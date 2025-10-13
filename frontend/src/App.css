@@ -1,0 +1,12 @@
+#root {
+  /*
+    Bổ sung các thuộc tính này để đảm bảo container gốc của React
+    luôn chiếm toàn bộ không gian của cửa sổ trình duyệt.
+  */
+  width: 100%;
+  height: 100%;
+}
+
+/* Các style mặc định khác của Vite đã được gỡ bỏ vì chúng không còn cần thiết
+  và có thể gây xung đột với hệ thống layout của Tailwind CSS.
+*/
