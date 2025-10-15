@@ -9,9 +9,9 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             VaitroSeeder::class,
-            ChuyennganhSeeder::class, // <-- THÊM DÒNG NÀY
-            KhoaBomonSeeder::class,   // <-- THÊM DÒNG NÀY
-            NguoidungSeeder::class,   // Đảm bảo NguoidungSeeder được gọi cuối cùng
+            ChuyennganhSeeder::class,
+            KhoaBomonSeeder::class,
+            NguoidungSeeder::class,
         ]);
     }
 }

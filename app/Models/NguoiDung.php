@@ -51,4 +51,9 @@ class Nguoidung extends Authenticatable
     {
         return $this->hasOne(Giangvien::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');
     }
+    
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'user_id', 'ID_NGUOIDUNG');
+    }
 }

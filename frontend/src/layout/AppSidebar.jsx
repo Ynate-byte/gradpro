@@ -1,4 +1,3 @@
-// src/components/AppSidebar.jsx
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
@@ -35,7 +34,14 @@ export function AppSidebar({ user, handleLogout }) {
                         { href: "/starred", title: "Đã lưu" },
                     ],
                 },
-                { title: "Đồ án", href: "/projects/topics", icon: BookCopy },
+                {
+                    title: "Đồ án",
+                    icon: BookCopy,
+                    subItems: [
+                        { href: "/projects/topics", title: "Đề tài" },
+                        { href: "/projects/my-group", title: "Nhóm của tôi" },
+                    ],
+                },
                 { title: "Sinh viên", href: "/students", icon: Users },
                 { title: "Thiết lập", href: "/settings/account", icon: Settings },
             ]
@@ -44,7 +50,7 @@ export function AppSidebar({ user, handleLogout }) {
 
     // Cấu hình menu dành riêng cho Admin
     const adminMenuConfig = [
-         {
+        {
             label: "Quản trị",
             items: [
                 { title: "Người dùng", href: "/admin/users", icon: Shield },
@@ -53,7 +59,7 @@ export function AppSidebar({ user, handleLogout }) {
     ];
 
     const MenuItem = ({ item }) => {
-        const isParentActive = item.subItems && item.subItems.some(sub => currentUrl === sub.href);
+        const isParentActive = item.subItems && item.subItems.some(sub => currentUrl.startsWith(sub.href));
         if (item.subItems) {
             return (
                 <Collapsible defaultOpen={isParentActive} className="group/collapsible">

@@ -2,12 +2,12 @@ import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 
-// CẬP NHẬT ĐƯỜNG DẪN IMPORT
 const AuthenticatedLayout = lazy(() => import('./layout/AuthenticatedLayout'));
 const Login = lazy(() => import('./features/auth/Login'));
 const HomePage = lazy(() => import('./features/home/HomePage'));
-// SỬA LỖI: Chỉ định rõ file index.jsx
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
+const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
+const FindGroupPage = lazy(() => import('./features/student/find-group/index.jsx'));
 
 const PlaceholderPage = ({ title }) => (
     <div className="p-4 bg-white rounded-lg shadow">
@@ -61,9 +61,15 @@ function App() {
                     <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
                     <Route path="students" element={<PlaceholderPage title="Sinh viên" />} />
                     <Route path="projects/topics" element={<PlaceholderPage title="Đề tài" />} />
-                    <Route path="projects/my-group" element={<PlaceholderPage title="Nhóm của tôi" />} />
                     <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
                     <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />
+                    
+                    {user && user.vaitro.TEN_VAITRO === 'Sinh viên' && (
+                        <>
+                            <Route path="projects/my-group" element={<MyGroupPage />} />
+                            <Route path="projects/find-group" element={<FindGroupPage />} />
+                        </>
+                    )}
                     
                     {user && user.vaitro.TEN_VAITRO === 'Admin' && (
                          <Route path="admin/users" element={<UserManagementPage />} />

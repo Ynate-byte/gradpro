@@ -5,7 +5,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
-use App\Models\Nguoidung; // <-- SỬ DỤNG MODEL MỚI
+use App\Models\Nguoidung;
 
 class AuthController extends Controller
 {

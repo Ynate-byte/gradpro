@@ -12,7 +12,6 @@ class Vaitro extends Model
     protected $table = 'VAITRO';
     protected $primaryKey = 'ID_VAITRO';
 
-    // Chỉ có NGAYTAO, không có NGAYCAPNHAT
     const CREATED_AT = 'NGAYTAO';
     const UPDATED_AT = null;
 }
