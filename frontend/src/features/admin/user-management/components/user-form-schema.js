@@ -20,6 +20,7 @@ export const userFormSchema = z.object({
     giangvien_details: z.object({
         ID_KHOA_BOMON: z.string(),
         HOCVI: z.string(),
+        CHUCVU: z.string().optional().nullable(),
     }).optional(),
 
 }).refine((data) => {

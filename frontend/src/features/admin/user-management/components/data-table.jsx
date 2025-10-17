@@ -22,6 +22,15 @@ export function DataTable({
     filterOptions,
     activeTab,
     onSuccess,
+    searchColumnId,
+    searchPlaceholder,
+    statusColumnId,
+    statusOptions,
+    addBtnText,
+    // === BẮT ĐẦU SỬA LỖI: Nhận props cho search term ===
+    searchTerm,
+    onSearchChange,
+    // === KẾT THÚC SỬA LỖI ===
 }) {
   const table = useReactTable({
     data,
@@ -31,6 +40,10 @@ export function DataTable({
       sorting,
       columnFilters,
       pagination,
+      columnVisibility: {
+        chuyen_nganh: false,
+        khoa_bomon: false,
+      },
     },
     manualPagination: true,
     manualFiltering: true,
@@ -51,6 +64,15 @@ export function DataTable({
         filterOptions={filterOptions}
         activeTab={activeTab}
         onSuccess={onSuccess}
+        searchColumnId={searchColumnId}
+        searchPlaceholder={searchPlaceholder}
+        statusColumnId={statusColumnId}
+        statusOptions={statusOptions}
+        addBtnText={addBtnText}
+        // === BẮT ĐẦU SỬA LỖI: Truyền props xuống toolbar ===
+        searchTerm={searchTerm}
+        onSearchChange={onSearchChange}
+        // === KẾT THÚC SỬA LỖI ===
       />
       <div className="rounded-md border max-h-[calc(100vh-25rem)] overflow-y-auto relative">
         <Table>

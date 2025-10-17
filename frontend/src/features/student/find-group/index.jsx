@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { findGroups, requestToJoin } from '@/api/groupService';
+import { findGroups, requestToJoin, getMyActivePlans } from '@/api/groupService';
 import { getChuyenNganhs, getKhoaBomons } from '@/api/userService';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Search, UserPlus, CheckCircle } from 'lucide-react';
+import { Loader2, UserPlus, CheckCircle, BookCopy } from 'lucide-react';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -20,14 +20,14 @@ const RequestJoinDialog = ({ group, isOpen, setIsOpen, onSuccess }) => {
     const [isLoading, setIsLoading] = useState(false);
     const form = useForm({
         resolver: zodResolver(requestSchema),
-        defaultValues: { LOINHAN: '' }
+        defaultValues: { LOINHAN: '' },
     });
 
     const onSubmit = async (data) => {
         setIsLoading(true);
         try {
-            const res = await requestToJoin(group.ID_NHOM, data);
-            toast.success(res.message);
+            const response = await requestToJoin(group.ID_NHOM, data);
+            toast.success(response.message);
             onSuccess();
             setIsOpen(false);
         } catch (error) {
@@ -37,28 +37,36 @@ const RequestJoinDialog = ({ group, isOpen, setIsOpen, onSuccess }) => {
         }
     };
     
-    if(!group) return null;
+    if (!group) return null;
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent>
+            <DialogContent className="sm:max-w-md">
+                {/* === SỬA LỖI: Thêm DialogHeader, DialogTitle, và DialogDescription === */}
                 <DialogHeader>
-                    <DialogTitle>Xin gia nhập nhóm "{group.TEN_NHOM}"</DialogTitle>
-                    <DialogDescription>Gửi lời nhắn đến nhóm trưởng để tăng cơ hội được chấp nhận.</DialogDescription>
+                    <DialogTitle>Gửi yêu cầu gia nhập "{group.TEN_NHOM}"</DialogTitle>
+                    <DialogDescription>Gửi lời nhắn (tùy chọn) đến nhóm trưởng.</DialogDescription>
                 </DialogHeader>
-                 <Form {...form}>
+                {/* === KẾT THÚC SỬA LỖI === */}
+                <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <FormField control={form.control} name="LOINHAN" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Lời nhắn (Tùy chọn)</FormLabel>
-                                <FormControl><Textarea placeholder="Mình rất muốn tham gia nhóm..." {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                         <DialogFooter>
+                        <FormField
+                            control={form.control}
+                            name="LOINHAN"
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Lời nhắn</FormLabel>
+                                    <FormControl>
+                                        <Textarea placeholder="Chào bạn, mình muốn tham gia nhóm..." {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}
+                        />
+                        <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Hủy</Button>
                             <Button type="submit" disabled={isLoading}>
-                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Gửi yêu cầu
+                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Gửi
                             </Button>
                         </DialogFooter>
                     </form>
@@ -72,32 +80,65 @@ export default function FindGroupPage() {
     const [groups, setGroups] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [filters, setFilters] = useState({ search: '', ID_CHUYENNGANH: '', ID_KHOA_BOMON: '' });
-    const [options, setOptions] = useState({ chuyenNganhs: [], khoaBomons: [] });
+    const [options, setOptions] = useState({ chuyenNganhs: [], khoaBomons: [], activePlans: [] });
+    const [selectedPlanId, setSelectedPlanId] = useState('');
     const [selectedGroup, setSelectedGroup] = useState(null);
 
+    const fetchPrerequisites = useCallback(async () => {
+        try {
+            const [cn, kb, plans] = await Promise.all([getChuyenNganhs(), getKhoaBomons(), getMyActivePlans()]);
+            setOptions({ chuyenNganhs: cn, khoaBomons: kb, activePlans: plans });
+            if (plans.length > 0) {
+                setSelectedPlanId(String(plans[0].ID_KEHOACH));
+            } else {
+                setIsLoading(false);
+            }
+        } catch {
+            toast.error("Lỗi tải dữ liệu ban đầu.");
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchPrerequisites();
+    }, [fetchPrerequisites]);
+
     const fetchData = useCallback(async () => {
+        if (!selectedPlanId) return;
         setIsLoading(true);
         try {
-            const res = await findGroups(filters);
+            const res = await findGroups(filters, selectedPlanId);
             setGroups(res.data);
-            // Cần thêm xử lý pagination nếu API trả về
         } catch (error) {
             toast.error("Tải danh sách nhóm thất bại.");
         } finally {
             setIsLoading(false);
         }
-    }, [filters]);
+    }, [filters, selectedPlanId]);
 
     useEffect(() => {
-        fetchData();
-        Promise.all([getChuyenNganhs(), getKhoaBomons()]).then(([cn, kb]) => {
-            setOptions({ chuyenNganhs: cn, khoaBomons: kb });
-        });
+        const timer = setTimeout(() => {
+            fetchData();
+        }, 300);
+        return () => clearTimeout(timer);
     }, [fetchData]);
 
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({...prev, [key]: value}));
     };
+
+    if (options.activePlans.length === 0 && !isLoading) {
+        return (
+            <Card>
+                <CardHeader>
+                    <CardTitle>Chưa tham gia đợt khóa luận</CardTitle>
+                </CardHeader>
+                <CardContent>
+                    <p>Bạn không thể tìm nhóm khi chưa tham gia vào một đợt khóa luận đang hoạt động.</p>
+                </CardContent>
+            </Card>
+        )
+    }
 
     return (
         <div className="space-y-6">
@@ -106,21 +147,34 @@ export default function FindGroupPage() {
                     <CardTitle>Tìm kiếm nhóm</CardTitle>
                     <CardDescription>Tìm và xin gia nhập các nhóm còn trống thành viên.</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-col md:flex-row gap-4">
-                    <Input placeholder="Tìm theo tên nhóm..." className="flex-grow" onChange={e => handleFilterChange('search', e.target.value)} />
-                    <Select onValueChange={v => handleFilterChange('ID_CHUYENNGANH', v)}>
-                        <SelectTrigger><SelectValue placeholder="Lọc theo chuyên ngành" /></SelectTrigger>
-                        <SelectContent>{options.chuyenNganhs.map(o => <SelectItem key={o.ID_CHUYENNGANH} value={String(o.ID_CHUYENNGANH)}>{o.TEN_CHUYENNGANH}</SelectItem>)}</SelectContent>
-                    </Select>
-                     <Select onValueChange={v => handleFilterChange('ID_KHOA_BOMON', v)}>
-                        <SelectTrigger><SelectValue placeholder="Lọc theo khoa/bộ môn" /></SelectTrigger>
-                        <SelectContent>{options.khoaBomons.map(o => <SelectItem key={o.ID_KHOA_BOMON} value={String(o.ID_KHOA_BOMON)}>{o.TEN_KHOA_BOMON}</SelectItem>)}</SelectContent>
-                    </Select>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select onValueChange={setSelectedPlanId} value={selectedPlanId}>
+                            <SelectTrigger>
+                                <div className='flex items-center gap-2'>
+                                    <BookCopy className='h-4 w-4 text-muted-foreground' />
+                                    <SelectValue placeholder="Chọn một kế hoạch..." />
+                                </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {options.activePlans.map(p => <SelectItem key={p.ID_KEHOACH} value={String(p.ID_KEHOACH)}>{p.TEN_DOT}</SelectItem>)}
+                            </SelectContent>
+                        </Select>
+                        <Input placeholder="Tìm theo tên nhóm..." onChange={e => handleFilterChange('search', e.target.value)} />
+                        <Select onValueChange={v => handleFilterChange('ID_CHUYENNGANH', v)}>
+                            <SelectTrigger><SelectValue placeholder="Lọc theo chuyên ngành" /></SelectTrigger>
+                            <SelectContent>{options.chuyenNganhs.map(o => <SelectItem key={o.ID_CHUYENNGANH} value={String(o.ID_CHUYENNGANH)}>{o.TEN_CHUYENNGANH}</SelectItem>)}</SelectContent>
+                        </Select>
+                        <Select onValueChange={v => handleFilterChange('ID_KHOA_BOMON', v)}>
+                            <SelectTrigger><SelectValue placeholder="Lọc theo khoa/bộ môn" /></SelectTrigger>
+                            <SelectContent>{options.khoaBomons.map(o => <SelectItem key={o.ID_KHOA_BOMON} value={String(o.ID_KHOA_BOMON)}>{o.TEN_KHOA_BOMON}</SelectItem>)}</SelectContent>
+                        </Select>
+                    </div>
                 </CardContent>
             </Card>
 
             {isLoading ? (
-                 <div className="text-center p-8"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></div>
+                <div className="text-center p-8"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></div>
             ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {groups.map(group => (
@@ -147,6 +201,7 @@ export default function FindGroupPage() {
                             </CardContent>
                         </Card>
                     ))}
+                        {groups.length === 0 && <p className="col-span-full text-center text-muted-foreground">Không tìm thấy nhóm nào phù hợp.</p>}
                 </div>
             )}
             

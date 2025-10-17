@@ -121,33 +121,6 @@ export default function AuthenticatedLayout() {
                                     )}
                                 </DropdownMenuContent>
                             </DropdownMenu>
-
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                                        <Avatar className="h-9 w-9">
-                                            <AvatarFallback>{getInitials(user.HODEM_VA_TEN)}</AvatarFallback>
-                                        </Avatar>
-                                    </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent className="w-56" align="end" forceMount>
-                                    <DropdownMenuLabel className="font-normal">
-                                        <div className="flex flex-col space-y-1">
-                                            <p className="text-sm font-medium leading-none">{user.HODEM_VA_TEN}</p>
-                                            <p className="text-xs leading-none text-muted-foreground">{user.EMAIL}</p>
-                                        </div>
-                                    </DropdownMenuLabel>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem><User className="mr-2 h-4 w-4" /><span>Hồ sơ</span></DropdownMenuItem>
-                                    <DropdownMenuItem><Settings className="mr-2 h-4 w-4" /><span>Cài đặt</span></DropdownMenuItem>
-                                    <DropdownMenuItem><LifeBuoy className="mr-2 h-4 w-4" /><span>Hỗ trợ</span></DropdownMenuItem>
-                                    <DropdownMenuSeparator />
-                                    <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-                                        <LogOut className="mr-2 h-4 w-4" />
-                                        <span>Đăng xuất</span>
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
                         </div>
                     </header>
                     <main className="flex-1 overflow-y-auto bg-muted/40 p-4 sm:p-6">

@@ -30,4 +30,9 @@ class Sinhvien extends Model
     {
         return $this->belongsTo(Chuyennganh::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');
     }
+
+    public function cacDotThamGia()
+    {
+        return $this->hasMany(SinhvienThamgia::class, 'ID_SINHVIEN', 'ID_SINHVIEN');
+    }
 }

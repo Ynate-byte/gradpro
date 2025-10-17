@@ -47,7 +47,9 @@ const TableHead = React.forwardRef(({ className, ...props }, ref) => (
   <th
     ref={ref}
     className={cn(
+      // === BẮT ĐẦU SỬA ĐỔI: Thêm các class để cố định header ===
       "sticky top-0 z-10 border-b bg-card h-12 px-2 text-left align-middle font-medium text-muted-foreground [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+      // === KẾT THÚC SỬA ĐỔI ===
       className
     )}
     {...props} />

@@ -20,7 +20,7 @@ const createGroupSchema = z.object({
     ID_KHOA_BOMON: z.string().optional(),
 });
 
-export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess }) {
+export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
     const [isLoading, setIsLoading] = useState(false);
     const [options, setOptions] = useState({ chuyenNganhs: [], khoaBomons: [] });
 
@@ -41,7 +41,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess }) {
     const onSubmit = async (data) => {
         setIsLoading(true);
         try {
-            await createGroup(data);
+            await createGroup(data, planId); // Truyền planId
             toast.success("Tạo nhóm thành công!");
             onSuccess();
             setIsOpen(false);

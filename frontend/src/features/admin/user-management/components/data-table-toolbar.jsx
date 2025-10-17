@@ -2,20 +2,31 @@
 
 import React, { useState } from 'react';
 import { Cross2Icon } from "@radix-ui/react-icons"
-import { PlusCircle, Upload, Trash2 } from "lucide-react"
+import { PlusCircle, Upload, Trash2, KeyRound } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
-import { performBulkAction, performBulkDelete } from "@/api/userService"
+import { performBulkAction, performBulkDelete, bulkResetPassword } from "@/api/userService" 
 import { toast } from "sonner"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 
-const statuses = [
-    { value: "1", label: "Hoạt động" },
-    { value: "0", label: "Vô hiệu hóa" },
-]
-
-export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions, activeTab, onSuccess }) {
+export function DataTableToolbar({ 
+    table, 
+    onAddUser, 
+    onImportUser, 
+    filterOptions, 
+    activeTab, 
+    onSuccess,
+    searchColumnId,
+    searchPlaceholder,
+    statusColumnId,
+    statusOptions,
+    addBtnText,
+    searchTerm,
+    // === BẮT ĐẦU SỬA LỖI: Thêm giá trị mặc định để tránh lỗi ===
+    onSearchChange = () => {},
+    // === KẾT THÚC SỬA LỖI ===
+}) {
     const [isAlertOpen, setIsAlertOpen] = useState(false);
     const [bulkAction, setBulkAction] = useState(null);
 
@@ -28,9 +39,14 @@ export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions
     }
 
     const handleBulkAction = async () => {
-        const userIds = selectedRows.map(row => row.original.ID_NGUOIDUNG);
+        const userIds = selectedRows.map(row => row.original.ID_NGUOIDUNG).filter(Boolean);
+        if (userIds.length === 0) {
+            toast.warning("Hành động này chỉ áp dụng cho người dùng.");
+            setIsAlertOpen(false);
+            return;
+        }
+        
         setIsAlertOpen(false);
-
         try {
             if (bulkAction === 'activate' || bulkAction === 'deactivate') {
                 const actionText = bulkAction === 'activate' ? 'Kích hoạt' : 'Vô hiệu hóa';
@@ -39,7 +55,12 @@ export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions
             } else if (bulkAction === 'delete') {
                 await performBulkDelete(userIds);
                 toast.success(`Đã xóa vĩnh viễn ${userIds.length} tài khoản.`);
+            } 
+            else if (bulkAction === 'reset_password') {
+                await bulkResetPassword(userIds);
+                toast.success(`Đã reset mật khẩu cho ${userIds.length} tài khoản.`);
             }
+
             table.resetRowSelection();
             onSuccess();
         } catch (error) {
@@ -57,13 +78,16 @@ export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions
                 return { title: 'Xác nhận Vô hiệu hóa Tài khoản?', description: `Bạn có chắc chắn muốn vô hiệu hóa ${count} tài khoản đã chọn không? Người dùng sẽ không thể đăng nhập.` };
             case 'delete':
                 return { title: 'Xác nhận Xóa Vĩnh Viễn?', description: `Hành động này không thể hoàn tác. Bạn có chắc chắn muốn xóa vĩnh viễn ${count} tài khoản đã chọn không?` };
+            case 'reset_password':
+                return { title: 'Xác nhận Reset Mật khẩu?', description: `Bạn có chắc chắn muốn reset mật khẩu về mặc định cho ${count} tài khoản đã chọn không?` };
             default:
                 return { title: '', description: '' };
         }
     }
     const dialogContent = getDialogContent();
-    const chuyenNganhOptions = filterOptions.chuyenNganhs.map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) }));
-    const khoaBomonOptions = filterOptions.khoaBomons.map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) }));
+    
+    const chuyenNganhOptions = (filterOptions?.chuyenNganhs ?? []).map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) }));
+    const khoaBomonOptions = (filterOptions?.khoaBomons ?? []).map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) }));
     
     return (
         <>
@@ -71,6 +95,9 @@ export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions
                 <div className="flex flex-1 items-center space-x-2">
                     {selectedRows.length > 0 ? (
                         <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('reset_password')}>
+                                <KeyRound className="mr-2 h-4 w-4" /> Reset Mật khẩu ({selectedRows.length})
+                            </Button>
                             <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('activate')}>Kích hoạt ({selectedRows.length})</Button>
                             <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('deactivate')}>Vô hiệu hóa ({selectedRows.length})</Button>
                             <Button variant="destructive" size="sm" className="h-8" onClick={() => confirmBulkAction('delete')}>
@@ -80,27 +107,31 @@ export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions
                         </div>
                     ) : (
                         <>
-                            <Input
-                                placeholder="Lọc theo tên, email, mã..."
-                                value={(table.getColumn("HODEM_VA_TEN")?.getFilterValue()) ?? ""}
-                                onChange={(event) => table.getColumn("HODEM_VA_TEN")?.setFilterValue(event.target.value)}
-                                className="h-8 w-[150px] lg:w-[250px]"
-                            />
-                            {activeTab === 'Sinh viên' && (
+                            {searchColumnId && (
+                                <Input
+                                    placeholder={searchPlaceholder}
+                                    value={searchTerm}
+                                    onChange={(event) => onSearchChange(event.target.value)}
+                                    className="h-8 w-[150px] lg:w-[250px]"
+                                />
+                            )}
+                            {(activeTab === 'Tất cả' || activeTab === 'Sinh viên') && (
                                 <DataTableFacetedFilter
                                     column={table.getColumn("chuyen_nganh")}
                                     title="Chuyên ngành"
                                     options={chuyenNganhOptions}
                                 />
                             )}
-                            {activeTab === 'Giảng viên' && (
+                            {(activeTab === 'Tất cả' || activeTab === 'Giảng viên') && (
                                 <DataTableFacetedFilter
                                     column={table.getColumn("khoa_bomon")}
                                     title="Khoa/Bộ môn"
                                     options={khoaBomonOptions}
                                 />
                             )}
-                            <DataTableFacetedFilter column={table.getColumn("trang_thai")} title="Trạng thái" options={statuses} />
+                            {statusColumnId && statusOptions && (
+                                <DataTableFacetedFilter column={table.getColumn(statusColumnId)} title="Trạng thái" options={statusOptions} />
+                            )}
                             {isFiltered && (
                                 <Button variant="ghost" onClick={() => table.resetColumnFilters()} className="h-8 px-2 lg:px-3">
                                     Reset <Cross2Icon className="ml-2 h-4 w-4" />
@@ -111,13 +142,15 @@ export function DataTableToolbar({ table, onAddUser, onImportUser, filterOptions
                 </div>
 
                 <div className="flex items-center space-x-2">
-                    {selectedRows.length === 0 && (
+                    {selectedRows.length === 0 && onAddUser && (
                         <>
-                            <Button variant="outline" size="sm" className="h-8" onClick={onImportUser}>
-                                <Upload className="mr-2 h-4 w-4" /> Import
-                            </Button>
+                            {onImportUser && (
+                                <Button variant="outline" size="sm" className="h-8" onClick={onImportUser}>
+                                    <Upload className="mr-2 h-4 w-4" /> Import
+                                </Button>
+                            )}
                             <Button size="sm" className="h-8" onClick={onAddUser}>
-                                <PlusCircle className="mr-2 h-4 w-4" /> Thêm người dùng
+                                <PlusCircle className="mr-2 h-4 w-4" /> {addBtnText}
                             </Button>
                         </>
                     )}

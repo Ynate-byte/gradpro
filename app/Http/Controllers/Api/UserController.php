@@ -90,6 +90,7 @@ class UserController extends Controller
 
             'giangvien_details.ID_KHOA_BOMON' => "required_if:ID_VAITRO,{$vaitroGV}|nullable|exists:KHOA_BOMON,ID_KHOA_BOMON",
             'giangvien_details.HOCVI' => "required_if:ID_VAITRO,{$vaitroGV}|nullable|string",
+            'giangvien_details.CHUCVU' => ['nullable', 'string', Rule::in(['Trưởng khoa', 'Phó khoa', 'Giáo vụ', 'Trưởng bộ môn'])],
         ]);
         
         $user = null;
@@ -136,6 +137,7 @@ class UserController extends Controller
 
             'giangvien_details.ID_KHOA_BOMON' => 'sometimes|required|exists:KHOA_BOMON,ID_KHOA_BOMON',
             'giangvien_details.HOCVI' => 'sometimes|required|string',
+            'giangvien_details.CHUCVU' => ['nullable', 'string', Rule::in(['Trưởng khoa', 'Phó khoa', 'Giáo vụ', 'Trưởng bộ môn'])],
         ]);
 
         $user->update($validatedData);
@@ -190,7 +192,21 @@ class UserController extends Controller
 
         return response()->json(['message' => "Đã xóa thành công {$count} người dùng."]);
     }
+    public function bulkResetPassword(Request $request)
+    {
+        $validated = $request->validate([
+            'userIds' => 'required|array',
+            'userIds.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG',
+        ]);
 
+        $count = count($validated['userIds']);
+        Nguoidung::whereIn('ID_NGUOIDUNG', $validated['userIds'])->update([
+            'MATKHAU_BAM' => Hash::make('123456'),
+            'LA_DANGNHAP_LANDAU' => true,
+        ]);
+
+        return response()->json(['message' => "Đã reset mật khẩu cho {$count} người dùng thành công."]);
+    }
     public function getRoles() { return Vaitro::where('TEN_VAITRO', '!=', 'Admin')->get(); }
     public function getChuyenNganhs() { return Chuyennganh::where('TRANGTHAI_KICHHOAT', true)->get(); }
     public function getKhoaBomons() { return KhoaBomon::where('TRANGTHAI_KICHHOAT', true)->get(); }
@@ -220,9 +236,9 @@ class UserController extends Controller
                  $invalidRows[] = $rowArray;
              }
              return response()->json([
-                'validRows' => [],
-                'invalidRows' => $invalidRows,
-            ], 422);
+                 'validRows' => [],
+                 'invalidRows' => $invalidRows,
+             ], 422);
         } catch (Throwable $th) {
             Log::error('Import Preview Failed: ' . $th->getMessage());
             return response()->json(['message' => 'Đã có lỗi xảy ra khi đọc file. Vui lòng kiểm tra lại định dạng file.'], 500);

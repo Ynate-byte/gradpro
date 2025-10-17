@@ -13,6 +13,7 @@ return new class extends Migration
     {
         Schema::create('NHOM', function (Blueprint $table) {
             $table->id('ID_NHOM');
+            $table->unsignedBigInteger('ID_KEHOACH'); // THÊM MỚI
             $table->string('TEN_NHOM', 100);
             $table->text('MOTA')->nullable()->comment('Ghi chú hoặc mô tả về nhóm');
             $table->string('MA_NHOM', 20)->unique()->nullable();
@@ -24,6 +25,10 @@ return new class extends Migration
             $table->enum('TRANGTHAI', ['Đang mở', 'Đã đủ thành viên', 'Đã có đề tài', 'Đang thực hiện', 'Đã hoàn thành'])->default('Đang mở');
             $table->timestamp('NGAYTAO')->useCurrent();
             $table->timestamp('NGAYCAPNHAT')->nullable()->useCurrentOnUpdate();
+
+            // THÊM MỚI RÀNG BUỘC FOREIGN KEY
+            $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN')->onDelete('cascade');
+            // KẾT THÚC THÊM MỚI
 
             $table->foreign('ID_NHOMTRUONG')->references('ID_NGUOIDUNG')->on('NGUOIDUNG');
             $table->foreign('ID_CHUYENNGANH')->references('ID_CHUYENNGANH')->on('CHUYENNGANH')->onDelete('set null');

@@ -17,6 +17,7 @@ class Giangvien extends Model
         'ID_NGUOIDUNG',
         'ID_KHOA_BOMON',
         'HOCVI',
+        'CHUCVU',
         'CHUYENMON',
         'SO_NHOM_TOIDA',
     ];

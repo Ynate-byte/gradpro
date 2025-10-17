@@ -24,22 +24,6 @@ const StatCard = ({ icon: Icon, title, value, description }) => (
     </div>
 );
 
-const DataTableSkeleton = () => (
-    <div className="space-y-4">
-        <div className="flex items-center justify-between">
-            <Skeleton className="h-8 w-[250px]" />
-            <Skeleton className="h-8 w-[170px]" />
-        </div>
-        <div className="rounded-md border">
-            <div className="p-4 border-b"><Skeleton className="h-5 w-[80%]" /></div>
-            <div className="p-4 space-y-3">
-                {Array.from({ length: 10 }).map((_, i) => (<Skeleton key={i} className="h-5 w-full" />))}
-            </div>
-        </div>
-        <div className="flex items-center justify-between p-4 border-t"><Skeleton className="h-8 w-[150px]" /><Skeleton className="h-8 w-[200px]" /></div>
-    </div>
-);
-
 const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -70,6 +54,10 @@ export default function UserManagementPage() {
     const [columnFilters, setColumnFilters] = useState([]);
     const [sorting, setSorting] = useState([]);
     const [filterOptions, setFilterOptions] = useState({ chuyenNganhs: [], khoaBomons: [] });
+
+    // === BẮT ĐẦU SỬA LỖI: Thêm state cho debouncing ===
+    const [searchTerm, setSearchTerm] = useState('');
+    // === KẾT THÚC SỬA LỖI ===
 
     useEffect(() => {
         Promise.all([
@@ -102,14 +90,35 @@ export default function UserManagementPage() {
             .finally(() => setLoading(false));
     }, [pagination, columnFilters, sorting, activeTab]);
 
+    // === BẮT ĐẦU SỬA LỖI: Tách useEffect cho debouncing và fetchData ===
     useEffect(() => {
-        const timer = setTimeout(() => fetchData(), 300);
-        return () => clearTimeout(timer);
-    }, [fetchData]);
+        const timer = setTimeout(() => {
+            setColumnFilters(prev => {
+                const existingFilter = prev.find(f => f.id === 'HODEM_VA_TEN');
+                if (searchTerm) {
+                    if (existingFilter) {
+                        return prev.map(f => f.id === 'HODEM_VA_TEN' ? { ...f, value: searchTerm } : f);
+                    }
+                    return [...prev, { id: 'HODEM_VA_TEN', value: searchTerm }];
+                }
+                return prev.filter(f => f.id !== 'HODEM_VA_TEN');
+            });
+        }, 500); // Đợi 500ms sau khi người dùng ngừng gõ
 
+        return () => {
+            clearTimeout(timer);
+        };
+    }, [searchTerm]);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
+    // === KẾT THÚC SỬA LỖI ===
+
+
+    const handleFormSuccess = () => fetchData();
     const handleOpenCreateDialog = () => { setEditingUser(null); setIsDialogOpen(true); };
     const handleOpenEditDialog = (user) => { setEditingUser(user); setIsDialogOpen(true); };
-    const handleFormSuccess = () => fetchData();
     const handleOpenViewSheet = (user) => {
         setViewingUser(user);
         setIsSheetOpen(true);
@@ -119,7 +128,7 @@ export default function UserManagementPage() {
         onEdit: handleOpenEditDialog,
         onSuccess: handleFormSuccess,
         onViewDetails: handleOpenViewSheet
-    }), []);
+    }), [handleFormSuccess]);
     
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
@@ -130,7 +139,6 @@ export default function UserManagementPage() {
     const activeUsers = data.filter(u => u.TRANGTHAI_KICHHOAT).length;
 
     const renderDataTable = (tabName) => (
-        loading ? <DataTableSkeleton /> :
         <DataTable
             key={tabName}
             columns={columns}
@@ -148,6 +156,15 @@ export default function UserManagementPage() {
             filterOptions={filterOptions}
             activeTab={activeTab}
             onSuccess={handleFormSuccess}
+            searchColumnId="HODEM_VA_TEN"
+            searchPlaceholder="Tìm theo tên, email, mã..."
+            addBtnText="Thêm người dùng"
+            statusColumnId="trang_thai"
+            statusOptions={[{ value: "1", label: "Hoạt động" }, { value: "0", label: "Vô hiệu" }]}
+            // === BẮT ĐẦU SỬA LỖI: Truyền state và setter cho search term ===
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            // === KẾT THÚC SỬA LỖI ===
         />
     );
 

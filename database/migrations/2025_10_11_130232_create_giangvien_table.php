@@ -13,6 +13,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NGUOIDUNG');
             $table->unsignedBigInteger('ID_KHOA_BOMON');
             $table->enum('HOCVI', ['Tiến sĩ', 'Thạc sĩ', 'Giáo sư', 'Phó Giáo sư']);
+            $table->enum('CHUCVU', ['Trưởng khoa', 'Phó khoa', 'Giáo vụ', 'Trưởng bộ môn'])->nullable();
             $table->text('CHUYENMON')->nullable();
             $table->integer('SO_NHOM_TOIDA')->default(5)->comment('Số nhóm tối đa có thể hướng dẫn');
             

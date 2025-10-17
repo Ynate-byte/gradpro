@@ -8,6 +8,10 @@ const HomePage = lazy(() => import('./features/home/HomePage'));
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
 const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
 const FindGroupPage = lazy(() => import('./features/student/find-group/index.jsx'));
+const GroupAdminPage = lazy(() => import('./features/admin/group-management/index.jsx'));
+const ThesisPlanManagementPage = lazy(() => import('./features/admin/thesis-plan-management/index.jsx'));
+// === THÊM DÒNG NÀY ===
+const PlanFormPage = lazy(() => import('./features/admin/thesis-plan-management/PlanFormPage.jsx'));
 
 const PlaceholderPage = ({ title }) => (
     <div className="p-4 bg-white rounded-lg shadow">
@@ -72,7 +76,15 @@ function App() {
                     )}
                     
                     {user && user.vaitro.TEN_VAITRO === 'Admin' && (
-                         <Route path="admin/users" element={<UserManagementPage />} />
+                        <>
+                            <Route path="admin/users" element={<UserManagementPage />} />
+                            <Route path="admin/groups" element={<GroupAdminPage />} />
+                            <Route path="admin/thesis-plans" element={<ThesisPlanManagementPage />} />
+                            {/* === THÊM CÁC ROUTE MỚI DƯỚI ĐÂY === */}
+                            <Route path="admin/thesis-plans/create" element={<PlanFormPage />} />
+                            <Route path="admin/thesis-plans/:planId/edit" element={<PlanFormPage />} />
+                            {/* === KẾT THÚC THÊM MỚI === */}
+                        </>
                     )}
                 </Route>
 

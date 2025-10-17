@@ -39,6 +39,11 @@ export const performBulkDelete = async (userIds) => {
     return response.data;
 };
 
+export const bulkResetPassword = async (userIds) => {
+    const response = await axiosClient.post('/users/bulk-reset-password', { userIds });
+    return response.data;
+};
+
 export const downloadImportTemplate = async () => {
     const response = await axiosClient.get('/users/import/template', {
         responseType: 'blob',

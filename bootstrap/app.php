@@ -13,7 +13,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        $middleware->prependToGroup('api', ConvertEmptyStringsToNull::class);
+        // $middleware->prependToGroup('api', ConvertEmptyStringsToNull::class); // <-- VÔ HIỆU HÓA DÒNG NÀY
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

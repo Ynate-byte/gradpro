@@ -15,14 +15,20 @@ class Nhom extends Model
     const UPDATED_AT = 'NGAYCAPNHAT';
 
     protected $fillable = [
-        // 'ID_DOT',
+        'ID_KEHOACH',
         'TEN_NHOM',
         'MOTA',
         'ID_NHOMTRUONG',
         'ID_CHUYENNGANH',
         'ID_KHOA_BOMON',
-        'SO_THANHVIEN_HIENTAI'
+        'SO_THANHVIEN_HIENTAI',
+        'LA_NHOM_DACBIET',
     ];
+    
+    public function kehoach()
+    {
+        return $this->belongsTo(KehoachKhoaluan::class, 'ID_KEHOACH', 'ID_KEHOACH');
+    }
 
     public function nhomtruong()
     {
@@ -53,9 +59,10 @@ class Nhom extends Model
     {
         return $this->hasMany(YeucauVaoNhom::class, 'ID_NHOM', 'ID_NHOM');
     }
-        public function thanhvienNhom()
-    {
-        return $this->hasOne(ThanhvienNhom::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');
-    }
     
+    // Sửa lại tên relationship cho đúng chuẩn
+    public function thanhvienNhom()
+    {
+        return $this->hasMany(ThanhvienNhom::class, 'ID_NHOM', 'ID_NHOM');
+    }
 }

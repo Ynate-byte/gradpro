@@ -11,10 +11,36 @@ use App\Models\Nguoidung;
 use App\Models\LoimoiNhom;
 use App\Models\YeucauVaoNhom;
 use App\Models\Notification;
+use App\Models\SinhvienThamgia;
+use App\Models\KehoachKhoaluan;
 use Illuminate\Support\Facades\Log;
 
 class NhomController extends Controller
 {
+    /**
+     * Lấy danh sách các kế hoạch đang hoạt động mà sinh viên hiện tại đang tham gia.
+     */
+    public function getActivePlansForStudent(Request $request)
+    {
+        $user = $request->user();
+
+        // Đảm bảo người dùng là sinh viên và có thông tin sinh viên liên kết
+        if (!$user->sinhvien) {
+            return response()->json([]);
+        }
+        
+        $plans = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')
+            ->whereHas('sinhvienThamgias', function ($query) use ($user) {
+                $query->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN);
+            })
+            ->get();
+            
+        return response()->json($plans);
+    }
+
+    /**
+     * Lấy thông tin nhóm hiện tại của người dùng.
+     */
     public function getMyGroup(Request $request)
     {
         try {
@@ -40,10 +66,9 @@ class NhomController extends Controller
             ])->find($thanhvien->ID_NHOM);
 
             if (!$nhom) {
-                // Nếu có bản ghi thành viên nhưng không có nhóm, đây là lỗi nghiêm trọng
-                // Ghi log để admin kiểm tra thay vì tự động xóa
                 Log::error("Dữ liệu không nhất quán: Người dùng ID {$user->ID_NGUOIDUNG} có bản ghi thành viên trong nhóm ID {$thanhvien->ID_NHOM} không tồn tại.");
-                // Trả về không có nhóm để Giao diện không bị lỗi, nhưng không xóa dữ liệu
+                // An toàn xóa bản ghi thành viên rác
+                $thanhvien->delete();
                 return response()->json(['has_group' => false]);
             }
 
@@ -55,6 +80,9 @@ class NhomController extends Controller
         }
     }
     
+    /**
+     * Tạo một nhóm mới trong một kế hoạch cụ thể.
+     */
     public function createGroup(Request $request)
     {
         $user = $request->user();
@@ -64,15 +92,25 @@ class NhomController extends Controller
         }
 
         $validated = $request->validate([
+            'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
             'TEN_NHOM' => 'required|string|max:100|unique:NHOM,TEN_NHOM',
             'MOTA' => 'nullable|string|max:255',
             'ID_CHUYENNGANH' => 'nullable|exists:CHUYENNGANH,ID_CHUYENNGANH',
             'ID_KHOA_BOMON' => 'nullable|exists:KHOA_BOMON,ID_KHOA_BOMON',
         ]);
 
+        // Kiểm tra xem sinh viên có thực sự tham gia kế hoạch này không
+        $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $validated['ID_KEHOACH'])
+                                        ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
+                                        ->exists();
+        if (!$isParticipant) {
+            return response()->json(['message' => 'Bạn không có quyền tạo nhóm trong kế hoạch này.'], 403);
+        }
+
         $nhom = null;
         DB::transaction(function () use ($validated, $user, &$nhom) {
             $nhom = Nhom::create([
+                'ID_KEHOACH' => $validated['ID_KEHOACH'],
                 'TEN_NHOM' => $validated['TEN_NHOM'],
                 'MOTA' => $validated['MOTA'],
                 'ID_NHOMTRUONG' => $user->ID_NGUOIDUNG,
@@ -90,64 +128,26 @@ class NhomController extends Controller
         return response()->json($nhom->load('thanhviens.nguoidung'), 201);
     }
     
-    public function inviteMember(Request $request, Nhom $nhom)
-    {
-        $user = $request->user();
-
-        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
-            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
-        }
-
-        if ($nhom->SO_THANHVIEN_HIENTAI >= 4) {
-            return response()->json(['message' => 'Nhóm đã đủ số lượng thành viên tối đa.'], 400);
-        }
-        
-        $validated = $request->validate([
-            'MA_DINHDANH' => 'required|string|exists:NGUOIDUNG,MA_DINHDANH',
-            'LOINHAN' => 'nullable|string|max:150',
-        ]);
-
-        $memberToInvite = Nguoidung::where('MA_DINHDANH', $validated['MA_DINHDANH'])->first();
-        
-        if ($memberToInvite->ID_NGUOIDUNG === $user->ID_NGUOIDUNG) {
-            return response()->json(['message' => 'Bạn không thể mời chính mình.'], 400);
-        }
-
-        if (ThanhvienNhom::where('ID_NGUOIDUNG', $memberToInvite->ID_NGUOIDUNG)->exists()) {
-             return response()->json(['message' => 'Sinh viên này đã ở trong một nhóm khác.'], 409);
-        }
-        
-        $inviteCount = LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                                    ->where('ID_NGUOI_DUOCMOI', $memberToInvite->ID_NGUOIDUNG)
-                                    ->count();
-        if ($inviteCount >= 3) {
-            return response()->json(['message' => 'Bạn đã mời sinh viên này 3 lần. Không thể mời lại.'], 429);
-        }
-
-        LoimoiNhom::create([
-            'ID_NHOM' => $nhom->ID_NHOM,
-            'ID_NGUOI_DUOCMOI' => $memberToInvite->ID_NGUOIDUNG,
-            'ID_NGUOIMOI' => $user->ID_NGUOIDUNG,
-            'LOINHAN' => $validated['LOINHAN'],
-            'NGAY_HETHAN' => now()->addDays(4),
-        ]);
-
-        Notification::create([
-            'user_id' => $memberToInvite->ID_NGUOIDUNG,
-            'type' => 'GROUP_INVITATION',
-            'data' => [
-                'group_name' => $nhom->TEN_NHOM,
-                'inviter_name' => $user->HODEM_VA_TEN,
-            ]
-        ]);
-
-        return response()->json(['message' => 'Đã gửi lời mời thành công.'], 200);
-    }
-    
+    /**
+     * Tìm kiếm các nhóm đang mở trong một kế hoạch cụ thể.
+     */
     public function findGroups(Request $request)
     {
         $user = $request->user();
-        $query = Nhom::query()->where('TRANGTHAI', 'Đang mở');
+        
+        $request->validate(['ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
+        $kehoachId = $request->ID_KEHOACH;
+
+        $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $kehoachId)
+                                        ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
+                                        ->exists();
+        if (!$isParticipant) {
+             return response()->json(['data' => []]);
+        }
+
+        $query = Nhom::query()
+            ->where('ID_KEHOACH', $kehoachId)
+            ->where('TRANGTHAI', 'Đang mở');
 
         if($request->filled('search')) {
             $query->where('TEN_NHOM', 'like', '%' . $request->search . '%');
@@ -172,7 +172,10 @@ class NhomController extends Controller
         
         return response()->json($nhoms);
     }
-    
+
+    /**
+     * Gửi yêu cầu xin tham gia một nhóm.
+     */
     public function requestToJoin(Request $request, Nhom $nhom)
     {
         $user = $request->user();
@@ -181,14 +184,21 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn đã là thành viên của một nhóm khác.'], 409);
         }
 
-        // Kiểm tra trực tiếp trạng thái của nhóm, đảm bảo nó đang mở
+        // Kiểm tra SV có tham gia cùng kế hoạch với nhóm không
+        $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $nhom->ID_KEHOACH)
+                                        ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
+                                        ->exists();
+        if (!$isParticipant) {
+            return response()->json(['message' => 'Bạn không thuộc kế hoạch khóa luận của nhóm này.'], 403);
+        }
+
         if ($nhom->TRANGTHAI !== 'Đang mở') {
             return response()->json(['message' => 'Không thể gửi yêu cầu. Nhóm này không còn mở để nhận thành viên.'], 400);
         }
 
         $requestCount = YeucauVaoNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                                    ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
-                                    ->count();
+                                        ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+                                        ->count();
         if ($requestCount >= 3) {
             return response()->json(['message' => 'Bạn đã gửi yêu cầu tới nhóm này 3 lần.'], 429);
         }
@@ -211,6 +221,78 @@ class NhomController extends Controller
         return response()->json(['message' => 'Đã gửi yêu cầu gia nhập thành công.']);
     }
 
+    /**
+     * Mời một thành viên khác vào nhóm.
+     */
+    public function inviteMember(Request $request, Nhom $nhom)
+    {
+        $user = $request->user();
+
+        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
+        if ($nhom->SO_THANHVIEN_HIENTAI >= 4) {
+            return response()->json(['message' => 'Nhóm đã đủ số lượng thành viên tối đa.'], 400);
+        }
+        
+        $validated = $request->validate([
+            'MA_DINHDANH' => 'required|string|exists:NGUOIDUNG,MA_DINHDANH',
+            'LOINHAN' => 'nullable|string|max:150',
+        ]);
+
+        $memberToInvite = Nguoidung::where('MA_DINHDANH', $validated['MA_DINHDANH'])->first();
+        
+        if ($memberToInvite->ID_NGUOIDUNG === $user->ID_NGUOIDUNG) {
+            return response()->json(['message' => 'Bạn không thể mời chính mình.'], 400);
+        }
+
+        if (!$memberToInvite->sinhvien) {
+            return response()->json(['message' => 'Chỉ có thể mời sinh viên vào nhóm.'], 400);
+        }
+
+        // Kiểm tra người được mời có tham gia cùng kế hoạch không
+        $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $nhom->ID_KEHOACH)
+                                        ->where('ID_SINHVIEN', $memberToInvite->sinhvien->ID_SINHVIEN)
+                                        ->exists();
+        if (!$isParticipant) {
+            return response()->json(['message' => 'Sinh viên này không thuộc kế hoạch khóa luận của nhóm bạn.'], 403);
+        }
+
+        if (ThanhvienNhom::where('ID_NGUOIDUNG', $memberToInvite->ID_NGUOIDUNG)->exists()) {
+             return response()->json(['message' => 'Sinh viên này đã ở trong một nhóm khác.'], 409);
+        }
+        
+        $inviteCount = LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
+                                     ->where('ID_NGUOI_DUOCMOI', $memberToInvite->ID_NGUOIDUNG)
+                                     ->count();
+        if ($inviteCount >= 3) {
+            return response()->json(['message' => 'Bạn đã mời sinh viên này 3 lần. Không thể mời lại.'], 429);
+        }
+
+        LoimoiNhom::create([
+            'ID_NHOM' => $nhom->ID_NHOM,
+            'ID_NGUOI_DUOCMOI' => $memberToInvite->ID_NGUOIDUNG,
+            'ID_NGUOIMOI' => $user->ID_NGUOIDUNG,
+            'LOINHAN' => $validated['LOINHAN'],
+            'NGAY_HETHAN' => now()->addDays(4),
+        ]);
+
+        Notification::create([
+            'user_id' => $memberToInvite->ID_NGUOIDUNG,
+            'type' => 'GROUP_INVITATION',
+            'data' => [
+                'group_name' => $nhom->TEN_NHOM,
+                'inviter_name' => $user->HODEM_VA_TEN,
+            ]
+        ]);
+
+        return response()->json(['message' => 'Đã gửi lời mời thành công.'], 200);
+    }
+    
+    /**
+     * Xử lý yêu cầu tham gia nhóm của nhóm trưởng.
+     */
     public function handleJoinRequest(Request $request, Nhom $nhom, YeucauVaoNhom $yeucau)
     {
         $user = $request->user();
@@ -256,6 +338,9 @@ class NhomController extends Controller
         });
     }
 
+    /**
+     * Rời khỏi nhóm hiện tại.
+     */
     public function leaveGroup(Request $request)
     {
         $user = $request->user();
@@ -278,9 +363,10 @@ class NhomController extends Controller
 
         DB::transaction(function () use ($nhom, $thanhvien) {
             if ($nhom->SO_THANHVIEN_HIENTAI <= 1) {
+                // Nếu là người cuối cùng, xóa luôn nhóm
                 $nhom->delete();
-            } 
-            else {
+            } else {
+                // Nếu không, chỉ xóa bản ghi thành viên và giảm số lượng
                 $thanhvien->delete();
                 $nhom->decrement('SO_THANHVIEN_HIENTAI');
             }

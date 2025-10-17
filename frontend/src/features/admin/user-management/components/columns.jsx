@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DataTableRowActions } from "./row-actions"
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ShieldCheck, Briefcase, GraduationCap } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, ShieldCheck, Briefcase, GraduationCap } from "lucide-react";
 import { format, formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -25,6 +25,15 @@ const roleConfig = {
     'Sinh viên': { icon: GraduationCap, color: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300" },
 };
 
+const SortIndicator = ({ column }) => {
+    const sorted = column.getIsSorted();
+    if (!sorted) {
+        return <ArrowUpDown className="ml-2 h-4 w-4" />;
+    }
+    return sorted === "desc" ? <ArrowDown className="ml-2 h-4 w-4" /> : <ArrowUp className="ml-2 h-4 w-4" />;
+};
+
+
 export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
     {
         id: "select",
@@ -41,7 +50,8 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         accessorKey: "HODEM_VA_TEN",
         header: ({ column }) => (
             <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-                Người dùng <ArrowUpDown className="ml-2 h-4 w-4" />
+                Người dùng 
+                <SortIndicator column={column} />
             </Button>
         ),
         cell: ({ row }) => (
@@ -82,8 +92,23 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             );
         },
     },
-    { id: "chuyen_nganh", accessorFn: row => row.original?.sinhvien?.ID_CHUYENNGANH },
-    { id: "khoa_bomon", accessorFn: row => row.original?.giangvien?.ID_KHOA_BOMON },
+    {
+        id: "unit_major",
+        header: "Đơn vị / Chuyên ngành",
+        cell: ({ row }) => {
+            const user = row.original;
+            if (user.vaitro.TEN_VAITRO === 'Sinh viên') {
+                return <div className="text-xs">{user.sinhvien?.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}</div>;
+            }
+            if (user.vaitro.TEN_VAITRO === 'Giảng viên') {
+                return <div className="text-xs">{user.giangvien?.khoabomon?.TEN_KHOA_BOMON || 'N/A'}</div>;
+            }
+            return <div className="text-xs text-muted-foreground">N/A</div>;
+        }
+    },
+    // === SỬA ĐỔI TẠI ĐÂY: Thêm lại các cột ẩn để lọc ===
+    { id: "chuyen_nganh", accessorFn: row => String(row.original?.sinhvien?.ID_CHUYENNGANH) },
+    { id: "khoa_bomon", accessorFn: row => String(row.original?.giangvien?.ID_KHOA_BOMON) },
     {
         id: "trang_thai",
         accessorKey: "TRANGTHAI_KICHHOAT",
