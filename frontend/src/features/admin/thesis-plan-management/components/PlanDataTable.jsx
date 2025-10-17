@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { getColumns } from './columns.jsx';
-import { DataTable } from '@/features/admin/user-management/components/data-table.jsx';
+// ĐÃ SỬA ĐỔI: Cập nhật đường dẫn import đến vị trí mới
+import { DataTable } from '@/components/shared/data-table/DataTable.jsx';
 
 export function PlanDataTable({
     data,
@@ -13,10 +14,8 @@ export function PlanDataTable({
     setColumnFilters,
     sorting,
     setSorting,
-    // === BẮT ĐẦU SỬA LỖI: Nhận props mới và truyền xuống ===
     searchTerm,
     onSearchChange,
-    // === KẾT THÚC SỬA LỖI ===
 }) {
 
     const columns = useMemo(() => getColumns(columnsConfig), [columnsConfig]);
@@ -38,10 +37,8 @@ export function PlanDataTable({
             addBtnText="Thêm Kế hoạch"
             searchColumnId="TEN_DOT"
             searchPlaceholder="Tìm theo tên kế hoạch..."
-            // === BẮT ĐẦU SỬA LỖI: Truyền props mới và truyền xuống ===
             searchTerm={searchTerm}
             onSearchChange={onSearchChange}
-            // === KẾT THÚC SỬA LỖI ===
         />
     );
 }

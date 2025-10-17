@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getGroups } from '@/api/adminGroupService';
 import { toast } from 'sonner';
 import { getColumns } from './columns';
-import { DataTable } from '@/features/admin/user-management/components/data-table';
+import { DataTable } from '@/components/shared/data-table/DataTable';
 import { AddStudentDialog } from './AddStudentDialog';
 import { GroupFormDialog } from './GroupFormDialog';
 
@@ -17,6 +17,9 @@ export function GroupDataTable({ planId, onSuccess }) {
     const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState(null);
+    
+    // Thêm state cho debouncing
+    const [searchTerm, setSearchTerm] = useState('');
 
     const handleAddStudent = (group) => {
         setSelectedGroup(group);
@@ -50,10 +53,26 @@ export function GroupDataTable({ planId, onSuccess }) {
             .catch(() => toast.error("Lỗi khi tải danh sách nhóm."))
             .finally(() => setLoading(false));
     }, [pagination, columnFilters, sorting, planId]);
+    
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setColumnFilters(prev => {
+                const existingFilter = prev.find(f => f.id === 'TEN_NHOM');
+                if (searchTerm) {
+                    if (existingFilter) {
+                        return prev.map(f => f.id === 'TEN_NHOM' ? { ...f, value: searchTerm } : f);
+                    }
+                    return [...prev, { id: 'TEN_NHOM', value: searchTerm }];
+                }
+                return prev.filter(f => f.id !== 'TEN_NHOM');
+            });
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchTerm]);
 
     useEffect(() => {
-        const timer = setTimeout(() => fetchData(), 300);
-        return () => clearTimeout(timer);
+        fetchData();
     }, [fetchData]);
 
     const columns = useMemo(() => getColumns({ onEdit: handleEdit, onAddStudent: handleAddStudent, onSuccess }), [onSuccess]);
@@ -74,6 +93,8 @@ export function GroupDataTable({ planId, onSuccess }) {
                 onAddUser={null}
                 searchColumnId="TEN_NHOM"
                 searchPlaceholder="Tìm theo tên nhóm..."
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
             />
             <AddStudentDialog 
                 isOpen={isAddStudentOpen} 

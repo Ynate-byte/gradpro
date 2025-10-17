@@ -3,8 +3,8 @@
 import * as React from "react"
 import { flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DataTablePagination } from "./data-table-pagination"
-import { DataTableToolbar } from "./data-table-toolbar"
+import { DataTablePagination } from "./DataTablePagination"
+import { DataTableToolbar } from "./DataTableToolbar"
 
 export function DataTable({ 
     columns, 
@@ -27,10 +27,8 @@ export function DataTable({
     statusColumnId,
     statusOptions,
     addBtnText,
-    // === BẮT ĐẦU SỬA LỖI: Nhận props cho search term ===
     searchTerm,
     onSearchChange,
-    // === KẾT THÚC SỬA LỖI ===
 }) {
   const table = useReactTable({
     data,
@@ -69,10 +67,8 @@ export function DataTable({
         statusColumnId={statusColumnId}
         statusOptions={statusOptions}
         addBtnText={addBtnText}
-        // === BẮT ĐẦU SỬA LỖI: Truyền props xuống toolbar ===
         searchTerm={searchTerm}
         onSearchChange={onSearchChange}
-        // === KẾT THÚC SỬA LỖI ===
       />
       <div className="rounded-md border max-h-[calc(100vh-25rem)] overflow-y-auto relative">
         <Table>

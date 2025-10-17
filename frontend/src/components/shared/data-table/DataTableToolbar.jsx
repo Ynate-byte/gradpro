@@ -5,7 +5,7 @@ import { Cross2Icon } from "@radix-ui/react-icons"
 import { PlusCircle, Upload, Trash2, KeyRound } from "lucide-react" 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { DataTableFacetedFilter } from "./data-table-faceted-filter"
+import { DataTableFacetedFilter } from "./DataTableFacetedFilter"
 import { performBulkAction, performBulkDelete, bulkResetPassword } from "@/api/userService" 
 import { toast } from "sonner"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -23,9 +23,7 @@ export function DataTableToolbar({
     statusOptions,
     addBtnText,
     searchTerm,
-    // === BẮT ĐẦU SỬA LỖI: Thêm giá trị mặc định để tránh lỗi ===
     onSearchChange = () => {},
-    // === KẾT THÚC SỬA LỖI ===
 }) {
     const [isAlertOpen, setIsAlertOpen] = useState(false);
     const [bulkAction, setBulkAction] = useState(null);

@@ -3,12 +3,13 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreThesisPlanRequest;
+use App\Http\Requests\UpdateThesisPlanRequest;
 use App\Models\KehoachKhoaluan;
 use App\Models\MocThoigian;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\Rule;
 use Barryvdh\DomPDF\Facade\Pdf;
 
 class ThesisPlanController extends Controller
@@ -17,47 +18,26 @@ class ThesisPlanController extends Controller
     {
         $query = KehoachKhoaluan::with('nguoiTao')->orderBy('NGAYTAO', 'desc');
 
-        // === BẮT ĐẦU THÊM MỚI: Xử lý logic tìm kiếm ===
         if ($request->filled('search')) {
             $query->where('TEN_DOT', 'like', '%' . $request->search . '%');
         }
-        // === KẾT THÚC THÊM MỚI ===
 
         $plans = $query->paginate($request->per_page ?? 10);
         return response()->json($plans);
     }
 
-    public function store(Request $request)
+    public function store(StoreThesisPlanRequest $request)
     {
-        $validated = $request->validate([
-            'TEN_DOT' => 'required|string|max:100',
-            'NAMHOC' => 'required|string|max:20',
-            'HOCKY' => 'required|in:1,2,3',
-            'KHOAHOC' => 'required|string|max:10',
-            'HEDAOTAO' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
-            'NGAY_BATDAU' => 'required|date', 
-            'NGAY_KETHUC' => 'required|date|after_or_equal:NGAY_BATDAU', 
-            'mocThoigians' => 'required|array|min:1',
-            'mocThoigians.*.TEN_SUKIEN' => 'required|string|max:255',
-            'mocThoigians.*.NGAY_BATDAU' => 'required|date',
-            'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU',
-            'mocThoigians.*.MOTA' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         try {
             DB::beginTransaction();
 
-            $plan = KehoachKhoaluan::create([
-                'TEN_DOT' => $validated['TEN_DOT'],
-                'NAMHOC' => $validated['NAMHOC'],
-                'HOCKY' => $validated['HOCKY'],
-                'KHOAHOC' => $validated['KHOAHOC'],
-                'HEDAOTAO' => $validated['HEDAOTAO'],
-                'NGAY_BATDAU' => $validated['NGAY_BATDAU'], 
-                'NGAY_KETHUC' => $validated['NGAY_KETHUC'], 
+            $planData = collect($validated)->except('mocThoigians')->all();
+            $plan = KehoachKhoaluan::create(array_merge($planData, [
                 'ID_NGUOITAO' => $request->user()->ID_NGUOIDUNG,
                 'TRANGTHAI' => 'Bản nháp',
-            ]);
+            ]));
 
             foreach ($validated['mocThoigians'] as $moc) {
                 $plan->mocThoigians()->create($moc);
@@ -77,32 +57,18 @@ class ThesisPlanController extends Controller
         return response()->json($plan->load('mocThoigians', 'nguoiTao'));
     }
 
-    public function update(Request $request, KehoachKhoaluan $plan)
+    public function update(UpdateThesisPlanRequest $request, KehoachKhoaluan $plan)
     {
         if (!in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa'])) {
             return response()->json(['message' => 'Không thể chỉnh sửa kế hoạch ở trạng thái này.'], 403);
         }
 
-        $validated = $request->validate([
-            'TEN_DOT' => 'required|string|max:100',
-            'NAMHOC' => 'required|string|max:20',
-            'HOCKY' => 'required|in:1,2,3',
-            'KHOAHOC' => 'required|string|max:10',
-            'HEDAOTAO' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
-            'NGAY_BATDAU' => 'required|date', 
-            'NGAY_KETHUC' => 'required|date|after_or_equal:NGAY_BATDAU', 
-            'mocThoigians' => 'required|array|min:1',
-            'mocThoigians.*.id' => 'nullable|integer',
-            'mocThoigians.*.TEN_SUKIEN' => 'required|string|max:255',
-            'mocThoigians.*.NGAY_BATDAU' => 'required|date',
-            'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU',
-            'mocThoigians.*.MOTA' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         try {
             DB::beginTransaction();
 
-            $plan->update($validated);
+            $plan->update(collect($validated)->except('mocThoigians')->all());
 
             $incomingIds = collect($validated['mocThoigians'])->pluck('id')->filter();
             $plan->mocThoigians()->whereNotIn('ID', $incomingIds)->delete();
@@ -194,23 +160,9 @@ class ThesisPlanController extends Controller
         }
     }
     
-    public function previewNewPlan(Request $request)
+    public function previewNewPlan(StoreThesisPlanRequest $request)
     {
-        $validated = $request->validate([
-            'TEN_DOT' => 'required|string|max:100',
-            'NAMHOC' => 'required|string|max:20',
-            'HOCKY' => 'required|in:1,2,3',
-            'KHOAHOC' => 'required|string|max:10',
-            'HEDAOTAO' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
-            // Thêm 2 trường mới vào đây để preview
-            'NGAY_BATDAU' => 'required|date',
-            'NGAY_KETHUC' => 'required|date|after_or_equal:NGAY_BATDAU',
-            'mocThoigians' => 'required|array|min:1',
-            'mocThoigians.*.TEN_SUKIEN' => 'required|string|max:255',
-            'mocThoigians.*.NGAY_BATDAU' => 'required|date',
-            'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU',
-            'mocThoigians.*.MOTA' => 'nullable|string',
-        ]);
+        $validated = $request->validated();
 
         try {
             $plan = new KehoachKhoaluan($validated);

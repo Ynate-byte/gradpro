@@ -1,12 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { getColumns } from './components/columns';
-import { DataTable } from './components/data-table';
+import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getUsers, getChuyenNganhs, getKhoaBomons } from '@/api/userService';
 import { UserFormDialog } from './components/user-form-dialog';
 import { UserImportDialog } from './components/UserImportDialog';
 import { UserDetailSheet } from './components/UserDetailSheet';
-import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster, toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, GraduationCap, Briefcase, ShieldCheck } from 'lucide-react';
@@ -54,10 +53,7 @@ export default function UserManagementPage() {
     const [columnFilters, setColumnFilters] = useState([]);
     const [sorting, setSorting] = useState([]);
     const [filterOptions, setFilterOptions] = useState({ chuyenNganhs: [], khoaBomons: [] });
-
-    // === BẮT ĐẦU SỬA LỖI: Thêm state cho debouncing ===
     const [searchTerm, setSearchTerm] = useState('');
-    // === KẾT THÚC SỬA LỖI ===
 
     useEffect(() => {
         Promise.all([
@@ -90,7 +86,6 @@ export default function UserManagementPage() {
             .finally(() => setLoading(false));
     }, [pagination, columnFilters, sorting, activeTab]);
 
-    // === BẮT ĐẦU SỬA LỖI: Tách useEffect cho debouncing và fetchData ===
     useEffect(() => {
         const timer = setTimeout(() => {
             setColumnFilters(prev => {
@@ -103,7 +98,7 @@ export default function UserManagementPage() {
                 }
                 return prev.filter(f => f.id !== 'HODEM_VA_TEN');
             });
-        }, 500); // Đợi 500ms sau khi người dùng ngừng gõ
+        }, 300);
 
         return () => {
             clearTimeout(timer);
@@ -113,8 +108,6 @@ export default function UserManagementPage() {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
-    // === KẾT THÚC SỬA LỖI ===
-
 
     const handleFormSuccess = () => fetchData();
     const handleOpenCreateDialog = () => { setEditingUser(null); setIsDialogOpen(true); };
@@ -161,10 +154,8 @@ export default function UserManagementPage() {
             addBtnText="Thêm người dùng"
             statusColumnId="trang_thai"
             statusOptions={[{ value: "1", label: "Hoạt động" }, { value: "0", label: "Vô hiệu" }]}
-            // === BẮT ĐẦU SỬA LỖI: Truyền state và setter cho search term ===
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
-            // === KẾT THÚC SỬA LỖI ===
         />
     );
 

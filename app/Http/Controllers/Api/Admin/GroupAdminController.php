@@ -7,13 +7,13 @@ use Illuminate\Http\Request;
 use App\Models\Nguoidung;
 use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
-use App\Models\Vaitro;
 use App\Models\KehoachKhoaluan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use App\Exports\GroupsExport;
 use Maatwebsite\Excel\Facades\Excel;
+use App\Services\AutoGroupingService;
 
 class GroupAdminController extends Controller
 {
@@ -24,7 +24,6 @@ class GroupAdminController extends Controller
         $query = Nhom::with(['nhomtruong', 'chuyennganh', 'khoabomon', 'thanhviens.nguoidung']);
 
         if ($request->filled('plan_id')) {
-            // SỬA LỖI: Sử dụng $request->input() để đảm bảo lấy đúng tham số query
             $query->where('ID_KEHOACH', $request->input('plan_id'));
         }
 
@@ -67,25 +66,25 @@ class GroupAdminController extends Controller
         $plan = KehoachKhoaluan::find($request->plan_id);
 
         try {
-            $allStudentIdsInPlan = $plan->sinhvienThamgias()->pluck('ID_SINHVIEN');
-            
-            $allUserIdsInPlan = DB::table('SINHVIEN')->whereIn('ID_SINHVIEN', $allStudentIdsInPlan)->pluck('ID_NGUOIDUNG');
+            $activeStudentUserIdsQuery = Nguoidung::query()
+                ->where('TRANGTHAI_KICHHOAT', true)
+                ->whereHas('sinhvien.cacDotThamGia', function ($query) use ($plan) {
+                    $query->where('ID_KEHOACH', $plan->ID_KEHOACH);
+                });
 
-            $activeStudentsQuery = Nguoidung::whereIn('ID_NGUOIDUNG', $allUserIdsInPlan)
-                ->where('TRANGTHAI_KICHHOAT', true);
+            $totalStudents = (clone $activeStudentUserIdsQuery)->count();
 
-            $totalStudents = (clone $activeStudentsQuery)->count();
-            
-            $inactiveStudents = Nguoidung::whereIn('ID_NGUOIDUNG', $allUserIdsInPlan)
+            $studentsWithoutGroup = (clone $activeStudentUserIdsQuery)
+                ->whereDoesntHave('thanhvienNhom', function($query) use ($plan) {
+                    $query->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH));
+                })
+                ->count();
+
+            $inactiveStudents = Nguoidung::query()
                 ->whereNull('DANGNHAP_CUOI')
-                ->count();
-            
-            $groupIDsInPlan = $plan->nhoms()->pluck('ID_NHOM');
-            $studentsInGroupIds = ThanhvienNhom::whereIn('ID_NHOM', $groupIDsInPlan)->pluck('ID_NGUOIDUNG');
-
-            $studentsWithoutGroup = (clone $activeStudentsQuery)
-                ->whereNotIn('ID_NGUOIDUNG', $studentsInGroupIds)
-                ->count();
+                ->whereHas('sinhvien.cacDotThamGia', function ($query) use ($plan) {
+                    $query->where('ID_KEHOACH', $plan->ID_KEHOACH);
+                })->count();
 
             return response()->json([
                 'totalStudents' => $totalStudents,
@@ -159,7 +158,7 @@ class GroupAdminController extends Controller
         return Excel::download(new GroupsExport($plan->ID_KEHOACH), 'danh-sach-nhom-'.$plan->KHOAHOC.'.xlsx');
     }
 
-    public function autoGroupStudents(Request $request)
+    public function autoGroupStudents(Request $request, AutoGroupingService $groupingService)
     {
         $validated = $request->validate([
             'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
@@ -168,96 +167,9 @@ class GroupAdminController extends Controller
         ]);
         
         $plan = KehoachKhoaluan::find($validated['plan_id']);
-        $desiredMembers = $validated['desiredMembers'];
-        $priority = $validated['priority'];
-    
-        return DB::transaction(function () use ($desiredMembers, $priority, $plan) {
-            $allStudentIdsInPlan = $plan->sinhvienThamgias()->pluck('ID_SINHVIEN');
-            $allUserIdsInPlan = DB::table('SINHVIEN')->whereIn('ID_SINHVIEN', $allStudentIdsInPlan)->pluck('ID_NGUOIDUNG');
-            $groupIDsInPlan = $plan->nhoms()->pluck('ID_NHOM');
-            $studentsInGroupIds = ThanhvienNhom::whereIn('ID_NHOM', $groupIDsInPlan)->pluck('ID_NGUOIDUNG');
-
-            $ungroupedStudents = Nguoidung::whereIn('ID_NGUOIDUNG', $allUserIdsInPlan)
-                ->where('TRANGTHAI_KICHHOAT', true)
-                ->whereNotIn('ID_NGUOIDUNG', $studentsInGroupIds)
-                ->with('sinhvien.chuyennganh')
-                ->get()
-                ->shuffle();
-    
-            $notFullGroups = $plan->nhoms()
-                ->where('SO_THANHVIEN_HIENTAI', '<', $desiredMembers)
-                ->where('LA_NHOM_DACBIET', false)
-                ->get();
-            
-            $membersAddedCount = 0;
-            $newGroupsCount = 0;
-    
-            foreach ($notFullGroups as $group) {
-                if ($ungroupedStudents->isEmpty()) break;
-    
-                $spaceLeft = $desiredMembers - $group->SO_THANHVIEN_HIENTAI;
-                $studentsToFill = $ungroupedStudents->filter(function ($student) use ($group, $priority) {
-                    if ($priority === 'chuyennganh' && $group->ID_CHUYENNGANH) {
-                        return $student->sinhvien?->ID_CHUYENNGANH === $group->ID_CHUYENNGANH;
-                    }
-                    return true;
-                })->take($spaceLeft);
-                
-                if ($studentsToFill->isNotEmpty()) {
-                    $studentIds = $studentsToFill->pluck('ID_NGUOIDUNG');
-                    foreach($studentIds as $id) {
-                         ThanhvienNhom::create(['ID_NHOM' => $group->ID_NHOM, 'ID_NGUOIDUNG' => $id]);
-                    }
-                    $group->increment('SO_THANHVIEN_HIENTAI', $studentsToFill->count());
-                    $membersAddedCount += $studentsToFill->count();
-                    $ungroupedStudents = $ungroupedStudents->reject(fn($s) => $studentIds->contains($s->ID_NGUOIDUNG));
-                }
-            }
-    
-            $studentsGroupedByPriority = $ungroupedStudents->groupBy(function ($student) use ($priority) {
-                if ($priority === 'chuyennganh') {
-                    return $student->sinhvien?->ID_CHUYENNGANH ?? 'no_major';
-                }
-                return 'no_priority';
-            });
-            
-            foreach($studentsGroupedByPriority as $priorityId => $priorityGroup) {
-                if ($priorityId === 'no_major' || $priorityId === 'no_priority') continue;
-
-                foreach($priorityGroup->chunk($desiredMembers) as $chunk) {
-                    if ($chunk->count() < 2) continue;
-    
-                    $leader = $chunk->first();
-                    $majorCode = $leader->sinhvien?->chuyennganh?->MA_CHUYENNGANH ?? 'N/A';
-
-                    $newGroup = Nhom::create([
-                        'ID_KEHOACH' => $plan->ID_KEHOACH,
-                        'TEN_NHOM' => "Nhóm tự động - {$majorCode} - " . substr(uniqid(), -4),
-                        'ID_NHOMTRUONG' => $leader->ID_NGUOIDUNG,
-                        'ID_CHUYENNGANH' => $leader->sinhvien?->ID_CHUYENNGANH,
-                        'SO_THANHVIEN_HIENTAI' => $chunk->count(),
-                    ]);
-                    $newGroupsCount++;
-    
-                    $studentIdsForNewGroup = $chunk->pluck('ID_NGUOIDUNG');
-                    $membersToInsert = $studentIdsForNewGroup->map(fn($id) => [
-                        'ID_NHOM' => $newGroup->ID_NHOM,
-                        'ID_NGUOIDUNG' => $id,
-                        'NGAY_VAONHOM' => now(),
-                    ])->all();
-                    ThanhvienNhom::insert($membersToInsert);
-                    
-                    $membersAddedCount += $chunk->count();
-                    $ungroupedStudents = $ungroupedStudents->reject(fn($s) => $studentIdsForNewGroup->contains($s->ID_NGUOIDUNG));
-                }
-            }
-            
-            return response()->json([
-                'message' => 'Quá trình ghép nhóm tự động đã hoàn tất.',
-                'newGroupsCreated' => $newGroupsCount,
-                'membersAdded' => $membersAddedCount,
-                'leftoverStudents' => $ungroupedStudents->values()->all(),
-            ]);
-        });
+        
+        $result = $groupingService->execute($plan, $validated['desiredMembers'], $validated['priority']);
+        
+        return response()->json($result);
     }
 }
