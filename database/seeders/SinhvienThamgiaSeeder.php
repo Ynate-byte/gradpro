@@ -6,26 +6,37 @@ use Illuminate\Database\Seeder;
 use App\Models\KehoachKhoaluan;
 use App\Models\Sinhvien;
 use App\Models\SinhvienThamgia;
+use Illuminate\Support\Facades\DB;
 
 class SinhvienThamgiaSeeder extends Seeder
 {
     public function run(): void
     {
-        SinhvienThamgia::query()->delete();
+        DB::table('SINHVIEN_THAMGIA')->delete();
 
-        // Lấy kế hoạch đang thực hiện
-        $planInProgress = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')->first();
+        $inProgressPlans = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')->get();
+        if ($inProgressPlans->isEmpty()) {
+            $this->command->warn("Không tìm thấy kế hoạch nào 'Đang thực hiện' để thêm sinh viên.");
+            return;
+        }
 
-        if ($planInProgress) {
-            // Lấy 30 sinh viên đang hoạt động để cho tham gia
-            $students = Sinhvien::whereHas('nguoidung', function ($q) {
-                $q->where('TRANGTHAI_KICHHOAT', true);
-            })->inRandomOrder()->limit(30)->get();
+        $allActiveStudents = Sinhvien::whereHas('nguoidung', fn($q) => $q->where('TRANGTHAI_KICHHOAT', true))->get();
+
+        if ($allActiveStudents->count() < 30) {
+            $this->command->warn("Không đủ sinh viên để tạo dữ liệu mẫu. Cần ít nhất 30 sinh viên.");
+            return;
+        }
+
+        $studentChunks = $allActiveStudents->shuffle()->chunk(ceil($allActiveStudents->count() / $inProgressPlans->count()));
+        
+        foreach ($inProgressPlans as $index => $plan) {
+            $studentsForThisPlan = $studentChunks->get($index);
+            if (!$studentsForThisPlan) continue;
 
             $dataToInsert = [];
-            foreach ($students as $student) {
+            foreach ($studentsForThisPlan as $student) {
                 $dataToInsert[] = [
-                    'ID_KEHOACH' => $planInProgress->ID_KEHOACH,
+                    'ID_KEHOACH' => $plan->ID_KEHOACH,
                     'ID_SINHVIEN' => $student->ID_SINHVIEN,
                     'DU_DIEUKIEN' => true,
                     'NGAY_DANGKY' => now(),
@@ -33,9 +44,7 @@ class SinhvienThamgiaSeeder extends Seeder
             }
             SinhvienThamgia::insert($dataToInsert);
 
-            $this->command->info("Đã thêm " . count($dataToInsert) . " sinh viên vào kế hoạch đang thực hiện.");
-        } else {
-            $this->command->warn("Không tìm thấy kế hoạch nào 'Đang thực hiện' để thêm sinh viên.");
+            $this->command->info("Đã thêm " . count($dataToInsert) . " sinh viên vào kế hoạch: '{$plan->TEN_DOT}'.");
         }
     }
 }

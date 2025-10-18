@@ -3,13 +3,15 @@ import { motion } from 'framer-motion';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, UserX, SlidersHorizontal, FileDown, BookCopy, Loader2 } from 'lucide-react';
+import { Users, UserX, SlidersHorizontal, FileDown, BookCopy, Loader2, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getGroupStatistics, exportGroups } from '@/api/adminGroupService';
 import { getAllPlans } from '@/api/thesisPlanService';
 import { AutoGroupDialog } from './components/AutoGroupDialog';
 import { InactiveStudentsDialog } from './components/InactiveStudentsDialog';
 import { GroupDataTable } from './components/GroupDataTable';
+import { CreateGroupDialog } from './components/CreateGroupDialog';
+import { GroupDetailSheet } from './components/GroupDetailSheet';
 
 const StatCard = ({ icon: Icon, title, value, onAction, actionLabel = "Xem danh sách" }) => (
     <Card>
@@ -32,6 +34,9 @@ export default function GroupAdminPage() {
     const [isAutoGroupOpen, setIsAutoGroupOpen] = useState(false);
     const [isInactiveStudentOpen, setIsInactiveStudentOpen] = useState(false);
     const [refreshTrigger, setRefreshTrigger] = useState(false);
+    const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false);
+    const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+    const [viewingGroup, setViewingGroup] = useState(null);
 
     useEffect(() => {
         getAllPlans().then(data => {
@@ -59,6 +64,11 @@ export default function GroupAdminPage() {
     useEffect(() => {
         fetchStats();
     }, [fetchStats]);
+
+    const handleViewDetails = (group) => {
+        setViewingGroup(group);
+        setIsDetailSheetOpen(true);
+    };
 
     const handleExport = async () => {
         if (!selectedPlanId) {
@@ -135,21 +145,25 @@ export default function GroupAdminPage() {
             
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                  <Card>
-                    <CardHeader>
-                        <CardTitle>Hành động xử lý</CardTitle>
-                        <CardDescription>Thực hiện các thao tác hàng loạt cho kế hoạch đã chọn.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex flex-wrap gap-4">
-                        <Button onClick={() => setIsAutoGroupOpen(true)} disabled={!selectedPlanId}>
-                            <SlidersHorizontal className="mr-2 h-4 w-4" />
-                            Tiến hành ghép nhóm tự động
+                     <CardHeader>
+                         <CardTitle>Hành động xử lý</CardTitle>
+                         <CardDescription>Thực hiện các thao tác hàng loạt cho kế hoạch đã chọn.</CardDescription>
+                     </CardHeader>
+                     <CardContent className="flex flex-wrap gap-4">
+                        <Button onClick={() => setIsCreateGroupOpen(true)} disabled={!selectedPlanId}>
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Tạo nhóm mới
                         </Button>
-                        <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId}>
-                            <FileDown className="mr-2 h-4 w-4" />
-                            Xuất danh sách tổng hợp
-                        </Button>
-                    </CardContent>
-                </Card>
+                         <Button onClick={() => setIsAutoGroupOpen(true)} disabled={!selectedPlanId}>
+                             <SlidersHorizontal className="mr-2 h-4 w-4" />
+                             Tiến hành ghép nhóm tự động
+                         </Button>
+                         <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId}>
+                             <FileDown className="mr-2 h-4 w-4" />
+                             Xuất danh sách tổng hợp
+                         </Button>
+                     </CardContent>
+                 </Card>
             </motion.div>
             
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
@@ -160,7 +174,12 @@ export default function GroupAdminPage() {
                     </CardHeader>
                     <CardContent>
                         {selectedPlanId ? (
-                            <GroupDataTable key={`${selectedPlanId}-${refreshTrigger}`} planId={selectedPlanId} onSuccess={handleSuccess} />
+                            <GroupDataTable 
+                                key={`${selectedPlanId}-${refreshTrigger}`} 
+                                planId={selectedPlanId} 
+                                onSuccess={handleSuccess}
+                                onViewDetails={handleViewDetails}
+                            />
                         ) : (
                             <div className="text-center text-muted-foreground p-8">Vui lòng chọn một kế hoạch để xem danh sách nhóm.</div>
                         )}
@@ -170,6 +189,8 @@ export default function GroupAdminPage() {
 
             <InactiveStudentsDialog isOpen={isInactiveStudentOpen} setIsOpen={setIsInactiveStudentOpen} onSuccess={handleSuccess} planId={selectedPlanId} />
             <AutoGroupDialog isOpen={isAutoGroupOpen} setIsOpen={setIsAutoGroupOpen} onSuccess={handleSuccess} planId={selectedPlanId} />
+            <CreateGroupDialog isOpen={isCreateGroupOpen} setIsOpen={setIsCreateGroupOpen} onSuccess={handleSuccess} planId={selectedPlanId} />
+            <GroupDetailSheet group={viewingGroup} isOpen={isDetailSheetOpen} setIsOpen={setIsDetailSheetOpen} />
         </div>
     );
 }

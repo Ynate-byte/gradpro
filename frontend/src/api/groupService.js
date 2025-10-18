@@ -54,3 +54,11 @@ export const leaveGroup = async () => {
     const response = await axiosClient.post('/nhom/leave');
     return response.data;
 };
+
+export const searchUngroupedStudents = (planId, search) => {
+    return axiosClient.get('/admin/groups/search-ungrouped-students', { params: { plan_id: planId, search } }).then(res => res.data);
+};
+
+export const createGroupWithMembers = (payload) => {
+    return axiosClient.post('/admin/groups/create-with-members', payload).then(res => res.data);
+};

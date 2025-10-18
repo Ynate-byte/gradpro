@@ -6,7 +6,7 @@ import { DataTable } from '@/components/shared/data-table/DataTable';
 import { AddStudentDialog } from './AddStudentDialog';
 import { GroupFormDialog } from './GroupFormDialog';
 
-export function GroupDataTable({ planId, onSuccess }) {
+export function GroupDataTable({ planId, onSuccess, onViewDetails }) {
     const [data, setData] = useState([]);
     const [pageCount, setPageCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -17,8 +17,6 @@ export function GroupDataTable({ planId, onSuccess }) {
     const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState(null);
-    
-    // Thêm state cho debouncing
     const [searchTerm, setSearchTerm] = useState('');
 
     const handleAddStudent = (group) => {
@@ -75,7 +73,12 @@ export function GroupDataTable({ planId, onSuccess }) {
         fetchData();
     }, [fetchData]);
 
-    const columns = useMemo(() => getColumns({ onEdit: handleEdit, onAddStudent: handleAddStudent, onSuccess }), [onSuccess]);
+    const columns = useMemo(() => getColumns({ 
+        onEdit: handleEdit, 
+        onAddStudent: handleAddStudent, 
+        onSuccess, 
+        onViewDetails 
+    }), [onSuccess, onViewDetails]);
     
     return (
         <>

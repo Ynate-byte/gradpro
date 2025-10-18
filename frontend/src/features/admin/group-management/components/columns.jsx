@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { GroupRowActions } from "./row-actions";
 
-export const getColumns = ({ onEdit, onAddStudent, onSuccess }) => [
+export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails }) => [
     {
         accessorKey: "TEN_NHOM",
         header: ({ column }) => (
@@ -14,7 +14,12 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess }) => [
             </Button>
         ),
         cell: ({ row }) => (
-            <div className="font-medium pl-2">{row.original.TEN_NHOM}</div>
+            <button 
+                className="font-medium text-left hover:underline pl-2"
+                onClick={() => onViewDetails(row.original)}
+            >
+                {row.original.TEN_NHOM}
+            </button>
         )
     },
     {

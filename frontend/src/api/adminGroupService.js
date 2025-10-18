@@ -1,7 +1,6 @@
 import axiosClient from './axiosConfig';
 
 export const getGroups = (params) => {
-    // plan_id sẽ được truyền trong object params
     return axiosClient.get('/admin/groups', { params }).then(res => res.data);
 };
 
@@ -26,7 +25,6 @@ export const deleteGroup = (groupId) => {
 };
 
 export const autoGroupStudents = (payload) => {
-    // payload bây giờ sẽ chứa { plan_id, desiredMembers, priority }
     return axiosClient.post('/admin/groups/auto-group', payload).then(res => res.data);
 };
 
@@ -45,3 +43,13 @@ export const exportGroups = async (planId) => {
     });
     return response.data;
 };
+
+// === BẮT ĐẦU THÊM MỚI ===
+export const searchUngroupedStudents = (planId, search) => {
+    return axiosClient.get('/admin/groups/search-ungrouped-students', { params: { plan_id: planId, search } }).then(res => res.data);
+};
+
+export const createGroupWithMembers = (payload) => {
+    return axiosClient.post('/admin/groups/create-with-members', payload).then(res => res.data);
+};
+// === KẾT THÚC THÊM MỚI ===

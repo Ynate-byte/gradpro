@@ -172,4 +172,80 @@ class GroupAdminController extends Controller
         
         return response()->json($result);
     }
+    
+    public function searchUngroupedStudents(Request $request)
+    {
+        $validated = $request->validate([
+            'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'search' => 'nullable|string|max:100',
+        ]);
+        $planId = $validated['plan_id'];
+
+        $query = Nguoidung::query()
+            ->where('TRANGTHAI_KICHHOAT', true)
+            ->whereHas('sinhvien.cacDotThamGia', function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            })
+            ->whereDoesntHave('thanhvienNhom', function ($q) use ($planId) {
+                $q->whereHas('nhom', function ($subQ) use ($planId) {
+                    $subQ->where('ID_KEHOACH', $planId);
+                });
+            });
+
+        if ($request->filled('search')) {
+            $searchTerm = $validated['search'];
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
+                  ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
+                  ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        $students = $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH')->take(10)->get();
+
+        return response()->json($students);
+    }
+
+    public function createWithMembers(Request $request)
+    {
+        $validated = $request->validate([
+            'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'TEN_NHOM' => ['required', 'string', 'max:100', Rule::unique('NHOM')->where('ID_KEHOACH', $request->plan_id)],
+            'MOTA' => 'nullable|string|max:255',
+            'ID_NHOMTRUONG' => 'required|exists:NGUOIDUNG,ID_NGUOIDUNG',
+            'member_ids' => 'required|array|min:1',
+            'member_ids.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG',
+        ]);
+
+        if (!in_array($validated['ID_NHOMTRUONG'], $validated['member_ids'])) {
+            return response()->json(['message' => 'Nhóm trưởng phải là một trong các thành viên được chọn.'], 422);
+        }
+
+        $existingMembers = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $validated['member_ids'])->count();
+        if ($existingMembers > 0) {
+            return response()->json(['message' => 'Một hoặc nhiều sinh viên đã có nhóm. Vui lòng kiểm tra lại.'], 409);
+        }
+
+        $group = null;
+        DB::transaction(function () use ($validated, &$group) {
+            $group = Nhom::create([
+                'ID_KEHOACH' => $validated['plan_id'],
+                'TEN_NHOM' => $validated['TEN_NHOM'],
+                'MOTA' => $validated['MOTA'],
+                'ID_NHOMTRUONG' => $validated['ID_NHOMTRUONG'],
+                'SO_THANHVIEN_HIENTAI' => count($validated['member_ids']),
+                'LA_NHOM_DACBIET' => true,
+            ]);
+
+            $membersToInsert = collect($validated['member_ids'])->map(fn($id) => [
+                'ID_NHOM' => $group->ID_NHOM,
+                'ID_NGUOIDUNG' => $id,
+                'NGAY_VAONHOM' => now(),
+            ])->all();
+
+            ThanhvienNhom::insert($membersToInsert);
+        });
+
+        return response()->json($group->load('thanhviens.nguoidung', 'nhomtruong'), 201);
+    }
 }

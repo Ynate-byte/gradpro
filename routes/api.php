@@ -62,6 +62,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [GroupAdminController::class, 'getGroups']);
             Route::get('/statistics', [GroupAdminController::class, 'getStatistics']);
             Route::get('/inactive-students', [GroupAdminController::class, 'getInactiveStudents']);
+            Route::get('/search-ungrouped-students', [GroupAdminController::class, 'searchUngroupedStudents']);
+            Route::post('/create-with-members', [GroupAdminController::class, 'createWithMembers']);
             Route::post('/remove-students', [GroupAdminController::class, 'removeStudents']);
             Route::post('/auto-group', [GroupAdminController::class, 'autoGroupStudents']);
             Route::get('/export', [GroupAdminController::class, 'exportGroups']);

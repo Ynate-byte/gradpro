@@ -106,7 +106,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             return <div className="text-xs text-muted-foreground">N/A</div>;
         }
     },
-    // === SỬA ĐỔI TẠI ĐÂY: Thêm lại các cột ẩn để lọc ===
     { id: "chuyen_nganh", accessorFn: row => String(row.original?.sinhvien?.ID_CHUYENNGANH) },
     { id: "khoa_bomon", accessorFn: row => String(row.original?.giangvien?.ID_KHOA_BOMON) },
     {
