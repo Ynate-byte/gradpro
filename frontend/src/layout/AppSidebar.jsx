@@ -1,9 +1,9 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
     LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight, LogOut, CircleUserRound, History, Star, Shield,
-    FileText // *** ADDED ICON ***
+    FileText
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -16,14 +16,16 @@ import {
     Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarGroup, SidebarGroupContent,
     SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem
 } from '@/components/ui/sidebar';
-import { useAuth } from '@/contexts/AuthContext'; // Import useAuth to get user info directly
+import { useAuth } from '@/contexts/AuthContext';
 
+// Component chính hiển thị thanh Sidebar của ứng dụng
 export function AppSidebar() {
-    const { user, logout } = useAuth(); // Get user and logout from context
+    const { user, logout } = useAuth();
     const location = useLocation();
+    const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Main Menu Configuration ---
+    // --- Cấu hình Menu Chính ---
     const menuConfig = [
         {
             label: "Platform",
@@ -41,7 +43,7 @@ export function AppSidebar() {
                 {
                     title: "Đồ án",
                     icon: BookCopy,
-                    // Filter sub-items based on user role
+                    // Lọc các mục con dựa trên vai trò người dùng (chỉ sinh viên mới thấy mục nhóm)
                     subItems: [
                         { href: "/projects/topics", title: "Đề tài" },
                         ...(user?.vaitro?.TEN_VAITRO === 'Sinh viên' ? [
@@ -54,7 +56,7 @@ export function AppSidebar() {
         }
     ];
 
-    // --- Admin Menu Configuration ---
+    // --- Cấu hình Menu Quản trị ---
     const adminMenuConfig = [
         {
             label: "Quản trị",
@@ -62,23 +64,24 @@ export function AppSidebar() {
                 { title: "Người dùng", href: "/admin/users", icon: Shield },
                 { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
                 { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
-                // *** ADDED TEMPLATE LINK ***
                 { title: "Kế hoạch Mẫu", href: "/admin/templates", icon: FileText },
             ]
         }
     ];
-    // --- END Update ---
 
-    // --- MenuItem Component (Recursive Renderer) ---
+    // --- Component MenuItem (Hàm render đệ quy các mục menu) ---
     const MenuItem = ({ item }) => {
+        // Kiểm tra xem mục con có đang active hay không
         const isSubItemActive = item.subItems && item.subItems.some(sub =>
             (sub.href === '/' && currentUrl === '/') || (sub.href !== '/' && currentUrl.startsWith(sub.href))
         );
+        // Kiểm tra mục trực tiếp có đang active hay không
         const isDirectActive = item.href && (
             (item.href === '/' && currentUrl === '/') || (item.href !== '/' && currentUrl.startsWith(item.href))
         );
         const isActive = !!(isSubItemActive || isDirectActive);
 
+        // Nếu là mục có sub-menu (dạng Collapsible)
         if (item.subItems) {
             const visibleSubItems = item.subItems;
             if (visibleSubItems.length === 0) return null;
@@ -109,6 +112,7 @@ export function AppSidebar() {
             );
         }
 
+        // Nếu là mục đơn (không có sub-menu)
         if (item.href) {
             return (
                 <SidebarMenuItem>
@@ -127,7 +131,7 @@ export function AppSidebar() {
 
     return (
         <Sidebar collapsible="icon" className="group">
-            {/* Header */}
+            {/* Header: Logo và vai trò người dùng */}
             <SidebarHeader>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -144,13 +148,12 @@ export function AppSidebar() {
                             <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden" />
                         </Button>
                     </DropdownMenuTrigger>
-                    {/* <DropdownMenuContent side="right" align="start" className="w-56"> ... </DropdownMenuContent> */}
                 </DropdownMenu>
             </SidebarHeader>
 
-            {/* Main Content */}
+            {/* Nội dung chính: Các nhóm menu */}
             <SidebarContent className="py-3">
-                {/* Render main menu */}
+                {/* Render menu chính */}
                 {menuConfig.map((group, idx) => (
                     <SidebarGroup key={idx}>
                         <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">{group.label}</SidebarGroupLabel>
@@ -164,7 +167,7 @@ export function AppSidebar() {
                     </SidebarGroup>
                 ))}
 
-                {/* Render admin menu if user is Admin */}
+                {/* Render menu quản trị nếu người dùng là Admin */}
                 {user?.vaitro?.TEN_VAITRO === 'Admin' && adminMenuConfig.map((group, idx) => (
                     <SidebarGroup key={`admin-${idx}`}>
                         <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">{group.label}</SidebarGroupLabel>
@@ -179,35 +182,35 @@ export function AppSidebar() {
                 ))}
             </SidebarContent>
 
-            {/* Footer */}
+            {/* Footer: Thông tin và cài đặt tài khoản */}
             <SidebarFooter>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                         <Button variant="ghost" className="w-full justify-start gap-3 p-2 text-left group-data-[collapsible=icon]:justify-center">
-                             <Avatar className="size-8">
-                                 <AvatarFallback>{user?.HODEM_VA_TEN?.charAt(0) ?? '?'}</AvatarFallback>
-                             </Avatar>
-                             <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden">
-                                 <span className="text-sm font-semibold truncate max-w-[150px]">{user?.HODEM_VA_TEN}</span>
-                                 <span className="text-xs text-muted-foreground truncate max-w-[150px]">{user?.EMAIL}</span>
-                             </div>
-                             <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden" />
-                         </Button>
-                     </DropdownMenuTrigger>
-                     <DropdownMenuContent side="right" align="start" className="w-56">
-                         <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
-                         <DropdownMenuItem onClick={() => navigate('/settings/account')}>
-                              <CircleUserRound className="mr-2 size-4" /> Thông tin
-                         </DropdownMenuItem>
-                         <DropdownMenuItem onClick={() => navigate('/settings/appearance')}>
+                        <Button variant="ghost" className="w-full justify-start gap-3 p-2 text-left group-data-[collapsible=icon]:justify-center">
+                            <Avatar className="size-8">
+                                <AvatarFallback>{user?.HODEM_VA_TEN?.charAt(0) ?? '?'}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden">
+                                <span className="text-sm font-semibold truncate max-w-[150px]">{user?.HODEM_VA_TEN}</span>
+                                <span className="text-xs text-muted-foreground truncate max-w-[150px]">{user?.EMAIL}</span>
+                            </div>
+                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent side="right" align="start" className="w-56">
+                        <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => navigate('/settings/account')}>
+                            <CircleUserRound className="mr-2 size-4" /> Thông tin
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate('/settings/appearance')}>
                             <Settings className='mr-2 size-4'/> Giao diện
-                         </DropdownMenuItem>
-                         <DropdownMenuSeparator />
-                         <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
-                             <LogOut className="mr-2 size-4" /> Đăng xuất
-                         </DropdownMenuItem>
-                     </DropdownMenuContent>
-                 </DropdownMenu>
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">
+                            <LogOut className="mr-2 size-4" /> Đăng xuất
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </SidebarFooter>
         </Sidebar>
     );

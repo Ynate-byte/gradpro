@@ -57,13 +57,6 @@ class Nguoidung extends Authenticatable
         return $this->hasMany(Notification::class, 'user_id', 'ID_NGUOIDUNG');
     }
 
-    // =================================================================
-    // === 👇 BẮT BUỘC THÊM FUNCTION NÀY VÀO ĐỂ SỬA LỖI 👇 ===
-    // =================================================================
-    /**
-     * Định nghĩa quan hệ một-một đến bảng ThanhvienNhom.
-     * Dùng để kiểm tra xem người dùng đã thuộc nhóm nào chưa.
-     */
     public function thanhvienNhom()
     {
         return $this->hasOne(ThanhvienNhom::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');

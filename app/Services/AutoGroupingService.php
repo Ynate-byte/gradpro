@@ -9,8 +9,19 @@ use App\Models\ThanhvienNhom;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
 
+/**
+ * Dịch vụ này xử lý logic tự động ghép nhóm cho sinh viên.
+ */
 class AutoGroupingService
 {
+    /**
+     * Thực thi thuật toán ghép nhóm tự động.
+     *
+     * @param KehoachKhoaluan $plan Kế hoạch cần thực hiện ghép nhóm.
+     * @param int $desiredMembers Số lượng thành viên mong muốn cho mỗi nhóm.
+     * @param string $priority Tiêu chí ưu tiên khi ghép ('chuyennganh' hoặc 'lop').
+     * @return array Kết quả của quá trình ghép nhóm.
+     */
     public function execute(KehoachKhoaluan $plan, int $desiredMembers, string $priority)
     {
         return DB::transaction(function () use ($plan, $desiredMembers, $priority) {
@@ -18,14 +29,12 @@ class AutoGroupingService
             $newGroupsCount = 0;
             $membersInNewGroups = 0;
 
-            // === BƯỚC 1: LẤY DANH SÁCH SINH VIÊN "TỰ DO" ===
-
-            // Lấy ID tất cả sinh viên đã có nhóm trong kế hoạch
+            // BƯỚC 1: CHUẨN BỊ DỮ LIỆU VÀ GIẢI TÁN NHÓM 1 THÀNH VIÊN
+            
             $studentsInGroupIds = ThanhvienNhom::query()
                 ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
                 ->pluck('ID_NGUOIDUNG');
 
-            // Lấy danh sách sinh viên chưa có nhóm
             $availableStudents = Nguoidung::query()
                 ->where('TRANGTHAI_KICHHOAT', true)
                 ->whereHas('sinhvien.cacDotThamGia', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
@@ -33,16 +42,13 @@ class AutoGroupingService
                 ->with('sinhvien.chuyennganh')
                 ->get()->shuffle();
 
-            // Lấy các nhóm có thể thao tác (không đặc biệt)
             $targetGroups = $plan->nhoms()
                 ->where('LA_NHOM_DACBIET', false)
                 ->with('thanhviens.nguoidung.sinhvien.chuyennganh')
                 ->get();
             
-            // Phân loại nhóm: nhóm chỉ có 1 TV (để xóa) và nhóm cần lấp đầy
             list($loneLeaderGroups, $groupsToFill) = $targetGroups->partition(fn($group) => $group->SO_THANHVIEN_HIENTAI == 1);
             
-            // Xử lý nhóm 1 thành viên: giải tán và đưa thành viên vào danh sách chờ
             if ($loneLeaderGroups->isNotEmpty()) {
                 $groupIdsToDelete = [];
                 foreach ($loneLeaderGroups as $group) {
@@ -54,7 +60,8 @@ class AutoGroupingService
                 Nhom::destroy($groupIdsToDelete);
             }
 
-            // === BƯỚC 2: LẤP ĐẦY CÁC NHÓM CÒN TRỐNG (2/4, 3/4) ===
+            // BƯỚC 2: LẤP ĐẦY CÁC NHÓM HIỆN CÓ
+            
             foreach ($groupsToFill as $group) {
                 if ($availableStudents->isEmpty() || $group->SO_THANHVIEN_HIENTAI >= $desiredMembers) {
                     continue;
@@ -63,7 +70,6 @@ class AutoGroupingService
                 $spaceLeft = $desiredMembers - $group->SO_THANHVIEN_HIENTAI;
                 $studentsForThisGroup = new Collection();
                 
-                // Ưu tiên theo chuyên ngành
                 if ($priority === 'chuyennganh' && $group->ID_CHUYENNGANH) {
                     list($sameMajorStudents, $otherStudents) = $availableStudents->partition(
                         fn($student) => $student->sinhvien?->ID_CHUYENNGANH === $group->ID_CHUYENNGANH
@@ -72,7 +78,6 @@ class AutoGroupingService
                     $availableStudents = $otherStudents->merge($sameMajorStudents->skip($spaceLeft));
                 }
                 
-                // Lấy thêm nếu vẫn còn thiếu
                 $stillNeeded = $spaceLeft - $studentsForThisGroup->count();
                 if ($stillNeeded > 0) {
                     $studentsForThisGroup = $studentsForThisGroup->merge($availableStudents->take($stillNeeded));
@@ -89,6 +94,7 @@ class AutoGroupingService
                     ThanhvienNhom::insert($memberData);
                     $newMemberCount = count($memberData);
                     $group->increment('SO_THANHVIEN_HIENTAI', $newMemberCount);
+                    
                     if ($group->SO_THANHVIEN_HIENTAI >= 4) {
                         $group->TRANGTHAI = 'Đã đủ thành viên';
                         $group->save();
@@ -97,7 +103,8 @@ class AutoGroupingService
                 }
             }
 
-            // === BƯỚC 3: TẠO NHÓM MỚI TỪ SINH VIÊN CÒN LẠI ===
+            // BƯỚC 3: TẠO NHÓM MỚI TỪ CÁC SINH VIÊN CÒN LẠI
+            
             $studentsGroupedByPriority = $availableStudents->groupBy(function ($student) use ($priority) {
                 if ($priority === 'chuyennganh') {
                     return $student->sinhvien?->ID_CHUYENNGANH ?? 'no_major';
@@ -109,7 +116,7 @@ class AutoGroupingService
 
             foreach ($studentsGroupedByPriority as $priorityId => $studentsInPriority) {
                 foreach ($studentsInPriority->chunk($desiredMembers) as $chunk) {
-                    if ($chunk->count() < 2) { // Nhóm phải có ít nhất 2 thành viên
+                    if ($chunk->count() < 2) { 
                         $leftoverStudents = $leftoverStudents->merge($chunk);
                         continue;
                     }

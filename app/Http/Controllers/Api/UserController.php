@@ -19,6 +19,11 @@ use Throwable;
 
 class UserController extends Controller
 {
+    // QUẢN LÝ NGƯỜI DÙNG (CRUD)
+
+    /**
+     * Lấy danh sách người dùng (hỗ trợ lọc, tìm kiếm, sắp xếp, phân trang).
+     */
     public function index(Request $request)
     {
         $query = Nguoidung::with(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon']);
@@ -71,6 +76,9 @@ class UserController extends Controller
         return response()->json($users);
     }
 
+    /**
+     * Tạo một người dùng mới.
+     */
     public function store(Request $request)
     {
         $vaitroSV = Vaitro::where('TEN_VAITRO', 'Sinh viên')->first()->ID_VAITRO;
@@ -114,12 +122,18 @@ class UserController extends Controller
         return response()->json($user->load(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon']), 201);
     }
 
+    /**
+     * Lấy thông tin chi tiết một người dùng.
+     */
     public function show($id)
     {
         $user = Nguoidung::with(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon'])->findOrFail($id);
         return response()->json($user);
     }
 
+    /**
+     * Cập nhật thông tin người dùng.
+     */
     public function update(Request $request, $id)
     {
         $user = Nguoidung::findOrFail($id);
@@ -152,6 +166,9 @@ class UserController extends Controller
         return response()->json($user->load(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon']));
     }
 
+    /**
+     * Xóa một người dùng.
+     */
     public function destroy($id)
     {
         $user = Nguoidung::findOrFail($id);
@@ -159,6 +176,9 @@ class UserController extends Controller
         return response()->json(null, 204);
     }
 
+    /**
+     * Đặt lại mật khẩu của người dùng về mặc định.
+     */
     public function resetPassword(Request $request, $id)
     {
         $user = Nguoidung::findOrFail($id);
@@ -168,6 +188,11 @@ class UserController extends Controller
         return response()->json(['message' => 'Mật khẩu đã được reset thành công.']);
     }
 
+    // XỬ LÝ HÀNG LOẠT (BULK ACTIONS)
+
+    /**
+     * Kích hoạt hoặc vô hiệu hóa hàng loạt người dùng.
+     */
     public function bulkAction(Request $request)
     {
         $validated = $request->validate([
@@ -180,6 +205,9 @@ class UserController extends Controller
         return response()->json(['message' => 'Cập nhật trạng thái thành công.']);
     }
 
+    /**
+     * Xóa hàng loạt người dùng.
+     */
     public function bulkDelete(Request $request)
     {
         $validated = $request->validate([
@@ -192,6 +220,10 @@ class UserController extends Controller
 
         return response()->json(['message' => "Đã xóa thành công {$count} người dùng."]);
     }
+    
+    /**
+     * Đặt lại mật khẩu hàng loạt cho người dùng.
+     */
     public function bulkResetPassword(Request $request)
     {
         $validated = $request->validate([
@@ -207,10 +239,29 @@ class UserController extends Controller
 
         return response()->json(['message' => "Đã reset mật khẩu cho {$count} người dùng thành công."]);
     }
+
+    // CÁC HÀM TIỆN ÍCH (HELPERS)
+    
+    /**
+     * Lấy danh sách vai trò (trừ Admin).
+     */
     public function getRoles() { return Vaitro::where('TEN_VAITRO', '!=', 'Admin')->get(); }
+    
+    /**
+     * Lấy danh sách chuyên ngành đang hoạt động.
+     */
     public function getChuyenNganhs() { return Chuyennganh::where('TRANGTHAI_KICHHOAT', true)->get(); }
+
+    /**
+     * Lấy danh sách khoa/bộ môn đang hoạt động.
+     */
     public function getKhoaBomons() { return KhoaBomon::where('TRANGTHAI_KICHHOAT', true)->get(); }
     
+    // IMPORT DỮ LIỆU TỪ FILE EXCEL
+
+    /**
+     * Tải về file mẫu để import người dùng.
+     */
     public function downloadImportTemplate()
     {
         $path = storage_path('app/templates/import_users_template.xlsx');
@@ -220,6 +271,9 @@ class UserController extends Controller
         return response()->download($path);
     }
 
+    /**
+     * Đọc và xác thực dữ liệu từ file Excel (chưa lưu vào DB).
+     */
     public function previewImport(Request $request)
     {
         $request->validate(['file' => 'required|mimes:xlsx,xls']);
@@ -249,6 +303,9 @@ class UserController extends Controller
         ]);
     }
 
+    /**
+     * Lưu dữ liệu người dùng hợp lệ từ bước xem trước vào DB.
+     */
     public function processImport(Request $request)
     {
         $validated = $request->validate([

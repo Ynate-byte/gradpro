@@ -10,6 +10,7 @@ import { Toaster, toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, GraduationCap, Briefcase, ShieldCheck } from 'lucide-react';
 
+// Component hiển thị thẻ thống kê số liệu
 const StatCard = ({ icon: Icon, title, value, description }) => (
     <div className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4">
         <div className="bg-primary/10 p-3 rounded-md">
@@ -23,6 +24,7 @@ const StatCard = ({ icon: Icon, title, value, description }) => (
     </div>
 );
 
+// Biến thể hoạt ảnh cho container
 const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -33,11 +35,13 @@ const containerVariants = {
     }
 };
 
+// Biến thể hoạt ảnh cho từng mục trong container
 const itemVariants = {
     hidden: { y: 20, opacity: 0 },
     visible: { y: 0, opacity: 1 }
 };
 
+// Component chính quản lý trang Quản lý Người dùng
 export default function UserManagementPage() {
     const [data, setData] = useState([]);
     const [total, setTotal] = useState(0);
@@ -55,6 +59,7 @@ export default function UserManagementPage() {
     const [filterOptions, setFilterOptions] = useState({ chuyenNganhs: [], khoaBomons: [] });
     const [searchTerm, setSearchTerm] = useState('');
 
+    // Hook useEffect để tải danh sách Chuyên ngành và Khoa/Bộ môn khi component được tạo
     useEffect(() => {
         Promise.all([
             getChuyenNganhs().catch(() => []),
@@ -64,6 +69,7 @@ export default function UserManagementPage() {
         });
     }, []);
 
+    // Hàm tải dữ liệu người dùng từ API, bao gồm phân trang, lọc và sắp xếp
     const fetchData = useCallback(() => {
         setLoading(true);
         const params = {
@@ -86,6 +92,7 @@ export default function UserManagementPage() {
             .finally(() => setLoading(false));
     }, [pagination, columnFilters, sorting, activeTab]);
 
+    // Hook useEffect để xử lý tìm kiếm theo độ trễ (debounce)
     useEffect(() => {
         const timer = setTimeout(() => {
             setColumnFilters(prev => {
@@ -105,32 +112,44 @@ export default function UserManagementPage() {
         };
     }, [searchTerm]);
 
+    // Hook useEffect gọi fetchData mỗi khi dependency thay đổi (activeTab, filters, sorting, pagination)
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
+    // Hàm xử lý khi form thêm/sửa người dùng thành công
     const handleFormSuccess = () => fetchData();
+
+    // Hàm mở dialog tạo người dùng mới
     const handleOpenCreateDialog = () => { setEditingUser(null); setIsDialogOpen(true); };
+
+    // Hàm mở dialog chỉnh sửa thông tin người dùng
     const handleOpenEditDialog = (user) => { setEditingUser(user); setIsDialogOpen(true); };
+
+    // Hàm mở sheet xem chi tiết người dùng
     const handleOpenViewSheet = (user) => {
         setViewingUser(user);
         setIsSheetOpen(true);
     };
 
+    // Định nghĩa cột cho DataTable, sử dụng useMemo để tối ưu hiệu suất
     const columns = useMemo(() => getColumns({
         onEdit: handleOpenEditDialog,
         onSuccess: handleFormSuccess,
         onViewDetails: handleOpenViewSheet
     }), [handleFormSuccess]);
-    
+
+    // Đặt lại trang về 0 khi tab hoặc bộ lọc thay đổi
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters]);
 
+    // Tính toán các thống kê nhanh từ dữ liệu hiện tại
     const totalStudents = data.filter(u => u.vaitro.TEN_VAITRO === 'Sinh viên').length;
     const totalLecturers = data.filter(u => u.vaitro.TEN_VAITRO === 'Giảng viên').length;
     const activeUsers = data.filter(u => u.TRANGTHAI_KICHHOAT).length;
 
+    // Hàm render DataTable cho từng tab
     const renderDataTable = (tabName) => (
         <DataTable
             key={tabName}
@@ -187,10 +206,23 @@ export default function UserManagementPage() {
                     </Tabs>
                 </motion.div>
             </div>
-            
-            <UserFormDialog isOpen={isDialogOpen} setIsOpen={setIsDialogOpen} editingUser={editingUser} onSuccess={handleFormSuccess} />
-            <UserImportDialog isOpen={isImportOpen} setIsOpen={setIsImportOpen} onSuccess={handleFormSuccess} />
-            <UserDetailSheet user={viewingUser} isOpen={isSheetOpen} setIsOpen={setIsSheetOpen} />
+
+            <UserFormDialog 
+                isOpen={isDialogOpen} 
+                setIsOpen={setIsDialogOpen} 
+                editingUser={editingUser} 
+                onSuccess={handleFormSuccess} 
+            />
+            <UserImportDialog 
+                isOpen={isImportOpen} 
+                setIsOpen={setIsImportOpen} 
+                onSuccess={handleFormSuccess} 
+            />
+            <UserDetailSheet 
+                user={viewingUser} 
+                isOpen={isSheetOpen} 
+                setIsOpen={setIsSheetOpen} 
+            />
             <Toaster richColors position="top-right" />
         </>
     );

@@ -23,12 +23,8 @@ class MauKehoach extends Model
         'MO_TA',
     ];
 
-    /**
-     * Get the milestones for the template.
-     */
     public function mauMocThoigians(): HasMany
     {
-        // Sắp xếp theo thứ tự đã định nghĩa
         return $this->hasMany(MauMocThoigian::class, 'ID_MAU', 'ID_MAU')->orderBy('THU_TU');
     }
 }

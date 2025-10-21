@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 
 class ThesisPlanTemplateController extends Controller
 {
+    // QUẢN LÝ MẪU KẾ HOẠCH (CHO SINH VIÊN)
+
     /**
      * Lấy danh sách các bản mẫu (chỉ tên và ID).
      */
@@ -19,10 +21,10 @@ class ThesisPlanTemplateController extends Controller
     /**
      * Lấy chi tiết một bản mẫu kèm các mốc thời gian.
      */
-    public function show($id) // Không dùng Route Model Binding ở đây để trả 404 nếu không tìm thấy
+    public function show($id)
     {
          $template = MauKehoach::with(['mauMocThoigians' => function ($query) {
-            $query->orderBy('THU_TU'); // Đảm bảo mốc thời gian đúng thứ tự
+            $query->orderBy('THU_TU');
         }])->find($id);
 
         if (!$template) {

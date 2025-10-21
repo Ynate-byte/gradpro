@@ -26,10 +26,7 @@ return new class extends Migration
             $table->timestamp('NGAYTAO')->useCurrent();
             $table->timestamp('NGAYCAPNHAT')->nullable()->useCurrentOnUpdate();
 
-            // THÊM MỚI RÀNG BUỘC FOREIGN KEY
             $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN')->onDelete('cascade');
-            // KẾT THÚC THÊM MỚI
-
             $table->foreign('ID_NHOMTRUONG')->references('ID_NGUOIDUNG')->on('NGUOIDUNG');
             $table->foreign('ID_CHUYENNGANH')->references('ID_CHUYENNGANH')->on('CHUYENNGANH')->onDelete('set null');
             $table->foreign('ID_KHOA_BOMON')->references('ID_KHOA_BOMON')->on('KHOA_BOMON')->onDelete('set null');
@@ -41,11 +38,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NGUOIDUNG')->comment('ID_NGUOIDUNG của sinh viên');
             $table->timestamp('NGAY_VAONHOM')->useCurrent();
             
-            // === SỬA LỖI TẠI ĐÂY ===
-            // Ràng buộc đúng: Một người dùng chỉ thuộc về MỘT nhóm.
             $table->unique('ID_NGUOIDUNG', 'UQ_THANHVIEN_NGUOIDUNG');
-            // === KẾT THÚC SỬA LỖI ===
-
             $table->foreign('ID_NHOM')->references('ID_NHOM')->on('NHOM')->onDelete('cascade');
             $table->foreign('ID_NGUOIDUNG')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->onDelete('cascade');
         });

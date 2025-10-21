@@ -1,17 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-// Import API functions
 import { getMyGroup, getPendingInvitations, getMyActivePlans } from '@/api/groupService';
 import { toast } from 'sonner';
-// Import UI components
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BookCopy } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'; // Import Select
-// Import view components
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NoGroupView } from './components/NoGroupView';
 import { GroupManagementView } from './components/GroupManagementView';
 
-// Loading Skeleton (no changes needed)
+// Component hiển thị khung xương tải dữ liệu
 const LoadingSkeleton = () => (
     <div className="space-y-6">
         <Skeleton className="h-10 w-1/3" />
@@ -23,44 +20,38 @@ const LoadingSkeleton = () => (
     </div>
 );
 
-// PlanSelector component is removed
-
+// Component chính quản lý trang Nhóm của tôi
 export default function MyGroupPage() {
+    // State quản lý trạng thái chung của trang
     const [pageState, setPageState] = useState({
         isLoading: true,
-        groupData: null,       // Group data for the *selected* plan
-        invitations: [],       // Invitations for the *selected* plan
-        activePlans: [],       // List of all active plans the student is in
-        selectedPlan: null,    // The currently *selected* plan object
+        groupData: null,
+        invitations: [],
+        activePlans: [],
+        selectedPlan: null,
     });
-    // State to hold the ID of the plan selected in the dropdown (as string)
+    // State quản lý ID của kế hoạch đang được chọn trong dropdown
     const [selectedPlanIdForDisplay, setSelectedPlanIdForDisplay] = useState('');
 
-    // Fetches group and invitation data for a SPECIFIC plan
+    // Hàm tải dữ liệu nhóm và lời mời cho một kế hoạch cụ thể
     const fetchDataForPlan = useCallback(async (plan) => {
-        // Guard clause: Do nothing if no plan is provided
         if (!plan) {
             setPageState(prev => ({ ...prev, isLoading: false, selectedPlan: null, groupData: null, invitations: [] }));
             return;
         }
 
-        // Set loading state and update selected plan object
         setPageState(prev => ({ ...prev, isLoading: true, selectedPlan: plan }));
-        // Update the dropdown display value
         setSelectedPlanIdForDisplay(String(plan.ID_KEHOACH));
 
         try {
-            // Assume API accepts plan_id (Needs backend update if not)
             const params = { plan_id: plan.ID_KEHOACH };
-            const groupRes = await getMyGroup(params); // Pass params
+            const groupRes = await getMyGroup(params);
             let invitationsRes = [];
 
-            // Only fetch invitations if the student doesn't have a group in this plan
             if (!groupRes.has_group) {
-                invitationsRes = await getPendingInvitations(params); // Pass params
+                invitationsRes = await getPendingInvitations(params);
             }
 
-            // Update state with fetched data
             setPageState(prev => ({
                 ...prev,
                 isLoading: false,
@@ -71,63 +62,54 @@ export default function MyGroupPage() {
         } catch (error) {
             toast.error(`Đã có lỗi xảy ra khi tải dữ liệu nhóm cho kế hoạch "${plan.TEN_DOT}".`);
             console.error("Fetch data for plan failed:", error);
-            // Clear relevant states on error
             setPageState(prev => ({ ...prev, isLoading: false, groupData: null, invitations: [] }));
         }
-    }, []); // Empty dependency array is correct here as it doesn't depend on external state changes directly
+    }, []);
 
-    // Fetches the initial list of active plans for the student
+    // Hàm tải danh sách các kế hoạch hoạt động mà sinh viên đang tham gia
     const fetchInitialData = useCallback(async () => {
         setPageState(prev => ({ ...prev, isLoading: true }));
         try {
             const plans = await getMyActivePlans();
             if (plans.length === 0) {
-                // No active plans, stop loading
                 setPageState(prev => ({ ...prev, isLoading: false, activePlans: [] }));
             } else {
-                // Found active plans, set the list and select the first one by default
                 const initialPlan = plans[0];
                 setPageState(prev => ({ ...prev, isLoading: false, activePlans: plans, selectedPlan: initialPlan }));
                 setSelectedPlanIdForDisplay(String(initialPlan.ID_KEHOACH));
-                // Optionally: Fetch data for the initial plan immediately
-                // fetchDataForPlan(initialPlan); // Uncomment this line if you want data to load on initial render
             }
         } catch (error) {
             toast.error("Lỗi khi tải danh sách kế hoạch đang tham gia.");
             setPageState(prev => ({ ...prev, isLoading: false }));
         }
-    }, []); // Removed fetchDataForPlan from dependencies
+    }, []);
 
-    // Effect for initial data load (fetching active plans)
+    // Hook useEffect để tải dữ liệu ban đầu (danh sách kế hoạch)
     useEffect(() => {
         fetchInitialData();
     }, [fetchInitialData]);
 
-    // Effect to fetch group/invitation data when the selected plan ID changes
+    // Hook useEffect để tải dữ liệu nhóm/lời mời khi kế hoạch được chọn thay đổi
     useEffect(() => {
-        // Only run if a plan ID is selected and the plan list is available
         if (selectedPlanIdForDisplay && pageState.activePlans.length > 0) {
-            // Find the full plan object corresponding to the selected ID
             const selected = pageState.activePlans.find(p => String(p.ID_KEHOACH) === selectedPlanIdForDisplay);
             if (selected) {
-                 fetchDataForPlan(selected); // Fetch data using the plan object
+                fetchDataForPlan(selected);
             }
         } else if (!selectedPlanIdForDisplay && pageState.activePlans.length === 0) {
-            // Handle the case where there are no plans (already handled by initial fetch)
-             setPageState(prev => ({...prev, isLoading: false, selectedPlan: null, groupData: null, invitations: []}))
+            setPageState(prev => ({...prev, isLoading: false, selectedPlan: null, groupData: null, invitations: []}))
         }
-        // This effect depends on the selected ID and the list of available plans
     }, [selectedPlanIdForDisplay, pageState.activePlans, fetchDataForPlan]);
 
 
-    // --- Render Logic ---
+    // --- Logic Hiển thị ---
 
-    // 1. Show loading skeleton initially or during plan data fetch
-    if (pageState.isLoading && !pageState.selectedPlan) { // Show initial loading skeleton
-         return <LoadingSkeleton />;
+    // Hiển thị khung xương tải ban đầu
+    if (pageState.isLoading && !pageState.selectedPlan) {
+        return <LoadingSkeleton />;
     }
 
-    // 2. If not loading and no active plans found
+    // Hiển thị thông báo nếu không có kế hoạch hoạt động
     if (!pageState.isLoading && pageState.activePlans.length === 0) {
         return (
             <Card>
@@ -139,23 +121,23 @@ export default function MyGroupPage() {
         );
     }
 
-    // 3. Render the main content (Plan Selector + Group Info/NoGroup View)
+    // Hiển thị giao diện chính
     return (
         <div className="space-y-6">
-            {/* Always show Plan Selector if there are active plans */}
+            {/* Vùng chọn Kế hoạch nếu có */}
             {pageState.activePlans.length > 0 && (
-                 <Card>
+                <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
-                             <BookCopy className="h-6 w-6 text-primary" />
-                             Chọn Kế hoạch Khóa luận
+                            <BookCopy className="h-6 w-6 text-primary" />
+                            Chọn Kế hoạch Khóa luận
                         </CardTitle>
                     </CardHeader>
-                     <CardContent>
-                         <Select
-                             value={selectedPlanIdForDisplay}
-                             onValueChange={setSelectedPlanIdForDisplay} // Update the selected ID string directly
-                         >
+                    <CardContent>
+                        <Select
+                            value={selectedPlanIdForDisplay}
+                            onValueChange={setSelectedPlanIdForDisplay}
+                        >
                             <SelectTrigger className="w-full md:w-[450px]">
                                 <SelectValue placeholder="Chọn một kế hoạch..." />
                             </SelectTrigger>
@@ -167,31 +149,30 @@ export default function MyGroupPage() {
                                 ))}
                             </SelectContent>
                         </Select>
-                     </CardContent>
-                 </Card>
+                    </CardContent>
+                </Card>
             )}
 
-            {/* Conditionally render loading skeleton or group views based on the selected plan */}
-            {pageState.isLoading && pageState.selectedPlan ? ( // Show loading when switching plans
-                 <LoadingSkeleton />
-            ) : pageState.selectedPlan ? ( // Only render if a plan is actually selected
+            {/* Hiển thị nội dung dựa trên trạng thái tải và dữ liệu nhóm */}
+            {pageState.isLoading && pageState.selectedPlan ? (
+                <LoadingSkeleton />
+            ) : pageState.selectedPlan ? (
                 pageState.groupData ? (
-                    // Show group details if data exists for the selected plan
+                    // Hiển thị chi tiết nhóm
                     <GroupManagementView
-                         groupData={pageState.groupData}
-                         refreshData={() => fetchDataForPlan(pageState.selectedPlan)} // Refresh with the current plan
-                     />
-                 ) : (
-                    // Show options to create/find group if no group data for the selected plan
+                        groupData={pageState.groupData}
+                        refreshData={() => fetchDataForPlan(pageState.selectedPlan)}
+                    />
+                ) : (
+                    // Hiển thị tùy chọn Tạo/Tìm nhóm
                     <NoGroupView
                         invitations={pageState.invitations}
-                         refreshData={() => fetchDataForPlan(pageState.selectedPlan)} // Refresh with the current plan
-                         plan={pageState.selectedPlan} // Pass the selected plan object
-                     />
-                 )
-             ) : (
-                 // Placeholder if no plan is selected yet (should normally not show if initial selection works)
-                 <p className="text-muted-foreground text-center p-4">Vui lòng chọn một kế hoạch để xem thông tin nhóm.</p>
+                        refreshData={() => fetchDataForPlan(pageState.selectedPlan)}
+                        plan={pageState.selectedPlan}
+                    />
+                )
+            ) : (
+                <p className="text-muted-foreground text-center p-4">Vui lòng chọn một kế hoạch để xem thông tin nhóm.</p>
             )}
         </div>
     );

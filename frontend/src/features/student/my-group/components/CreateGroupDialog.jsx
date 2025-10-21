@@ -13,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from 'lucide-react';
 
+// Định nghĩa schema validation cho form tạo nhóm
 const createGroupSchema = z.object({
     TEN_NHOM: z.string().min(5, { message: "Tên nhóm phải có ít nhất 5 ký tự." }).max(100),
     MOTA: z.string().max(255, { message: "Mô tả không được vượt quá 255 ký tự." }).optional(),
@@ -20,15 +21,18 @@ const createGroupSchema = z.object({
     ID_KHOA_BOMON: z.string().optional(),
 });
 
+// Component Dialog tạo nhóm mới
 export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
     const [isLoading, setIsLoading] = useState(false);
     const [options, setOptions] = useState({ chuyenNganhs: [], khoaBomons: [] });
 
+    // Khởi tạo form với zodResolver
     const form = useForm({
         resolver: zodResolver(createGroupSchema),
         defaultValues: { TEN_NHOM: '', MOTA: '', ID_CHUYENNGANH: '', ID_KHOA_BOMON: '' },
     });
 
+    // Hook tải dữ liệu Chuyên ngành và Khoa/Bộ môn khi dialog mở
     useEffect(() => {
         if (isOpen) {
             form.reset();
@@ -38,10 +42,11 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
         }
     }, [isOpen, form]);
 
+    // Xử lý logic tạo nhóm
     const onSubmit = async (data) => {
         setIsLoading(true);
         try {
-            await createGroup(data, planId); // Truyền planId
+            await createGroup(data, planId);
             toast.success("Tạo nhóm thành công!");
             onSuccess();
             setIsOpen(false);
@@ -63,45 +68,81 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 py-4">
-                        <FormField control={form.control} name="TEN_NHOM" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Tên nhóm *</FormLabel>
-                                <FormControl><Input placeholder="Ví dụ: Nhóm chiến binh bất bại" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
+                        <FormField 
+                            control={form.control} 
+                            name="TEN_NHOM" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Tên nhóm *</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="Ví dụ: Nhóm chiến binh bất bại" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} 
+                        />
                         
-                        <FormField control={form.control} name="MOTA" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Ghi chú / Mô tả (Tùy chọn)</FormLabel>
-                                <FormControl><Textarea placeholder="Mô tả ngắn về mục tiêu hoặc định hướng của nhóm..." className="resize-none" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
+                        <FormField 
+                            control={form.control} 
+                            name="MOTA" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Ghi chú / Mô tả (Tùy chọn)</FormLabel>
+                                    <FormControl>
+                                        <Textarea placeholder="Mô tả ngắn về mục tiêu hoặc định hướng của nhóm..." className="resize-none" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} 
+                        />
 
-                        <FormField control={form.control} name="ID_CHUYENNGANH" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Ưu tiên Chuyên ngành (Tùy chọn)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Chọn chuyên ngành" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        {options.chuyenNganhs.map(cn => <SelectItem key={cn.ID_CHUYENNGANH} value={String(cn.ID_CHUYENNGANH)}>{cn.TEN_CHUYENNGANH}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </FormItem>
-                        )} />
+                        <FormField 
+                            control={form.control} 
+                            name="ID_CHUYENNGANH" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Ưu tiên Chuyên ngành (Tùy chọn)</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Chọn chuyên ngành" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {options.chuyenNganhs.map(cn => 
+                                                <SelectItem key={cn.ID_CHUYENNGANH} value={String(cn.ID_CHUYENNGANH)}>
+                                                    {cn.TEN_CHUYENNGANH}
+                                                </SelectItem>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
+                            )} 
+                        />
                         
-                        <FormField control={form.control} name="ID_KHOA_BOMON" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Ưu tiên Khoa/Bộ môn (Tùy chọn)</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value}>
-                                    <FormControl><SelectTrigger><SelectValue placeholder="Chọn khoa hoặc bộ môn" /></SelectTrigger></FormControl>
-                                    <SelectContent>
-                                        {options.khoaBomons.map(kb => <SelectItem key={kb.ID_KHOA_BOMON} value={String(kb.ID_KHOA_BOMON)}>{kb.TEN_KHOA_BOMON}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </FormItem>
-                        )} />
+                        <FormField 
+                            control={form.control} 
+                            name="ID_KHOA_BOMON" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Ưu tiên Khoa/Bộ môn (Tùy chọn)</FormLabel>
+                                    <Select onValueChange={field.onChange} value={field.value}>
+                                        <FormControl>
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Chọn khoa hoặc bộ môn" />
+                                            </SelectTrigger>
+                                        </FormControl>
+                                        <SelectContent>
+                                            {options.khoaBomons.map(kb => 
+                                                <SelectItem key={kb.ID_KHOA_BOMON} value={String(kb.ID_KHOA_BOMON)}>
+                                                    {kb.TEN_KHOA_BOMON}
+                                                </SelectItem>
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                </FormItem>
+                            )} 
+                        />
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Hủy</Button>

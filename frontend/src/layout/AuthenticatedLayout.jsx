@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { LifeBuoy, LogOut, Settings, User, Bell, Mail, UserPlus } from "lucide-react";
 import { getUnreadCount, getUnreadNotifications, markAllAsRead } from '@/api/notificationService';
 
+// Hàm lấy chữ cái đầu của họ và tên
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -20,11 +21,13 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 }
 
+// Component Layout chính sau khi người dùng đăng nhập
 export default function AuthenticatedLayout() {
     const { user, logout } = useAuth();
     const [notifications, setNotifications] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
 
+    // Hàm tải số lượng và danh sách thông báo chưa đọc
     const fetchNotifications = useCallback(async () => {
         if (!user) return;
         try {
@@ -41,12 +44,14 @@ export default function AuthenticatedLayout() {
         }
     }, [user]);
 
+    // Hook useEffect để tải thông báo lần đầu và thiết lập interval tải lại
     useEffect(() => {
         fetchNotifications();
         const intervalId = setInterval(fetchNotifications, 30000);
         return () => clearInterval(intervalId);
     }, [fetchNotifications]);
 
+    // Hàm xử lý khi người dùng đóng dropdown thông báo (đánh dấu tất cả là đã đọc)
     const handleOpenNotificationChange = (isOpen) => {
         if (!isOpen && unreadCount > 0) {
             markAllAsRead()
@@ -73,7 +78,9 @@ export default function AuthenticatedLayout() {
                             <Breadcrumb>
                                 <BreadcrumbList>
                                     <BreadcrumbItem>
-                                        <BreadcrumbLink asChild><Link to="/">GradPro</Link></BreadcrumbLink>
+                                        <BreadcrumbLink asChild>
+                                            <Link to="/">GradPro</Link>
+                                        </BreadcrumbLink>
                                     </BreadcrumbItem>
                                     <BreadcrumbSeparator />
                                     <BreadcrumbItem>
@@ -101,10 +108,14 @@ export default function AuthenticatedLayout() {
                                         notifications.map(noti => (
                                             <DropdownMenuItem key={noti.id} asChild className="p-2">
                                                 <Link to="/projects/my-group" className="flex items-start gap-3 cursor-pointer">
-                                                    {noti.type === 'GROUP_INVITATION' ? <Mail className="mt-1 h-4 w-4 text-sky-500 shrink-0" /> : <UserPlus className="mt-1 h-4 w-4 text-green-500 shrink-0" />}
+                                                    {noti.type === 'GROUP_INVITATION' 
+                                                        ? <Mail className="mt-1 h-4 w-4 text-sky-500 shrink-0" /> 
+                                                        : <UserPlus className="mt-1 h-4 w-4 text-green-500 shrink-0" />}
                                                     <div className="flex flex-col">
                                                         <p className="text-sm font-medium leading-tight">
-                                                            {noti.type === 'GROUP_INVITATION' ? `Lời mời vào nhóm` : `Yêu cầu tham gia`}
+                                                            {noti.type === 'GROUP_INVITATION' 
+                                                                ? `Lời mời vào nhóm` 
+                                                                : `Yêu cầu tham gia`}
                                                         </p>
                                                         <p className="text-xs text-muted-foreground whitespace-normal">
                                                             {noti.type === 'GROUP_INVITATION' 

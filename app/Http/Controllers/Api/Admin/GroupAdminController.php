@@ -17,6 +17,9 @@ use App\Services\AutoGroupingService;
 
 class GroupAdminController extends Controller
 {
+    /**
+     * Lấy danh sách các nhóm, hỗ trợ lọc và phân trang.
+     */
     public function getGroups(Request $request)
     {
         $request->validate(['plan_id' => 'sometimes|nullable|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
@@ -36,9 +39,13 @@ class GroupAdminController extends Controller
         }
 
         $groups = $query->orderBy('NGAYTAO', 'desc')->paginate($request->per_page ?? 10);
+        
         return response()->json($groups);
     }
 
+    /**
+     * Cập nhật thông tin của một nhóm cụ thể.
+     */
     public function update(Request $request, Nhom $nhom)
     {
         $validated = $request->validate([
@@ -55,9 +62,13 @@ class GroupAdminController extends Controller
         ]);
 
         $nhom->update($validated);
+        
         return response()->json($nhom->load('nhomtruong', 'thanhviens.nguoidung'));
     }
 
+    /**
+     * Xóa một nhóm và tất cả thành viên của nhóm đó.
+     */
     public function destroy(Nhom $nhom)
     {
         DB::transaction(function () use ($nhom) {
@@ -68,6 +79,9 @@ class GroupAdminController extends Controller
         return response()->json(null, 204);
     }
     
+    /**
+     * Lấy thông kê về sinh viên và nhóm trong một kế hoạch.
+     */
     public function getStatistics(Request $request)
     {
         $request->validate(['plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
@@ -108,6 +122,9 @@ class GroupAdminController extends Controller
         }
     }
 
+    /**
+     * Lấy danh sách sinh viên chưa kích hoạt (chưa đăng nhập) trong kế hoạch.
+     */
     public function getInactiveStudents(Request $request)
     {
         $request->validate(['plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
@@ -120,8 +137,13 @@ class GroupAdminController extends Controller
             ->whereIn('ID_NGUOIDUNG', $allUserIdsInPlan)
             ->whereNull('DANGNHAP_CUOI')
             ->get();
+            
         return response()->json($students);
     }
+    
+    /**
+     * Xóa một thành viên cụ thể ra khỏi nhóm.
+     */
     public function removeMember(Nhom $nhom, $userId)
     {
         $member = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
@@ -136,12 +158,11 @@ class GroupAdminController extends Controller
             return response()->json(['message' => 'Không thể xóa thành viên cuối cùng.'], 400);
         }
 
-
         DB::transaction(function () use ($nhom, $member) {
             $member->delete();
             $nhom->decrement('SO_THANHVIEN_HIENTAI');
-            // Update group status if it was full
-            if($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < 4) {
+            
+            if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < 4) {
                 $nhom->TRANGTHAI = 'Đang mở';
                 $nhom->save();
             }
@@ -149,21 +170,39 @@ class GroupAdminController extends Controller
 
         return response()->json(['message' => 'Đã xóa thành viên khỏi nhóm thành công.']);
     }
+    
+    /**
+     * Vô hiệu hóa tài khoản của nhiều sinh viên.
+     */
     public function removeStudents(Request $request)
     {
-        $validated = $request->validate(['studentIds' => 'required|array', 'studentIds.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG']);
+        $validated = $request->validate([
+            'studentIds' => 'required|array', 
+            'studentIds.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG'
+        ]);
+        
         Nguoidung::whereIn('ID_NGUOIDUNG', $validated['studentIds'])->update(['TRANGTHAI_KICHHOAT' => false]);
+        
         return response()->json(['message' => 'Đã vô hiệu hóa các sinh viên được chọn thành công.']);
     }
 
+    /**
+     * Đánh dấu hoặc gỡ đánh dấu "nhóm đặc biệt".
+     */
     public function markAsSpecial(Request $request, Nhom $nhom)
     {
         $validated = $request->validate(['is_special' => 'required|boolean']);
+        
         $nhom->update(['LA_NHOM_DACBIET' => $validated['is_special']]);
+        
         $message = $validated['is_special'] ? 'Đã đánh dấu nhóm là nhóm đặc biệt.' : 'Đã gỡ đánh dấu nhóm đặc biệt.';
+        
         return response()->json(['message' => $message]);
     }
     
+    /**
+     * Thêm nhiều sinh viên vào một nhóm đã có.
+     */
     public function addMembersToGroup(Request $request)
     {
         $validated = $request->validate([
@@ -204,6 +243,9 @@ class GroupAdminController extends Controller
         return response()->json(['message' => "Đã thêm thành công {$countToAdd} sinh viên vào nhóm."]);
     }
     
+    /**
+     * Xuất danh sách nhóm ra file Excel.
+     */
     public function exportGroups(Request $request)
     {
         $request->validate(['plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
@@ -212,6 +254,9 @@ class GroupAdminController extends Controller
         return Excel::download(new GroupsExport($plan->ID_KEHOACH), 'danh-sach-nhom-'.$plan->KHOAHOC.'.xlsx');
     }
 
+    /**
+     * Tự động chia nhóm cho các sinh viên chưa có nhóm.
+     */
     public function autoGroupStudents(Request $request, AutoGroupingService $groupingService)
     {
         $validated = $request->validate([
@@ -227,7 +272,9 @@ class GroupAdminController extends Controller
         return response()->json($result);
     }
     
-    // === BẮT ĐẦU SỬA ĐỔI: Tối ưu lại truy vấn ===
+    /**
+     * Tìm kiếm sinh viên chưa có nhóm trong một kế hoạch.
+     */
     public function searchUngroupedStudents(Request $request)
     {
         $validated = $request->validate([
@@ -236,27 +283,25 @@ class GroupAdminController extends Controller
         ]);
         $planId = $validated['plan_id'];
 
-        // Lấy danh sách ID người dùng đã có nhóm trong kế hoạch này (cách này hiệu quả hơn)
         $groupedUserIds = ThanhvienNhom::query()
             ->whereHas('nhom', function ($query) use ($planId) {
                 $query->where('ID_KEHOACH', $planId);
             })
             ->pluck('ID_NGUOIDUNG');
 
-        // Bắt đầu query những người dùng chưa có nhóm
         $query = Nguoidung::query()
             ->where('TRANGTHAI_KICHHOAT', true)
             ->whereHas('sinhvien.cacDotThamGia', function ($q) use ($planId) {
                 $q->where('ID_KEHOACH', $planId);
             })
-            ->whereNotIn('ID_NGUOIDUNG', $groupedUserIds); // Sử dụng whereNotIn cho hiệu năng tốt hơn
+            ->whereNotIn('ID_NGUOIDUNG', $groupedUserIds);
 
         if ($request->filled('search')) {
             $searchTerm = $validated['search'];
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
-                  ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
-                  ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
+                    ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
+                    ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
             });
         }
 
@@ -264,8 +309,10 @@ class GroupAdminController extends Controller
 
         return response()->json($students);
     }
-    // === KẾT THÚC SỬA ĐỔI ===
 
+    /**
+     * Tạo một nhóm mới và thêm thành viên ngay lập tức.
+     */
     public function createWithMembers(Request $request)
     {
         $validated = $request->validate([
@@ -308,6 +355,10 @@ class GroupAdminController extends Controller
 
         return response()->json($group->load('thanhviens.nguoidung', 'nhomtruong'), 201);
     }
+
+    /**
+     * Lấy toàn bộ danh sách sinh viên chưa có nhóm trong kế hoạch.
+     */
     public function getUngroupedStudents(Request $request)
     {
         $validated = $request->validate([

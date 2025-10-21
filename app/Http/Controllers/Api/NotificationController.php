@@ -8,14 +8,14 @@ use App\Models\Notification;
 
 class NotificationController extends Controller
 {
+    // QUẢN LÝ THÔNG BÁO
+
     /**
-     * Lấy danh sách 5 thông báo chưa đọc gần nhất.
+     * Lấy danh sách 5 thông báo gần nhất.
      */
     public function index(Request $request)
     {
         $notifications = $request->user()->notifications()
-            // BỎ DÒNG NÀY ĐỂ LẤY CẢ THÔNG BÁO ĐÃ ĐỌC
-            // ->whereNull('read_at') 
             ->latest()
             ->take(5)
             ->get();
@@ -29,6 +29,7 @@ class NotificationController extends Controller
     public function unreadCount(Request $request)
     {
         $count = $request->user()->notifications()->whereNull('read_at')->count();
+        
         return response()->json(['count' => $count]);
     }
 
@@ -38,6 +39,7 @@ class NotificationController extends Controller
     public function markAsRead(Request $request)
     {
         $request->user()->notifications()->whereNull('read_at')->update(['read_at' => now()]);
+        
         return response()->json(['message' => 'Đã đánh dấu tất cả là đã đọc.']);
     }
 }

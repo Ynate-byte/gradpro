@@ -1,8 +1,10 @@
 import React, { useMemo } from 'react';
 import { getColumns } from './columns.jsx';
-// ĐÃ SỬA ĐỔI: Cập nhật đường dẫn import đến vị trí mới
 import { DataTable } from '@/components/shared/data-table/DataTable.jsx';
 
+/**
+ * Component hiển thị bảng dữ liệu các kế hoạch khóa luận.
+ */
 export function PlanDataTable({
     data,
     columnsConfig,
@@ -17,7 +19,7 @@ export function PlanDataTable({
     searchTerm,
     onSearchChange,
 }) {
-
+    // Ghi nhớ cấu hình cột để tránh render lại không cần thiết
     const columns = useMemo(() => getColumns(columnsConfig), [columnsConfig]);
 
     return (

@@ -6,6 +6,7 @@ import { Users, PlusCircle, Search } from 'lucide-react';
 import { CreateGroupDialog } from './CreateGroupDialog';
 import { PendingInvitationsList } from './PendingInvitationsList';
 
+// Component hiển thị giao diện khi sinh viên chưa có nhóm
 export function NoGroupView({ invitations, refreshData, plan }) {
     const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
     const navigate = useNavigate();
@@ -32,10 +33,15 @@ export function NoGroupView({ invitations, refreshData, plan }) {
                 </CardContent>
             </Card>
 
+            {/* Hiển thị danh sách lời mời đang chờ nếu có */}
             {invitations && invitations.length > 0 && (
-                <PendingInvitationsList invitations={invitations} refreshData={refreshData} />
+                <PendingInvitationsList 
+                    invitations={invitations} 
+                    refreshData={refreshData} 
+                />
             )}
 
+            {/* Dialog tạo nhóm mới */}
             <CreateGroupDialog
                 isOpen={isCreateDialogOpen}
                 setIsOpen={setIsCreateDialogOpen}

@@ -60,7 +60,6 @@ class Nhom extends Model
         return $this->hasMany(YeucauVaoNhom::class, 'ID_NHOM', 'ID_NHOM');
     }
     
-    // Sửa lại tên relationship cho đúng chuẩn
     public function thanhvienNhom()
     {
         return $this->hasMany(ThanhvienNhom::class, 'ID_NHOM', 'ID_NHOM');

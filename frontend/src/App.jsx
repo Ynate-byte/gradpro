@@ -2,23 +2,26 @@ import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 
-// --- Existing imports ---
+// --- Import các components Layout và Auth ---
 const AuthenticatedLayout = lazy(() => import('./layout/AuthenticatedLayout'));
 const Login = lazy(() => import('./features/auth/Login'));
+
+// --- Import các components chung ---
 const HomePage = lazy(() => import('./features/home/HomePage'));
-const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
+
+// --- Import các components Sinh viên ---
 const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
 const FindGroupPage = lazy(() => import('./features/student/find-group/index.jsx'));
+
+// --- Import các components Quản trị ---
+const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
 const GroupAdminPage = lazy(() => import('./features/admin/group-management/index.jsx'));
 const ThesisPlanManagementPage = lazy(() => import('./features/admin/thesis-plan-management/index.jsx'));
 const PlanFormPage = lazy(() => import('./features/admin/thesis-plan-management/PlanFormPage.jsx'));
-// --- END Existing imports ---
-
-// *** ADD NEW IMPORTS FOR TEMPLATES ***
 const TemplateManagementPage = lazy(() => import('./features/admin/thesis-plan-template-management/index.jsx'));
 const TemplateFormPage = lazy(() => import('./features/admin/thesis-plan-template-management/TemplateFormPage.jsx'));
-// ************************************
 
+// Component placeholder cho các trang chưa có nội dung
 const PlaceholderPage = ({ title }) => (
     <div className="p-4 bg-white rounded-lg shadow dark:bg-card">
         <h1 className="text-2xl font-bold">Đây là trang: {title}</h1>
@@ -26,6 +29,7 @@ const PlaceholderPage = ({ title }) => (
     </div>
 );
 
+// Component Route bảo vệ (yêu cầu đăng nhập)
 function ProtectedRoute({ children }) {
     const { isAuthenticated } = useAuth();
     if (!isAuthenticated) {
@@ -34,6 +38,7 @@ function ProtectedRoute({ children }) {
     return children;
 }
 
+// Component Route công khai (chuyển hướng nếu đã đăng nhập)
 function PublicRoute({ children }) {
     const { isAuthenticated } = useAuth();
     if (isAuthenticated) {
@@ -42,24 +47,25 @@ function PublicRoute({ children }) {
     return children;
 }
 
+// Component chính định tuyến ứng dụng
 function App() {
     const { user } = useAuth();
 
     return (
         <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Đang tải ứng dụng...</div>}>
             <Routes>
-                {/* Login Route */}
+                {/* Route Đăng nhập */}
                 <Route
                     path="/login"
                     element={<PublicRoute><Login /></PublicRoute>}
                 />
 
-                {/* Authenticated Routes */}
+                {/* Các Routes yêu cầu xác thực */}
                 <Route
                     path="/"
                     element={<ProtectedRoute><AuthenticatedLayout /></ProtectedRoute>}
                 >
-                    {/* General Routes */}
+                    {/* Các Routes chung */}
                     <Route index element={<HomePage />} />
                     <Route path="notifications" element={<PlaceholderPage title="Thông báo" />} />
                     <Route path="history" element={<PlaceholderPage title="Lịch sử" />} />
@@ -69,7 +75,7 @@ function App() {
                     <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
                     <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />
 
-                    {/* Student Routes */}
+                    {/* Routes dành cho Sinh viên */}
                     {user && user.vaitro.TEN_VAITRO === 'Sinh viên' && (
                         <>
                             <Route path="projects/my-group" element={<MyGroupPage />} />
@@ -77,25 +83,26 @@ function App() {
                         </>
                     )}
 
-                    {/* Admin Routes */}
+                    {/* Routes dành cho Admin */}
                     {user && user.vaitro.TEN_VAITRO === 'Admin' && (
                         <>
                             <Route path="admin/users" element={<UserManagementPage />} />
                             <Route path="admin/groups" element={<GroupAdminPage />} />
-                            {/* Thesis Plan Routes */}
+                            
+                            {/* Routes Quản lý Kế hoạch Khóa luận */}
                             <Route path="admin/thesis-plans" element={<ThesisPlanManagementPage />} />
                             <Route path="admin/thesis-plans/create" element={<PlanFormPage />} />
                             <Route path="admin/thesis-plans/:planId/edit" element={<PlanFormPage />} />
-                            {/* *** ADD NEW TEMPLATE ROUTES *** */}
+                            
+                            {/* Routes Quản lý Kế hoạch Mẫu */}
                             <Route path="admin/templates" element={<TemplateManagementPage />} />
                             <Route path="admin/templates/create" element={<TemplateFormPage />} />
                             <Route path="admin/templates/:templateId/edit" element={<TemplateFormPage />} />
-                            {/* ******************************* */}
                         </>
                     )}
                 </Route>
 
-                {/* Fallback Route */}
+                {/* Route dự phòng (chuyển hướng về trang chủ) */}
                 <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
         </Suspense>

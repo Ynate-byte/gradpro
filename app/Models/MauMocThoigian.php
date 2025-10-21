@@ -12,7 +12,7 @@ class MauMocThoigian extends Model
 
     protected $table = 'MAU_MOC_THOIGIAN';
     protected $primaryKey = 'ID_MAU_MOC';
-    public $timestamps = false; // Bảng này không dùng timestamp
+    public $timestamps = false;
 
     protected $fillable = [
         'ID_MAU',
@@ -23,9 +23,6 @@ class MauMocThoigian extends Model
         'THU_TU',
     ];
 
-    /**
-     * Get the template that owns the milestone.
-     */
     public function mauKehoach(): BelongsTo
     {
         return $this->belongsTo(MauKehoach::class, 'ID_MAU', 'ID_MAU');

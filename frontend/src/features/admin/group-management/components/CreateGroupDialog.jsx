@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -15,15 +15,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Search, X, Crown, ArrowRight } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Card, CardContent } from '@/components/ui/card';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 
+/**
+ * Schema xác thực dữ liệu cho form tạo nhóm.
+ */
 const createGroupSchema = z.object({
-  TEN_NHOM: z.string().min(3, "Tên nhóm phải có ít nhất 3 ký tự.").max(100),
-  MOTA: z.string().max(255, "Mô tả không quá 255 ký tự.").optional(),
+    TEN_NHOM: z.string().min(3, "Tên nhóm phải có ít nhất 3 ký tự.").max(100),
+    MOTA: z.string().max(255, "Mô tả không quá 255 ký tự.").optional(),
 });
 
+/**
+ * Lấy chữ cái đầu của họ và tên để hiển thị trên avatar.
+ */
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -31,16 +36,21 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 };
 
+/**
+ * Cấu hình các biến thể chuyển động cho component.
+ */
 const motionVariants = {
     hidden: { x: 30, opacity: 0 },
     visible: { x: 0, opacity: 1, transition: { duration: 0.3, ease: "easeInOut" } },
     exit: { x: -30, opacity: 0, transition: { duration: 0.2, ease: "easeInOut" } },
 };
 
+/**
+ * Component hiển thị dialog để tạo nhóm mới.
+ */
 export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
-    
     const [members, setMembers] = useState([]);
     const [leaderId, setLeaderId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
@@ -52,7 +62,10 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
         resolver: zodResolver(createGroupSchema),
         defaultValues: { TEN_NHOM: '', MOTA: '' },
     });
-    
+
+    /**
+     * Tải danh sách sinh viên chưa có nhóm khi chuyển sang bước 2.
+     */
     useEffect(() => {
         if (step === 2 && planId) {
             setIsFetchingStudents(true);
@@ -63,6 +76,9 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
         }
     }, [step, planId]);
 
+    /**
+     * Lọc danh sách sinh viên dựa trên từ khóa tìm kiếm.
+     */
     const filteredStudents = useMemo(() => {
         if (!debouncedSearchTerm) return ungroupedStudents;
         return ungroupedStudents.filter(student =>
@@ -70,11 +86,17 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
         );
     }, [debouncedSearchTerm, ungroupedStudents]);
 
+    /**
+     * Xử lý chuyển sang bước tiếp theo sau khi xác thực form.
+     */
     const handleNextStep = async () => {
         const isValid = await form.trigger(['TEN_NHOM', 'MOTA']);
         if (isValid) setStep(2);
     };
 
+    /**
+     * Xử lý việc thêm hoặc xóa thành viên khỏi nhóm.
+     */
     const handleCheckboxChange = (student, isChecked) => {
         if (isChecked) {
             const newMembers = [...members, student];
@@ -88,7 +110,10 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
             }
         }
     };
-    
+
+    /**
+     * Xử lý gửi dữ liệu form để tạo nhóm mới.
+     */
     const onSubmit = async (data) => {
         if (members.length === 0) {
             toast.error("Nhóm phải có ít nhất một thành viên.");
@@ -98,7 +123,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
             toast.error("Vui lòng chỉ định một nhóm trưởng.");
             return;
         }
-        
+
         setIsLoading(true);
         try {
             await createGroupWithMembers({
@@ -116,7 +141,10 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
             setIsLoading(false);
         }
     };
-    
+
+    /**
+     * Reset trạng thái của form khi dialog đóng lại.
+     */
     useEffect(() => {
         if (!isOpen) {
             setTimeout(() => {
@@ -142,30 +170,40 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                         {step === 1 ? 'Điền thông tin cơ bản của nhóm.' : 'Chọn thành viên và chỉ định nhóm trưởng.'}
                     </DialogDescription>
                 </DialogHeader>
+
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="flex-grow min-h-0 flex flex-col space-y-4">
                         <AnimatePresence mode="wait">
                             {step === 1 && (
                                 <motion.div key="step1" variants={motionVariants} initial="hidden" animate="visible" exit="exit" className="space-y-6 py-4">
-                                   <FormField control={form.control} name="TEN_NHOM" render={({ field }) => (
-                                       <FormItem>
-                                           <FormLabel>Tên nhóm *</FormLabel>
-                                           <FormControl><Input placeholder="Ví dụ: Nhóm Alpha" {...field} /></FormControl>
-                                           <FormMessage />
-                                       </FormItem>
-                                   )} />
-                                   <FormField control={form.control} name="MOTA" render={({ field }) => (
-                                       <FormItem>
-                                           <FormLabel>Mô tả (tùy chọn)</FormLabel>
-                                           <FormControl><Textarea rows={5} placeholder="Mô tả ngắn về nhóm..." {...field} /></FormControl>
-                                           <FormMessage />
-                                       </FormItem>
-                                   )} />
+                                    <FormField
+                                        control={form.control}
+                                        name="TEN_NHOM"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Tên nhóm *</FormLabel>
+                                                <FormControl><Input placeholder="Ví dụ: Nhóm Alpha" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="MOTA"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Mô tả (tùy chọn)</FormLabel>
+                                                <FormControl><Textarea rows={5} placeholder="Mô tả ngắn về nhóm..." {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
                                 </motion.div>
                             )}
 
                             {step === 2 && (
                                 <motion.div key="step2" variants={motionVariants} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-2 gap-6 flex-grow min-h-0">
+                                    {/* Cột danh sách sinh viên chưa có nhóm */}
                                     <div className="flex flex-col space-y-2">
                                         <FormLabel>Sinh viên chưa có nhóm</FormLabel>
                                         <div className="relative">
@@ -174,14 +212,20 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                                         </div>
                                         <ScrollArea className="border rounded-md flex-grow h-[400px]">
                                             {isFetchingStudents ? (
-                                                <div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin"/></div>
+                                                <div className="flex items-center justify-center h-full"><Loader2 className="h-6 w-6 animate-spin" /></div>
                                             ) : (
                                                 <Table>
-                                                    <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Họ và tên</TableHead><TableHead>MSSV</TableHead></TableRow></TableHeader>
+                                                    <TableHeader>
+                                                        <TableRow>
+                                                            <TableHead className="w-[50px]"></TableHead>
+                                                            <TableHead>Họ và tên</TableHead>
+                                                            <TableHead>MSSV</TableHead>
+                                                        </TableRow>
+                                                    </TableHeader>
                                                     <TableBody>
                                                         {filteredStudents.map(student => (
                                                             <TableRow key={student.ID_NGUOIDUNG}>
-                                                                <TableCell><Checkbox checked={members.some(m => m.ID_NGUOIDUNG === student.ID_NGUOIDUNG)} onCheckedChange={(checked) => handleCheckboxChange(student, checked)}/></TableCell>
+                                                                <TableCell><Checkbox checked={members.some(m => m.ID_NGUOIDUNG === student.ID_NGUOIDUNG)} onCheckedChange={(checked) => handleCheckboxChange(student, checked)} /></TableCell>
                                                                 <TableCell className="font-medium">{student.HODEM_VA_TEN}</TableCell>
                                                                 <TableCell>{student.MA_DINHDANH}</TableCell>
                                                             </TableRow>
@@ -192,7 +236,8 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                                             {!isFetchingStudents && filteredStudents.length === 0 && (<p className="text-center text-sm text-muted-foreground p-4">Không tìm thấy sinh viên.</p>)}
                                         </ScrollArea>
                                     </div>
-                                    
+
+                                    {/* Cột thành viên đã chọn */}
                                     <div className="flex flex-col space-y-2">
                                         <FormLabel>Thành viên đã chọn ({members.length})</FormLabel>
                                         <ScrollArea className="border rounded-md flex-grow h-[400px] p-2 space-y-2">
@@ -207,8 +252,12 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                                                             </div>
                                                         </div>
                                                         <div className="flex items-center gap-1">
-                                                            <Button type="button" variant={leaderId === member.ID_NGUOIDUNG ? "default" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setLeaderId(member.ID_NGUOIDUNG)} title="Đặt làm nhóm trưởng"><Crown className={`h-4 w-4 ${leaderId === member.ID_NGUOIDUNG ? "" : "text-muted-foreground"}`} /></Button>
-                                                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleCheckboxChange(member, false)}><X className="h-4 w-4" /></Button>
+                                                            <Button type="button" variant={leaderId === member.ID_NGUOIDUNG ? "default" : "ghost"} size="icon" className="h-8 w-8" onClick={() => setLeaderId(member.ID_NGUOIDUNG)} title="Đặt làm nhóm trưởng">
+                                                                <Crown className={`h-4 w-4 ${leaderId === member.ID_NGUOIDUNG ? "" : "text-muted-foreground"}`} />
+                                                            </Button>
+                                                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleCheckboxChange(member, false)}>
+                                                                <X className="h-4 w-4" />
+                                                            </Button>
                                                         </div>
                                                     </div>
                                                 ))
@@ -231,7 +280,9 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                             {step === 2 && (
                                 <>
                                     <Button type="button" variant="outline" onClick={() => setStep(1)}>Quay lại</Button>
-                                    <Button type="submit" disabled={isLoading}>{isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Tạo nhóm</Button>
+                                    <Button type="submit" disabled={isLoading}>
+                                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Tạo nhóm
+                                    </Button>
                                 </>
                             )}
                         </DialogFooter>

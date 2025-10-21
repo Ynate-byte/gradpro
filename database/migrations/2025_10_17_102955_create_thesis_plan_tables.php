@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // Bảng 1: KEHOACH_KHOALUAN (Không đổi)
+        // Bảng 1: KEHOACH_KHOALUAN
         Schema::create('KEHOACH_KHOALUAN', function (Blueprint $table) {
             $table->id('ID_KEHOACH');
             $table->string('TEN_DOT', 100);
@@ -34,7 +34,7 @@ return new class extends Migration
             $table->foreign('ID_NGUOITAO')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->onDelete('set null');
         });
 
-        // Bảng 2: MOC_THOIGIAN (Không đổi)
+        // Bảng 2: MOC_THOIGIAN
         Schema::create('MOC_THOIGIAN', function (Blueprint $table) {
             $table->id('ID');
             $table->unsignedBigInteger('ID_KEHOACH');
@@ -46,7 +46,7 @@ return new class extends Migration
             $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN')->onDelete('cascade');
         });
 
-        // Bảng 3: SINHVIEN_THAMGIA (Bảng trung gian quan trọng)
+        // Bảng 3: SINHVIEN_THAMGIA
         Schema::create('SINHVIEN_THAMGIA', function (Blueprint $table) {
             $table->id('ID_THAMGIA');
             $table->unsignedBigInteger('ID_KEHOACH');
@@ -54,11 +54,9 @@ return new class extends Migration
             $table->boolean('DU_DIEUKIEN')->default(true)->comment('Đánh dấu sinh viên đủ điều kiện tham gia');
             $table->timestamp('NGAY_DANGKY')->useCurrent();
 
-            // Foreign keys
             $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN')->onDelete('cascade');
             $table->foreign('ID_SINHVIEN')->references('ID_SINHVIEN')->on('SINHVIEN')->onDelete('cascade');
 
-            // Ràng buộc duy nhất: Một sinh viên chỉ tham gia một đợt MỘT LẦN
             $table->unique(['ID_KEHOACH', 'ID_SINHVIEN'], 'UQ_SINHVIEN_TRONG_DOT');
         });
     }

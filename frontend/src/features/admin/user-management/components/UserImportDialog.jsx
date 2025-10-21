@@ -10,12 +10,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ScrollArea } from '@/components/ui/scroll-area';
 
+// Component Dialog thực hiện chức năng import người dùng từ file Excel
 export function UserImportDialog({ isOpen, setIsOpen, onSuccess }) {
     const [step, setStep] = useState(1);
     const [file, setFile] = useState(null);
     const [previewData, setPreviewData] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Đặt lại trạng thái của dialog về mặc định
     const resetState = () => {
         setStep(1);
         setFile(null);
@@ -23,11 +25,13 @@ export function UserImportDialog({ isOpen, setIsOpen, onSuccess }) {
         setIsLoading(false);
     };
 
+    // Xử lý đóng dialog và gọi hàm reset trạng thái
     const handleClose = () => {
         setIsOpen(false);
-        setTimeout(resetState, 300); // Reset state sau khi animation đóng dialog kết thúc
+        setTimeout(resetState, 300);
     };
 
+    // Xử lý tải về file mẫu Excel
     const handleDownloadTemplate = async () => {
         try {
             const blob = await downloadImportTemplate();
@@ -43,18 +47,21 @@ export function UserImportDialog({ isOpen, setIsOpen, onSuccess }) {
         }
     };
 
+    // Xử lý khi người dùng kéo thả hoặc chọn file
     const onDrop = useCallback((acceptedFiles) => {
         if (acceptedFiles.length > 0) {
             setFile(acceptedFiles[0]);
         }
     }, []);
 
+    // Hook Dropzone để quản lý vùng kéo thả file
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
         accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'], 'application/vnd.ms-excel': ['.xls'] },
         multiple: false
     });
 
+    // Xử lý xem trước nội dung file đã tải lên
     const handlePreview = async () => {
         if (!file) return;
         setIsLoading(true);
@@ -69,6 +76,7 @@ export function UserImportDialog({ isOpen, setIsOpen, onSuccess }) {
         }
     };
 
+    // Xử lý import dữ liệu hợp lệ vào hệ thống
     const handleProcess = async () => {
         if (!previewData?.validRows || previewData.validRows.length === 0) {
             toast.warning("Không có dữ liệu hợp lệ để import.");
@@ -132,7 +140,7 @@ export function UserImportDialog({ isOpen, setIsOpen, onSuccess }) {
                                     </h4>
                                 </div>
                                 <div className="border p-4 rounded-lg bg-red-50 border-red-200">
-                                     <h4 className="font-semibold flex items-center text-red-700">
+                                    <h4 className="font-semibold flex items-center text-red-700">
                                         <XCircle className="mr-2 h-5 w-5" /> {previewData.invalidRows.length} dòng có lỗi
                                     </h4>
                                 </div>
@@ -164,14 +172,14 @@ export function UserImportDialog({ isOpen, setIsOpen, onSuccess }) {
                                                 </TableCell>
                                             </TableRow>
                                         ))}
-                                         {previewData.validRows.map((row, index) => (
+                                        {previewData.validRows.map((row, index) => (
                                             <TableRow key={`valid-${index}`}>
                                                 <TableCell>{previewData.invalidRows.length + index + 1}</TableCell>
                                                 <TableCell>{row.ho_dem_va_ten}</TableCell>
                                                 <TableCell>{row.email}</TableCell>
                                                 <TableCell>{row.ma_dinh_danh}</TableCell>
                                                 <TableCell>{row.vai_tro}</TableCell>
-                                                <TableCell><CheckCircle className="h-5 w-5 text-green-500"/></TableCell>
+                                                <TableCell><CheckCircle className="h-5 w-5 text-green-500" /></TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>

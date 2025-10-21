@@ -16,7 +16,6 @@ return new class extends Migration
             $table->integer('OFFSET_BATDAU')->comment('Số ngày bắt đầu kể từ ngày bắt đầu kế hoạch (đã điều chỉnh)');
             $table->integer('THOI_LUONG')->comment('Số ngày diễn ra sự kiện (bao gồm ngày bắt đầu)');
             $table->integer('THU_TU')->default(0);
-            // Không cần timestamp ở đây
         });
     }
 

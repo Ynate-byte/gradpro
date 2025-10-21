@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
+// Lấy chữ cái đầu của họ và tên
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -21,17 +22,18 @@ const roleConfig = {
     'Sinh viên': { icon: GraduationCap, className: "bg-sky-100 text-sky-800" },
 };
 
+// Component con để hiển thị một cặp thông tin (icon, nhãn, giá trị)
 const InfoItem = ({ icon: Icon, label, value }) => (
     <div className="flex items-start">
         <Icon className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
         <div className="ml-3">
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            {/* SỬA TẠI ĐÂY: Thay thế <p> bằng <div> để chứa được component <Badge> */}
             <div className="text-sm font-semibold break-words">{value || 'Chưa có thông tin'}</div>
         </div>
     </div>
 );
 
+// Component chính hiển thị chi tiết người dùng dưới dạng Sheet (Side Panel)
 export function UserDetailSheet({ user, isOpen, setIsOpen }) {
     if (!user) return null;
 
@@ -73,7 +75,7 @@ export function UserDetailSheet({ user, isOpen, setIsOpen }) {
                                 <InfoItem icon={Clock} label="Đăng nhập cuối" value={user.DANGNHAP_CUOI ? format(new Date(user.DANGNHAP_CUOI), 'dd/MM/yyyy HH:mm', { locale: vi }) : 'Chưa đăng nhập'} />
                             </CardContent>
                         </Card>
-                        
+
                         {roleName === 'Sinh viên' && user.sinhvien && (
                             <Card>
                                 <CardHeader><CardTitle className="text-base">Thông tin Sinh viên</CardTitle></CardHeader>
@@ -87,7 +89,7 @@ export function UserDetailSheet({ user, isOpen, setIsOpen }) {
                         )}
 
                         {roleName === 'Giảng viên' && user.giangvien && (
-                             <Card>
+                            <Card>
                                 <CardHeader><CardTitle className="text-base">Thông tin Giảng viên</CardTitle></CardHeader>
                                 <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-2 text-sm">
                                     <InfoItem icon={Building} label="Khoa/Bộ môn" value={user.giangvien.khoabomon?.TEN_KHOA_BOMON} />

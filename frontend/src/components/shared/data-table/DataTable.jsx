@@ -39,8 +39,8 @@ export function DataTable({
       columnFilters,
       pagination,
       columnVisibility: {
-        chuyen_nganh: false, // Hidden by default, used for filtering
-        khoa_bomon: false,   // Hidden by default, used for filtering
+        chuyen_nganh: false,
+        khoa_bomon: false,
       },
     },
     manualPagination: true,
@@ -70,7 +70,6 @@ export function DataTable({
         searchTerm={searchTerm}
         onSearchChange={onSearchChange}
       />
-      {/* Container for scrollable table with sticky header */}
       <div className="rounded-md border max-h-[calc(100vh-25rem)] overflow-y-auto relative">
         <Table>
           <TableHeader>
@@ -78,7 +77,6 @@ export function DataTable({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
-                    // Sticky classes removed here, will be applied in the base TableHead component
                     <TableHead key={header.id} colSpan={header.colSpan}>
                       {header.isPlaceholder
                         ? null

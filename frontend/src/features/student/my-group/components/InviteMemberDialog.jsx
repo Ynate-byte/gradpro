@@ -11,18 +11,23 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2, Send } from 'lucide-react';
 
+// Định nghĩa schema validation cho form mời thành viên
 const inviteSchema = z.object({
     MA_DINHDANH: z.string().min(1, 'MSSV không được để trống.'),
     LOINHAN: z.string().max(150, 'Lời nhắn không quá 150 ký tự.').optional(),
 });
 
+// Component Dialog để gửi lời mời thành viên
 export function InviteMemberDialog({ isOpen, setIsOpen, groupId }) {
     const [isLoading, setIsLoading] = useState(false);
+    
+    // Khởi tạo form với zodResolver
     const form = useForm({
         resolver: zodResolver(inviteSchema),
         defaultValues: { MA_DINHDANH: '', LOINHAN: '' },
     });
 
+    // Xử lý logic gửi lời mời
     const onSubmit = async (data) => {
         setIsLoading(true);
         try {
@@ -46,21 +51,33 @@ export function InviteMemberDialog({ isOpen, setIsOpen, groupId }) {
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <FormField control={form.control} name="MA_DINHDANH" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Mã số sinh viên *</FormLabel>
-                                <FormControl><Input placeholder="200120..." {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                        <FormField control={form.control} name="LOINHAN" render={({ field }) => (
-                            <FormItem>
-                                <FormLabel>Lời nhắn (Tùy chọn)</FormLabel>
-                                <FormControl><Textarea placeholder="Vào nhóm tớ nhé..." className="resize-none" {...field} /></FormControl>
-                                <FormMessage />
-                            </FormItem>
-                        )} />
-                         <DialogFooter>
+                        <FormField 
+                            control={form.control} 
+                            name="MA_DINHDANH" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Mã số sinh viên *</FormLabel>
+                                    <FormControl>
+                                        <Input placeholder="200120..." {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} 
+                        />
+                        <FormField 
+                            control={form.control} 
+                            name="LOINHAN" 
+                            render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Lời nhắn (Tùy chọn)</FormLabel>
+                                    <FormControl>
+                                        <Textarea placeholder="Vào nhóm tớ nhé..." className="resize-none" {...field} />
+                                    </FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )} 
+                        />
+                        <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Hủy</Button>
                             <Button type="submit" disabled={isLoading}>
                                 {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}

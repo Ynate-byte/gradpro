@@ -1,4 +1,5 @@
 <?php
+
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
@@ -9,6 +10,11 @@ use App\Models\Nguoidung;
 
 class AuthController extends Controller
 {
+    // QUẢN LÝ XÁC THỰC (ĐĂNG NHẬP / ĐĂNG XUẤT)
+
+    /**
+     * Xử lý đăng nhập của người dùng.
+     */
     public function login(Request $request)
     {
         $request->validate([
@@ -16,20 +22,16 @@ class AuthController extends Controller
             'password' => 'required',
         ]);
 
-        // Thay đổi logic tìm kiếm người dùng
         $user = Nguoidung::where('EMAIL', $request->email)->first();
 
-        // Thay đổi logic kiểm tra mật khẩu
         if (!$user || !$user->TRANGTHAI_KICHHOAT || !Hash::check($request->password, $user->MATKHAU_BAM)) {
             throw ValidationException::withMessages([
                 'email' => ['Thông tin đăng nhập không chính xác hoặc tài khoản đã bị khóa.'],
             ]);
         }
 
-        // Tạo token và trả về
         $token = $user->createToken('auth_token')->plainTextToken;
 
-        // Cập nhật thời gian đăng nhập cuối
         $user->DANGNHAP_CUOI = now();
         $user->save();
 
@@ -37,13 +39,17 @@ class AuthController extends Controller
             'message' => 'Đăng nhập thành công',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('vaitro') // Gửi kèm thông tin vai trò
+            'user' => $user->load('vaitro')
         ]);
     }
 
+    /**
+     * Xử lý đăng xuất của người dùng (xóa token hiện tại).
+     */
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
+        
         return response()->json(['message' => 'Đăng xuất thành công']);
     }
 }

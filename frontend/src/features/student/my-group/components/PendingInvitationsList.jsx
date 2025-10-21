@@ -7,15 +7,18 @@ import { Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { handleInvitation } from '@/api/groupService';
 
+// Component hiển thị danh sách lời mời tham gia nhóm đang chờ
 export function PendingInvitationsList({ invitations, refreshData }) {
     const [alertInfo, setAlertInfo] = useState({ isOpen: false, action: null, invitationId: null });
     const alertTitleId = useId();
     const alertDescriptionId = useId();
 
+    // Mở dialog xác nhận hành động (chấp nhận/từ chối)
     const openConfirmation = (action, invitationId) => {
         setAlertInfo({ isOpen: true, action, invitationId });
     };
 
+    // Xử lý logic chấp nhận hoặc từ chối lời mời
     const handleAction = async () => {
         const { action, invitationId } = alertInfo;
         if (!action || !invitationId) return;
@@ -23,8 +26,11 @@ export function PendingInvitationsList({ invitations, refreshData }) {
             const response = await handleInvitation(invitationId, action);
             toast.success(response.message);
             refreshData();
-        } catch (error) { toast.error(error.response?.data?.message || "Thao tác thất bại."); }
-        finally { setAlertInfo({ isOpen: false, action: null, invitationId: null }); }
+        } catch (error) { 
+            toast.error(error.response?.data?.message || "Thao tác thất bại."); 
+        } finally { 
+            setAlertInfo({ isOpen: false, action: null, invitationId: null }); 
+        }
     };
 
     return (
@@ -53,6 +59,7 @@ export function PendingInvitationsList({ invitations, refreshData }) {
                 </CardContent>
             </Card>
 
+            {/* Dialog xác nhận hành động */}
             <AlertDialog open={alertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setAlertInfo({ isOpen: false, action: null, invitationId: null })}>
                 <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
                     <AlertDialogHeader>
