@@ -1,6 +1,4 @@
-"use client"
-
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { MoreHorizontal, Pencil, KeyRound, ToggleLeft, ToggleRight, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -12,17 +10,20 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
     const [isResetAlertOpen, setIsResetAlertOpen] = useState(false);
     const [isToggleStatusAlertOpen, setIsToggleStatusAlertOpen] = useState(false);
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false);
-    const user = row.original
+    const user = row.original;
+    const resetTitleId = useId();
+    const resetDescriptionId = useId();
+    const toggleTitleId = useId();
+    const toggleDescriptionId = useId();
+    const deleteTitleId = useId();
+    const deleteDescriptionId = useId();
 
     const handleResetPassword = async () => {
         try {
             await resetPassword(user.ID_NGUOIDUNG);
             toast.success(`Đã reset mật khẩu cho ${user.HODEM_VA_TEN}.`);
             onSuccess();
-        } catch (error) {
-            toast.error("Thao tác thất bại. Vui lòng thử lại.");
-            console.error("Failed to reset password", error);
-        }
+        } catch (error) { toast.error("Reset mật khẩu thất bại."); }
         setIsResetAlertOpen(false);
     };
 
@@ -33,10 +34,7 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
             await updateUser(user.ID_NGUOIDUNG, { TRANGTHAI_KICHHOAT: newStatus });
             toast.success(`${actionText} tài khoản ${user.HODEM_VA_TEN} thành công!`);
             onSuccess();
-        } catch (error) {
-            toast.error("Thao tác thất bại. Vui lòng thử lại.");
-            console.error("Failed to toggle status", error);
-        }
+        } catch (error) { toast.error("Thay đổi trạng thái thất bại."); }
         setIsToggleStatusAlertOpen(false);
     };
 
@@ -45,10 +43,7 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
             await deleteUser(user.ID_NGUOIDUNG);
             toast.success(`Đã xóa vĩnh viễn người dùng ${user.HODEM_VA_TEN}.`);
             onSuccess();
-        } catch (error) {
-            toast.error("Thao tác thất bại. Người dùng có thể có các dữ liệu liên quan.");
-            console.error("Failed to delete user", error);
-        }
+        } catch (error) { toast.error("Xóa người dùng thất bại."); }
         setIsDeleteAlertOpen(false);
     };
 
@@ -72,19 +67,14 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
                         <span>Reset mật khẩu</span>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                        onClick={() => setIsToggleStatusAlertOpen(true)}
-                    >
+                    <DropdownMenuItem onClick={() => setIsToggleStatusAlertOpen(true)}>
                         {user.TRANGTHAI_KICHHOAT ? (
                             <><ToggleLeft className="mr-2 h-4 w-4 text-amber-600" /> <span className="text-amber-600">Vô hiệu hóa</span></>
                         ) : (
                             <><ToggleRight className="mr-2 h-4 w-4 text-green-600" /> <span className="text-green-600">Kích hoạt</span></>
                         )}
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                        onClick={() => setIsDeleteAlertOpen(true)}
-                        className="text-destructive focus:text-destructive"
-                    >
+                    <DropdownMenuItem onClick={() => setIsDeleteAlertOpen(true)} className="text-destructive focus:text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
                         <span>Xóa vĩnh viễn</span>
                     </DropdownMenuItem>
@@ -92,11 +82,11 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
             </DropdownMenu>
 
             <AlertDialog open={isResetAlertOpen} onOpenChange={setIsResetAlertOpen}>
-                <AlertDialogContent>
+                <AlertDialogContent aria-labelledby={resetTitleId} aria-describedby={resetDescriptionId}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Xác nhận Reset Mật khẩu?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Hành động này sẽ đặt lại mật khẩu cho <strong>{user.HODEM_VA_TEN}</strong> về giá trị mặc định và buộc họ phải đổi lại ở lần đăng nhập sau. Bạn có chắc chắn?
+                        <AlertDialogTitle id={resetTitleId}>Xác nhận Reset Mật khẩu?</AlertDialogTitle>
+                        <AlertDialogDescription id={resetDescriptionId}>
+                            Đặt lại mật khẩu cho <strong>{user.HODEM_VA_TEN}</strong> về mặc định?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -107,19 +97,16 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
             </AlertDialog>
 
             <AlertDialog open={isToggleStatusAlertOpen} onOpenChange={setIsToggleStatusAlertOpen}>
-                <AlertDialogContent>
+                <AlertDialogContent aria-labelledby={toggleTitleId} aria-describedby={toggleDescriptionId}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Xác nhận thay đổi trạng thái?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Bạn có chắc chắn muốn <strong>{user.TRANGTHAI_KICHHOAT ? "vô hiệu hóa" : "kích hoạt"}</strong> tài khoản của <strong>{user.HODEM_VA_TEN}</strong>?
+                        <AlertDialogTitle id={toggleTitleId}>Xác nhận thay đổi trạng thái?</AlertDialogTitle>
+                        <AlertDialogDescription id={toggleDescriptionId}>
+                            Bạn có chắc muốn <strong>{user.TRANGTHAI_KICHHOAT ? "vô hiệu hóa" : "kích hoạt"}</strong> tài khoản của <strong>{user.HODEM_VA_TEN}</strong>?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Hủy</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleToggleStatus}
-                            className={user.TRANGTHAI_KICHHOAT ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
-                        >
+                        <AlertDialogAction onClick={handleToggleStatus} className={user.TRANGTHAI_KICHHOAT ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}>
                             Xác nhận
                         </AlertDialogAction>
                     </AlertDialogFooter>
@@ -127,19 +114,16 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
             </AlertDialog>
 
             <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
-                <AlertDialogContent>
+                <AlertDialogContent aria-labelledby={deleteTitleId} aria-describedby={deleteDescriptionId}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Xác nhận Xóa Vĩnh Viễn?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Hành động này <strong>không thể hoàn tác</strong>. Toàn bộ dữ liệu liên quan đến người dùng <strong>{user.HODEM_VA_TEN}</strong> sẽ bị xóa khỏi hệ thống. Bạn có chắc chắn?
+                        <AlertDialogTitle id={deleteTitleId}>Xác nhận Xóa Vĩnh Viễn?</AlertDialogTitle>
+                        <AlertDialogDescription id={deleteDescriptionId}>
+                            Hành động này <strong>không thể hoàn tác</strong>. Xóa vĩnh viễn người dùng <strong>{user.HODEM_VA_TEN}</strong>?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Hủy</AlertDialogCancel>
-                        <AlertDialogAction
-                            onClick={handleDeleteUser}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        >
+                        <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                             Xác nhận Xóa
                         </AlertDialogAction>
                     </AlertDialogFooter>

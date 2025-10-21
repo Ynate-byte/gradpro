@@ -7,106 +7,142 @@ use App\Models\Nguoidung;
 use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Collection;
 
 class AutoGroupingService
 {
     public function execute(KehoachKhoaluan $plan, int $desiredMembers, string $priority)
     {
         return DB::transaction(function () use ($plan, $desiredMembers, $priority) {
-            $allStudentUserIdsInPlan = Nguoidung::query()
-                ->whereHas('sinhvien.cacDotThamGia', function ($query) use ($plan) {
-                    $query->where('ID_KEHOACH', $plan->ID_KEHOACH);
-                })
-                ->pluck('ID_NGUOIDUNG');
+            $membersAddedToExistingGroups = 0;
+            $newGroupsCount = 0;
+            $membersInNewGroups = 0;
 
+            // === BƯỚC 1: LẤY DANH SÁCH SINH VIÊN "TỰ DO" ===
+
+            // Lấy ID tất cả sinh viên đã có nhóm trong kế hoạch
             $studentsInGroupIds = ThanhvienNhom::query()
-                ->whereHas('nhom', function($query) use ($plan) {
-                    $query->where('ID_KEHOACH', $plan->ID_KEHOACH);
-                })
+                ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
                 ->pluck('ID_NGUOIDUNG');
 
-            $ungroupedStudents = Nguoidung::whereIn('ID_NGUOIDUNG', $allStudentUserIdsInPlan)
+            // Lấy danh sách sinh viên chưa có nhóm
+            $availableStudents = Nguoidung::query()
                 ->where('TRANGTHAI_KICHHOAT', true)
+                ->whereHas('sinhvien.cacDotThamGia', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
                 ->whereNotIn('ID_NGUOIDUNG', $studentsInGroupIds)
                 ->with('sinhvien.chuyennganh')
-                ->get()
-                ->shuffle();
+                ->get()->shuffle();
 
-            $notFullGroups = $plan->nhoms()
-                ->where('SO_THANHVIEN_HIENTAI', '<', $desiredMembers)
+            // Lấy các nhóm có thể thao tác (không đặc biệt)
+            $targetGroups = $plan->nhoms()
                 ->where('LA_NHOM_DACBIET', false)
+                ->with('thanhviens.nguoidung.sinhvien.chuyennganh')
                 ->get();
+            
+            // Phân loại nhóm: nhóm chỉ có 1 TV (để xóa) và nhóm cần lấp đầy
+            list($loneLeaderGroups, $groupsToFill) = $targetGroups->partition(fn($group) => $group->SO_THANHVIEN_HIENTAI == 1);
+            
+            // Xử lý nhóm 1 thành viên: giải tán và đưa thành viên vào danh sách chờ
+            if ($loneLeaderGroups->isNotEmpty()) {
+                $groupIdsToDelete = [];
+                foreach ($loneLeaderGroups as $group) {
+                    if ($group->thanhviens->first()?->nguoidung) {
+                        $availableStudents->push($group->thanhviens->first()->nguoidung);
+                    }
+                    $groupIdsToDelete[] = $group->ID_NHOM;
+                }
+                Nhom::destroy($groupIdsToDelete);
+            }
 
-            $membersAddedCount = 0;
-            $newGroupsCount = 0;
-
-            // Lấp đầy các nhóm chưa đủ thành viên
-            foreach ($notFullGroups as $group) {
-                if ($ungroupedStudents->isEmpty()) break;
+            // === BƯỚC 2: LẤP ĐẦY CÁC NHÓM CÒN TRỐNG (2/4, 3/4) ===
+            foreach ($groupsToFill as $group) {
+                if ($availableStudents->isEmpty() || $group->SO_THANHVIEN_HIENTAI >= $desiredMembers) {
+                    continue;
+                }
 
                 $spaceLeft = $desiredMembers - $group->SO_THANHVIEN_HIENTAI;
-                $studentsToFill = $ungroupedStudents->filter(function ($student) use ($group, $priority) {
-                    if ($priority === 'chuyennganh' && $group->ID_CHUYENNGANH) {
-                        return $student->sinhvien?->ID_CHUYENNGANH === $group->ID_CHUYENNGANH;
-                    }
-                    return true;
-                })->take($spaceLeft);
+                $studentsForThisGroup = new Collection();
+                
+                // Ưu tiên theo chuyên ngành
+                if ($priority === 'chuyennganh' && $group->ID_CHUYENNGANH) {
+                    list($sameMajorStudents, $otherStudents) = $availableStudents->partition(
+                        fn($student) => $student->sinhvien?->ID_CHUYENNGANH === $group->ID_CHUYENNGANH
+                    );
+                    $studentsForThisGroup = $sameMajorStudents->take($spaceLeft);
+                    $availableStudents = $otherStudents->merge($sameMajorStudents->skip($spaceLeft));
+                }
+                
+                // Lấy thêm nếu vẫn còn thiếu
+                $stillNeeded = $spaceLeft - $studentsForThisGroup->count();
+                if ($stillNeeded > 0) {
+                    $studentsForThisGroup = $studentsForThisGroup->merge($availableStudents->take($stillNeeded));
+                    $availableStudents = $availableStudents->skip($stillNeeded);
+                }
 
-                if ($studentsToFill->isNotEmpty()) {
-                    $studentIds = $studentsToFill->pluck('ID_NGUOIDUNG');
-                    foreach($studentIds as $id) {
-                        ThanhvienNhom::create(['ID_NHOM' => $group->ID_NHOM, 'ID_NGUOIDUNG' => $id]);
+                if ($studentsForThisGroup->isNotEmpty()) {
+                    $memberData = $studentsForThisGroup->map(fn($student) => [
+                        'ID_NHOM' => $group->ID_NHOM,
+                        'ID_NGUOIDUNG' => $student->ID_NGUOIDUNG,
+                        'NGAY_VAONHOM' => now(),
+                    ])->all();
+
+                    ThanhvienNhom::insert($memberData);
+                    $newMemberCount = count($memberData);
+                    $group->increment('SO_THANHVIEN_HIENTAI', $newMemberCount);
+                    if ($group->SO_THANHVIEN_HIENTAI >= 4) {
+                        $group->TRANGTHAI = 'Đã đủ thành viên';
+                        $group->save();
                     }
-                    $group->increment('SO_THANHVIEN_HIENTAI', $studentsToFill->count());
-                    $membersAddedCount += $studentsToFill->count();
-                    $ungroupedStudents = $ungroupedStudents->reject(fn($s) => $studentIds->contains($s->ID_NGUOIDUNG));
+                    $membersAddedToExistingGroups += $newMemberCount;
                 }
             }
 
-            // Tạo nhóm mới từ các sinh viên còn lại
-            $studentsGroupedByPriority = $ungroupedStudents->groupBy(function ($student) use ($priority) {
+            // === BƯỚC 3: TẠO NHÓM MỚI TỪ SINH VIÊN CÒN LẠI ===
+            $studentsGroupedByPriority = $availableStudents->groupBy(function ($student) use ($priority) {
                 if ($priority === 'chuyennganh') {
                     return $student->sinhvien?->ID_CHUYENNGANH ?? 'no_major';
                 }
                 return 'no_priority';
             });
+            
+            $leftoverStudents = collect();
 
-            foreach($studentsGroupedByPriority as $priorityId => $priorityGroup) {
-                if ($priorityId === 'no_major' || $priorityId === 'no_priority') continue;
-
-                foreach($priorityGroup->chunk($desiredMembers) as $chunk) {
-                    if ($chunk->count() < 2) continue;
-
+            foreach ($studentsGroupedByPriority as $priorityId => $studentsInPriority) {
+                foreach ($studentsInPriority->chunk($desiredMembers) as $chunk) {
+                    if ($chunk->count() < 2) { // Nhóm phải có ít nhất 2 thành viên
+                        $leftoverStudents = $leftoverStudents->merge($chunk);
+                        continue;
+                    }
+                    
                     $leader = $chunk->first();
                     $majorCode = $leader->sinhvien?->chuyennganh?->MA_CHUYENNGANH ?? 'N/A';
-
+                    
                     $newGroup = Nhom::create([
                         'ID_KEHOACH' => $plan->ID_KEHOACH,
                         'TEN_NHOM' => "Nhóm tự động - {$majorCode} - " . substr(uniqid(), -4),
                         'ID_NHOMTRUONG' => $leader->ID_NGUOIDUNG,
                         'ID_CHUYENNGANH' => $leader->sinhvien?->ID_CHUYENNGANH,
                         'SO_THANHVIEN_HIENTAI' => $chunk->count(),
+                        'TRANGTHAI' => $chunk->count() >= 4 ? 'Đã đủ thành viên' : 'Đang mở',
                     ]);
                     $newGroupsCount++;
 
-                    $studentIdsForNewGroup = $chunk->pluck('ID_NGUOIDUNG');
-                    $membersToInsert = $studentIdsForNewGroup->map(fn($id) => [
+                    $membersToInsert = $chunk->map(fn(Nguoidung $student) => [
                         'ID_NHOM' => $newGroup->ID_NHOM,
-                        'ID_NGUOIDUNG' => $id,
+                        'ID_NGUOIDUNG' => $student->ID_NGUOIDUNG,
                         'NGAY_VAONHOM' => now(),
                     ])->all();
                     ThanhvienNhom::insert($membersToInsert);
-
-                    $membersAddedCount += $chunk->count();
-                    $ungroupedStudents = $ungroupedStudents->reject(fn($s) => $studentIdsForNewGroup->contains($s->ID_NGUOIDUNG));
+                    $membersInNewGroups += $chunk->count();
                 }
             }
 
             return [
                 'message' => 'Quá trình ghép nhóm tự động đã hoàn tất.',
                 'newGroupsCreated' => $newGroupsCount,
-                'membersAdded' => $membersAddedCount,
-                'leftoverStudents' => $ungroupedStudents->values()->all(),
+                'membersAddedToExistingGroups' => $membersAddedToExistingGroups,
+                'membersInNewGroups' => $membersInNewGroups,
+                'leftoverStudents' => $leftoverStudents->values()->all(),
             ];
         });
     }

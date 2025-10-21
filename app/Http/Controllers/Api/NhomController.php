@@ -374,4 +374,34 @@ class NhomController extends Controller
 
         return response()->json(['message' => 'Rời nhóm thành công.']);
     }
+    public function transferLeadership(Request $request, Nhom $nhom, $newLeaderId)
+    {
+        $user = $request->user();
+
+        // 1. Authorize: Only current leader can transfer.
+        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
+        // 2. Validate: Ensure new leader is a member and not the current leader.
+        if ($nhom->ID_NHOMTRUONG == $newLeaderId) {
+            return response()->json(['message' => 'Người này đã là nhóm trưởng.'], 400);
+        }
+
+        $newLeaderIsMember = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
+                                        ->where('ID_NGUOIDUNG', $newLeaderId)
+                                        ->exists();
+
+        if (!$newLeaderIsMember) {
+            return response()->json(['message' => 'Người được chọn không phải là thành viên của nhóm.'], 400);
+        }
+
+        // 3. Update: Change ID_NHOMTRUONG on the Nhom model.
+        $nhom->ID_NHOMTRUONG = $newLeaderId;
+        $nhom->save();
+
+        // Optional: Send notification to new leader?
+
+        return response()->json(['message' => 'Đã chuyển quyền trưởng nhóm thành công.']);
+    }
 }

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { MoreHorizontal, Pencil, Trash2, Send, CheckCircle, XCircle, FileDown, Users } from "lucide-react";
+import React, { useState, useId } from 'react';
+import { MoreHorizontal, Pencil, Trash2, Send, CheckCircle, XCircle, FileDown, Users, Loader2 } from "lucide-react"; // Import Loader2
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -9,17 +9,21 @@ import { deleteThesisPlan, submitForApproval, approvePlan, requestChanges, expor
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 
-// THAY ĐỔI: Không cần truyền onEdit nữa
-export function PlanRowActions({ row, onSuccess }) {
+export function PlanRowActions({ row, onEdit, onSuccess }) {
     const [alertInfo, setAlertInfo] = useState({ isOpen: false, type: null, comment: '' });
+    const [isLoading, setIsLoading] = useState(false); // Loading state cho các hành động
     const [isExporting, setIsExporting] = useState(false);
     const plan = row.original;
     const navigate = useNavigate();
+    const titleId = useId();
+    const descriptionId = useId();
 
     const openConfirmation = (type) => setAlertInfo({ isOpen: true, type: type, comment: '' });
 
+    // Xử lý các hành động (xóa, duyệt,...)
     const handleAction = async () => {
         const { type, comment } = alertInfo;
+        setIsLoading(true); // Bắt đầu loading
         try {
             let res;
             switch (type) {
@@ -37,32 +41,40 @@ export function PlanRowActions({ row, onSuccess }) {
                     break;
                 case 'request_changes':
                     if (!comment) {
-                        toast.error("Vui lòng nhập lý do yêu cầu chỉnh sửa.");
-                        return;
+                        toast.error("Vui lòng nhập lý do.");
+                        setIsLoading(false); // Dừng loading nếu lỗi
+                        return; // Không đóng dialog
                     }
                     res = await requestChanges(plan.ID_KEHOACH, comment);
                     toast.success(res.message);
                     break;
                 default:
+                    setIsLoading(false);
                     return;
             }
-            onSuccess();
+            onSuccess(); // Refresh lại data ở trang list
+            setAlertInfo({ isOpen: false, type: null, comment: '' }); // Đóng dialog
         } catch (error) {
             toast.error(error.response?.data?.message || "Thao tác thất bại.");
         } finally {
-            setAlertInfo({ isOpen: false, type: null, comment: '' });
+            setIsLoading(false); // Kết thúc loading
+            // Chỉ đóng dialog nếu không phải lỗi validation
+            if (type !== 'request_changes' || comment) {
+                 setAlertInfo({ isOpen: false, type: null, comment: '' });
+            }
         }
     };
 
+    // Xử lý xuất PDF
     const handleExport = async () => {
         setIsExporting(true);
-        toast.info("Đang chuẩn bị file PDF, vui lòng đợi...");
+        toast.info("Đang chuẩn bị file PDF...");
         try {
             const blob = await exportPlanDocument(plan.ID_KEHOACH);
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `Thong-bao-KLTN-${plan.KHOAHOC}.pdf`;
+            a.download = `Thong-bao-KLTN-${plan.KHOAHOC || 'plan'}.pdf`; // Thêm fallback
             document.body.appendChild(a);
             a.click();
             a.remove();
@@ -75,92 +87,115 @@ export function PlanRowActions({ row, onSuccess }) {
         }
     };
 
+    // Lấy nội dung cho dialog xác nhận
     const getAlertContent = () => {
         switch (alertInfo.type) {
-            case 'delete':
-                return {
-                    title: 'Xác nhận Xóa Kế hoạch?',
-                    description: `Hành động này không thể hoàn tác. Bạn có chắc muốn xóa vĩnh viễn kế hoạch "${plan.TEN_DOT}" không?`
-                };
-            case 'submit':
-                return {
-                    title: 'Xác nhận Gửi duyệt?',
-                    description: `Kế hoạch "${plan.TEN_DOT}" sẽ được gửi đến Trưởng Khoa để phê duyệt. Bạn sẽ không thể chỉnh sửa cho đến khi có phản hồi.`
-                };
-            case 'approve':
-                return {
-                    title: 'Xác nhận Phê duyệt?',
-                    description: `Bạn có chắc chắn muốn phê duyệt kế hoạch "${plan.TEN_DOT}" không? Kế hoạch sẽ được công khai sau khi phê duyệt.`
-                };
-            case 'request_changes':
-                return {
-                    title: 'Yêu cầu Chỉnh sửa',
-                    description: `Vui lòng nhập lý do yêu cầu chỉnh sửa cho kế hoạch "${plan.TEN_DOT}". Giáo vụ sẽ nhận được thông báo này.`
-                };
+            case 'delete': return { title: 'Xác nhận Xóa Kế hoạch?', description: `Hành động này không thể hoàn tác. Bạn có chắc muốn xóa vĩnh viễn kế hoạch "${plan.TEN_DOT}" không?` };
+            case 'submit': return { title: 'Xác nhận Gửi duyệt?', description: `Kế hoạch "${plan.TEN_DOT}" sẽ được gửi đến Trưởng Khoa để phê duyệt.` };
+            case 'approve': return { title: 'Xác nhận Phê duyệt?', description: `Bạn có chắc chắn muốn phê duyệt kế hoạch "${plan.TEN_DOT}" không?` };
+            case 'request_changes': return { title: 'Yêu cầu Chỉnh sửa', description: `Vui lòng nhập lý do yêu cầu chỉnh sửa cho kế hoạch "${plan.TEN_DOT}".` };
             default: return {};
         }
     };
+
+    // Lấy màu nút xác nhận
+    const getActionVariant = () => {
+        switch (alertInfo.type) {
+            case 'delete':
+                return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
+            case 'approve':
+                 return "bg-green-600 text-white hover:bg-green-700"; // Ví dụ màu xanh lá
+            case 'request_changes':
+                 return "bg-orange-500 text-white hover:bg-orange-600"; // Ví dụ màu cam
+            default:
+                return ""; // Mặc định
+        }
+    }
 
     return (
         <>
             <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="h-8 w-8 p-0"><MoreHorizontal className="h-4 w-4" /></Button>
+                    <Button variant="ghost" className="h-8 w-8 p-0">
+                        <MoreHorizontal className="h-4 w-4" />
+                    </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuLabel>Hành động</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    {/* Sửa lại route của Quản lý nhóm cho đúng */}
+                    {/* Luôn hiển thị Quản lý nhóm và Xuất PDF */}
                     <DropdownMenuItem onClick={() => navigate(`/admin/groups?plan_id=${plan.ID_KEHOACH}`)}>
                         <Users className="mr-2 h-4 w-4" /> Quản lý nhóm
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={handleExport} disabled={isExporting}>
-                        <FileDown className="mr-2 h-4 w-4" />
+                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                         {isExporting ? "Đang xử lý..." : "Xuất Thông báo"}
                     </DropdownMenuItem>
-                    {/* Sửa lại hàm onClick của nút Sửa */}
+
+                    {/* Các hành động theo trạng thái */}
                     {(plan.TRANGTHAI === 'Bản nháp' || plan.TRANGTHAI === 'Yêu cầu chỉnh sửa') && (
-                        <DropdownMenuItem onClick={() => navigate(`/admin/thesis-plans/${plan.ID_KEHOACH}/edit`)}><Pencil className="mr-2 h-4 w-4" /> Sửa</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/admin/thesis-plans/${plan.ID_KEHOACH}/edit`)}>
+                            <Pencil className="mr-2 h-4 w-4" /> Sửa
+                        </DropdownMenuItem>
                     )}
                     {plan.TRANGTHAI === 'Bản nháp' && (
-                        <DropdownMenuItem onClick={() => openConfirmation('submit')}><Send className="mr-2 h-4 w-4" /> Gửi duyệt</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openConfirmation('submit')}>
+                            <Send className="mr-2 h-4 w-4" /> Gửi duyệt
+                        </DropdownMenuItem>
                     )}
                     {plan.TRANGTHAI === 'Chờ phê duyệt' && (
                         <>
-                            <DropdownMenuItem onClick={() => openConfirmation('approve')} className="text-green-600 focus:text-green-700"><CheckCircle className="mr-2 h-4 w-4" /> Phê duyệt</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openConfirmation('request_changes')} className="text-orange-600 focus:text-orange-700"><XCircle className="mr-2 h-4 w-4" /> Yêu cầu chỉnh sửa</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openConfirmation('approve')} className="text-green-600 focus:text-green-700">
+                                <CheckCircle className="mr-2 h-4 w-4" /> Phê duyệt
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openConfirmation('request_changes')} className="text-orange-600 focus:text-orange-700">
+                                <XCircle className="mr-2 h-4 w-4" /> Yêu cầu chỉnh sửa
+                            </DropdownMenuItem>
                         </>
                     )}
                     {plan.TRANGTHAI === 'Bản nháp' && (
-                        <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openConfirmation('delete')}>
-                            <Trash2 className="mr-2 h-4 w-4" /> Xóa
-                        </DropdownMenuItem>
+                         <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openConfirmation('delete')}>
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa
+                            </DropdownMenuItem>
+                         </>
                     )}
                 </DropdownMenuContent>
             </DropdownMenu>
 
+            {/* Dialog xác nhận */}
             <AlertDialog open={alertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setAlertInfo(prev => ({ ...prev, isOpen: false }))}>
-                <AlertDialogContent>
+                <AlertDialogContent aria-labelledby={titleId} aria-describedby={descriptionId}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>{getAlertContent().title}</AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <AlertDialogTitle id={titleId}>{getAlertContent().title}</AlertDialogTitle>
+                        <AlertDialogDescription id={descriptionId}>
                             {getAlertContent().description}
                         </AlertDialogDescription>
+                        {/* Input cho lý do yêu cầu chỉnh sửa */}
                         {alertInfo.type === 'request_changes' && (
                             <div className="pt-4">
-                                <Label htmlFor="comment">Lý do</Label>
+                                <Label htmlFor="comment" className="text-left">Lý do*</Label>
                                 <Input
                                     id="comment"
-                                    placeholder="VD: Vui lòng điều chỉnh lại mốc thời gian nộp báo cáo..."
+                                    placeholder="VD: Vui lòng điều chỉnh..."
                                     value={alertInfo.comment}
-                                    onChange={(e) => setAlertInfo(prev => ({...prev, comment: e.target.value}))}
+                                    onChange={(e) => setAlertInfo(prev => ({ ...prev, comment: e.target.value }))}
+                                    className="mt-2"
                                 />
                             </div>
                         )}
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Hủy</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleAction}>Xác nhận</AlertDialogAction>
+                        <AlertDialogCancel disabled={isLoading}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleAction}
+                            disabled={isLoading}
+                            className={getActionVariant()} // Áp dụng màu nút
+                        >
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Xác nhận
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

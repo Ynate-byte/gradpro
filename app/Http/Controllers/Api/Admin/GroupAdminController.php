@@ -44,10 +44,18 @@ class GroupAdminController extends Controller
         $validated = $request->validate([
             'TEN_NHOM' => ['required', 'string', 'max:100', Rule::unique('NHOM')->ignore($nhom->ID_NHOM, 'ID_NHOM')],
             'MOTA' => 'nullable|string|max:255',
+            'ID_NHOMTRUONG' => [
+                'sometimes',
+                'required',
+                'exists:NGUOIDUNG,ID_NGUOIDUNG',
+                Rule::exists('THANHVIEN_NHOM', 'ID_NGUOIDUNG')->where('ID_NHOM', $nhom->ID_NHOM)
+            ],
+        ], [
+            'ID_NHOMTRUONG.exists' => 'Trưởng nhóm mới phải là một thành viên hợp lệ của nhóm.'
         ]);
 
         $nhom->update($validated);
-        return response()->json($nhom->load('nhomtruong', 'thanhviens'));
+        return response()->json($nhom->load('nhomtruong', 'thanhviens.nguoidung'));
     }
 
     public function destroy(Nhom $nhom)
@@ -114,7 +122,33 @@ class GroupAdminController extends Controller
             ->get();
         return response()->json($students);
     }
+    public function removeMember(Nhom $nhom, $userId)
+    {
+        $member = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
+                                ->where('ID_NGUOIDUNG', $userId)
+                                ->firstOrFail();
 
+        if ($nhom->ID_NHOMTRUONG == $userId) {
+            return response()->json(['message' => 'Không thể xóa nhóm trưởng. Vui lòng chuyển quyền trưởng nhóm trước.'], 400);
+        }
+
+        if ($nhom->SO_THANHVIEN_HIENTAI <= 1) {
+            return response()->json(['message' => 'Không thể xóa thành viên cuối cùng.'], 400);
+        }
+
+
+        DB::transaction(function () use ($nhom, $member) {
+            $member->delete();
+            $nhom->decrement('SO_THANHVIEN_HIENTAI');
+            // Update group status if it was full
+            if($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < 4) {
+                $nhom->TRANGTHAI = 'Đang mở';
+                $nhom->save();
+            }
+        });
+
+        return response()->json(['message' => 'Đã xóa thành viên khỏi nhóm thành công.']);
+    }
     public function removeStudents(Request $request)
     {
         $validated = $request->validate(['studentIds' => 'required|array', 'studentIds.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG']);
@@ -130,24 +164,44 @@ class GroupAdminController extends Controller
         return response()->json(['message' => $message]);
     }
     
-    public function addStudentToGroup(Request $request)
+    public function addMembersToGroup(Request $request)
     {
         $validated = $request->validate([
-            'ID_NGUOIDUNG' => ['required', 'exists:NGUOIDUNG,ID_NGUOIDUNG', Rule::unique('THANHVIEN_NHOM', 'ID_NGUOIDUNG')],
             'ID_NHOM' => 'required|exists:NHOM,ID_NHOM',
+            'student_ids' => 'required|array|min:1',
+            'student_ids.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG',
         ]);
 
         $nhom = Nhom::find($validated['ID_NHOM']);
-        if ($nhom->SO_THANHVIEN_HIENTAI >= 5) {
-            return response()->json(['message' => 'Nhóm đã đạt số lượng thành viên tối đa.'], 400);
+        $planId = $nhom->ID_KEHOACH;
+        $countToAdd = count($validated['student_ids']);
+
+        if ($nhom->SO_THANHVIEN_HIENTAI + $countToAdd > 5) {
+            return response()->json(['message' => 'Số lượng thành viên thêm vào vượt quá giới hạn của nhóm.'], 400);
         }
 
-        DB::transaction(function () use ($validated, $nhom) {
-            ThanhvienNhom::create($validated);
-            $nhom->increment('SO_THANHVIEN_HIENTAI');
+        $existingMembers = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $validated['student_ids'])
+            ->whereHas('nhom', function ($query) use ($planId) {
+                $query->where('ID_KEHOACH', $planId);
+            })
+            ->count();
+
+        if ($existingMembers > 0) {
+            return response()->json(['message' => 'Một hoặc nhiều sinh viên được chọn đã thuộc về một nhóm khác trong kế hoạch này.'], 409);
+        }
+
+        DB::transaction(function () use ($validated, $nhom, $countToAdd) {
+            $membersToInsert = collect($validated['student_ids'])->map(fn($id) => [
+                'ID_NHOM' => $nhom->ID_NHOM,
+                'ID_NGUOIDUNG' => $id,
+                'NGAY_VAONHOM' => now(),
+            ])->all();
+            
+            ThanhvienNhom::insert($membersToInsert);
+            $nhom->increment('SO_THANHVIEN_HIENTAI', $countToAdd);
         });
         
-        return response()->json(['message' => 'Đã thêm sinh viên vào nhóm thành công.']);
+        return response()->json(['message' => "Đã thêm thành công {$countToAdd} sinh viên vào nhóm."]);
     }
     
     public function exportGroups(Request $request)
@@ -173,6 +227,7 @@ class GroupAdminController extends Controller
         return response()->json($result);
     }
     
+    // === BẮT ĐẦU SỬA ĐỔI: Tối ưu lại truy vấn ===
     public function searchUngroupedStudents(Request $request)
     {
         $validated = $request->validate([
@@ -181,16 +236,20 @@ class GroupAdminController extends Controller
         ]);
         $planId = $validated['plan_id'];
 
+        // Lấy danh sách ID người dùng đã có nhóm trong kế hoạch này (cách này hiệu quả hơn)
+        $groupedUserIds = ThanhvienNhom::query()
+            ->whereHas('nhom', function ($query) use ($planId) {
+                $query->where('ID_KEHOACH', $planId);
+            })
+            ->pluck('ID_NGUOIDUNG');
+
+        // Bắt đầu query những người dùng chưa có nhóm
         $query = Nguoidung::query()
             ->where('TRANGTHAI_KICHHOAT', true)
             ->whereHas('sinhvien.cacDotThamGia', function ($q) use ($planId) {
                 $q->where('ID_KEHOACH', $planId);
             })
-            ->whereDoesntHave('thanhvienNhom', function ($q) use ($planId) {
-                $q->whereHas('nhom', function ($subQ) use ($planId) {
-                    $subQ->where('ID_KEHOACH', $planId);
-                });
-            });
+            ->whereNotIn('ID_NGUOIDUNG', $groupedUserIds); // Sử dụng whereNotIn cho hiệu năng tốt hơn
 
         if ($request->filled('search')) {
             $searchTerm = $validated['search'];
@@ -201,10 +260,11 @@ class GroupAdminController extends Controller
             });
         }
 
-        $students = $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH')->take(10)->get();
+        $students = $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH')->get();
 
         return response()->json($students);
     }
+    // === KẾT THÚC SỬA ĐỔI ===
 
     public function createWithMembers(Request $request)
     {
@@ -247,5 +307,31 @@ class GroupAdminController extends Controller
         });
 
         return response()->json($group->load('thanhviens.nguoidung', 'nhomtruong'), 201);
+    }
+    public function getUngroupedStudents(Request $request)
+    {
+        $validated = $request->validate([
+            'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+        ]);
+        $planId = $validated['plan_id'];
+
+        $groupedUserIds = ThanhvienNhom::query()
+            ->whereHas('nhom', function ($query) use ($planId) {
+                $query->where('ID_KEHOACH', $planId);
+            })
+            ->pluck('ID_NGUOIDUNG');
+
+        $students = Nguoidung::query()
+            ->where('TRANGTHAI_KICHHOAT', true)
+            ->whereHas('sinhvien.cacDotThamGia', function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            })
+            ->whereNotIn('ID_NGUOIDUNG', $groupedUserIds)
+            ->with('sinhvien.chuyennganh')
+            ->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL')
+            ->orderBy('HODEM_VA_TEN')
+            ->get();
+
+        return response()->json($students);
     }
 }

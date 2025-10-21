@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom'; 
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getThesisPlans } from '@/api/thesisPlanService';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { PlusCircle } from 'lucide-react';
 import { PlanDataTable } from './components/PlanDataTable';
 import { PlanDetailDialog } from './components/PlanDetailDialog';
+import { TemplateSelectionDialog } from './components/TemplateSelectionDialog'; // Thêm import
 
 export default function ThesisPlanManagementPage() {
     const [plans, setPlans] = useState([]);
@@ -15,12 +16,11 @@ export default function ThesisPlanManagementPage() {
     const [loading, setLoading] = useState(true);
     const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [selectedPlanId, setSelectedPlanId] = useState(null);
-    const navigate = useNavigate(); 
+    const navigate = useNavigate();
     const [columnFilters, setColumnFilters] = useState([]);
     const [sorting, setSorting] = useState([]);
-    // === BẮT ĐẦU SỬA LỖI: Thêm state cho debouncing ===
     const [searchTerm, setSearchTerm] = useState('');
-    // === KẾT THÚC SỬA LỖI ===
+    const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false); // State cho dialog chọn template
 
     const fetchData = useCallback(() => {
         setLoading(true);
@@ -39,7 +39,6 @@ export default function ThesisPlanManagementPage() {
             .finally(() => setLoading(false));
     }, [pagination, columnFilters, sorting]);
 
-    // === BẮT ĐẦU SỬA LỖI: Tách useEffect cho debouncing và fetchData ===
     useEffect(() => {
         const timer = setTimeout(() => {
             setColumnFilters(prev => {
@@ -52,7 +51,7 @@ export default function ThesisPlanManagementPage() {
                 }
                 return prev.filter(f => f.id !== 'TEN_DOT');
             });
-        }, 500); // Đợi 500ms sau khi người dùng ngừng gõ
+        }, 500);
 
         return () => {
             clearTimeout(timer);
@@ -63,14 +62,14 @@ export default function ThesisPlanManagementPage() {
     useEffect(() => {
         fetchData();
     }, [fetchData]);
-    // === KẾT THÚC SỬA LỖI ===
 
     const handleSuccess = () => {
         fetchData();
     };
 
     const handleOpenCreate = () => {
-        navigate('/admin/thesis-plans/create');
+        // Mở dialog chọn template thay vì navigate trực tiếp
+        setIsTemplateDialogOpen(true);
     };
 
     const handleOpenEdit = (plan) => {
@@ -85,10 +84,6 @@ export default function ThesisPlanManagementPage() {
     return (
         <div className="space-y-8 p-4 md:p-8">
             <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold">Quản lý Kế hoạch Khóa luận</h1>
-                    <p className="text-muted-foreground">Tạo, chỉnh sửa và phê duyệt các đợt khóa luận tốt nghiệp.</p>
-                </div>
                 <Button onClick={handleOpenCreate}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Tạo Kế hoạch mới
                 </Button>
@@ -115,10 +110,8 @@ export default function ThesisPlanManagementPage() {
                         setColumnFilters={setColumnFilters}
                         sorting={sorting}
                         setSorting={setSorting}
-                        // === BẮT ĐẦU SỬA LỖI: Truyền state và setter cho search term ===
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
-                        // === KẾT THÚC SỬA LỖI ===
                     />
                 </CardContent>
             </Card>
@@ -127,6 +120,12 @@ export default function ThesisPlanManagementPage() {
                 planId={selectedPlanId}
                 isOpen={isDetailOpen}
                 setIsOpen={setIsDetailOpen}
+            />
+            
+            {/* Thêm Dialog chọn template vào cuối component */}
+            <TemplateSelectionDialog
+                isOpen={isTemplateDialogOpen}
+                setIsOpen={setIsTemplateDialogOpen}
             />
         </div>
     );

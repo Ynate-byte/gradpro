@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { handleInvitation } from '@/api/groupService';
 
 export function PendingInvitationsList({ invitations, refreshData }) {
     const [alertInfo, setAlertInfo] = useState({ isOpen: false, action: null, invitationId: null });
+    const alertTitleId = useId();
+    const alertDescriptionId = useId();
 
     const openConfirmation = (action, invitationId) => {
         setAlertInfo({ isOpen: true, action, invitationId });
@@ -17,36 +19,26 @@ export function PendingInvitationsList({ invitations, refreshData }) {
     const handleAction = async () => {
         const { action, invitationId } = alertInfo;
         if (!action || !invitationId) return;
-
         try {
             const response = await handleInvitation(invitationId, action);
             toast.success(response.message);
             refreshData();
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Thao tác thất bại.");
-        } finally {
-            setAlertInfo({ isOpen: false, action: null, invitationId: null });
-        }
+        } catch (error) { toast.error(error.response?.data?.message || "Thao tác thất bại."); }
+        finally { setAlertInfo({ isOpen: false, action: null, invitationId: null }); }
     };
 
     return (
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <Mail /> Lời mời tham gia nhóm
-                    </CardTitle>
-                    <CardDescription>
-                        Bạn có {invitations.length} lời mời đang chờ phản hồi. Chấp nhận một lời mời sẽ tự động từ chối các lời mời còn lại.
-                    </CardDescription>
+                    <CardTitle className="flex items-center gap-2"><Mail /> Lời mời tham gia nhóm</CardTitle>
+                    <CardDescription>Bạn có {invitations.length} lời mời đang chờ. Chấp nhận một lời mời sẽ tự động từ chối các lời mời còn lại.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     {invitations.map(inv => (
                         <div key={inv.ID_LOIMOI} className="flex items-center justify-between p-3 border rounded-md bg-muted/50">
                             <div className="flex items-center gap-4">
-                                <Avatar>
-                                    <AvatarFallback>{inv.nhom.TEN_NHOM.charAt(0)}</AvatarFallback>
-                                </Avatar>
+                                <Avatar><AvatarFallback>{inv.nhom.TEN_NHOM.charAt(0)}</AvatarFallback></Avatar>
                                 <div>
                                     <p className="font-semibold">{inv.nhom.TEN_NHOM}</p>
                                     <p className="text-sm text-muted-foreground">Trưởng nhóm: {inv.nhom.nhomtruong.HODEM_VA_TEN}</p>
@@ -62,12 +54,12 @@ export function PendingInvitationsList({ invitations, refreshData }) {
             </Card>
 
             <AlertDialog open={alertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setAlertInfo({ isOpen: false, action: null, invitationId: null })}>
-                <AlertDialogContent>
+                <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Xác nhận hành động</AlertDialogTitle>
-                        <AlertDialogDescription>
+                        <AlertDialogTitle id={alertTitleId}>Xác nhận hành động</AlertDialogTitle>
+                        <AlertDialogDescription id={alertDescriptionId}>
                             {alertInfo.action === 'accept'
-                                ? "Bạn có chắc chắn muốn tham gia nhóm này không? Tất cả các lời mời khác sẽ bị từ chối."
+                                ? "Bạn có chắc chắn muốn tham gia nhóm này không? Các lời mời khác sẽ bị từ chối."
                                 : "Bạn có chắc chắn muốn từ chối lời mời này không?"}
                         </AlertDialogDescription>
                     </AlertDialogHeader>

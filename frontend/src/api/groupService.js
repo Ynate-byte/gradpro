@@ -62,3 +62,7 @@ export const searchUngroupedStudents = (planId, search) => {
 export const createGroupWithMembers = (payload) => {
     return axiosClient.post('/admin/groups/create-with-members', payload).then(res => res.data);
 };
+
+export const transferGroupLeadership = (groupId, newLeaderId) => {
+    return axiosClient.post(`/nhom/${groupId}/transfer-leadership/${newLeaderId}`).then(res => res.data);
+};

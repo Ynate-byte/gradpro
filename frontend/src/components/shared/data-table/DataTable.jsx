@@ -6,14 +6,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { DataTablePagination } from "./DataTablePagination"
 import { DataTableToolbar } from "./DataTableToolbar"
 
-export function DataTable({ 
-    columns, 
-    data, 
+export function DataTable({
+    columns,
+    data,
     pageCount,
     loading,
-    pagination, 
-    setPagination, 
-    columnFilters, 
+    pagination,
+    setPagination,
+    columnFilters,
     setColumnFilters,
     sorting,
     setSorting,
@@ -39,8 +39,8 @@ export function DataTable({
       columnFilters,
       pagination,
       columnVisibility: {
-        chuyen_nganh: false,
-        khoa_bomon: false,
+        chuyen_nganh: false, // Hidden by default, used for filtering
+        khoa_bomon: false,   // Hidden by default, used for filtering
       },
     },
     manualPagination: true,
@@ -55,8 +55,8 @@ export function DataTable({
 
   return (
     <div className="space-y-4">
-      <DataTableToolbar 
-        table={table} 
+      <DataTableToolbar
+        table={table}
         onAddUser={onAddUser}
         onImportUser={onImportUser}
         filterOptions={filterOptions}
@@ -70,6 +70,7 @@ export function DataTable({
         searchTerm={searchTerm}
         onSearchChange={onSearchChange}
       />
+      {/* Container for scrollable table with sticky header */}
       <div className="rounded-md border max-h-[calc(100vh-25rem)] overflow-y-auto relative">
         <Table>
           <TableHeader>
@@ -77,6 +78,7 @@ export function DataTable({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
+                    // Sticky classes removed here, will be applied in the base TableHead component
                     <TableHead key={header.id} colSpan={header.colSpan}>
                       {header.isPlaceholder
                         ? null

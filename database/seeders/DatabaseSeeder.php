@@ -9,6 +9,7 @@ class DatabaseSeeder extends Seeder
     {
         // Chạy các seeder theo thứ tự phụ thuộc
         $this->call([
+            BachelorThesisTemplateSeeder::class,
             VaitroSeeder::class,          // 1. Tạo các vai trò
             ChuyennganhSeeder::class,     // 2. Tạo các chuyên ngành
             KhoaBomonSeeder::class,       // 3. Tạo các khoa/bộ môn

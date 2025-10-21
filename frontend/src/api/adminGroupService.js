@@ -32,9 +32,11 @@ export const markGroupAsSpecial = (groupId, is_special) => {
     return axiosClient.post(`/admin/groups/${groupId}/mark-special`, { is_special }).then(res => res.data);
 };
 
-export const addStudentToGroup = (payload) => {
-    return axiosClient.post('/admin/groups/add-student', payload).then(res => res.data);
+// === BẮT ĐẦU THAY THẾ: Chức năng thêm nhiều thành viên ===
+export const addMembersToGroup = (payload) => {
+    return axiosClient.post('/admin/groups/add-members', payload).then(res => res.data);
 };
+// === KẾT THÚC THAY THẾ ===
 
 export const exportGroups = async (planId) => {
     const response = await axiosClient.get('/admin/groups/export', {
@@ -44,12 +46,18 @@ export const exportGroups = async (planId) => {
     return response.data;
 };
 
-// === BẮT ĐẦU THÊM MỚI ===
 export const searchUngroupedStudents = (planId, search) => {
     return axiosClient.get('/admin/groups/search-ungrouped-students', { params: { plan_id: planId, search } }).then(res => res.data);
+};
+
+export const getUngroupedStudents = (planId) => {
+    return axiosClient.get('/admin/groups/ungrouped-students', { params: { plan_id: planId } }).then(res => res.data);
 };
 
 export const createGroupWithMembers = (payload) => {
     return axiosClient.post('/admin/groups/create-with-members', payload).then(res => res.data);
 };
-// === KẾT THÚC THÊM MỚI ===
+
+export const removeGroupMember = (groupId, userId) => {
+    return axiosClient.post(`/admin/groups/${groupId}/remove-member/${userId}`).then(res => res.data);
+};
