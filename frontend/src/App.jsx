@@ -8,6 +8,8 @@ const Login = lazy(() => import('./features/auth/Login'));
 
 // --- Import các components chung ---
 const HomePage = lazy(() => import('./features/home/HomePage'));
+const NewsManagementPage = lazy(() => import('./features/news-management/index.jsx'));
+const NewsDetail = lazy(() => import('./features/news-management/NewsDetail'));
 
 // --- Import các components Sinh viên ---
 const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
@@ -75,6 +77,10 @@ function App() {
                     <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
                     <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />
 
+                    {/* Các Routes chung tin tức */}
+                    <Route path="news" element={<NewsManagementPage />} />
+                    <Route path="news/:id" element={<NewsDetail />} />
+
                     {/* Routes dành cho Sinh viên */}
                     {user && user.vaitro.TEN_VAITRO === 'Sinh viên' && (
                         <>
@@ -89,6 +95,9 @@ function App() {
                             <Route path="admin/users" element={<UserManagementPage />} />
                             <Route path="admin/groups" element={<GroupAdminPage />} />
                             
+                            {/* Routes dành cho Admin Quản lý Tin tức */}
+                            <Route path="admin/news" element={<NewsManagementPage />} />
+
                             {/* Routes Quản lý Kế hoạch Khóa luận */}
                             <Route path="admin/thesis-plans" element={<ThesisPlanManagementPage />} />
                             <Route path="admin/thesis-plans/create" element={<PlanFormPage />} />

@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { findGroups, requestToJoin, getMyActivePlans } from '@/api/groupService';
+import React, { useState, useEffect, useCallback, useId } from 'react';
+import { findGroups, requestToJoin, getMyActivePlans, cancelJoinRequest } from '@/api/groupService';
 import { getChuyenNganhs, getKhoaBomons } from '@/api/userService';
 import { useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, UserPlus, CheckCircle, BookCopy } from 'lucide-react';
+import { Loader2, UserPlus, CheckCircle, BookCopy, X, AlertCircle } from 'lucide-react';
 import {
     Table,
     TableBody,
@@ -21,20 +21,29 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+// ***** SỬA ĐỔI: Thêm AlertDialog *****
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle
+} from "@/components/ui/alert-dialog";
+
 
 const requestSchema = z.object({ LOINHAN: z.string().max(150, 'Lời nhắn không quá 150 ký tự.').optional() });
 
 // Component Dialog để gửi yêu cầu gia nhập nhóm
 const RequestJoinDialog = ({ group, isOpen, setIsOpen, onSuccess }) => {
+    // ... (Không thay đổi)
     const [isLoading, setIsLoading] = useState(false);
-    
-    // Khởi tạo form với zodResolver
     const form = useForm({
         resolver: zodResolver(requestSchema),
         defaultValues: { LOINHAN: '' },
     });
-
-    // Xử lý logic gửi yêu cầu gia nhập nhóm
     const onSubmit = async (data) => {
         setIsLoading(true);
         try {
@@ -49,9 +58,7 @@ const RequestJoinDialog = ({ group, isOpen, setIsOpen, onSuccess }) => {
             setIsLoading(false);
         }
     };
-
     if (!group) return null;
-
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogContent className="sm:max-w-md">
@@ -87,6 +94,52 @@ const RequestJoinDialog = ({ group, isOpen, setIsOpen, onSuccess }) => {
     );
 };
 
+// ***** COMPONENT MỚI: Dialog xác nhận hủy yêu cầu *****
+const CancelRequestAlert = ({ isOpen, setIsOpen, requestId, groupName, onSuccess }) => {
+    const [isCanceling, setIsCanceling] = useState(false);
+    const alertTitleId = useId();
+    const alertDescriptionId = useId();
+
+    const handleCancel = async () => {
+        setIsCanceling(true);
+        try {
+            const res = await cancelJoinRequest(requestId);
+            toast.success(res.message);
+            onSuccess();
+        } catch (error) {
+            toast.error(error.response?.data?.message || 'Hủy yêu cầu thất bại.');
+        } finally {
+            setIsCanceling(false);
+            setIsOpen(false);
+        }
+    };
+
+    return (
+        <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+            <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
+                <AlertDialogHeader>
+                    <AlertDialogTitle id={alertTitleId}>Xác nhận Hủy Yêu cầu</AlertDialogTitle>
+                    <AlertDialogDescription id={alertDescriptionId}>
+                        Bạn có chắc chắn muốn hủy yêu cầu tham gia nhóm <strong>"{groupName}"</strong> không?
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isCanceling}>Không</AlertDialogCancel>
+                    <AlertDialogAction
+                        disabled={isCanceling}
+                        onClick={handleCancel}
+                        className="bg-destructive hover:bg-destructive/90"
+                    >
+                        {isCanceling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                        Đồng ý Hủy
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    );
+};
+
+
 // Component chính của trang Tìm Nhóm
 export default function FindGroupPage() {
     const [groups, setGroups] = useState([]);
@@ -94,9 +147,12 @@ export default function FindGroupPage() {
     const [filters, setFilters] = useState({ search: '', ID_CHUYENNGANH: '', ID_KHOA_BOMON: '' });
     const [options, setOptions] = useState({ chuyenNganhs: [], khoaBomons: [], activePlans: [] });
     const [selectedPlanId, setSelectedPlanId] = useState('');
-    const [selectedGroup, setSelectedGroup] = useState(null);
+    const [selectedGroup, setSelectedGroup] = useState(null); // Dùng cho dialog Gửi Yêu Cầu
 
-    // Hàm tải các dữ liệu cần thiết ban đầu (Chuyên ngành, Khoa/Bộ môn, Kế hoạch hoạt động)
+    // ***** STATE MỚI: Dùng cho dialog Hủy Yêu Cầu *****
+    const [cancelInfo, setCancelInfo] = useState({ isOpen: false, requestId: null, groupName: '' });
+
+
     const fetchPrerequisites = useCallback(async () => {
         try {
             const [cn, kb, plans] = await Promise.all([getChuyenNganhs(), getKhoaBomons(), getMyActivePlans()]);
@@ -112,12 +168,10 @@ export default function FindGroupPage() {
         }
     }, []);
 
-    // Hook để tải dữ liệu cần thiết khi component khởi tạo
     useEffect(() => {
         fetchPrerequisites();
     }, [fetchPrerequisites]);
 
-    // Hàm tải danh sách nhóm dựa trên các bộ lọc và kế hoạch đã chọn
     const fetchData = useCallback(async () => {
         if (!selectedPlanId) return;
         setIsLoading(true);
@@ -132,7 +186,6 @@ export default function FindGroupPage() {
         }
     }, [filters, selectedPlanId]);
 
-    // Hook để thực hiện tải dữ liệu nhóm với độ trễ (debounce) khi bộ lọc thay đổi
     useEffect(() => {
         const timer = setTimeout(() => {
             fetchData();
@@ -140,12 +193,10 @@ export default function FindGroupPage() {
         return () => clearTimeout(timer);
     }, [fetchData]);
 
-    // Hàm xử lý khi các bộ lọc tìm kiếm thay đổi
     const handleFilterChange = (key, value) => {
         setFilters(prev => ({ ...prev, [key]: value === 'all' ? '' : value }));
     };
 
-    // Hiển thị thông báo nếu không có kế hoạch nào đang hoạt động
     if (options.activePlans.length === 0 && !isLoading) {
         return (
             <Card>
@@ -158,12 +209,12 @@ export default function FindGroupPage() {
     return (
         <div className="space-y-6">
             <Card>
+                {/* ... (Phần CardHeader và Lọc không đổi) ... */}
                 <CardHeader>
                     <CardTitle>Tìm kiếm nhóm</CardTitle>
                     <CardDescription>Tìm và xin gia nhập các nhóm còn trống thành viên.</CardDescription>
                 </CardHeader>
                 
-                {/* Khu vực Lọc và Tìm kiếm */}
                 <CardContent className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <Select 
@@ -234,7 +285,6 @@ export default function FindGroupPage() {
                 </CardContent>
             </Card>
 
-            {/* Khu vực Hiển thị Bảng kết quả */}
             <Card>
                 <CardHeader>
                     <CardTitle>Kết quả tìm kiếm ({groups.length})</CardTitle>
@@ -267,14 +317,15 @@ export default function FindGroupPage() {
                                                     {group.chuyennganh?.TEN_CHUYENNGANH || group.khoabomon?.TEN_KHOA_BOMON || 'N/A'}
                                                 </TableCell>
                                                 <TableCell className="text-right">
+                                                    {/* ***** SỬA ĐỔI LOGIC NÚT BẤM ***** */}
                                                     {group.da_gui_yeu_cau ? (
                                                         <Button 
-                                                            variant="outline" 
+                                                            variant="destructive" 
                                                             size="sm" 
-                                                            disabled 
+                                                            onClick={() => setCancelInfo({ isOpen: true, requestId: group.id_yeu_cau_da_gui, groupName: group.TEN_NHOM })}
                                                             className="text-xs h-8"
                                                         >
-                                                            <CheckCircle className="mr-1.5 h-3.5 w-3.5" /> Đã gửi
+                                                            <X className="mr-1.5 h-3.5 w-3.5" /> Hủy
                                                         </Button>
                                                     ) : (
                                                         <Button 
@@ -285,6 +336,7 @@ export default function FindGroupPage() {
                                                             <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Xin gia nhập
                                                         </Button>
                                                     )}
+                                                    {/* ***** KẾT THÚC SỬA ĐỔI ***** */}
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -307,6 +359,14 @@ export default function FindGroupPage() {
                 group={selectedGroup}
                 isOpen={!!selectedGroup}
                 setIsOpen={() => setSelectedGroup(null)}
+                onSuccess={fetchData}
+            />
+
+            <CancelRequestAlert
+                isOpen={cancelInfo.isOpen}
+                setIsOpen={(isOpen) => setCancelInfo(prev => ({ ...prev, isOpen }))}
+                requestId={cancelInfo.requestId}
+                groupName={cancelInfo.groupName}
                 onSuccess={fetchData}
             />
         </div>

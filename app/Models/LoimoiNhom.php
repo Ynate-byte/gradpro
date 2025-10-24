@@ -13,6 +13,12 @@ class LoimoiNhom extends Model
     const CREATED_AT = 'NGAYTAO';
     const UPDATED_AT = null;
 
+    const STATUS_PENDING = 'Đang chờ';
+    const STATUS_ACCEPTED = 'Chấp nhận';
+    const STATUS_DECLINED = 'Từ chối';
+    const STATUS_EXPIRED = 'Hết hạn';
+    const STATUS_CANCELLED = 'Đã hủy';
+
     protected $fillable = [
         'ID_NHOM',
         'ID_NGUOI_DUOCMOI',

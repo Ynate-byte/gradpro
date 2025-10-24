@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
     LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight, LogOut, CircleUserRound, History, Star, Shield,
-    FileText
+    FileText, Newspaper
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,7 @@ export function AppSidebar() {
                         { href: "/starred", title: "Đã lưu" },
                     ],
                 },
+                { title: "Tin tức", href: "/news", icon: Newspaper },
                 {
                     title: "Đồ án",
                     icon: BookCopy,
@@ -148,6 +149,7 @@ export function AppSidebar() {
                             <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden" />
                         </Button>
                     </DropdownMenuTrigger>
+                    {/* Dropdown Menu Content - Tùy chỉnh nếu cần */}
                 </DropdownMenu>
             </SidebarHeader>
 

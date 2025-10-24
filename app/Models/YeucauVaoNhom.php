@@ -13,6 +13,11 @@ class YeucauVaoNhom extends Model
     const CREATED_AT = 'NGAYTAO';
     const UPDATED_AT = null;
 
+    const STATUS_PENDING = 'Đang chờ';
+    const STATUS_ACCEPTED = 'Chấp nhận';
+    const STATUS_DECLINED = 'Từ chối';
+    const STATUS_CANCELLED = 'Đã hủy';
+
     protected $fillable = [
         'ID_NHOM',
         'ID_NGUOIDUNG',
@@ -21,7 +26,8 @@ class YeucauVaoNhom extends Model
         'NGAY_PHANHOI',
         'ID_NGUOI_PHANHOI',
     ];
-        public function nhom()
+
+    public function nhom()
     {
         return $this->belongsTo(Nhom::class, 'ID_NHOM', 'ID_NHOM');
     }

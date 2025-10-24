@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Crown, UserPlus, LogOut, Info, UserCheck, UserX, Loader2, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { InviteMemberDialog } from './InviteMemberDialog';
+import { SentInvitationsList } from './SentInvitationsList'; 
 import { handleJoinRequest, leaveGroup, transferGroupLeadership } from '@/api/groupService';
 import { toast } from 'sonner';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -23,17 +24,16 @@ const getInitials = (name) => {
 
 // Component xử lý danh sách yêu cầu xin gia nhập (chỉ nhóm trưởng thấy)
 const JoinRequests = ({ requests, groupId, refreshData }) => {
+    // ... (Không đổi)
     const [isProcessing, setIsProcessing] = useState(null);
     const [alertInfo, setAlertInfo] = useState({ isOpen: false, action: null, requestId: null, studentName: '' });
     const alertTitleId = useId();
     const alertDescriptionId = useId();
 
-    // Mở dialog xác nhận hành động (chấp nhận/từ chối)
     const openConfirmation = (action, requestId, studentName) => {
         setAlertInfo({ isOpen: true, action, requestId, studentName });
     };
 
-    // Gọi API xử lý yêu cầu gia nhập (chấp nhận hoặc từ chối)
     const onHandle = async () => {
         const { action, requestId } = alertInfo;
         if (!action || !requestId) return;
@@ -93,7 +93,6 @@ const JoinRequests = ({ requests, groupId, refreshData }) => {
                 </CardContent>
             </Card>
 
-            {/* Dialog xác nhận chấp nhận/từ chối */}
             <AlertDialog open={alertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setAlertInfo(prev => ({ ...prev, isOpen: false }))}>
                 <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
                     <AlertDialogHeader>
@@ -113,7 +112,7 @@ const JoinRequests = ({ requests, groupId, refreshData }) => {
 };
 
 // Component chính hiển thị chi tiết và quản lý nhóm
-export function GroupManagementView({ groupData, refreshData }) {
+export function GroupManagementView({ groupData, refreshData, planId }) { // ***** THÊM planId *****
     const { user } = useAuth();
     const [isInviteOpen, setIsInviteOpen] = useState(false);
     const [isLeaveAlertOpen, setIsLeaveAlertOpen] = useState(false);
@@ -132,7 +131,8 @@ export function GroupManagementView({ groupData, refreshData }) {
     const handleLeaveGroup = async () => {
         setIsLeaving(true);
         try {
-            const res = await leaveGroup();
+             // ***** SỬA ĐỔI: Truyền planId vào service *****
+            const res = await leaveGroup(planId);
             toast.success(res.message);
             refreshData();
         } catch (error) {
@@ -150,13 +150,19 @@ export function GroupManagementView({ groupData, refreshData }) {
         try {
             const res = await transferGroupLeadership(groupData.ID_NHOM, transferTarget.userId);
             toast.success(res.message);
-            refreshData();
+            // ***** SỬA ĐỔI: Cập nhật dữ liệu nhóm sau khi chuyển quyền *****
+            refreshData(); 
         } catch (error) {
             toast.error(error.response?.data?.message || "Chuyển quyền thất bại.");
         } finally {
             setIsTransferring(false);
             setTransferTarget(null);
         }
+    };
+
+     // ***** HÀM MỚI: Xử lý khi mời thành viên thành công (để cập nhật list) *****
+    const onInviteSuccess = () => {
+        refreshData();
     };
 
     return (
@@ -192,19 +198,21 @@ export function GroupManagementView({ groupData, refreshData }) {
                 {/* Danh sách yêu cầu gia nhập (chỉ hiển thị cho nhóm trưởng) */}
                 {isLeader && <JoinRequests requests={groupData.yeucaus} groupId={groupData.ID_NHOM} refreshData={refreshData} />}
 
+                {/* ***** MỚI: Danh sách lời mời đã gửi (chỉ nhóm trưởng) ***** */}
+                {isLeader && <SentInvitationsList invitations={groupData.loimois} groupId={groupData.ID_NHOM} refreshData={refreshData} />}
+
                 {/* Danh sách thành viên */}
                 <Card>
+                    {/* ... (Phần CardHeader và logic map thành viên không đổi) ... */}
                     <CardHeader><CardTitle>Danh sách thành viên ({groupData.SO_THANHVIEN_HIENTAI}/4)</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                         {groupData.thanhviens.map(member => (
                             <div key={member.ID_NGUOIDUNG} className="flex items-center justify-between p-3 border rounded-md">
-                                {/* Thông tin thành viên */}
                                 <div className="flex items-center gap-4">
                                     <Avatar><AvatarFallback>{getInitials(member.nguoidung.HODEM_VA_TEN)}</AvatarFallback></Avatar>
                                     <div>
                                         <div className="font-semibold flex items-center gap-2">
                                             {member.nguoidung.HODEM_VA_TEN}
-                                            {/* Huy hiệu trưởng nhóm */}
                                             {member.ID_NGUOIDUNG === groupData.ID_NHOMTRUONG && (
                                                 <Badge variant="destructive" className="gap-1 text-xs px-1.5 py-0.5">
                                                     <Crown className="h-3 w-3" />Trưởng nhóm
@@ -214,7 +222,6 @@ export function GroupManagementView({ groupData, refreshData }) {
                                         <p className="text-sm text-muted-foreground">{member.nguoidung.EMAIL}</p>
                                     </div>
                                 </div>
-                                {/* Nút chuyển quyền (chỉ hiển thị cho nhóm trưởng và không phải chính mình) */}
                                 {isLeader && member.ID_NGUOIDUNG !== groupData.ID_NHOMTRUONG && (
                                     <Tooltip>
                                         <TooltipTrigger asChild>
@@ -237,11 +244,13 @@ export function GroupManagementView({ groupData, refreshData }) {
                     </CardContent>
                 </Card>
 
+
                 {/* Dialog Mời thành viên */}
                 <InviteMemberDialog 
                     isOpen={isInviteOpen} 
                     setIsOpen={setIsInviteOpen} 
                     groupId={groupData.ID_NHOM} 
+                    onSuccess={onInviteSuccess} // ***** SỬA ĐỔI: Dùng hàm mới *****
                 />
 
                 {/* Dialog Xác nhận Rời nhóm */}

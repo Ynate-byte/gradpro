@@ -114,3 +114,24 @@ export const leaveGroup = async () => {
 export const transferGroupLeadership = (groupId, newLeaderId) => {
     return axiosClient.post(`/nhom/${groupId}/transfer-leadership/${newLeaderId}`).then(res => res.data);
 };
+
+/**
+ * Hủy một yêu cầu tham gia (do sinh viên gửi).
+ * @param {number} requestId - ID của yêu cầu.
+ * @returns {Promise<object>} Thông báo kết quả.
+ */
+export const cancelJoinRequest = async (requestId) => {
+    const response = await axiosClient.post(`/requests/${requestId}/cancel`);
+    return response.data;
+};
+
+/**
+ * Hủy một lời mời (do nhóm trưởng gửi).
+ * @param {number} groupId - ID của nhóm.
+ * @param {number} invitationId - ID của lời mời.
+ * @returns {Promise<object>} Thông báo kết quả.
+ */
+export const cancelInvitation = async (groupId, invitationId) => {
+    const response = await axiosClient.post(`/nhom/${groupId}/invitations/${invitationId}/cancel`);
+    return response.data;
+};

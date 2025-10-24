@@ -4,12 +4,13 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { format, parseISO, addDays, getDay, startOfDay, isValid } from 'date-fns'
+// ----- SỬA LOGIC: Import đầy đủ date-fns -----
+import { format, parseISO, addDays, getDay, startOfDay, isValid, differenceInCalendarDays, isSaturday, isSunday } from 'date-fns'
 import { vi } from 'date-fns/locale'
 import { createThesisPlan, updateThesisPlan, getThesisPlanById, previewNewPlan, getThesisPlanTemplateDetails } from '../../../api/thesisPlanService'
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
@@ -20,27 +21,61 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import { Skeleton } from '@/components/ui/skeleton'
 
-// Schema xác thực dữ liệu
+// ----- SỬA LOGIC: Thêm lại hàm adjustDateForWeekend -----
+/**
+ * Tự động điều chỉnh ngày sang Thứ Hai kế tiếp nếu là Thứ Bảy hoặc Chủ Nhật.
+ * @param {Date} date - Ngày cần kiểm tra.
+ * @returns {Date} - Ngày đã điều chỉnh (nếu cần).
+ */
+function adjustDateForWeekend(date) {
+  if (!isValid(date)) return date;
+  const dayOfWeek = getDay(date);
+  if (dayOfWeek === 6) { // Thứ Bảy
+    return addDays(date, 2); // Dời sang Thứ Hai
+  }
+  if (dayOfWeek === 0) { // Chủ Nhật
+    return addDays(date, 1); // Dời sang Thứ Hai
+  }
+  return date; // Giữ nguyên nếu là ngày trong tuần
+}
+
+// ----- SỬA LOGIC: Giữ lại validation (Khóa) -----
+// Hàm helper để kiểm tra ngày không phải cuối tuần
+const isNotWeekend = (val) => {
+  if (!val) return true;
+  try {
+    const date = parseISO(val);
+    if (!isValid(date)) return true;
+    return !isSaturday(date) && !isSunday(date);
+  } catch (e) {
+    return true;
+  }
+};
+
 const planSchema = z.object({
   TEN_DOT: z.string().min(5, "Tên đợt phải có ít nhất 5 ký tự."),
   NAMHOC: z.string().min(1, "Năm học không được trống."),
   HOCKY: z.string().min(1, "Học kỳ không được trống."),
   KHOAHOC: z.string().min(1, "Khóa học không được trống."),
   HEDAOTAO: z.string().min(1, "Hệ đào tạo không được trống."),
-  NGAY_BATDAU: z.string().min(1, "Ngày bắt đầu không được trống."),
-  NGAY_KETHUC: z.string().min(1, "Ngày kết thúc không được trống."),
+  NGAY_BATDAU: z.string().min(1, "Ngày bắt đầu không được trống.")
+    .refine(isNotWeekend, "Ngày bắt đầu không được là Thứ Bảy hoặc Chủ Nhật."),
+  NGAY_KETHUC: z.string().min(1, "Ngày kết thúc không được trống.")
+    .refine(isNotWeekend, "Ngày kết thúc không được là Thứ Bảy hoặc Chủ Nhật."),
   mocThoigians: z
     .array(
       z
         .object({
           id: z.any().optional().nullable(),
           TEN_SUKIEN: z.string().min(1, "Tên sự kiện không được trống."),
-          NGAY_BATDAU: z.string().min(1, "Ngày bắt đầu không được trống.").refine(val => val, { message: "Ngày bắt đầu không được trống." }),
-          NGAY_KETTHUC: z.string().min(1, "Ngày kết thúc không được trống.").refine(val => val, { message: "Ngày kết thúc không được trống." }),
+          NGAY_BATDAU: z.string().min(1, "Ngày bắt đầu không được trống.")
+            .refine(isNotWeekend, "Ngày bắt đầu không được là Thứ Bảy hoặc Chủ Nhật."),
+          NGAY_KETTHUC: z.string().min(1, "Ngày kết thúc không được trống.")
+            .refine(isNotWeekend, "Ngày kết thúc không được là Thứ Bảy hoặc Chủ Nhật."),
           MOTA: z.string().optional().nullable()
         })
         .refine(
-          data => !data.NGAY_BATDAU || !data.NGAY_KETTHUC || data.NGAY_KETTHUC >= data.NGAY_BATDAU,
+          data => !data.NGAY_BATDAU || !data.NGAY_KETHUC || data.NGAY_KETTHUC >= data.NGAY_BATDAU,
           {
             message: "Ngày kết thúc của mục phải sau hoặc bằng ngày bắt đầu.",
             path: ["NGAY_KETTHUC"]
@@ -51,12 +86,42 @@ const planSchema = z.object({
 }).refine(
   data => !data.NGAY_BATDAU || !data.NGAY_KETHUC || data.NGAY_KETHUC >= data.NGAY_BATDAU,
   {
-    message: "Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.",
+    message: "Ngày kết thúc kế hoạch phải sau hoặc bằng ngày bắt đầu.",
     path: ["NGAY_KETHUC"]
   }
-)
+).refine(
+  (data) => {
+    if (!data.NGAY_KETHUC || !data.mocThoigians || data.mocThoigians.length === 0) {
+      return true;
+    }
+    let latestMilestoneEndDate = null;
+    try {
+      for (const moc of data.mocThoigians) {
+        if (moc.NGAY_KETTHUC) {
+          const endDate = parseISO(moc.NGAY_KETTHUC);
+          if (isValid(endDate)) {
+            if (!latestMilestoneEndDate || endDate > latestMilestoneEndDate) {
+              latestMilestoneEndDate = endDate;
+            }
+          }
+        }
+      }
+      if (!latestMilestoneEndDate) return true;
+      const planEndDate = parseISO(data.NGAY_KETHUC);
+      if (!isValid(planEndDate)) return true;
+      return startOfDay(planEndDate) >= startOfDay(latestMilestoneEndDate);
+    } catch (e) {
+      return true;
+    }
+  },
+  {
+    message: "Ngày kết thúc kế hoạch không được sớm hơn ngày kết thúc của mốc thời gian cuối cùng.",
+    path: ["NGAY_KETHUC"],
+  }
+);
+// ----- KẾT THÚC SỬA LOGIC SCHEMA -----
 
-// Thành phần hiển thị mục mốc thời gian với khả năng kéo thả
+// Component hiển thị mục mốc thời gian (Không thay đổi)
 const MilestoneItem = React.forwardRef(({ index, field, remove, form, handleProps, onDateBlur, style, ...props }, ref) => {
   return (
     <div
@@ -109,7 +174,7 @@ const MilestoneItem = React.forwardRef(({ index, field, remove, form, handleProp
             <FormItem>
               <FormLabel>Bắt đầu*</FormLabel>
               <FormControl>
-                <Input type="datetime-local" {...fld} onBlur={onDateBlur} />
+                <Input type="datetime-local" {...fld} onBlur={(e) => { fld.onBlur(e); onDateBlur(index, 'start', e.target.value); }} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -124,7 +189,7 @@ const MilestoneItem = React.forwardRef(({ index, field, remove, form, handleProp
             <FormItem>
               <FormLabel>Kết thúc*</FormLabel>
               <FormControl>
-                <Input type="datetime-local" {...fld} onBlur={onDateBlur} />
+                <Input type="datetime-local" {...fld} onBlur={(e) => { fld.onBlur(e); onDateBlur(index, 'end', e.target.value); }} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -146,7 +211,7 @@ const MilestoneItem = React.forwardRef(({ index, field, remove, form, handleProp
 })
 MilestoneItem.displayName = 'MilestoneItem'
 
-// Bao bọc mục mốc thời gian để hỗ trợ kéo thả
+// Component bọc cho mục có thể kéo thả (Không thay đổi)
 const SortableItemWrapper = ({ id, children }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id })
   const style = { transform: CSS.Transform.toString(transform), transition }
@@ -159,15 +224,7 @@ const SortableItemWrapper = ({ id, children }) => {
   })
 }
 
-// Điều chỉnh ngày tránh cuối tuần
-function adjustDateForWeekend(date) {
-  const dayOfWeek = getDay(date)
-  if (dayOfWeek === 6) return addDays(date, 2) // Thứ Bảy -> Thứ Hai
-  if (dayOfWeek === 0) return addDays(date, 1) // Chủ Nhật -> Thứ Hai
-  return date
-}
-
-// Trang biểu mẫu kế hoạch
+// Component chính của trang biểu mẫu
 export default function PlanFormPage() {
   const { planId } = useParams()
   const navigate = useNavigate()
@@ -177,8 +234,9 @@ export default function PlanFormPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [templateData, setTemplateData] = useState(null)
-  const [userModifiedEndDate, setUserModifiedEndDate] = useState(false)
   const [userModifiedMilestoneDates, setUserModifiedMilestoneDates] = useState({})
+  const [originalMilestoneDates, setOriginalMilestoneDates] = useState([]);
+  const [isManuallyEditingEndDate, setIsManuallyEditingEndDate] = useState(false);
 
   const form = useForm({
     resolver: zodResolver(planSchema),
@@ -196,72 +254,129 @@ export default function PlanFormPage() {
 
   const { fields, append, remove, move, insert } = useFieldArray({
     control: form.control,
-    name: "mocThoigians"
+    name: "mocThoigians",
+    keyName: "arrayId"
   })
 
   const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor))
 
-  // Xử lý thay đổi ngày bắt đầu và tự động tính toán ngày kết thúc
+  // ----- SỬA LOGIC: Tích hợp lại adjustDateForWeekend -----
   const handleStartDateChange = useCallback(
     (selectedDateStr) => {
       if (!selectedDateStr || !templateData || isEditMode) return
       try {
-        let planStartDate = startOfDay(parseISO(selectedDateStr))
-        planStartDate = adjustDateForWeekend(planStartDate)
-        const adjustedStartDateStr = format(planStartDate, 'yyyy-MM-dd')
-        if (selectedDateStr !== adjustedStartDateStr) {
-          form.setValue('NGAY_BATDAU', adjustedStartDateStr, { shouldValidate: true })
+        let planStartDate = startOfDay(parseISO(selectedDateStr));
+
+        // Tự động điều chỉnh ngày bắt đầu kế hoạch nếu trúng cuối tuần
+        const adjustedStartDate = adjustDateForWeekend(planStartDate);
+        if (adjustedStartDate !== planStartDate) {
+            planStartDate = adjustedStartDate;
+            const adjustedStartDateStr = format(planStartDate, 'yyyy-MM-dd');
+            form.setValue('NGAY_BATDAU', adjustedStartDateStr, { shouldValidate: true });
+            toast.info("Ngày bắt đầu đã được tự động dời sang Thứ Hai.", { duration: 2000 });
         }
-        if (!userModifiedEndDate) {
-          const planDurationWeeks = templateData.SO_TUAN_MACDINH || 12
-          let planEndDate = addDays(planStartDate, planDurationWeeks * 7 - 1)
-          planEndDate = adjustDateForWeekend(planEndDate)
-          form.setValue('NGAY_KETHUC', format(planEndDate, 'yyyy-MM-dd'), { shouldValidate: true })
-        }
+
+        const planDurationWeeks = templateData.SO_TUAN_MACDINH || 12
+        let planEndDate = addDays(planStartDate, planDurationWeeks * 7 - 1)
+        planEndDate = adjustDateForWeekend(planEndDate); // Điều chỉnh ngày kết thúc dự kiến
+        
+        form.setValue('NGAY_KETHUC', format(planEndDate, 'yyyy-MM-dd'), { shouldValidate: true });
+
+        const newOriginalDates = [];
         (templateData.mau_moc_thoigians || []).forEach((milestone, index) => {
           if (!userModifiedMilestoneDates[index]) {
             const { OFFSET_BATDAU, THOI_LUONG } = milestone
             let eventStartDate = addDays(planStartDate, OFFSET_BATDAU)
-            eventStartDate = adjustDateForWeekend(eventStartDate)
+            eventStartDate = adjustDateForWeekend(eventStartDate); // Điều chỉnh
             let eventEndDate = addDays(eventStartDate, THOI_LUONG - 1)
-            eventEndDate = adjustDateForWeekend(eventEndDate)
+            eventEndDate = adjustDateForWeekend(eventEndDate); // Điều chỉnh
             const dateFormat = "yyyy-MM-dd'T'HH:mm"
-            form.setValue(`mocThoigians.${index}.NGAY_BATDAU`, format(eventStartDate, dateFormat), {
-              shouldValidate: true
-            })
-            form.setValue(`mocThoigians.${index}.NGAY_KETTHUC`, format(eventEndDate, dateFormat), {
-              shouldValidate: true
-            })
+            const startStr = format(eventStartDate, dateFormat);
+            const endStr = format(eventEndDate, dateFormat);
+            form.setValue(`mocThoigians.${index}.NGAY_BATDAU`, startStr, { shouldValidate: true })
+            form.setValue(`mocThoigians.${index}.NGAY_KETTHUC`, endStr, { shouldValidate: true })
+            newOriginalDates[index] = { start: eventStartDate, end: eventEndDate };
+          } else {
+            const currentStart = form.getValues(`mocThoigians.${index}.NGAY_BATDAU`);
+            const currentEnd = form.getValues(`mocThoigians.${index}.NGAY_KETTHUC`);
+            newOriginalDates[index] = { start: parseISO(currentStart), end: parseISO(currentEnd) };
           }
         })
+        setOriginalMilestoneDates(newOriginalDates);
       } catch (e) {
         console.error("Error calculating dates:", e)
       }
     },
-    [templateData, isEditMode, form, userModifiedEndDate, userModifiedMilestoneDates]
+    [templateData, isEditMode, form, userModifiedMilestoneDates]
   )
 
-  // Tải dữ liệu kế hoạch hoặc bản mẫu
+  const watchedStartDate = form.watch('NGAY_BATDAU')
+  useEffect(() => {
+    handleStartDateChange(watchedStartDate)
+  }, [watchedStartDate, handleStartDateChange])
+
+  // Logic tự động cập nhật NGAY_KETHUC (Không thay đổi)
+  const watchedMilestones = form.watch('mocThoigians');
+  useEffect(() => {
+    if (isManuallyEditingEndDate) return;
+    if (watchedMilestones && watchedMilestones.length > 0) {
+      let latestEndDate = null;
+      for (const moc of watchedMilestones) {
+        const endDateStr = moc?.NGAY_KETTHUC;
+        if (endDateStr) {
+          try {
+            const endDate = parseISO(endDateStr);
+            if (isValid(endDate)) {
+              if (!latestEndDate || endDate > latestEndDate) {
+                latestEndDate = endDate;
+              }
+            }
+          } catch (e) { /* ignore invalid dates */ }
+        }
+      }
+      if (latestEndDate && isValid(latestEndDate)) {
+        const currentPlanEndDateStr = form.getValues('NGAY_KETHUC');
+        const latestEndDateStr = format(latestEndDate, 'yyyy-MM-dd');
+        if (currentPlanEndDateStr !== latestEndDateStr) {
+          form.setValue('NGAY_KETHUC', latestEndDateStr, { shouldValidate: true });
+        }
+      }
+    }
+  }, [watchedMilestones, form, isManuallyEditingEndDate]);
+
+
+  // Logic useEffect loadData (Không thay đổi)
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true)
-      setUserModifiedEndDate(false)
       setUserModifiedMilestoneDates({})
+      setOriginalMilestoneDates([]);
       try {
         let dataToLoad
         let fetchedMocThoigians = []
+        let initialOriginalDates = [];
         if (isEditMode) {
           dataToLoad = await getThesisPlanById(planId)
           fetchedMocThoigians = dataToLoad.moc_thoigians || []
-          setUserModifiedEndDate(true)
-          fetchedMocThoigians.forEach((_, index) => {
-            setUserModifiedMilestoneDates(prev => ({ ...prev, [index]: true }))
+          const modifiedDatesState = {};
+          fetchedMocThoigians.forEach((m, index) => {
+            modifiedDatesState[index] = true;
+            try {
+                const start = m.NGAY_BATDAU ? parseISO(m.NGAY_BATDAU) : null;
+                const end = m.NGAY_KETTHUC ? parseISO(m.NGAY_KETTHUC) : null;
+                initialOriginalDates[index] = { start: isValid(start) ? start : null, end: isValid(end) ? end : null };
+            } catch {
+                initialOriginalDates[index] = { start: null, end: null };
+            }
           })
+          setUserModifiedMilestoneDates(modifiedDatesState);
+
         } else if (templateId) {
           const template = await getThesisPlanTemplateDetails(templateId)
           setTemplateData(template)
           fetchedMocThoigians = (template.mau_moc_thoigians || []).map(m => ({
             id: crypto.randomUUID(),
+            ID_MAU_MOC: m.ID_MAU_MOC,
             TEN_SUKIEN: m.TEN_SUKIEN,
             MOTA: m.MOTA || '',
             NGAY_BATDAU: '',
@@ -290,6 +405,7 @@ export default function PlanFormPage() {
             NGAY_KETHUC: '',
             mocThoigians: [{ id: crypto.randomUUID(), TEN_SUKIEN: '', NGAY_BATDAU: '', NGAY_KETTHUC: '', MOTA: '' }]
           })
+          setOriginalMilestoneDates([]);
           setIsLoading(false)
           return
         }
@@ -299,11 +415,14 @@ export default function PlanFormPage() {
           NGAY_KETHUC: dataToLoad?.NGAY_KETHUC ? format(parseISO(dataToLoad.NGAY_KETHUC), 'yyyy-MM-dd') : '',
           mocThoigians: fetchedMocThoigians.map(m => ({
             ...m,
+            arrayId: crypto.randomUUID(),
             id: isEditMode ? m.ID : m.id,
+            ID_MAU_MOC: isEditMode ? m.ID : null,
             NGAY_BATDAU: m.NGAY_BATDAU && isValid(parseISO(m.NGAY_BATDAU)) ? format(parseISO(m.NGAY_BATDAU), "yyyy-MM-dd'T'HH:mm") : '',
             NGAY_KETTHUC: m.NGAY_KETTHUC && isValid(parseISO(m.NGAY_KETTHUC)) ? format(parseISO(m.NGAY_KETTHUC), "yyyy-MM-dd'T'HH:mm") : ''
           }))
         })
+        setOriginalMilestoneDates(initialOriginalDates);
       } catch (error) {
         console.error("Load data error:", error)
         toast.error(isEditMode ? "Lỗi tải chi tiết kế hoạch." : "Lỗi tải chi tiết bản mẫu.")
@@ -315,34 +434,132 @@ export default function PlanFormPage() {
     loadData()
   }, [planId, isEditMode, templateId, form, navigate])
 
-  // Theo dõi thay đổi ngày bắt đầu
-  const watchedStartDate = form.watch('NGAY_BATDAU')
-  useEffect(() => {
-    handleStartDateChange(watchedStartDate)
-  }, [watchedStartDate, handleStartDateChange])
+  // ----- SỬA LOGIC: Tích hợp lại adjustDateForWeekend -----
+  const handleMilestoneDateBlur = (index, type, newValueStr) => {
+    setUserModifiedMilestoneDates(prev => ({ ...prev, [index]: true }));
 
-  // Xử lý kéo thả mốc thời gian
-  const handleDragEnd = (event) => {
-    const { active, over } = event
-    if (active && over && active.id !== over.id) {
-      const oldIndex = fields.findIndex(item => item.id === active.id)
-      const newIndex = fields.findIndex(item => item.id === over.id)
-      if (oldIndex !== -1 && newIndex !== -1) {
-        const newModifiedDates = {}
-        const movedFields = arrayMove(fields, oldIndex, newIndex)
-        movedFields.forEach((field, idx) => {
-          const originalIndex = fields.findIndex(f => f.id === field.id)
-          if (userModifiedMilestoneDates[originalIndex]) {
-            newModifiedDates[idx] = true
-          }
-        })
-        setUserModifiedMilestoneDates(newModifiedDates)
-        move(oldIndex, newIndex)
+    const milestones = form.getValues('mocThoigians');
+    const currentMilestone = milestones[index];
+    const originalDates = originalMilestoneDates[index];
+
+    if (!currentMilestone) return;
+
+    try {
+      let currentDate = parseISO(newValueStr);
+      if (!isValid(currentDate)) {
+        console.warn(`Invalid date input at index ${index}: ${newValueStr}`);
+        return;
       }
-    }
-  }
+      
+      const dateFormat = "yyyy-MM-dd'T'HH:mm";
+      
+      // Tự động điều chỉnh ngày vừa nhập nếu là cuối tuần
+      const adjustedDate = adjustDateForWeekend(currentDate);
+      if (adjustedDate !== currentDate) {
+          currentDate = adjustedDate;
+          const adjustedDateStr = format(currentDate, dateFormat);
+          form.setValue(`mocThoigians.${index}.${type === 'start' ? 'NGAY_BATDAU' : 'NGAY_KETTHUC'}`, adjustedDateStr, { shouldValidate: true });
+          toast.info("Ngày đã được tự động dời sang Thứ Hai.", { duration: 2000 });
+      }
 
-  // Gửi biểu mẫu
+      let newStartDate = type === 'start' ? currentDate : null;
+      let newEndDate = type === 'end' ? currentDate : null;
+      let dayDifference = 0;
+
+      const originalStart = originalDates?.start && isValid(originalDates.start) ? originalDates.start : null;
+      const originalEnd = originalDates?.end && isValid(originalDates.end) ? originalDates.end : null;
+
+      if (type === 'start') {
+        if (originalStart && originalEnd) {
+          const originalDurationDays = differenceInCalendarDays(originalEnd, originalStart);
+          const calculatedEndDate = addDays(newStartDate, originalDurationDays);
+          newEndDate = adjustDateForWeekend(calculatedEndDate); // Điều chỉnh ngày kết thúc
+          form.setValue(`mocThoigians.${index}.NGAY_KETTHUC`, format(newEndDate, dateFormat), { shouldValidate: true });
+        } else {
+            const existingEndDateStr = form.getValues(`mocThoigians.${index}.NGAY_KETTHUC`);
+            newEndDate = existingEndDateStr && isValid(parseISO(existingEndDateStr)) ? parseISO(existingEndDateStr) : null;
+            if (!newEndDate) {
+               newEndDate = newStartDate;
+               form.setValue(`mocThoigians.${index}.NGAY_KETTHUC`, format(newEndDate, dateFormat), { shouldValidate: true });
+            }
+        }
+        if(originalStart){
+            dayDifference = differenceInCalendarDays(startOfDay(newStartDate), startOfDay(originalStart));
+        }
+
+      } else { // type === 'end'
+         const existingStartDateStr = form.getValues(`mocThoigians.${index}.NGAY_BATDAU`);
+         newStartDate = existingStartDateStr && isValid(parseISO(existingStartDateStr)) ? parseISO(existingStartDateStr) : null;
+         if (!newStartDate) {
+            newStartDate = newEndDate;
+            form.setValue(`mocThoigians.${index}.NGAY_BATDAU`, format(newStartDate, dateFormat), { shouldValidate: true });
+         }
+         if(originalEnd){
+             dayDifference = differenceInCalendarDays(startOfDay(newEndDate), startOfDay(originalEnd));
+         }
+      }
+
+      const newOriginals = [...originalMilestoneDates];
+      newOriginals[index] = { start: newStartDate, end: newEndDate };
+
+
+      if (dayDifference !== 0) {
+        const modifiedStateUpdates = {};
+        for (let i = index + 1; i < milestones.length; i++) {
+          const subsequentOriginal = originalMilestoneDates[i];
+          if (!subsequentOriginal || !subsequentOriginal.start || !subsequentOriginal.end || !isValid(subsequentOriginal.start) || !isValid(subsequentOriginal.end)) {
+            console.warn(`Skipping cascade for index ${i} due to missing or invalid original dates.`);
+            continue;
+          }
+
+          let cascadedStartDate = addDays(subsequentOriginal.start, dayDifference);
+          cascadedStartDate = adjustDateForWeekend(cascadedStartDate); // Điều chỉnh
+          let cascadedEndDate = addDays(subsequentOriginal.end, dayDifference);
+          cascadedEndDate = adjustDateForWeekend(cascadedEndDate); // Điều chỉnh
+
+          form.setValue(`mocThoigians.${i}.NGAY_BATDAU`, format(cascadedStartDate, dateFormat), { shouldValidate: true });
+          form.setValue(`mocThoigians.${i}.NGAY_KETTHUC`, format(cascadedEndDate, dateFormat), { shouldValidate: true });
+
+          newOriginals[i] = { start: cascadedStartDate, end: cascadedEndDate };
+          modifiedStateUpdates[i] = true;
+        }
+         setUserModifiedMilestoneDates(prev => ({ ...prev, ...modifiedStateUpdates }));
+      }
+      setOriginalMilestoneDates(newOriginals);
+    } catch (e) {
+      console.error(`Error during date cascade at index ${index}:`, e);
+      toast.error("Có lỗi xảy ra khi tự động cập nhật ngày.");
+    }
+  };
+
+  // Logic kéo thả (Không thay đổi)
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+    if (active && over && active.id !== over.id) {
+        const oldIndex = fields.findIndex(item => item.id === active.id);
+        const newIndex = fields.findIndex(item => item.id === over.id);
+        if (oldIndex !== -1 && newIndex !== -1) {
+            const reorderedOriginalDates = arrayMove(originalMilestoneDates, oldIndex, newIndex);
+            setOriginalMilestoneDates(reorderedOriginalDates);
+
+            const currentModifiedStatus = { ...userModifiedMilestoneDates };
+            const newModifiedStatus = {};
+            const movedFieldsTemp = arrayMove([...fields], oldIndex, newIndex);
+
+            movedFieldsTemp.forEach((field, idx) => {
+                const originalFieldDataIndex = fields.findIndex(f => f.id === field.id);
+                if (currentModifiedStatus[originalFieldDataIndex]) {
+                    newModifiedStatus[idx] = true;
+                }
+            });
+            setUserModifiedMilestoneDates(newModifiedStatus);
+
+            move(oldIndex, newIndex);
+        }
+    }
+  }, [fields, move, originalMilestoneDates, userModifiedMilestoneDates]);
+
+  // Logic submit form (Không thay đổi)
   const onSubmit = async (data) => {
     setIsSubmitting(true)
     const payload = { ...data, mocThoigians: data.mocThoigians.map(m => ({ ...m, id: typeof m.id === 'number' ? m.id : null })) }
@@ -363,7 +580,7 @@ export default function PlanFormPage() {
     }
   }
 
-  // Xem trước kế hoạch
+  // Logic xem trước (Không thay đổi)
   const handlePreview = async () => {
     const isValid = await form.trigger()
     if (!isValid) {
@@ -401,7 +618,7 @@ export default function PlanFormPage() {
     }
   }
 
-  // Hiển thị skeleton khi đang tải
+  // Logic loading skeleton (Không thay đổi)
   if (isLoading) {
     return (
       <div className="space-y-6 p-4 md:p-8">
@@ -411,11 +628,12 @@ export default function PlanFormPage() {
     )
   }
 
+  // JSX Render (Giữ nguyên)
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4 md:p-8">
         <div className="flex items-center justify-between gap-4">
-          <div>
+         <div>
             <Button
               type="button"
               variant="outline"
@@ -561,6 +779,7 @@ export default function PlanFormPage() {
                     </FormItem>
                   )}
                 />
+                
                 <FormField
                   name="NGAY_KETHUC"
                   control={form.control}
@@ -571,13 +790,20 @@ export default function PlanFormPage() {
                         <Input
                           type="date"
                           {...field}
-                          onBlur={() => setUserModifiedEndDate(true)}
+                          onFocus={() => setIsManuallyEditingEndDate(true)} // Tạm dừng auto-update
+                          onBlur={(e) => {
+                            field.onBlur(e);
+                            setIsManuallyEditingEndDate(false);
+                            form.trigger('NGAY_KETHUC');
+                          }}
                         />
                       </FormControl>
+                      <FormDescription>Tự động cập nhật. Có thể sửa thủ công.</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
               </div>
             </CardContent>
           </Card>
@@ -615,19 +841,14 @@ export default function PlanFormPage() {
                     >
                       <div className="space-y-4">
                         {fields.map((field, index) => (
-                          <div key={field.id} className="group relative">
+                          <div key={field.arrayId} className="group relative">
                             <SortableItemWrapper id={field.id}>
                               <MilestoneItem
                                 index={index}
                                 field={field}
                                 remove={remove}
                                 form={form}
-                                onDateBlur={() =>
-                                  setUserModifiedMilestoneDates(prev => ({
-                                    ...prev,
-                                    [index]: true
-                                  }))
-                                }
+                                onDateBlur={handleMilestoneDateBlur}
                               />
                             </SortableItemWrapper>
                             <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -639,6 +860,7 @@ export default function PlanFormPage() {
                                 onClick={() =>
                                   insert(index + 1, {
                                     id: crypto.randomUUID(),
+                                    arrayId: crypto.randomUUID(),
                                     TEN_SUKIEN: '',
                                     NGAY_BATDAU: '',
                                     NGAY_KETTHUC: '',

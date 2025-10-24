@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('NHOM', function (Blueprint $table) {
             $table->id('ID_NHOM');
-            $table->unsignedBigInteger('ID_KEHOACH'); // THÊM MỚI
+            $table->unsignedBigInteger('ID_KEHOACH');
             $table->string('TEN_NHOM', 100);
             $table->text('MOTA')->nullable()->comment('Ghi chú hoặc mô tả về nhóm');
             $table->string('MA_NHOM', 20)->unique()->nullable();
@@ -37,7 +37,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NHOM');
             $table->unsignedBigInteger('ID_NGUOIDUNG')->comment('ID_NGUOIDUNG của sinh viên');
             $table->timestamp('NGAY_VAONHOM')->useCurrent();
-            
+
             $table->unique('ID_NGUOIDUNG', 'UQ_THANHVIEN_NGUOIDUNG');
             $table->foreign('ID_NHOM')->references('ID_NHOM')->on('NHOM')->onDelete('cascade');
             $table->foreign('ID_NGUOIDUNG')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->onDelete('cascade');
@@ -49,7 +49,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NGUOI_DUOCMOI');
             $table->unsignedBigInteger('ID_NGUOIMOI')->comment('ID_NGUOIDUNG của người mời');
             $table->string('LOINHAN', 150)->nullable();
-            $table->enum('TRANGTHAI', ['Đang chờ', 'Chấp nhận', 'Từ chối', 'Hết hạn'])->default('Đang chờ');
+            $table->enum('TRANGTHAI', ['Đang chờ', 'Chấp nhận', 'Từ chối', 'Hết hạn', 'Đã hủy'])->default('Đang chờ');
             $table->timestamp('NGAYTAO')->useCurrent();
             $table->timestamp('NGAY_HETHAN')->comment('Hết hạn sau 4 ngày');
             $table->timestamp('NGAY_PHANHOI')->nullable();
@@ -64,7 +64,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NHOM');
             $table->unsignedBigInteger('ID_NGUOIDUNG')->comment('ID_NGUOIDUNG của sinh viên xin vào');
             $table->string('LOINHAN', 150)->nullable();
-            $table->enum('TRANGTHAI', ['Đang chờ', 'Chấp nhận', 'Từ chối'])->default('Đang chờ');
+            $table->enum('TRANGTHAI', ['Đang chờ', 'Chấp nhận', 'Từ chối', 'Đã hủy'])->default('Đang chờ');
             $table->timestamp('NGAYTAO')->useCurrent();
             $table->timestamp('NGAY_PHANHOI')->nullable();
             $table->unsignedBigInteger('ID_NGUOI_PHANHOI')->nullable()->comment('ID_NGUOIDUNG của nhóm trưởng phản hồi');
@@ -75,6 +75,9 @@ return new class extends Migration
         });
     }
 
+    /**
+     * Reverse the migrations.
+     */
     public function down(): void
     {
         Schema::dropIfExists('YEUCAU_VAONHOM');

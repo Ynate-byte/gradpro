@@ -4,13 +4,14 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
-use App\Http\Controllers\Api\NhomController;
+use App\Http\Controllers\Api\NhomController; // Đã import ở trên
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\Admin\GroupAdminController;
 use App\Http\Controllers\Api\Admin\ThesisPlanController;
 use App\Http\Controllers\Api\Admin\ThesisPlanTemplateController as AdminTemplateController;
 use App\Http\Controllers\Api\ThesisPlanTemplateController as UserTemplateController;
+use App\Models\YeucauVaoNhom; // Import Model
 
 // Route Đăng nhập công khai
 Route::post('/login', [AuthController::class, 'login']);
@@ -19,9 +20,8 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // Quản lý CRUD người dùng
+    // ... (User routes) ...
     Route::apiResource('users', UserController::class);
-    // Các hành động hàng loạt
     Route::post('users/bulk-action', [UserController::class, 'bulkAction']);
     Route::post('users/bulk-delete', [UserController::class, 'bulkDelete']);
     Route::post('users/bulk-reset-password', [UserController::class, 'bulkResetPassword']);
@@ -35,15 +35,23 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // --- Routes Quản lý Nhóm Sinh viên ---
     Route::prefix('nhom')->group(function () {
-        Route::get('/my-group', [NhomController::class, 'getMyGroup']);
+        Route::get('/my-group', [NhomController::class, 'getMyGroup']); // Có thể cần thêm plan_id query param
         Route::post('/', [NhomController::class, 'createGroup']);
         Route::post('/{nhom}/invite', [NhomController::class, 'inviteMember']);
-        Route::get('/find', [NhomController::class, 'findGroups']);
+        Route::get('/find', [NhomController::class, 'findGroups']); // Cần ID_KEHOACH query param
         Route::post('/{nhom}/request-join', [NhomController::class, 'requestToJoin']);
         Route::post('/{nhom}/requests/{yeucau}/handle', [NhomController::class, 'handleJoinRequest']);
-        Route::post('/leave', [NhomController::class, 'leaveGroup']);
+        Route::post('/leave', [NhomController::class, 'leaveGroup']); // Cần plan_id query param
         Route::post('/{nhom}/transfer-leadership/{newLeaderId}', [NhomController::class, 'transferLeadership']);
+
+        // ***** ROUTE MỚI: Hủy lời mời (do nhóm trưởng) *****
+        Route::post('/{nhom}/invitations/{loimoi}/cancel', [NhomController::class, 'cancelInvitation']);
+        // Bind {loimoi} tự động
     });
+
+    // ***** ROUTE MỚI: Hủy yêu cầu tham gia (do người gửi) *****
+    Route::post('/requests/{yeucau}/cancel', [NhomController::class, 'cancelJoinRequest'])
+          ->middleware('can:cancel,yeucau'); // Tùy chọn: Thêm Policy để kiểm tra quyền
 
     // Lấy danh sách các kế hoạch đang hoạt động mà sinh viên tham gia
     Route::get('/student/my-active-plans', [NhomController::class, 'getActivePlansForStudent']);
@@ -55,13 +63,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/mark-as-read', [NotificationController::class, 'markAsRead']);
 
+    // --- Routes Tin Tức (News) ---
+    Route::get('/news', [\App\Http\Controllers\Api\NewsController::class, 'index']);
+    Route::post('/news', [\App\Http\Controllers\Api\NewsController::class, 'store']);
+    Route::get('/news/{id}', [\App\Http\Controllers\Api\NewsController::class, 'show']);
+    Route::post('/news/{id}', [\App\Http\Controllers\Api\NewsController::class, 'update']); // Sử dụng POST để hỗ trợ multipart/form-data
+    Route::delete('/news/{id}', [\App\Http\Controllers\Api\NewsController::class, 'destroy']);
+    Route::get('/news/{id}/pdf', [\App\Http\Controllers\Api\NewsController::class, 'pdf']);
+
+
     // --- Routes Kế hoạch Mẫu (Dành cho người dùng) ---
     Route::get('thesis-plan-templates', [UserTemplateController::class, 'index']);
     Route::get('thesis-plan-templates/{id}', [UserTemplateController::class, 'show']);
 
     // --- Routes dành cho Quản trị viên ---
     Route::prefix('admin')->middleware(['auth:sanctum'])->group(function () {
-        
+
         // --- Quản lý Kế hoạch Khóa luận ---
         Route::get('thesis-plans/list-all', [ThesisPlanController::class, 'getAllPlans']);
         Route::post('thesis-plans/preview-new', [ThesisPlanController::class, 'previewNewPlan']);
@@ -91,8 +108,12 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         // --- Quản lý Kế hoạch Mẫu (Admin) ---
-        // Quản lý CRUD Kế hoạch Mẫu
         Route::apiResource('thesis-plan-templates', AdminTemplateController::class)
             ->parameters(['thesis-plan-templates' => 'template']);
     });
+});
+
+// Route dự phòng nếu không match route nào ở trên
+Route::fallback(function(){
+    return response()->json(['message' => 'Not Found!'], 404);
 });
