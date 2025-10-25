@@ -9,7 +9,7 @@ import { GroupFormDialog } from './GroupFormDialog';
 /**
  * Component hiển thị bảng dữ liệu các nhóm.
  */
-export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, onSearchChange, columnFilters, setColumnFilters }) {
+export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, onSearchChange, columnFilters, setColumnFilters, columnVisibility }){
     const [data, setData] = useState([]);
     const [pageCount, setPageCount] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -138,6 +138,7 @@ export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, o
                 
                 typeFilterColumnId="LA_NHOM_DACBIET"
                 typeFilterOptions={typeFilterOptions}
+                columnVisibility={columnVisibility}
                 getRowProps={(row) => ({
                     'data-state': row.original.TRANGTHAI === 'Đã đủ thành viên' ? 'full' : undefined,
                     className: row.original.TRANGTHAI === 'Đã đủ thành viên' ? 'opacity-70 group' : 'group',
