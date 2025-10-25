@@ -27,6 +27,7 @@ class UpdateThesisPlanRequest extends FormRequest
             'HOCKY' => 'required|in:1,2,3',
             'KHOAHOC' => 'required|string|max:10',
             'HEDAOTAO' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
+            'SO_TUAN_THUCHIEN' => 'required|integer|min:1|max:52',
             'NGAY_BATDAU' => 'required|date',
             'NGAY_KETHUC' => 'required|date|after_or_equal:NGAY_BATDAU',
             'mocThoigians' => 'required|array|min:1',
@@ -35,6 +36,7 @@ class UpdateThesisPlanRequest extends FormRequest
             'mocThoigians.*.NGAY_BATDAU' => 'required|date',
             'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU',
             'mocThoigians.*.MOTA' => 'nullable|string',
+            'mocThoigians.*.VAITRO_THUCHIEN' => 'nullable|string|max:255',
         ];
     }
 }

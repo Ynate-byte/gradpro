@@ -18,6 +18,7 @@ class MocThoigian extends Model
         'NGAY_BATDAU',
         'NGAY_KETTHUC',
         'MOTA',
+        'VAITRO_THUCHIEN',
     ];
 
     public function kehoach()

@@ -21,6 +21,7 @@ class MauMocThoigian extends Model
         'OFFSET_BATDAU',
         'THOI_LUONG',
         'THU_TU',
+        'VAITRO_THUCHIEN_MACDINH',
     ];
 
     public function mauKehoach(): BelongsTo

@@ -14,9 +14,10 @@ class SinhvienThamgiaSeeder extends Seeder
     {
         DB::table('SINHVIEN_THAMGIA')->delete();
 
-        $inProgressPlans = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')->get();
-        if ($inProgressPlans->isEmpty()) {
-            $this->command->warn("Không tìm thấy kế hoạch nào 'Đang thực hiện' để thêm sinh viên.");
+        // Lấy cả kế hoạch 'Đang thực hiện' và 'Chờ duyệt chỉnh sửa'
+        $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'])->get();
+        if ($activePlans->isEmpty()) {
+            $this->command->warn("Không tìm thấy kế hoạch nào 'Đang thực hiện' hoặc 'Chờ duyệt chỉnh sửa' để thêm sinh viên.");
             return;
         }
 
@@ -27,9 +28,9 @@ class SinhvienThamgiaSeeder extends Seeder
             return;
         }
 
-        $studentChunks = $allActiveStudents->shuffle()->chunk(ceil($allActiveStudents->count() / $inProgressPlans->count()));
+        $studentChunks = $allActiveStudents->shuffle()->chunk(ceil($allActiveStudents->count() / $activePlans->count()));
         
-        foreach ($inProgressPlans as $index => $plan) {
+        foreach ($activePlans as $index => $plan) {
             $studentsForThisPlan = $studentChunks->get($index);
             if (!$studentsForThisPlan) continue;
 

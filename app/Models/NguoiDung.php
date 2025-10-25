@@ -59,6 +59,6 @@ class Nguoidung extends Authenticatable
 
     public function thanhvienNhom()
     {
-        return $this->hasOne(ThanhvienNhom::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');
+        return $this->hasMany(ThanhvienNhom::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');
     }
 }

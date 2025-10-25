@@ -30,10 +30,13 @@ class NhomController extends Controller
             return response()->json([]);
         }
 
-        $plans = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')
+        $plans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm'])
             ->whereHas('sinhvienThamgias', function ($query) use ($user) {
                 $query->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN);
             })
+            ->with(['mocThoigians' => function ($query) {
+                $query->orderBy('NGAY_BATDAU');
+            }])
             ->get();
 
         return response()->json($plans);
@@ -46,7 +49,7 @@ class NhomController extends Controller
     {
         try {
             $user = $request->user();
-            $planId = $request->input('plan_id'); // Lấy plan_id từ request
+            $planId = $request->input('plan_id');
 
             $thanhvienQuery = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
 
@@ -62,7 +65,6 @@ class NhomController extends Controller
                 return response()->json(['has_group' => false]);
             }
 
-            // ***** SỬA ĐỔI TẠI ĐÂY *****
             $nhom = Nhom::with([
                 'thanhviens.nguoidung' => function ($query) {
                     $query->with(['vaitro', 'sinhvien.chuyennganh']);
@@ -70,7 +72,6 @@ class NhomController extends Controller
                 'nhomtruong',
                 'chuyennganh',
                 'khoabomon',
-                // Tải các yêu cầu (requests) đang chờ
                 'yeucaus' => function($query) {
                     $query->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)->with(['nguoidung' => function($q) {
                         $q->with(['vaitro', 'sinhvien.chuyennganh']);
@@ -80,13 +81,10 @@ class NhomController extends Controller
                 'loimois' => function($query) {
                     $query->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)->with('nguoiduocmoi.sinhvien.chuyennganh');
                 }
-                // ***** KẾT THÚC SỬA ĐỔI *****
             ])->find($thanhvien->ID_NHOM);
 
             if (!$nhom) {
                 Log::error("Dữ liệu không nhất quán: Người dùng ID {$user->ID_NGUOIDUNG} có bản ghi thành viên trong nhóm ID {$thanhvien->ID_NHOM} không tồn tại.");
-                // Cân nhắc xóa bản ghi thành viên không hợp lệ
-                // $thanhvien->delete();
                 return response()->json(['has_group' => false]);
             }
 
@@ -106,7 +104,7 @@ class NhomController extends Controller
     public function createGroup(Request $request)
     {
         $user = $request->user();
-        $planId = $request->input('ID_KEHOACH'); // Lấy planId để kiểm tra
+        $planId = $request->input('ID_KEHOACH');
 
         // Kiểm tra xem người dùng đã có nhóm trong kế hoạch này chưa
         $existingMembership = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
@@ -121,7 +119,6 @@ class NhomController extends Controller
 
         $validated = $request->validate([
             'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
-            // Đảm bảo unique tên nhóm theo plan
             'TEN_NHOM' => ['required', 'string', 'max:100', \Illuminate\Validation\Rule::unique('NHOM')->where('ID_KEHOACH', $request->ID_KEHOACH)],
             'MOTA' => 'nullable|string|max:255',
             'ID_CHUYENNGANH' => 'nullable|exists:CHUYENNGANH,ID_CHUYENNGANH',
@@ -153,7 +150,7 @@ class NhomController extends Controller
             ThanhvienNhom::create([
                 'ID_NHOM' => $nhom->ID_NHOM,
                 'ID_NGUOIDUNG' => $user->ID_NGUOIDUNG,
-                'NGAY_VAONHOM' => now(), // Thêm ngày vào nhóm
+                'NGAY_VAONHOM' => now(),
             ]);
         });
 
@@ -209,7 +206,6 @@ class NhomController extends Controller
 
         $nhoms->getCollection()->transform(function ($nhom) use ($sentRequestMap) {
             $nhom->da_gui_yeu_cau = $sentRequestMap->has($nhom->ID_NHOM);
-            // Gán ID_YEUCAU nếu có
             $nhom->id_yeu_cau_da_gui = $sentRequestMap->get($nhom->ID_NHOM);
             return $nhom;
         });
@@ -480,7 +476,6 @@ class NhomController extends Controller
     public function leaveGroup(Request $request)
     {
         $user = $request->user();
-        // ***** SỬA ĐỔI: Lấy plan_id từ request query *****
         $planId = $request->input('plan_id');
         if (!$planId) {
              return response()->json(['message' => 'Thiếu ID kế hoạch.'], 400);
@@ -509,13 +504,11 @@ class NhomController extends Controller
 
         DB::transaction(function () use ($nhom, $thanhvien) {
             if ($nhom->SO_THANHVIEN_HIENTAI <= 1) {
-                 // Nếu là thành viên cuối cùng, xóa cả nhóm
-                $nhom->delete(); // $thanhvien sẽ bị xóa theo (hoặc đã bị xóa bởi cascade)
+                $nhom->delete();
             } else {
                 $thanhvien->delete();
                 $nhom->decrement('SO_THANHVIEN_HIENTAI');
-                 // Nếu nhóm từng đầy, mở lại nhóm
-                 if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < 4) {
+                 if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < $nhom->SOB_THANHVIEN_TOIDA) {
                     $nhom->TRANGTHAI = 'Đang mở';
                     $nhom->save();
                  }

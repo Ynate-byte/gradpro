@@ -2,51 +2,79 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from "../../contexts/AuthContext";
 import NewsList from "./components/NewsList";
 import NewsForm from "./components/NewsForm";
-import { Newspaper, PlusCircle, X } from "lucide-react"; // Import thêm icon X
+import { Newspaper, PlusCircle, X } from "lucide-react";
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-// Xóa import Dialog vì không còn dùng
+import { useLocation } from 'react-router-dom'; // <-- THÊM MỚI
 
 const NewsPage = () => {
     const { user } = useAuth();
-    const isAdmin = user?.vaitro?.TEN_VAITRO === "Admin";
+    const location = useLocation(); // <-- THÊM MỚI: Để lấy state từ NewsDetail
 
-    // State này sẽ quyết định form nào đang hiển thị
-    // null: không hiển thị form
-    // {}: hiển thị form Thêm mới (trống)
-    // {...news}: hiển thị form Sửa (đã điền dữ liệu)
+    // ----- SỬA ĐỔI: Logic kiểm tra quyền -----
+    const userRoleName = user?.vaitro?.TEN_VAITRO;
+    const userPositionName = user?.giangvien?.CHUCVU;
+
+    const canManageNews = 
+        userRoleName === 'Admin' || 
+        userRoleName === 'Trưởng khoa' || 
+        userPositionName === 'Trưởng khoa' ||
+        userRoleName === 'Giáo vụ' ||
+        userPositionName === 'Giáo vụ';
+    // ----- KẾT THÚC SỬA ĐỔI -----
+
+
     const [editingNews, setEditingNews] = useState(null);
     const [refresh, setRefresh] = useState(0);
-    const formRef = useRef(null); // Ref để cuộn tới form khi Sửa
+    const formRef = useRef(null);
 
-    // Hàm này được gọi khi NewsForm nhấn "Hủy" hoặc "Lưu" thành công
+     // ----- THÊM MỚI: Xử lý khi điều hướng từ NewsDetail về -----
+     useEffect(() => {
+        if (location.state?.editNewsId) {
+            // Cần một cách để lấy chi tiết tin tức từ ID
+            // Tạm thời, chúng ta chỉ mở form Sửa với ID.
+            // Tốt hơn là NewsList sẽ fetch và tìm item đó.
+            // Cách đơn giản nhất là set editingNews với ID
+            // Nhưng NewsForm cần full object...
+            // Giải pháp tạm: reload trang list, component NewsList sẽ tải lại
+            // và chúng ta cần trigger onEdit từ NewsList.
+            // Lần này chúng ta sẽ mở form trống, và NewsForm sẽ tự tải.
+             setEditingNews({ id: location.state.editNewsId }); // NewsForm sẽ tự fetch data
+             setTimeout(() => {
+                formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 100);
+        }
+    }, [location.state]);
+     // ----- KẾT THÚC THÊM MỚI -----
+
+
     const handleFormClose = (shouldRefresh = false) => {
-        setEditingNews(null); // Ẩn form
+        setEditingNews(null);
         if (shouldRefresh) {
-            setRefresh((prev) => prev + 1); // Tải lại danh sách tin tức
+            setRefresh((prev) => prev + 1);
+        }
+        // Xóa state khỏi location
+        if (location.state?.editNewsId) {
+             window.history.replaceState({}, document.title)
         }
     };
 
-    // Kiểm tra xem form "Thêm mới" có đang mở hay không
     const isAdding = editingNews && !editingNews.id;
 
-    // Xử lý nút "Thêm tin tức mới"
     const handleToggleAddForm = () => {
         if (isAdding) {
-            setEditingNews(null); // Nếu đang mở form "Thêm", thì đóng lại
+            setEditingNews(null);
         } else {
-            setEditingNews({}); // Nếu không, mở form "Thêm" (trống)
-            window.scrollTo({ top: 0, behavior: 'smooth' }); // Cuộn lên đầu trang
+            setEditingNews({}); // Mở form "Thêm" (trống)
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     };
 
-    // Xử lý khi nhấn nút "Sửa" từ NewsList
     const handleEdit = (newsItem) => {
         setEditingNews(newsItem);
-        // Cuộn tới form
         setTimeout(() => {
             formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100); // Đợi 1 chút để form render
+        }, 100);
     };
 
     return (
@@ -60,16 +88,19 @@ const NewsPage = () => {
                         <p className="text-muted-foreground">Xem, thêm, sửa, xóa các bài viết tin tức.</p>
                     </div>
                 </div>
-                {isAdmin && (
+                {/* ----- SỬA ĐỔI: Dùng canManageNews ----- */}
+                {canManageNews && (
                     <Button onClick={handleToggleAddForm}>
                         {isAdding ? <X className="mr-2 h-4 w-4" /> : <PlusCircle className="mr-2 h-4 w-4" />}
                         {isAdding ? "Hủy Thêm mới" : "Thêm tin tức mới"}
                     </Button>
                 )}
+                {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
             </div>
 
             {/* Vùng hiển thị Form (inline) */}
-            {isAdmin && editingNews && (
+            {/* ----- SỬA ĐỔI: Dùng canManageNews ----- */}
+            {canManageNews && editingNews && (
                 <div ref={formRef}>
                     <Card className="border-primary/40 shadow-lg animate-in fade-in-50 duration-300">
                         <CardHeader>
@@ -81,19 +112,17 @@ const NewsPage = () => {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {/* Dùng `key` để React tự động reset component NewsForm 
-                                khi chuyển từ "Sửa" sang "Thêm" hoặc ngược lại.
-                            */}
                             <NewsForm
                                 key={editingNews.id || 'new'}
                                 news={editingNews.id ? editingNews : null}
-                                onSuccess={() => handleFormClose(true)} // Lưu thành công: Đóng form và refresh list
-                                onCancel={() => handleFormClose(false)} // Hủy: Chỉ đóng form
+                                onSuccess={() => handleFormClose(true)}
+                                onCancel={() => handleFormClose(false)}
                             />
                         </CardContent>
                     </Card>
                 </div>
             )}
+            {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
 
             {/* Danh sách tin tức */}
             <Card>
@@ -103,9 +132,11 @@ const NewsPage = () => {
                 </CardHeader>
                 <CardContent>
                     <NewsList
-                        onEdit={isAdmin ? handleEdit : null} // Truyền hàm handleEdit xuống
+                        // ----- SỬA ĐỔI: Dùng canManageNews -----
+                        onEdit={canManageNews ? handleEdit : null}
                         refresh={refresh}
-                        showActions={isAdmin}
+                        showActions={canManageNews}
+                        // ----- KẾT THÚC SỬA ĐỔI -----
                     />
                 </CardContent>
             </Card>

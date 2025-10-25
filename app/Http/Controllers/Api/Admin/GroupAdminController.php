@@ -8,6 +8,8 @@ use App\Models\Nguoidung;
 use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
 use App\Models\KehoachKhoaluan;
+use App\Models\Sinhvien;
+use App\Models\SinhvienThamgia;  
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -38,7 +40,7 @@ class GroupAdminController extends Controller
             $query->where('LA_NHOM_DACBIET', $request->boolean('is_special'));
         }
 
-        $groups = $query->orderBy('NGAYTAO', 'desc')->paginate($request->per_page ?? 10);
+        $groups = $query->orderBy('NHOM.NGAYTAO', 'desc')->paginate($request->per_page ?? 10);
         
         return response()->json($groups);
     }
@@ -91,21 +93,21 @@ class GroupAdminController extends Controller
             $activeStudentUserIdsQuery = Nguoidung::query()
                 ->where('TRANGTHAI_KICHHOAT', true)
                 ->whereHas('sinhvien.cacDotThamGia', function ($query) use ($plan) {
-                    $query->where('ID_KEHOACH', $plan->ID_KEHOACH);
+                    $query->where('SINHVIEN_THAMGIA.ID_KEHOACH', $plan->ID_KEHOACH);
                 });
 
             $totalStudents = (clone $activeStudentUserIdsQuery)->count();
 
             $studentsWithoutGroup = (clone $activeStudentUserIdsQuery)
                 ->whereDoesntHave('thanhvienNhom', function($query) use ($plan) {
-                    $query->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH));
+                    $query->whereHas('nhom', fn($q) => $q->where('NHOM.ID_KEHOACH', $plan->ID_KEHOACH));
                 })
                 ->count();
 
             $inactiveStudents = Nguoidung::query()
                 ->whereNull('DANGNHAP_CUOI')
                 ->whereHas('sinhvien.cacDotThamGia', function ($query) use ($plan) {
-                    $query->where('ID_KEHOACH', $plan->ID_KEHOACH);
+                    $query->where('SINHVIEN_THAMGIA.ID_KEHOACH', $plan->ID_KEHOACH);
                 })->count();
 
             return response()->json([
@@ -229,7 +231,7 @@ class GroupAdminController extends Controller
             return response()->json(['message' => 'Một hoặc nhiều sinh viên được chọn đã thuộc về một nhóm khác trong kế hoạch này.'], 409);
         }
 
-        DB::transaction(function () use ($validated, $nhom, $countToAdd) {
+        DB::transaction(function () use ($validated, $nhom, $countToAdd, $planId) {
             $membersToInsert = collect($validated['student_ids'])->map(fn($id) => [
                 'ID_NHOM' => $nhom->ID_NHOM,
                 'ID_NGUOIDUNG' => $id,
@@ -238,6 +240,8 @@ class GroupAdminController extends Controller
             
             ThanhvienNhom::insert($membersToInsert);
             $nhom->increment('SO_THANHVIEN_HIENTAI', $countToAdd);
+
+            $this->addStudentsToPlanIfNotExists($validated['student_ids'], $planId);
         });
         
         return response()->json(['message' => "Đã thêm thành công {$countToAdd} sinh viên vào nhóm."]);
@@ -328,10 +332,18 @@ class GroupAdminController extends Controller
             return response()->json(['message' => 'Nhóm trưởng phải là một trong các thành viên được chọn.'], 422);
         }
 
-        $existingMembers = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $validated['member_ids'])->count();
+        // ----- SỬA LỖI 409: Chỉ kiểm tra sinh viên trong kế hoạch này -----
+        $planId = $validated['plan_id']; // Lấy plan_id từ data đã validate
+        $existingMembers = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $validated['member_ids'])
+            ->whereHas('nhom', function ($query) use ($planId) {
+                $query->where('ID_KEHOACH', $planId);
+            })
+            ->count();
+            
         if ($existingMembers > 0) {
-            return response()->json(['message' => 'Một hoặc nhiều sinh viên đã có nhóm. Vui lòng kiểm tra lại.'], 409);
+            return response()->json(['message' => 'Một hoặc nhiều sinh viên đã có nhóm trong kế hoạch này. Vui lòng kiểm tra lại.'], 409);
         }
+        // ----- KẾT THÚC SỬA LỖI -----
 
         $group = null;
         DB::transaction(function () use ($validated, &$group) {
@@ -351,6 +363,8 @@ class GroupAdminController extends Controller
             ])->all();
 
             ThanhvienNhom::insert($membersToInsert);
+
+            $this->addStudentsToPlanIfNotExists($validated['member_ids'], $validated['plan_id']);
         });
 
         return response()->json($group->load('thanhviens.nguoidung', 'nhomtruong'), 201);
@@ -384,5 +398,40 @@ class GroupAdminController extends Controller
             ->get();
 
         return response()->json($students);
+    }
+
+    /**
+     * [Hàm helper] Tự động thêm sinh viên vào bảng SINHVIEN_THAMGIA nếu họ chưa có.
+     *
+     * @param array $userIds Mảng các ID_NGUOIDUNG
+     * @param int $planId ID_KEHOACH
+     */
+    private function addStudentsToPlanIfNotExists(array $userIds, int $planId)
+    {
+        // 1. Lấy map [ID_NGUOIDUNG => ID_SINHVIEN]
+        $studentMap = Sinhvien::whereIn('ID_NGUOIDUNG', $userIds)
+                                ->pluck('ID_SINHVIEN', 'ID_NGUOIDUNG');
+
+        // 2. Lấy các ID_SINHVIEN đã tồn tại trong kế hoạch
+        $existingStudentIdsInPlan = SinhvienThamgia::where('ID_KEHOACH', $planId)
+                                                ->whereIn('ID_SINHVIEN', $studentMap->values())
+                                                ->pluck('ID_SINHVIEN');
+                                                
+        // 3. Lọc ra các ID_SINHVIEN còn thiếu
+        $missingStudentIds = $studentMap->values()->diff($existingStudentIdsInPlan);
+
+        // 4. Thêm các sinh viên còn thiếu
+        if ($missingStudentIds->isNotEmpty()) {
+            $dataToInsert = $missingStudentIds->map(fn($studentId) => [
+                'ID_KEHOACH' => $planId,
+                'ID_SINHVIEN' => $studentId,
+                'DU_DIEUKIEN' => true, // Mặc định là true khi admin thêm thủ công
+                'NGAY_DANGKY' => now(),
+            ])->all();
+
+            SinhvienThamgia::insert($dataToInsert);
+            
+            Log::info("Admin action: Automatically added " . $missingStudentIds->count() . " students to SINHVIEN_THAMGIA for plan $planId.");
+        }
     }
 }

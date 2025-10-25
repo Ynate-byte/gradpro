@@ -21,6 +21,7 @@ class KehoachKhoaluan extends Model
         'HOCKY',
         'KHOAHOC',
         'HEDAOTAO',
+        'SO_TUAN_THUCHIEN',
         'SO_THANHVIEN_TOITHIEU',
         'SO_THANHVIEN_TOIDA',
         'TRANGTHAI',
@@ -31,6 +32,7 @@ class KehoachKhoaluan extends Model
         'BINHLUAN_PHEDUYET',
         'TYTRONG_DIEM_QUATRINH',
         'TYTRONG_DIEM_HOIDONG',
+        'ID_NGUOIPHEDUYET',
     ];
 
     public function mocThoigians()
@@ -46,6 +48,11 @@ class KehoachKhoaluan extends Model
     public function nguoiTao()
     {
         return $this->belongsTo(Nguoidung::class, 'ID_NGUOITAO', 'ID_NGUOIDUNG');
+    }
+
+    public function nguoiPheDuyet()
+    {
+        return $this->belongsTo(Nguoidung::class, 'ID_NGUOIPHEDUYET', 'ID_NGUOIDUNG');
     }
 
     public function nhoms()

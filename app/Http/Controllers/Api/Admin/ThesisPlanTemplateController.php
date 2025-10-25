@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\MauKehoach;
+use App\Models\MauMocThoigian;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
 
 class ThesisPlanTemplateController extends Controller
 {
@@ -16,14 +18,11 @@ class ThesisPlanTemplateController extends Controller
     public function index()
     {
         try {
-            // Tải relationship và sắp xếp
             $templates = MauKehoach::with('mauMocThoigians')->orderBy('TEN_MAU')->get();
             return response()->json($templates);
 
         } catch (\Exception $e) {
-            // Ghi log lỗi chi tiết
             Log::error('Failed to retrieve thesis plan templates: ' . $e->getMessage());
-            // Trả về lỗi 500 với thông báo
             return response()->json(['message' => 'Không thể tải danh sách bản mẫu. Vui lòng kiểm tra logs.'], 500);
         }
     }
@@ -43,6 +42,7 @@ class ThesisPlanTemplateController extends Controller
             'mocThoigians.*.MOTA' => 'nullable|string',
             'mocThoigians.*.OFFSET_BATDAU' => 'required|integer|min:0',
             'mocThoigians.*.THOI_LUONG' => 'required|integer|min:1',
+            'mocThoigians.*.VAITRO_THUCHIEN_MACDINH' => 'nullable|string|max:255', 
         ]);
 
         try {
@@ -51,7 +51,14 @@ class ThesisPlanTemplateController extends Controller
             $template = MauKehoach::create(collect($validated)->except('mocThoigians')->all());
 
             foreach ($validated['mocThoigians'] as $index => $moc) {
-                $template->mauMocThoigians()->create(array_merge($moc, ['THU_TU' => $index]));
+                $template->mauMocThoigians()->create([
+                     'TEN_SUKIEN' => $moc['TEN_SUKIEN'],
+                     'MOTA' => $moc['MOTA'],
+                     'OFFSET_BATDAU' => $moc['OFFSET_BATDAU'],
+                     'THOI_LUONG' => $moc['THOI_LUONG'],
+                     'VAITRO_THUCHIEN_MACDINH' => $moc['VAITRO_THUCHIEN_MACDINH'] ?? null,
+                     'THU_TU' => $index,
+                 ]);
             }
 
             DB::commit();
@@ -61,7 +68,6 @@ class ThesisPlanTemplateController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to create thesis plan template: ' . $e->getMessage());
-
             return response()->json(['message' => 'Tạo bản mẫu thất bại.'], 500);
         }
     }
@@ -72,7 +78,6 @@ class ThesisPlanTemplateController extends Controller
     public function show(MauKehoach $template)
     {
        try {
-            // Tải kèm relationship mauMocThoigians
             return response()->json($template->load('mauMocThoigians'));
         } catch (\Exception $e) {
             Log::error("Failed to retrieve template ID {$template->ID_MAU}: " . $e->getMessage());
@@ -96,6 +101,7 @@ class ThesisPlanTemplateController extends Controller
             'mocThoigians.*.MOTA' => 'nullable|string',
             'mocThoigians.*.OFFSET_BATDAU' => 'required|integer|min:0',
             'mocThoigians.*.THOI_LUONG' => 'required|integer|min:1',
+            'mocThoigians.*.VAITRO_THUCHIEN_MACDINH' => 'nullable|string|max:255',
         ]);
 
         try {
@@ -109,9 +115,18 @@ class ThesisPlanTemplateController extends Controller
             $template->mauMocThoigians()->whereNotIn('ID_MAU_MOC', $incomingIds)->delete();
 
             foreach ($validated['mocThoigians'] as $index => $moc) {
+                $dataToUpdate = [
+                     'TEN_SUKIEN' => $moc['TEN_SUKIEN'],
+                     'MOTA' => $moc['MOTA'],
+                     'OFFSET_BATDAU' => $moc['OFFSET_BATDAU'],
+                     'THOI_LUONG' => $moc['THOI_LUONG'],
+                     'VAITRO_THUCHIEN_MACDINH' => $moc['VAITRO_THUCHIEN_MACDINH'] ?? null,
+                     'THU_TU' => $index,
+                 ];
+
                 $template->mauMocThoigians()->updateOrCreate(
                     ['ID_MAU_MOC' => $moc['ID_MAU_MOC'] ?? null],
-                    array_merge(collect($moc)->except('ID_MAU_MOC')->all(), ['THU_TU' => $index])
+                    $dataToUpdate
                 );
             }
 
@@ -122,7 +137,6 @@ class ThesisPlanTemplateController extends Controller
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to update thesis plan template: ' . $e->getMessage() . ' File:' . $e->getFile() . ' Line:' . $e->getLine());
-
             return response()->json(['message' => 'Cập nhật bản mẫu thất bại.'], 500);
         }
     }
@@ -134,12 +148,7 @@ class ThesisPlanTemplateController extends Controller
     public function destroy(MauKehoach $template)
     {
         try {
-            // Transaction để đảm bảo xóa cả template và các mốc liên quan
             DB::transaction(function () use ($template) {
-                // Xóa các mốc thời gian liên quan trước (nếu cần, tùy vào onDelete của khóa ngoại)
-                // $template->mauMocThoigians()->delete(); // Bỏ comment nếu khóa ngoại không set cascade on delete
-
-                // Xóa bản mẫu
                 $template->delete();
             });
 

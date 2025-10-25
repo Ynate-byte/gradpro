@@ -12,8 +12,9 @@ class KhoaBomonSeeder extends Seeder
      */
     public function run(): void
     {
-        // Xóa dữ liệu cũ để tránh trùng lặp khi seed lại
-        DB::table('KHOA_BOMON')->delete();
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        DB::table('KHOA_BOMON')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         DB::table('KHOA_BOMON')->insert([
             ['MA_KHOA_BOMON' => 'K.CNTT', 'TEN_KHOA_BOMON' => 'Khoa Công nghệ Thông tin'],

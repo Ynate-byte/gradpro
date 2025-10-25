@@ -12,8 +12,9 @@ class ChuyennganhSeeder extends Seeder
      */
     public function run(): void
     {
-        // Xóa dữ liệu cũ để tránh trùng lặp khi seed lại
-        DB::table('CHUYENNGANH')->delete();
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        DB::table('CHUYENNGANH')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         DB::table('CHUYENNGANH')->insert([
             ['MA_CHUYENNGANH' => 'CNPM', 'TEN_CHUYENNGANH' => 'Công nghệ Phần mềm'],

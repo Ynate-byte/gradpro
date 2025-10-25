@@ -39,7 +39,7 @@ class AuthController extends Controller
             'message' => 'Đăng nhập thành công',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('vaitro')
+            'user' => $user->load('vaitro', 'giangvien')
         ]);
     }
 

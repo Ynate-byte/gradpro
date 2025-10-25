@@ -16,22 +16,30 @@ return new class extends Migration
             $table->enum('HOCKY', ['1', '2', '3']);
             $table->string('KHOAHOC', 10);
             $table->enum('HEDAOTAO', ['Cử nhân', 'Kỹ sư', 'Thạc sỹ']);
+            $table->unsignedTinyInteger('SO_TUAN_THUCHIEN')->default(12)->comment('Số tuần thực tế thực hiện kế hoạch');
+
             $table->unsignedTinyInteger('SO_THANHVIEN_TOITHIEU')->default(1);
             $table->unsignedTinyInteger('SO_THANHVIEN_TOIDA')->default(4);
+            
             $table->enum('TRANGTHAI', [
                 'Bản nháp', 'Chờ phê duyệt', 'Yêu cầu chỉnh sửa', 'Đã phê duyệt',
-                'Đã hủy', 'Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành'
+                'Đã hủy', 'Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành',
+                'Chờ duyệt chỉnh sửa'
             ])->default('Bản nháp');
+
             $table->boolean('TRANGTHAI_KICHHOAT')->default(true);
             $table->timestamp('NGAY_BATDAU')->nullable();
             $table->timestamp('NGAY_KETHUC')->nullable();
             $table->unsignedBigInteger('ID_NGUOITAO')->nullable();
+            $table->unsignedBigInteger('ID_NGUOIPHEDUYET')->nullable()->comment('ID của Trưởng khoa đã phê duyệt');
             $table->text('BINHLUAN_PHEDUYET')->nullable();
             $table->decimal('TYTRONG_DIEM_QUATRINH', 5, 2)->nullable();
             $table->decimal('TYTRONG_DIEM_HOIDONG', 5, 2)->nullable();
             $table->timestamp('NGAYTAO')->nullable()->useCurrent();
             $table->timestamp('NGAYCAPNHAT')->nullable()->useCurrentOnUpdate();
+            
             $table->foreign('ID_NGUOITAO')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->onDelete('set null');
+            $table->foreign('ID_NGUOIPHEDUYET')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->onDelete('set null');
         });
 
         // Bảng 2: MOC_THOIGIAN
@@ -42,6 +50,7 @@ return new class extends Migration
             $table->timestamp('NGAY_BATDAU')->nullable();
             $table->timestamp('NGAY_KETTHUC')->nullable();
             $table->text('MOTA')->nullable();
+            $table->string('VAITRO_THUCHIEN', 255)->nullable()->comment('Vai trò thực hiện, vd: "Giảng viên,Sinh viên"');
             $table->timestamps();
             $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN')->onDelete('cascade');
         });

@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 import { getAdminThesisPlanTemplateById, createAdminThesisPlanTemplate, updateAdminThesisPlanTemplate } from '@/api/thesisPlanService';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
@@ -18,6 +18,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { Skeleton } from '@/components/ui/skeleton';
 
+// Schema validation với trường mới
 const templateSchema = z.object({
   TEN_MAU: z.string().min(3, "Tên bản mẫu phải có ít nhất 3 ký tự.").max(100),
   HEDAOTAO_MACDINH: z.string().min(1, "Hệ đào tạo không được trống."),
@@ -39,11 +40,15 @@ const templateSchema = z.object({
         z.number().int().min(1, "Thời lượng phải lớn hơn 0.")
       ),
       MOTA: z.string().optional().nullable(),
+      VAITRO_THUCHIEN_MACDINH: z.string().max(255).optional().nullable(), // Thêm trường mới
     })
   ).min(1, "Phải có ít nhất một mốc thời gian."),
 });
 
-// Hiển thị giao diện cho một mốc thời gian có thể kéo thả
+// Danh sách vai trò mẫu
+const ROLES_OPTIONS = ["Sinh viên", "Giảng viên", "Giáo vụ", "Trưởng bộ môn", "Trưởng khoa"];
+
+// Component MilestoneTemplateItem với trường mới
 const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, handleProps, style, ...props }, ref) => {
   return (
     <div ref={ref} style={style} {...props} className="grid grid-cols-12 gap-x-4 gap-y-2 items-start p-4 border rounded-lg bg-background hover:shadow-md relative group">
@@ -51,9 +56,9 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
         <GripVertical className="h-5 w-5" />
       </div>
       <div className="col-span-12">
-        <FormField 
-          name={`mocThoigians.${index}.TEN_SUKIEN`} 
-          control={form.control} 
+        <FormField
+          name={`mocThoigians.${index}.TEN_SUKIEN`}
+          control={form.control}
           render={({ field: fld }) => (
             <FormItem>
               <FormLabel>Nội dung (Mục {index + 1})*</FormLabel>
@@ -66,24 +71,59 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
         />
       </div>
       <div className="col-span-12">
-        <FormField 
-          name={`mocThoigians.${index}.MOTA`} 
-          control={form.control} 
+        <FormField
+          name={`mocThoigians.${index}.MOTA`}
+          control={form.control}
           render={({ field: fld }) => (
             <FormItem>
               <FormLabel>Mô tả</FormLabel>
               <FormControl>
-                <Textarea {...fld} className="min-h-[60px] resize-y" />
+                <Textarea {...fld} className="min-h-[60px] resize-y" value={fld.value ?? ''} />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
       </div>
+
+      {/* ----- SỬA LỖI: FormField cho Vai trò thực hiện ----- */}
+      <div className="col-span-12">
+        <FormField
+          name={`mocThoigians.${index}.VAITRO_THUCHIEN_MACDINH`}
+          control={form.control}
+          render={({ field: fld }) => (
+            <FormItem>
+              <FormLabel>Vai trò thực hiện MĐ (Thông báo)</FormLabel>
+              <Select
+                onValueChange={(value) => fld.onChange(value === "none" ? null : value)}
+                value={fld.value || "none"}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn vai trò mặc định..." />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value="none">-- Không chọn --</SelectItem>
+                  {ROLES_OPTIONS.map(role => (
+                    <SelectItem key={role} value={role}>{role}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormDescription>
+                Vai trò mặc định sẽ nhận thông báo nhắc nhở cho mốc này khi tạo kế hoạch từ mẫu.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+      {/* ----- KẾT THÚC SỬA LỖI ----- */}
+
       <div className="col-span-6">
-        <FormField 
-          name={`mocThoigians.${index}.OFFSET_BATDAU`} 
-          control={form.control} 
+        <FormField
+          name={`mocThoigians.${index}.OFFSET_BATDAU`}
+          control={form.control}
           render={({ field: fld }) => (
             <FormItem>
               <FormLabel>Bắt đầu sau (ngày)*</FormLabel>
@@ -96,9 +136,9 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
         />
       </div>
       <div className="col-span-6">
-        <FormField 
-          name={`mocThoigians.${index}.THOI_LUONG`} 
-          control={form.control} 
+        <FormField
+          name={`mocThoigians.${index}.THOI_LUONG`}
+          control={form.control}
           render={({ field: fld }) => (
             <FormItem>
               <FormLabel>Thời lượng (ngày)*</FormLabel>
@@ -110,12 +150,12 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
           )}
         />
       </div>
-      <Button 
-        type="button" 
-        variant="ghost" 
-        size="icon" 
-        onClick={() => remove(index)} 
-        disabled={form.getValues('mocThoigians').length <= 1} 
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={() => remove(index)}
+        disabled={form.getValues('mocThoigians').length <= 1}
         className="absolute top-2 right-2 text-muted-foreground hover:text-destructive"
       >
         <Trash2 className="h-4 w-4" />
@@ -158,7 +198,8 @@ export default function TemplateFormPage() {
         TEN_SUKIEN: '',
         OFFSET_BATDAU: 0,
         THOI_LUONG: 1,
-        MOTA: ''
+        MOTA: '',
+        VAITRO_THUCHIEN_MACDINH: null
       }]
     }
   });
@@ -190,6 +231,7 @@ export default function TemplateFormPage() {
               OFFSET_BATDAU: m.OFFSET_BATDAU ?? 0,
               THOI_LUONG: m.THOI_LUONG ?? 1,
               MOTA: m.MOTA || '',
+              VAITRO_THUCHIEN_MACDINH: m.VAITRO_THUCHIEN_MACDINH || null,
             }))
           });
         })
@@ -201,18 +243,16 @@ export default function TemplateFormPage() {
         .finally(() => setIsLoading(false));
     } else {
       form.reset({
-        TEN_MAU: '',
-        HEDAOTAO_MACDINH: 'Cử nhân',
-        SO_TUAN_MACDINH: 12,
-        MO_TA: '',
+        TEN_MAU: '', HEDAOTAO_MACDINH: 'Cử nhân', SO_TUAN_MACDINH: 12, MO_TA: '',
         mocThoigians: [{
-          arrayId: crypto.randomUUID(),
-          id: crypto.randomUUID(),
-          ID_MAU_MOC: null,
-          TEN_SUKIEN: '',
-          OFFSET_BATDAU: 0,
-          THOI_LUONG: 1,
-          MOTA: ''
+            id: crypto.randomUUID(),
+            arrayId: crypto.randomUUID(), 
+            ID_MAU_MOC: null, 
+            TEN_SUKIEN: '', 
+            OFFSET_BATDAU: 0, 
+            THOI_LUONG: 1, 
+            MOTA: '', 
+            VAITRO_THUCHIEN_MACDINH: null 
         }]
       });
       setIsLoading(false);
@@ -241,7 +281,8 @@ export default function TemplateFormPage() {
         TEN_SUKIEN: m.TEN_SUKIEN,
         OFFSET_BATDAU: m.OFFSET_BATDAU,
         THOI_LUONG: m.THOI_LUONG,
-        MOTA: m.MOTA
+        MOTA: m.MOTA,
+        VAITRO_THUCHIEN_MACDINH: m.VAITRO_THUCHIEN_MACDINH || null,
       }))
     };
 
@@ -267,7 +308,7 @@ export default function TemplateFormPage() {
       <div className="space-y-6 p-4 md:p-8">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-10 w-full" />
+        <Skeleton className="h-96 w-full" />
       </div>
     );
   }
@@ -277,13 +318,13 @@ export default function TemplateFormPage() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4 md:p-8">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <Button 
-              type="button" 
-              variant="outline" 
-              size="sm" 
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/admin/templates')}
             >
-              <ChevronLeft className="mr-2 h-4 w-4" /> 
+              <ChevronLeft className="mr-2 h-4 w-4" />
               Quay lại
             </Button>
             <h1 className="text-3xl font-bold mt-2">
@@ -305,9 +346,9 @@ export default function TemplateFormPage() {
               <CardTitle>Thông tin chung</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <FormField 
-                name="TEN_MAU" 
-                control={form.control} 
+              <FormField
+                name="TEN_MAU"
+                control={form.control}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Tên bản mẫu*</FormLabel>
@@ -319,15 +360,15 @@ export default function TemplateFormPage() {
                 )}
               />
               <div className="grid grid-cols-2 gap-4">
-                <FormField 
-                  name="HEDAOTAO_MACDINH" 
-                  control={form.control} 
+                <FormField
+                  name="HEDAOTAO_MACDINH"
+                  control={form.control}
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Hệ ĐT Mặc định*</FormLabel>
-                      <Select 
-                        onValueChange={field.onChange} 
-                        defaultValue={field.value} 
+                      <Select
+                        onValueChange={field.onChange}
+                        defaultValue={field.value}
                         value={field.value}
                       >
                         <FormControl>
@@ -345,9 +386,9 @@ export default function TemplateFormPage() {
                     </FormItem>
                   )}
                 />
-                <FormField 
-                  name="SO_TUAN_MACDINH" 
-                  control={form.control} 
+                <FormField
+                  name="SO_TUAN_MACDINH"
+                  control={form.control}
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Số tuần MĐ*</FormLabel>
@@ -359,14 +400,14 @@ export default function TemplateFormPage() {
                   )}
                 />
               </div>
-              <FormField 
-                name="MO_TA" 
-                control={form.control} 
+              <FormField
+                name="MO_TA"
+                control={form.control}
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Mô tả (tùy chọn)</FormLabel>
                     <FormControl>
-                      <Textarea rows={3} placeholder="Mô tả ngắn về bản mẫu..." {...field} />
+                      <Textarea rows={3} placeholder="Mô tả ngắn về bản mẫu..." {...field} value={field.value ?? ''} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -379,21 +420,22 @@ export default function TemplateFormPage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Mốc thời gian ({fields.length})</CardTitle>
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => append({ 
-                    arrayId: crypto.randomUUID(), 
-                    id: crypto.randomUUID(), 
-                    ID_MAU_MOC: null, 
-                    TEN_SUKIEN: '', 
-                    OFFSET_BATDAU: 0, 
-                    THOI_LUONG: 1, 
-                    MOTA: '' 
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => append({
+                    arrayId: crypto.randomUUID(),
+                    id: crypto.randomUUID(),
+                    ID_MAU_MOC: null,
+                    TEN_SUKIEN: '',
+                    OFFSET_BATDAU: 0,
+                    THOI_LUONG: 1,
+                    MOTA: '',
+                    VAITRO_THUCHIEN_MACDINH: null
                   })}
                 >
-                  <PlusCircle className="mr-2 h-4 w-4" /> 
+                  <PlusCircle className="mr-2 h-4 w-4" />
                   Thêm mục
                 </Button>
               </CardHeader>
@@ -413,19 +455,20 @@ export default function TemplateFormPage() {
                               />
                             </SortableItemWrapper>
                             <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="sm" 
-                                className="h-6 w-6 p-0 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary" 
-                                onClick={() => insert(index + 1, { 
-                                  arrayId: crypto.randomUUID(), 
-                                  id: crypto.randomUUID(), 
-                                  ID_MAU_MOC: null, 
-                                  TEN_SUKIEN: '', 
-                                  OFFSET_BATDAU: 0, 
-                                  THOI_LUONG: 1, 
-                                  MOTA: '' 
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                onClick={() => insert(index + 1, {
+                                  arrayId: crypto.randomUUID(),
+                                  id: crypto.randomUUID(),
+                                  ID_MAU_MOC: null,
+                                  TEN_SUKIEN: '',
+                                  OFFSET_BATDAU: 0,
+                                  THOI_LUONG: 1,
+                                  MOTA: '',
+                                  VAITRO_THUCHIEN_MACDINH: null
                                 })}
                               >
                                 <PlusCircle className="h-4 w-4" />

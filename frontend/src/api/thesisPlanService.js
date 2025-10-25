@@ -85,6 +85,15 @@ export const requestChanges = (id, comment) => {
 };
 
 /**
+ * Kích hoạt kế hoạch (chuyển sang 'Đang thực hiện').
+ * @param {number} id - ID của kế hoạch.
+ * @returns {Promise<object>} Thông báo kết quả.
+ */
+export const activatePlan = (id) => {
+    return axiosClient.post(`/admin/thesis-plans/${id}/activate`).then(res => res.data);
+};
+
+/**
  * Xuất tài liệu kế hoạch ra file PDF.
  * @param {number} id - ID của kế hoạch.
  * @returns {Promise<Blob>} Dữ liệu file blob.
@@ -118,67 +127,49 @@ export const previewNewPlan = (data) => {
 };
 
 // MẪU KẾ HOẠCH (CHO NGƯỜI DÙNG THƯỜNG)
-
-/**
- * Lấy danh sách tên và ID các mẫu kế hoạch.
- * @returns {Promise<Array>} Danh sách các mẫu.
- */
 export const getThesisPlanTemplates = () => {
     return axiosClient.get('/thesis-plan-templates').then(res => res.data);
 };
-
-/**
- * Lấy chi tiết một mẫu kế hoạch kèm các mốc thời gian.
- * @param {number} id - ID của mẫu.
- * @returns {Promise<object>} Dữ liệu chi tiết của mẫu.
- */
 export const getThesisPlanTemplateDetails = (id) => {
     return axiosClient.get(`/thesis-plan-templates/${id}`).then(res => res.data);
 };
 
 // QUẢN LÝ MẪU KẾ HOẠCH (ADMIN)
 
-/**
- * Lấy danh sách đầy đủ các mẫu kế hoạch (cho admin).
- * @returns {Promise<Array>} Danh sách mẫu.
- */
 export const getAdminThesisPlanTemplates = () => {
     return axiosClient.get('/admin/thesis-plan-templates').then(res => res.data);
 };
-
-/**
- * Lấy chi tiết một mẫu kế hoạch theo ID (cho admin).
- * @param {number} id - ID của mẫu.
- * @returns {Promise<object>} Dữ liệu chi tiết của mẫu.
- */
 export const getAdminThesisPlanTemplateById = (id) => {
     return axiosClient.get(`/admin/thesis-plan-templates/${id}`).then(res => res.data);
 };
-
-/**
- * Tạo một mẫu kế hoạch mới.
- * @param {object} data - Dữ liệu của mẫu.
- * @returns {Promise<object>} Dữ liệu mẫu vừa tạo.
- */
 export const createAdminThesisPlanTemplate = (data) => {
     return axiosClient.post('/admin/thesis-plan-templates', data).then(res => res.data);
 };
-
-/**
- * Cập nhật một mẫu kế hoạch.
- * @param {number} id - ID của mẫu.
- * @param {object} data - Dữ liệu cập nhật.
- * @returns {Promise<object>} Dữ liệu mẫu sau khi cập nhật.
- */
 export const updateAdminThesisPlanTemplate = (id, data) => {
     return axiosClient.put(`/admin/thesis-plan-templates/${id}`, data).then(res => res.data);
 };
-
-/**
- * Xóa một mẫu kế hoạch.
- * @param {number} id - ID của mẫu.
- * @returns {Promise}
- */
 export const deleteAdminThesisPlanTemplate = (id) => {
     return axiosClient.delete(`/admin/thesis-plan-templates/${id}`);
+};
+
+
+// --- QUẢN LÝ SINH VIÊN THAM GIA KẾ HOẠCH ---
+export const getPlanParticipants = (planId, params) => {
+    return axiosClient.get(`/admin/thesis-plans/${planId}/participants`, { params }).then(res => res.data);
+};
+export const searchStudentsForPlan = (planId, searchTerm) => {
+    return axiosClient.get(`/admin/thesis-plans/${planId}/search-students`, { params: { search: searchTerm } }).then(res => res.data);
+};
+export const addParticipantsToPlan = (planId, studentIds, du_dieukien = true) => {
+    return axiosClient.post(`/admin/thesis-plans/${planId}/participants`, { student_ids: studentIds, du_dieukien }).then(res => res.data);
+};
+export const updateParticipantEligibility = (planId, participantId, isEligible) => {
+    return axiosClient.put(`/admin/thesis-plans/${planId}/participants/${participantId}`, { DU_DIEUKIEN: isEligible }).then(res => res.data);
+};
+export const removeParticipantFromPlan = (planId, participantId) => {
+    return axiosClient.delete(`/admin/thesis-plans/${planId}/participants/${participantId}`);
+};
+export const bulkRemoveParticipantsFromPlan = (planId, participantIds) => {
+  return axiosClient.post(`/admin/thesis-plans/${planId}/participants/bulk-remove`, { participant_ids: participantIds })
+    .then(res => res.data);
 };

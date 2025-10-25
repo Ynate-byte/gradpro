@@ -8,6 +8,7 @@ import { PlusCircle } from 'lucide-react'
 import { PlanDataTable } from './components/PlanDataTable'
 import { PlanDetailDialog } from './components/PlanDetailDialog'
 import { TemplateSelectionDialog } from './components/TemplateSelectionDialog'
+import { useAuth } from '@/contexts/AuthContext' // <-- THÊM MỚI
 
 // Trang quản lý kế hoạch khóa luận
 export default function ThesisPlanManagementPage() {
@@ -22,6 +23,16 @@ export default function ThesisPlanManagementPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false)
   const navigate = useNavigate()
+
+  // ----- THÊM MỚI: Lấy thông tin user -----
+  const { user } = useAuth();
+  const userRole = user?.giangvien?.CHUCVU; // 'Trưởng khoa', 'Giáo vụ', null
+  const isAdmin = user?.vaitro?.TEN_VAITRO === 'Admin';
+  // Chỉ Giáo vụ hoặc Trưởng khoa mới được tạo
+  const canCreate = userRole === 'Giáo vụ' || userRole === 'Trưởng khoa' || isAdmin; 
+  // (Thêm isAdmin cho an toàn, bạn có thể bỏ nếu Admin không được tạo)
+  // ----- KẾT THÚC THÊM MỚI -----
+
 
   // Tải danh sách kế hoạch
   const fetchData = useCallback(() => {
@@ -89,9 +100,15 @@ export default function ThesisPlanManagementPage() {
   return (
     <div className="space-y-8 p-4 md:p-8">
       <div className="flex items-center justify-between">
-        <Button onClick={handleOpenCreate}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Tạo Kế hoạch mới
-        </Button>
+        {/* ----- SỬA ĐỔI: Ẩn nút nếu không có quyền ----- */}
+        {canCreate ? (
+            <Button onClick={handleOpenCreate}>
+                <PlusCircle className="mr-2 h-4 w-4" /> Tạo Kế hoạch mới
+            </Button>
+        ) : (
+            <div></div> // Để trống giữ layout
+        )}
+        {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
       </div>
       <Card>
         <CardHeader>

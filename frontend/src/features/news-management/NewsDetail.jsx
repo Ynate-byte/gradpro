@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import axios from "../../api/axiosConfig";
 import { useParams, useNavigate } from "react-router-dom";
-import NewsForm from "./components/NewsForm"; // Form này sẽ được gọi bởi NewsPage
+// Bỏ import NewsForm
 import { Loader2, ArrowLeft, Share, Edit, Trash2, CalendarDays, UserCircle, FileText, Newspaper } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../contexts/AuthContext";
@@ -26,7 +26,18 @@ const NewsDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const isAdmin = user?.vaitro?.TEN_VAITRO === "Admin";
+    
+    // ----- SỬA ĐỔI: Logic kiểm tra quyền -----
+    const userRoleName = user?.vaitro?.TEN_VAITRO;
+    const userPositionName = user?.giangvien?.CHUCVU;
+    
+    const canManageNews = 
+        userRoleName === 'Admin' || 
+        userRoleName === 'Trưởng khoa' || 
+        userPositionName === 'Trưởng khoa' ||
+        userRoleName === 'Giáo vụ' ||
+        userPositionName === 'Giáo vụ';
+    // ----- KẾT THÚC SỬA ĐỔI -----
 
     const [news, setNews] = useState(null);
     const [relatedNews, setRelatedNews] = useState([]);
@@ -34,10 +45,6 @@ const NewsDetail = () => {
     const [error, setError] = useState(null);
     const [pdfObjectUrl, setPdfObjectUrl] = useState(null);
 
-    // -- BỎ LOGIC EDITING STATE --
-    // const [isEditing, setIsEditing] = useState(false);
-    // const formRef = useRef(null);
-    // ----------------------------
 
     // Tải tin tức chính và tin liên quan khi 'id' thay đổi
     useEffect(() => {
@@ -45,7 +52,6 @@ const NewsDetail = () => {
         setRelatedNews([]);
         setPdfObjectUrl(null);
         setError(null);
-        // setIsEditing(false); // Bỏ
         setLoading(true);
 
         fetchNews();
@@ -79,7 +85,7 @@ const NewsDetail = () => {
         return () => {
             if (objectUrl) URL.revokeObjectURL(objectUrl);
         };
-    }, [id, news, loading]); // Bỏ isEditing
+    }, [id, news, loading]);
 
     const fetchNews = async () => {
         try {
@@ -108,8 +114,6 @@ const NewsDetail = () => {
 
     // Hàm Sửa (chuyển về trang NewsPage với state)
     const handleEdit = () => {
-        // Thay vì bật isEditing, chúng ta quay lại trang news
-        // và truyền state để component NewsPage biết cần mở form edit
         navigate("/news", { state: { editNewsId: news.id } });
     };
 
@@ -186,7 +190,8 @@ const NewsDetail = () => {
                     <Button variant="outline" size="icon" onClick={handleShare}>
                         <Share className="h-4 w-4" />
                     </Button>
-                    {isAdmin && (
+                    {/* ----- SỬA ĐỔI: Dùng canManageNews ----- */}
+                    {canManageNews && (
                         <>
                             <Button variant="outline" onClick={handleEdit}>
                                 <Edit className="mr-2 h-4 w-4" /> Sửa
@@ -196,6 +201,7 @@ const NewsDetail = () => {
                             </Button>
                         </>
                     )}
+                    {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
                 </div>
             </div>
 

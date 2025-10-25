@@ -9,16 +9,34 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException; // Đảm bảo đã import
+use Illuminate\Validation\ValidationException;
 
 class NewsController extends Controller
 {
     /**
-     * 🔹 Kiểm tra quyền Admin
+     * 🔹 Sửa đổi: Kiểm tra quyền Quản lý Tin tức (Admin, Trưởng khoa, Giáo vụ)
      */
-    private function isAdmin(): bool
+    private function canManageNews(): bool
     {
-        return Auth::check() && Auth::user()->ID_VAITRO == 1; // Giả sử ID 1 là Admin
+        if (!Auth::check()) {
+            return false;
+        }
+
+        $user = Auth::user();
+
+        // 1. Kiểm tra Vai trò (Role)
+        $roleName = $user->vaitro?->TEN_VAITRO;
+        if (in_array($roleName, ['Admin', 'Trưởng khoa', 'Giáo vụ'])) {
+            return true;
+        }
+
+        // 2. Kiểm tra Chức vụ (Position) trong bảng Giangvien (nếu có)
+        $positionName = $user->giangvien?->CHUCVU;
+         if (in_array($positionName, ['Trưởng khoa', 'Giáo vụ'])) {
+            return true;
+        }
+        
+        return false;
     }
 
     /* ===========================================================
@@ -90,9 +108,11 @@ class NewsController extends Controller
     public function store(Request $request)
     {
         try {
-            if (!$this->isAdmin()) {
+            // ----- SỬA ĐỔI: Sử dụng hàm canManageNews() -----
+            if (!$this->canManageNews()) {
                 return response()->json(['error' => 'Bạn không có quyền thêm tin tức.'], 403);
             }
+            // ----- KẾT THÚC SỬA ĐỔI -----
 
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
@@ -187,9 +207,11 @@ class NewsController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            if (!$this->isAdmin()) {
+            // ----- SỬA ĐỔI: Sử dụng hàm canManageNews() -----
+            if (!$this->canManageNews()) {
                 return response()->json(['error' => 'Bạn không có quyền chỉnh sửa tin tức.'], 403);
             }
+            // ----- KẾT THÚC SỬA ĐỔI -----
 
             $news = News::findOrFail($id); // Tìm news hoặc báo lỗi 404
 
@@ -242,11 +264,11 @@ class NewsController extends Controller
 
                 // Xây dựng query động để tìm các filename
                  $imagesToDeleteQuery->where(function ($query) use ($filenamesToDelete) {
-                    foreach ($filenamesToDelete as $filename) {
+                     foreach ($filenamesToDelete as $filename) {
                          // Cần logic để lấy đúng tên file lưu trong DB từ URL gửi lên (ví dụ: lấy phần cuối của path)
                          $dbFilename = basename($filename); // Giả định filename là phần cuối của URL
                          $query->orWhere('filename', 'like', '%' . $dbFilename);
-                    }
+                     }
                  });
 
                  $imagesToDelete = $imagesToDeleteQuery->get();
@@ -293,9 +315,11 @@ class NewsController extends Controller
     public function destroy($id)
     {
         try {
-            if (!$this->isAdmin()) {
+            // ----- SỬA ĐỔI: Sử dụng hàm canManageNews() -----
+            if (!$this->canManageNews()) {
                 return response()->json(['error' => 'Bạn không có quyền xóa tin tức.'], 403);
             }
+            // ----- KẾT THÚC SỬA ĐỔI -----
 
             $news = News::with('images')->findOrFail($id); // Load kèm images để xóa file
 
@@ -305,8 +329,6 @@ class NewsController extends Controller
             foreach ($news->images as $img) {
                 Storage::disk('public')->delete($img->filename);
             }
-            // Không cần xóa NewsImage riêng vì model News dùng SoftDeletes,
-            // nhưng nếu News bị xóa vĩnh viễn (forceDelete), cần xóa NewsImage trước hoặc dùng cascade delete.
 
             $news->deleted_by = Auth::id(); // Ghi nhận người xóa
             $news->save(); // Lưu deleted_by
@@ -341,7 +363,6 @@ class NewsController extends Controller
                 Storage::disk('public')->path($news->pdf_file),
                 [
                     'Content-Type' => 'application/pdf',
-                    // Header này gợi ý trình duyệt hiển thị file thay vì tải xuống
                     'Content-Disposition' => 'inline; filename="' . basename($news->pdf_file) . '"',
                 ]
             );

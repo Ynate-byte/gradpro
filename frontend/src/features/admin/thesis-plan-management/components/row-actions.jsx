@@ -1,13 +1,14 @@
 import React, { useState, useId } from 'react';
-import { MoreHorizontal, Pencil, Trash2, Send, CheckCircle, XCircle, FileDown, Users, Loader2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Send, CheckCircle, XCircle, FileDown, Users, Loader2, Users2, PlayCircle } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { deleteThesisPlan, submitForApproval, approvePlan, requestChanges, exportPlanDocument } from '@/api/thesisPlanService.js';
+import { deleteThesisPlan, submitForApproval, approvePlan, requestChanges, exportPlanDocument, activatePlan } from '@/api/thesisPlanService.js';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * Component hiển thị menu hành động cho mỗi hàng trong bảng kế hoạch.
@@ -20,6 +21,58 @@ export function PlanRowActions({ row, onSuccess }) {
     const navigate = useNavigate();
     const titleId = useId();
     const descriptionId = useId();
+
+    // ----- SỬA ĐỔI: Logic phân quyền dựa trên vai trò VÀ chức vụ -----
+    const { user } = useAuth();
+    const userRoleName = user?.vaitro?.TEN_VAITRO;
+    const userPositionName = user?.giangvien?.CHUCVU;
+    
+    const isTruongKhoa = userRoleName === 'Trưởng khoa' || userPositionName === 'Trưởng khoa';
+    const isGiaoVu = userRoleName === 'Giáo vụ' || userPositionName === 'Giáo vụ';
+    const isAdmin = userRoleName === 'Admin';
+    const isCreator = plan.ID_NGUOITAO === user.ID_NGUOIDUNG;
+
+    // Xác định quyền dựa trên vai trò VÀ trạng thái kế hoạch
+    const status = plan.TRANGTHAI;
+    
+    // 1. Quyền xem/quản lý chi tiết (SV, Nhóm)
+    const canAccessDetails = 
+        (isAdmin || isTruongKhoa || isGiaoVu) &&
+        !['Bản nháp', 'Chờ phê duyệt', 'Yêu cầu chỉnh sửa', 'Đã hủy'].includes(status);
+
+    // 2. Quyền xuất file (luôn có thể)
+    const canExport = isAdmin || isTruongKhoa || isGiaoVu;
+
+    // 3. Quyền Sửa
+    const canEdit = 
+        (isTruongKhoa && status !== 'Đã hoàn thành') || // Trưởng khoa sửa mọi lúc
+        ( // Admin/Giáo vụ sửa khi
+            (isAdmin || isGiaoVu) && 
+            (
+                ((isCreator || isAdmin) && (status === 'Bản nháp' || status === 'Yêu cầu chỉnh sửa')) || // là người tạo/Admin sửa bản nháp
+                (status === 'Đang thực hiện') // hoặc khi đang thực hiện
+            )
+        );
+    
+    // 4. Quyền Gửi duyệt
+    const canSubmit = (status === 'Bản nháp') && (isCreator && (isGiaoVu || isAdmin)); // Admin/Giáo vụ tạo thì có thể gửi
+    
+    // 5. Quyền Phê duyệt/Yêu cầu sửa (Chỉ Trưởng Khoa)
+    const canApproveActions = 
+        isTruongKhoa && 
+        ['Chờ phê duyệt', 'Chờ duyệt chỉnh sửa'].includes(status);
+    
+    // 6. Quyền Kích hoạt
+    const canActivate = 
+        (status === 'Đã phê duyệt') && 
+        (isTruongKhoa || isGiaoVu || isAdmin);
+    
+    // 7. Quyền Xóa
+    const canDelete = 
+        (status === 'Bản nháp') && 
+        (isCreator || isAdmin);
+    // ----- KẾT THÚC SỬA ĐỔI -----
+
 
     /**
      * Mở dialog xác nhận hành động.
@@ -56,6 +109,10 @@ export function PlanRowActions({ row, onSuccess }) {
                         return;
                     }
                     res = await requestChanges(plan.ID_KEHOACH, comment);
+                    toast.success(res.message);
+                    break;
+                case 'activate':
+                    res = await activatePlan(plan.ID_KEHOACH);
                     toast.success(res.message);
                     break;
                 default:
@@ -120,6 +177,11 @@ export function PlanRowActions({ row, onSuccess }) {
                     title: 'Yêu cầu Chỉnh sửa',
                     description: `Vui lòng nhập lý do yêu cầu chỉnh sửa cho kế hoạch "${plan.TEN_DOT}".`
                 };
+            case 'activate':
+                return {
+                    title: 'Xác nhận Kích hoạt Kế hoạch?',
+                    description: `Bạn có chắc muốn bắt đầu thực hiện kế hoạch "${plan.TEN_DOT}" không? Sau khi kích hoạt, kế hoạch sẽ chuyển sang trạng thái "Đang thực hiện".`
+                };
             default:
                 return {};
         }
@@ -133,6 +195,7 @@ export function PlanRowActions({ row, onSuccess }) {
             case 'delete':
                 return "bg-destructive text-destructive-foreground hover:bg-destructive/90";
             case 'approve':
+            case 'activate':
                 return "bg-green-600 text-white hover:bg-green-700";
             case 'request_changes':
                 return "bg-orange-500 text-white hover:bg-orange-600";
@@ -149,42 +212,69 @@ export function PlanRowActions({ row, onSuccess }) {
                         <MoreHorizontal className="h-4 w-4" />
                     </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="w-[190px]">
                     <DropdownMenuLabel>Hành động</DropdownMenuLabel>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate(`/admin/groups?plan_id=${plan.ID_KEHOACH}`)}>
+
+                    {/* ----- SỬA ĐỔI: Thêm `disabled` ----- */}
+                    <DropdownMenuItem 
+                        onClick={() => navigate(`/admin/thesis-plans/${plan.ID_KEHOACH}/participants`)}
+                        disabled={!canAccessDetails}
+                    >
+                        <Users2 className="mr-2 h-4 w-4" />
+                        Quản lý SV Tham gia
+                    </DropdownMenuItem>
+                    <DropdownMenuItem 
+                        onClick={() => navigate(`/admin/groups?plan_id=${plan.ID_KEHOACH}`)}
+                        disabled={!canAccessDetails}
+                    >
                         <Users className="mr-2 h-4 w-4" />
                         Quản lý nhóm
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={handleExport} disabled={isExporting}>
-                        {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                        {isExporting ? "Đang xử lý..." : "Xuất Thông báo"}
-                    </DropdownMenuItem>
-                    {(plan.TRANGTHAI === 'Bản nháp' || plan.TRANGTHAI === 'Yêu cầu chỉnh sửa') && (
+                    {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
+                    
+                    {canExport && (
+                         <DropdownMenuItem onClick={handleExport} disabled={isExporting}>
+                            {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                            {isExporting ? "Đang xử lý..." : "Xuất Thông báo"}
+                        </DropdownMenuItem>
+                    )}
+                    
+                    {canEdit && (
                         <DropdownMenuItem onClick={() => navigate(`/admin/thesis-plans/${plan.ID_KEHOACH}/edit`)}>
                             <Pencil className="mr-2 h-4 w-4" />
                             Sửa
                         </DropdownMenuItem>
                     )}
-                    {plan.TRANGTHAI === 'Bản nháp' && (
+                    
+                    {canSubmit && (
                         <DropdownMenuItem onClick={() => openConfirmation('submit')}>
                             <Send className="mr-2 h-4 w-4" />
                             Gửi duyệt
                         </DropdownMenuItem>
                     )}
-                    {plan.TRANGTHAI === 'Chờ phê duyệt' && (
+
+                    {canActivate && (
+                        <DropdownMenuItem onClick={() => openConfirmation('activate')} className="text-green-600 focus:text-green-700">
+                            <PlayCircle className="mr-2 h-4 w-4" />
+                            Kích hoạt
+                        </DropdownMenuItem>
+                    )}
+                    
+                    {canApproveActions && (
                         <>
-                            <DropdownMenuItem onClick={() => openConfirmation('approve')} className="text-green-600 focus:text-green-700">
-                                <CheckCircle className="mr-2 h-4 w-4" />
-                                Phê duyệt
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openConfirmation('request_changes')} className="text-orange-600 focus:text-orange-700">
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Yêu cầu chỉnh sửa
-                            </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openConfirmation('approve')} className="text-green-600 focus:text-green-700">
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                            Phê duyệt
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openConfirmation('request_changes')} className="text-orange-600 focus:text-orange-700">
+                            <XCircle className="mr-2 h-4 w-4" />
+                            Yêu cầu chỉnh sửa
+                        </DropdownMenuItem>
                         </>
                     )}
-                    {plan.TRANGTHAI === 'Bản nháp' && (
+                    
+                    {canDelete && (
                         <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openConfirmation('delete')}>
@@ -193,6 +283,7 @@ export function PlanRowActions({ row, onSuccess }) {
                             </DropdownMenuItem>
                         </>
                     )}
+
                 </DropdownMenuContent>
             </DropdownMenu>
 

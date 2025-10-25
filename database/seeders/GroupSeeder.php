@@ -17,14 +17,14 @@ class GroupSeeder extends Seeder
         ThanhvienNhom::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        $inProgressPlans = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')->get();
+        $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'])->get();
 
-        if ($inProgressPlans->isEmpty()) {
-            $this->command->info('Không có kế hoạch nào đang hoạt động để tạo nhóm.');
+        if ($activePlans->isEmpty()) {
+            $this->command->info('Không có kế hoạch nào đang hoạt động/chờ duyệt để tạo nhóm.');
             return;
         }
 
-        foreach ($inProgressPlans as $plan) {
+        foreach ($activePlans as $plan) {
             $this->command->info("Đang tạo nhóm cho kế hoạch: '{$plan->TEN_DOT}'...");
 
             $studentUserIdsInPlan = $plan->sinhvienThamgias()
@@ -38,6 +38,7 @@ class GroupSeeder extends Seeder
                 continue;
             }
             
+            // Lấy 50% sinh viên để tạo nhóm mẫu
             $studentsToGroup = $studentUserIdsInPlan->splice(0, floor($studentUserIdsInPlan->count() / 2));
 
             if ($studentsToGroup->count() >= 2) {

@@ -13,6 +13,7 @@ return new class extends Migration
             $table->foreignId('ID_MAU')->constrained('MAU_KEHOACH', 'ID_MAU')->onDelete('cascade');
             $table->string('TEN_SUKIEN', 255);
             $table->text('MOTA')->nullable();
+            $table->string('VAITRO_THUCHIEN_MACDINH', 255)->nullable()->comment('Vai trò thực hiện mặc định, vd: "Giảng viên,Sinh viên"');
             $table->integer('OFFSET_BATDAU')->comment('Số ngày bắt đầu kể từ ngày bắt đầu kế hoạch (đã điều chỉnh)');
             $table->integer('THOI_LUONG')->comment('Số ngày diễn ra sự kiện (bao gồm ngày bắt đầu)');
             $table->integer('THU_TU')->default(0);

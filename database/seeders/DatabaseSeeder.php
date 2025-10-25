@@ -9,14 +9,14 @@ class DatabaseSeeder extends Seeder
     {
         // Chạy các seeder theo thứ tự phụ thuộc
         $this->call([
-            BachelorThesisTemplateSeeder::class,
-            VaitroSeeder::class,          // 1. Tạo các vai trò
-            ChuyennganhSeeder::class,     // 2. Tạo các chuyên ngành
-            KhoaBomonSeeder::class,       // 3. Tạo các khoa/bộ môn
-            NguoidungSeeder::class,       // 4. Tạo người dùng (Admin, GV, SV)
-            KehoachKhoaluanSeeder::class, // 5. Tạo các đợt khóa luận
-            SinhvienThamgiaSeeder::class,  // 6. Cho sinh viên tham gia vào các đợt
-            GroupSeeder::class,           // 7. Tạo nhóm cho sinh viên trong các đợt đó
+            BachelorThesisTemplateSeeder::class, // 1. Tạo mẫu (có VAITRO_THUCHIEN)
+            VaitroSeeder::class,                 // 2. Tạo các vai trò (có Giáo vụ, Trưởng khoa)
+            ChuyennganhSeeder::class,            // 3. Tạo các chuyên ngành
+            KhoaBomonSeeder::class,              // 4. Tạo các khoa/bộ môn
+            NguoidungSeeder::class,              // 5. Tạo người dùng (Admin, GV, SV, Giáo vụ, Trưởng khoa)
+            KehoachKhoaluanSeeder::class,        // 6. Tạo các đợt khóa luận (dùng ID Giáo vụ, Trưởng khoa)
+            SinhvienThamgiaSeeder::class,       // 7. Cho sinh viên tham gia vào các đợt
+            GroupSeeder::class,                  // 8. Tạo nhóm cho sinh viên trong các đợt đó
         ]);
     }
 }
