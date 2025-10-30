@@ -13,7 +13,7 @@ class ThanhvienNhom extends Model
     protected $primaryKey = 'ID_THANHVIEN';
     public $timestamps = false;
 
-    protected $fillable = ['ID_NHOM', 'ID_NGUOIDUNG'];
+    protected $fillable = ['ID_NHOM', 'ID_NGUOIDUNG', 'NGAY_VAONHOM'];
 
     public function nguoidung()
     {

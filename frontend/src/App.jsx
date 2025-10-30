@@ -15,6 +15,11 @@ const NewsDetail = lazy(() => import('./features/news-management/NewsDetail'));
 const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
 const FindGroupPage = lazy(() => import('./features/student/find-group/index.jsx'));
 const MyPlansPage = lazy(() => import('./features/student/my-plans/index.jsx'));
+const StudentThesisTopicsPage = lazy(() => import('./features/student/thesis-topics/index.jsx'));
+
+// --- Import các components Giảng viên ---
+const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
+const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/groups-management/index.jsx'));
 
 // --- Import các components Quản trị ---
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
@@ -24,6 +29,7 @@ const PlanFormPage = lazy(() => import('./features/admin/thesis-plan-management/
 const PlanParticipantPage = lazy(() => import('./features/admin/thesis-plan-management/PlanParticipantPage.jsx'));
 const TemplateManagementPage = lazy(() => import('./features/admin/thesis-plan-template-management/index.jsx'));
 const TemplateFormPage = lazy(() => import('./features/admin/thesis-plan-template-management/TemplateFormPage.jsx'));
+const AdminThesisTopicsPage = lazy(() => import('./features/admin/thesis-topic-management/index.jsx'));
 
 // Component placeholder cho các trang chưa có nội dung
 const PlaceholderPage = ({ title }) => (
@@ -102,7 +108,13 @@ function App() {
           <Route path="history" element={<PlaceholderPage title="Lịch sử" />} />
           <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
           <Route path="students" element={<PlaceholderPage title="Sinh viên" />} />
-          <Route path="projects/topics" element={<PlaceholderPage title="Đề tài" />} />
+          {/* Routes chung cho tất cả */}
+          {user && user.vaitro.TEN_VAITRO === 'Giảng viên' && (
+            <>
+              <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />
+              <Route path="projects/groups" element={<PlaceholderPage title="Quản lý nhóm" />} />
+            </>
+          )}
           <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
           <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />
 
@@ -113,9 +125,18 @@ function App() {
           {/* Routes dành cho Sinh viên */}
           {user && user.vaitro.TEN_VAITRO === 'Sinh viên' && (
             <>
+              <Route path="projects/topics" element={<StudentThesisTopicsPage />} />
               <Route path="projects/my-plans" element={<MyPlansPage />} />
               <Route path="projects/my-group" element={<MyGroupPage />} />
               <Route path="projects/find-group" element={<FindGroupPage />} />
+            </>
+          )}
+
+          {/* Routes dành cho Giảng viên */}
+          {user && user.vaitro.TEN_VAITRO === 'Giảng viên' && (
+            <>
+              <Route path="lecturer/thesis-topics" element={<LecturerThesisTopicsPage />} />
+              <Route path="lecturer/groups-management" element={<LecturerGroupsManagementPage />} />
             </>
           )}
 
@@ -142,6 +163,9 @@ function App() {
               <Route path="admin/templates" element={<TemplateManagementPage />} />
               <Route path="admin/templates/create" element={<TemplateFormPage />} />
               <Route path="admin/templates/:templateId/edit" element={<TemplateFormPage />} />
+
+              {/* Routes Quản lý Đề tài Khóa luận */}
+              <Route path="admin/thesis-topics" element={<AdminThesisTopicsPage />} />
             </>
           )}
           {/* ----- KẾT THÚC SỬA ĐỔI ----- */}

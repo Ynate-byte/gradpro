@@ -550,4 +550,32 @@ class NhomController extends Controller
             'group' => $nhom->load('nhomtruong') // Tải lại thông tin nhóm trưởng mới
         ]);
     }
+
+    /**
+     * Lấy chi tiết nhóm theo ID
+     */
+    public function getGroupById($id)
+    {
+        $nhom = Nhom::with([
+            'thanhviens.nguoidung',
+            'nhomtruong',
+            'chuyennganh',
+            'khoabomon',
+            'phancongDetaiNhom.detai.nguoiDexuat.nguoidung',
+            'phancongDetaiNhom.detai.nguoiDuyet',
+            'phancongDetaiNhom.detai.chuyennganh',
+            'phancongDetaiNhom.gvhd.nguoidung'
+        ])->findOrFail($id);
+
+        // Thêm thông tin đề tài và giảng viên nếu có
+        $assignment = $nhom->phancongDetaiNhom;
+        if ($assignment) {
+            $nhom->detai = $assignment->detai;
+            $nhom->gvhd = $assignment->gvhd;
+            $nhom->ngay_phan_cong = $assignment->NGAY_PHANCONG;
+            $nhom->trang_thai = $assignment->TRANGTHAI;
+        }
+
+        return response()->json($nhom);
+    }
 }

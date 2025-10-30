@@ -64,4 +64,14 @@ class Nhom extends Model
     {
         return $this->hasMany(ThanhvienNhom::class, 'ID_NHOM', 'ID_NHOM');
     }
+
+    public function phancongDetaiNhom()
+    {
+        return $this->hasOne(PhancongDetaiNhom::class, 'ID_NHOM', 'ID_NHOM');
+    }
+
+    public function detai()
+    {
+        return $this->hasOneThrough(Detai::class, PhancongDetaiNhom::class, 'ID_NHOM', 'ID_DETAI', 'ID_NHOM', 'ID_DETAI');
+    }
 }

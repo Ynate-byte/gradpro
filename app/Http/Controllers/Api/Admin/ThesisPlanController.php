@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Auth;
 class ThesisPlanController extends Controller
 {
     // ----- KHỐI HÀM HELPER PHÂN QUYỀN -----
-    
+
     private function getUserRoleName()
     {
         return Auth::user()->vaitro?->TEN_VAITRO;
@@ -397,7 +397,9 @@ class ThesisPlanController extends Controller
      */
     public function getAllPlans()
     {
-        $plans = KehoachKhoaluan::orderBy('NGAYTAO', 'desc')->get(['ID_KEHOACH', 'TEN_DOT']);
+        $plans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đã phê duyệt', 'Đang thực hiện'])
+            ->orderBy('NGAYTAO', 'desc')
+            ->get(['ID_KEHOACH', 'TEN_DOT', 'NAMHOC', 'TRANGTHAI', 'KHOAHOC', 'NGAYTAO']);
 
         return response()->json($plans);
     }

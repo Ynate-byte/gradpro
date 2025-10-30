@@ -1,0 +1,7 @@
+- [ ] Remove selectedPlan state from StudentThesisTopicsPage component
+- [ ] Remove plans state from StudentThesisTopicsPage component
+- [ ] Remove loadPlans function call from useEffect
+- [ ] Remove loadPlans function definition
+- [ ] Remove plan_id parameter from loadTopics API call
+- [ ] Remove Select component for plan filter in JSX
+- [ ] Remove getMyActivePlans import if not used elsewhere
