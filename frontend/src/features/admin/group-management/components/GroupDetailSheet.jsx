@@ -34,7 +34,8 @@ import {
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { getSubmissions } from '@/api/groupService'; // Sửa: Dùng lại hàm này (đã fix backend)
+// SỬA LỖI 403/500: Import từ adminSubmissionService
+import { getSubmissionsForPhancong } from '@/api/adminSubmissionService'; 
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
@@ -151,7 +152,7 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
     const phancong = group?.phancong_detai_nhom;
     const phancongId = phancong?.ID_PHANCONG;
 
-    // SỬA LỖI 403: Hàm fetchHistory giờ đã gọi API đã được fix
+    // SỬA LỖI 403/500: Hàm fetchHistory giờ đã gọi API của Admin
     const fetchHistory = useCallback(async () => {
         if (!phancongId) {
             setIsLoadingHistory(false);
@@ -159,9 +160,8 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
         }
         setIsLoadingHistory(true);
         try {
-            // Gọi hàm getSubmissions (NhomController@getSubmissions)
-            // Backend đã được sửa để cho phép Admin/GV/TK xem
-            const data = await getSubmissions(phancongId); 
+            // Gọi hàm getSubmissionsForPhancong (AdminSubmissionController)
+            const data = await getSubmissionsForPhancong(phancongId); 
             setHistory(data || []);
         } catch (error) {
             console.error("Lỗi khi tải lịch sử nộp bài (Admin):", error); // Log lỗi

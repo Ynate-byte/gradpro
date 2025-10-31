@@ -36,3 +36,12 @@ export const confirmSubmission = (submissionId) => {
 export const rejectSubmission = (submissionId, ly_do) => {
     return axiosClient.post(`/admin/submissions/${submissionId}/reject`, { ly_do }).then(res => res.data);
 };
+
+/**
+ * [MỚI] Lấy lịch sử nộp bài của một nhóm (dành cho Admin).
+ * @param {number} phancongId - ID của PHANCONG_DETAI_NHOM
+ * @returns {Promise<Array>} Danh sách các lần nộp.
+ */
+export const getSubmissionsForPhancong = (phancongId) => {
+    return axiosClient.get(`/admin/submissions/phancong/${phancongId}`).then(res => res.data);
+};

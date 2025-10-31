@@ -154,6 +154,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/{submission}', [AdminSubmissionController::class, 'show']); // Lấy chi tiết 1 lần nộp
             Route::post('/{submission}/confirm', [AdminSubmissionController::class, 'confirmSubmission']); // Xác nhận
             Route::post('/{submission}/reject', [AdminSubmissionController::class, 'rejectSubmission']); // Yêu cầu nộp lại
+            Route::get('/phancong/{phancong}', [AdminSubmissionController::class, 'getSubmissionsForPhancong']);
         });
     });
 });

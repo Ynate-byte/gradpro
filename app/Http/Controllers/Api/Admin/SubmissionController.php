@@ -26,9 +26,6 @@ class SubmissionController extends Controller
             $submissionTable = (new NopSanpham)->getTable(); // 'NOP_SANPHAM'
 
             // ***** SỬA LỖI 500 (AMBIGUOUS COLUMN) *****
-            // Bọc query chính trong một closure `where` để đảm bảo các điều kiện
-            // trên bảng `NOP_SANPHAM` không bị xung đột khi `whereHas` thực hiện JOIN.
-            
             $query = NopSanpham::query()->where(function ($mainQuery) use ($request, $submissionTable) {
                 
                 // Lọc theo trạng thái (ĐÃ SỬA: thêm tiền tố bảng)
@@ -37,8 +34,6 @@ class SubmissionController extends Controller
                     $mainQuery->where("{$submissionTable}.TRANGTHAI", $request->trangthai);
                 }
                 
-                // Các điều kiện lọc khác trên bảng NOP_SANPHAM có thể thêm vào đây...
-
             })->with([ // Tải các quan hệ
                 'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN',
                 'phancong.nhom:ID_NHOM,TEN_NHOM',
@@ -164,5 +159,29 @@ class SubmissionController extends Controller
         // TODO: Gửi thông báo cho nhóm
 
         return response()->json(['message' => 'Đã gửi yêu cầu nộp lại cho nhóm.']);
+    }
+
+    /**
+     * ***** HÀM MỚI: Lấy lịch sử nộp bài cho Admin *****
+     * Tương tự NhomController@getSubmissions nhưng không kiểm tra quyền thành viên
+     */
+    public function getSubmissionsForPhancong(Request $request, PhancongDetaiNhom $phancong)
+    {
+        if (!$this->canApproveSubmissions()) {
+            return response()->json(['message' => 'Bạn không có quyền xem thông tin này.'], 403);
+        }
+
+        try {
+            $submissions = NopSanpham::where('ID_PHANCONG', $phancong->ID_PHANCONG)
+                ->with(['files', 'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN', 'nguoiXacNhan:ID_NGUOIDUNG,HODEM_VA_TEN'])
+                ->orderBy('NGAY_NOP', 'desc')
+                ->get();
+
+            return response()->json($submissions);
+
+        } catch (\Exception $e) {
+            Log::error('Error in AdminSubmissionController@getSubmissionsForPhancong: ' . $e->getMessage());
+            return response()->json(['message' => 'Lỗi máy chủ khi lấy lịch sử nộp bài.'], 500);
+        }
     }
 }

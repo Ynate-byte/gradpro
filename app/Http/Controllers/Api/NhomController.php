@@ -31,16 +31,27 @@ class NhomController extends Controller
     {
         $user = $request->user();
 
+        // SỬA LỖI 500: Kiểm tra nếu $user->sinhvien không tồn tại
+        // Nếu người dùng không phải là sinh viên (không có bản ghi sinhvien)
         if (!$user->sinhvien) {
+            // Trả về mảng rỗng thay vì gây lỗi 500
             return response()->json([]);
         }
 
+        // Gán ID_SINHVIEN vào biến sau khi đã chắc chắn $user->sinhvien tồn tại
+        $sinhvienId = $user->sinhvien->ID_SINHVIEN;
+
         $plans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm'])
-            ->whereHas('sinhvienThamgias', function ($query) use ($user) {
-                $query->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN);
+            ->whereHas('sinhvienThamgias', function ($query) use ($sinhvienId) {
+                // Sử dụng biến $sinhvienId đã được kiểm tra
+                $query->where('ID_SINHVIEN', $sinhvienId);
             })
             ->with(['mocThoigians' => function ($query) {
                 $query->orderBy('NGAY_BATDAU');
+            }, 
+            // Thêm eager loading cho sinhvienThamgias để lấy DU_DIEUKIEN
+            'sinhvienThamgias' => function ($query) use ($sinhvienId) {
+                $query->where('ID_SINHVIEN', $sinhvienId);
             }])
             ->get();
 
