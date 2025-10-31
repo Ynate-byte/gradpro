@@ -4,16 +4,16 @@ import { addParticipantsToPlan, searchStudentsForPlan } from '@/api/thesisPlanSe
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Loader2, Search, UserPlus, Users, UserCheck, X } from 'lucide-react'; // Thêm icon
+import { Loader2, Search, UserPlus, X, Users, UserCheck } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDebounce } from '@/hooks/useDebounce';
-import { Skeleton } from '@/components/ui/skeleton'; // Thêm Skeleton
-import { Card, CardContent } from '@/components/ui/card'; // Thêm Card
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'; // Thêm Avatar
-import { Label } from '@/components/ui/label'; // Thêm Label
-import { cn } from '@/lib/utils'; // Thêm cn
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Label } from '@/components/ui/label';
+import { cn } from '@/lib/utils';
 
 // Helper (Lấy 2 chữ cái đầu)
 const getInitials = (name) => {
@@ -25,7 +25,7 @@ const getInitials = (name) => {
 
 // Skeleton cho danh sách kết quả tìm kiếm
 const StudentSearchSkeleton = ({ count = 3 }) => (
-    <div className="space-y-2">
+    <div className="space-y-2 p-2">
         {Array.from({ length: count }).map((_, i) => (
             <div key={i} className="flex items-center space-x-3 p-2">
                 <Skeleton className="h-5 w-5 rounded-sm" />
@@ -38,7 +38,6 @@ const StudentSearchSkeleton = ({ count = 3 }) => (
         ))}
     </div>
 );
-
 
 export function AddParticipantDialog({ isOpen, setIsOpen, onSuccess, plan }) {
     const [isLoading, setIsLoading] = useState(false); // Loading submit
@@ -54,6 +53,7 @@ export function AddParticipantDialog({ isOpen, setIsOpen, onSuccess, plan }) {
 
         if (debouncedSearchTerm.length < 2) {
             setSearchResults([]); // Xóa kết quả nếu term quá ngắn
+            setIsSearching(false);
             return;
         }
 
@@ -147,7 +147,7 @@ export function AddParticipantDialog({ isOpen, setIsOpen, onSuccess, plan }) {
                             <div className="relative">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input
-                                    placeholder="Tìm theo tên, MSSV, email..."
+                                    placeholder="Tìm theo tên, MSSV, email (min 2 ký tự)..."
                                     className="pl-10"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}

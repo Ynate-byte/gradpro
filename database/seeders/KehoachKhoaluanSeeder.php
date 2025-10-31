@@ -17,11 +17,16 @@ class KehoachKhoaluanSeeder extends Seeder
         KehoachKhoaluan::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
+        // SỬA LỖI: Tìm đúng email của Giáo vụ và Trưởng khoa
         $giaoVu = Nguoidung::where('EMAIL', 'giao.vu@gradpro.test')->first();
-        $truongKhoa = Nguoidung::where('EMAIL', 'truong.khoa@gradpro.test')->first();
+        $truongKhoa = Nguoidung::where('EMAIL', 'vunh@huit.edu.vn')->first(); // Nguyễn Hồng Vũ
 
-        if (!$giaoVu || !$truongKhoa) {
-             $this->command->error('Tài khoản Giáo vụ hoặc Trưởng khoa không tồn tại. Vui lòng chạy NguoidungSeeder trước.');
+        if (!$giaoVu) {
+             $this->command->error('Tài khoản Giáo vụ (giao.vu@gradpro.test) không tồn tại. Vui lòng kiểm tra NguoidungSeeder.');
+             return;
+        }
+        if (!$truongKhoa) {
+             $this->command->error('Tài khoản Trưởng khoa (vunh@huit.edu.vn) không tồn tại. Vui lòng kiểm tra NguoidungSeeder.');
              return;
         }
 
@@ -35,9 +40,9 @@ class KehoachKhoaluanSeeder extends Seeder
             'NGAY_BATDAU' => now()->subDays(20), 'NGAY_KETHUC' => now()->addDays(60),
         ]);
         MocThoigian::insert([
-            ['ID_KEHOACH' => $planInProgress->ID_KEHOACH, 'TEN_SUKIEN' => 'Sinh viên đăng ký nhóm', 'NGAY_BATDAU' => now()->subDays(10), 'NGAY_KETTHUC' => now()->subDays(5), 'VAITRO_THUCHIEN' => 'Sinh viên'],
-            ['ID_KEHOACH' => $planInProgress->ID_KEHOACH, 'TEN_SUKIEN' => 'Nhóm đăng ký đề tài', 'NGAY_BATDAU' => now()->subDays(4), 'NGAY_KETTHUC' => now()->addDays(2), 'VAITRO_THUCHIEN' => 'Sinh viên'],
-            ['ID_KEHOACH' => $planInProgress->ID_KEHOACH, 'TEN_SUKIEN' => 'Thực hiện đề tài', 'NGAY_BATDAU' => now(), 'NGAY_KETTHUC' => now()->addWeeks(12), 'VAITRO_THUCHIEN' => 'Sinh viên,Giảng viên'],
+            ['ID_KEHOACH' => $planInProgress->ID_KEHOACH, 'TEN_SUKIEN' => 'Sinh viên đăng ký nhóm', 'NGAY_BATDAU' => now()->subDays(10), 'NGAY_KETTHUC' => now()->subDays(5), 'VAITRO_THUCHIEN' => 'Sinh viên', 'created_at' => now(), 'updated_at' => now()],
+            ['ID_KEHOACH' => $planInProgress->ID_KEHOACH, 'TEN_SUKIEN' => 'Nhóm đăng ký đề tài', 'NGAY_BATDAU' => now()->subDays(4), 'NGAY_KETTHUC' => now()->addDays(2), 'VAITRO_THUCHIEN' => 'Sinh viên', 'created_at' => now(), 'updated_at' => now()],
+            ['ID_KEHOACH' => $planInProgress->ID_KEHOACH, 'TEN_SUKIEN' => 'Thực hiện đề tài', 'NGAY_BATDAU' => now(), 'NGAY_KETTHUC' => now()->addWeeks(12), 'VAITRO_THUCHIEN' => 'Sinh viên,Giảng viên', 'created_at' => now(), 'updated_at' => now()],
         ]);
 
         // Kế hoạch 2: Chờ phê duyệt (Do Giáo vụ tạo)
@@ -59,22 +64,7 @@ class KehoachKhoaluanSeeder extends Seeder
             'BINHLUAN_PHEDUYET' => 'Thời gian các mốc quá gần nhau, cần giãn ra thêm.'
         ]);
         
-        // Kế hoạch 4: Chờ duyệt chỉnh sửa (Giáo vụ sửa khi đang thực hiện)
-        $planReApprove = KehoachKhoaluan::create([
-            'TEN_DOT' => 'KLTN Học kỳ 1 (Đợt 2), năm học 2025-2026',
-            'NAMHOC' => '2025-2026', 'HOCKY' => '1', 'KHOAHOC' => 'K13-CLC', 'HEDAOTAO' => 'Kỹ sư',
-            'TRANGTHAI' => 'Chờ duyệt chỉnh sửa', // Giáo vụ vừa sửa
-            'ID_NGUOITAO' => $giaoVu->ID_NGUOIDUNG,
-            'ID_NGUOIPHEDUYET' => $truongKhoa->ID_NGUOIDUNG,
-            'NGAY_BATDAU' => now()->subDays(10), 'NGAY_KETHUC' => now()->addDays(70),
-        ]);
-         MocThoigian::insert([
-            ['ID_KEHOACH' => $planReApprove->ID_KEHOACH, 'TEN_SUKIEN' => 'Thực hiện', 'NGAY_BATDAU' => now(), 'NGAY_KETTHUC' => now()->addWeeks(10), 'VAITRO_THUCHIEN' => 'Sinh viên'],
-            ['ID_KEHOACH' => $planReApprove->ID_KEHOACH, 'TEN_SUKIEN' => 'Báo cáo (ĐÃ SỬA)', 'NGAY_BATDAU' => now()->addWeeks(11), 'NGAY_KETTHUC' => now()->addWeeks(12), 'VAITRO_THUCHIEN' => 'Sinh viên'],
-        ]);
-
-
-        // Kế hoạch 5: Đã hoàn thành
+        // Kế hoạch 4: Đã hoàn thành (cho mục đích lịch sử)
         KehoachKhoaluan::create([
             'TEN_DOT' => 'KLTN Học kỳ 2, năm học 2024-2025',
             'NAMHOC' => '2024-2025', 'HOCKY' => '2', 'KHOAHOC' => 'K12', 'HEDAOTAO' => 'Kỹ sư',
@@ -83,6 +73,6 @@ class KehoachKhoaluanSeeder extends Seeder
             'ID_NGUOIPHEDUYET' => $truongKhoa->ID_NGUOIDUNG,
         ]);
         
-        $this->command->info('Đã tạo dữ liệu mẫu cho các kế hoạch khóa luận!');
+        $this->command->info('Đã tạo dữ liệu mẫu cho Kế hoạch Khóa luận!');
     }
 }

@@ -468,7 +468,6 @@ export function UserFormDialog({ isOpen, setIsOpen, editingUser, onSuccess }) {
                                                                             <SelectItem value="Trưởng bộ môn" className="text-gray-800 dark:text-gray-100 hover:bg-blue-50 dark:hover:bg-blue-900/20">Trưởng bộ môn</SelectItem>
                                                                         </SelectContent>
                                                                     </Select>
- (...)
                                                                     <FormMessage className="text-red-500" />
                                                                 </FormItem>
                                                             )}

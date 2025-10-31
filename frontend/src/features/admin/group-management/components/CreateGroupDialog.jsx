@@ -21,6 +21,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
+import { Label } from '@/components/ui/label'; // <-- SỬA LỖI: THÊM DÒNG NÀY
 
 // Schema không đổi
 const createGroupSchema = z.object({
@@ -68,12 +69,12 @@ const StudentListSkeleton = ({ count = 5 }) => (
 
 export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
     const [step, setStep] = useState(1);
-    const [isLoading, setIsLoading] = useState(false);
-    const [members, setMembers] = useState([]);
+    const [isLoading, setIsLoading] = useState(false); // Loading submit
+    const [members, setMembers] = useState([]); // Danh sách ĐÃ CHỌN
     const [leaderId, setLeaderId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [ungroupedStudents, setUngroupedStudents] = useState([]);
-    const [isFetchingStudents, setIsFetchingStudents] = useState(false);
+    const [searchResults, setSearchResults] = useState([]); // Kết quả tìm kiếm
+    const [isFetchingStudents, setIsFetchingStudents] = useState(false); // Loading tìm kiếm
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
     const form = useForm({
@@ -81,39 +82,44 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
         defaultValues: { TEN_NHOM: '', MOTA: '' },
     });
 
-    const fetchUngroupedStudents = useCallback(async () => {
-        if (step === 2 && planId && ungroupedStudents.length === 0) {
-            setIsFetchingStudents(true);
-            try {
-                const data = await searchUngroupedStudents(planId, '');
-                setUngroupedStudents(data || []);
-            } catch {
-                toast.error("Lỗi khi tải danh sách sinh viên.");
-            } finally {
-                setIsFetchingStudents(false);
-            }
-        }
-    }, [step, planId, ungroupedStudents.length]);
-
+    // --- NÂNG CẤP: Logic tìm kiếm ---
     useEffect(() => {
-        fetchUngroupedStudents();
-    }, [fetchUngroupedStudents]);
+        // Chỉ tìm kiếm ở bước 2 và khi đủ ký tự
+        if (step !== 2 || debouncedSearchTerm.length < 2) {
+            setSearchResults([]);
+            setIsFetchingStudents(false);
+            return;
+        }
+
+        setIsFetchingStudents(true);
+        searchUngroupedStudents(planId, debouncedSearchTerm)
+            .then(data => {
+                setSearchResults(data || []);
+            })
+            .catch((error) => {
+                console.error("Lỗi khi tìm sinh viên chưa có nhóm:", error); // Log lỗi
+                toast.error("Lỗi khi tìm kiếm sinh viên.");
+            })
+            .finally(() => {
+                setIsFetchingStudents(false);
+            });
+
+    }, [step, planId, debouncedSearchTerm]);
 
 
-    const filteredStudents = useMemo(() => {
-        if (!debouncedSearchTerm) return ungroupedStudents;
-        const lowerSearch = debouncedSearchTerm.toLowerCase();
-        return ungroupedStudents.filter(student =>
-            student.HODEM_VA_TEN.toLowerCase().includes(lowerSearch) ||
-            student.MA_DINHDANH.toLowerCase().includes(lowerSearch)
-        );
-    }, [debouncedSearchTerm, ungroupedStudents]);
+    // --- NÂNG CẤP: Lọc danh sách có thể chọn (từ kết quả search) ---
+    const availableStudents = useMemo(() => {
+        const selectedIds = new Set(members.map(m => m.ID_NGUOIDUNG));
+        return searchResults.filter(student => !selectedIds.has(student.ID_NGUOIDUNG));
+    }, [searchResults, members]);
+
 
     const handleNextStep = async () => {
         const isValid = await form.trigger(['TEN_NHOM', 'MOTA']);
         if (isValid) setStep(2);
     };
 
+    // Thêm/Xóa sinh viên khỏi danh sách `members`
     const handleCheckboxChange = (student, isChecked) => {
         setMembers(prevMembers => {
             const newMembers = isChecked
@@ -124,6 +130,17 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                 setLeaderId(newMembers.length > 0 ? newMembers[0].ID_NGUOIDUNG : null);
             } else if (isChecked && newMembers.length === 1) {
                 setLeaderId(student.ID_NGUOIDUNG);
+            }
+            return newMembers;
+        });
+    };
+    
+    // Xóa khỏi cột "Đã chọn"
+    const handleRemoveSelected = (studentId) => {
+         setMembers(prevMembers => {
+            const newMembers = prevMembers.filter(m => m.ID_NGUOIDUNG !== studentId);
+            if (leaderId === studentId) {
+                setLeaderId(newMembers.length > 0 ? newMembers[0].ID_NGUOIDUNG : null);
             }
             return newMembers;
         });
@@ -150,6 +167,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
             onSuccess();
             setIsOpen(false);
         } catch (error) {
+            console.error("Lỗi khi tạo nhóm:", error); // Log lỗi
             toast.error(error.response?.data?.message || "Tạo nhóm thất bại.");
         } finally {
             setIsLoading(false);
@@ -163,7 +181,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                 setMembers([]);
                 setLeaderId(null);
                 setSearchTerm('');
-                setUngroupedStudents([]);
+                setSearchResults([]);
                 setIsFetchingStudents(false);
                 setStep(1);
             }, 300);
@@ -179,7 +197,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                 <DialogHeader className="p-6 pb-4 border-b">
                     <DialogTitle>Tạo Nhóm Mới (Bước {step}/2)</DialogTitle>
                     <DialogDescription>
-                        {step === 1 ? 'Điền thông tin cơ bản của nhóm.' : 'Chọn thành viên và chỉ định nhóm trưởng.'}
+                        {step === 1 ? 'Điền thông tin cơ bản của nhóm.' : 'Tìm và chọn thành viên, sau đó chỉ định nhóm trưởng.'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -197,20 +215,19 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
 
                                     {step === 2 && (
                                         <motion.div key="step2" variants={motionVariants} initial="hidden" animate="visible" exit="exit" className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
-                                            {/* Cột danh sách sinh viên */}
+                                            {/* Cột 1: Tìm kiếm sinh viên */}
                                             <div className="flex flex-col space-y-3">
-                                                <FormLabel className="flex items-center gap-2"><Users className="h-5 w-5"/> Sinh viên chưa có nhóm</FormLabel>
+                                                <Label className="flex items-center gap-2"><Users className="h-5 w-5"/> Sinh viên chưa có nhóm</Label>
                                                 <div className="relative">
                                                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                                    <Input placeholder="Lọc theo tên, MSSV..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                                    <Input placeholder="Lọc theo tên, MSSV (min 2 ký tự)..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                                 </div>
                                                 <div className="border rounded-md overflow-hidden max-h-[450px]">
                                                     <ScrollArea className="h-full max-h-[450px]">
                                                         {isFetchingStudents ? (
-                                                            <StudentListSkeleton count={7} />
+                                                            <StudentListSkeleton count={5} />
                                                         ) : (
                                                             <Table className="relative">
-                                                                {/* --- SỬA LỖI HYDRATION --- */}
                                                                 <TableHeader className="sticky top-0 bg-card z-10">
                                                                     <TableRow>
                                                                         <TableHead className="w-[50px]"></TableHead>
@@ -219,20 +236,17 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                                                                     </TableRow>
                                                                 </TableHeader>
                                                                 <TableBody>
-                                                                    {filteredStudents.length > 0 ? filteredStudents.map(student => (
+                                                                    {availableStudents.length > 0 ? availableStudents.map(student => (
                                                                         <TableRow
                                                                             key={student.ID_NGUOIDUNG}
                                                                             data-state={members.some(m => m.ID_NGUOIDUNG === student.ID_NGUOIDUNG) ? 'selected' : ''}
                                                                             className="cursor-pointer"
-                                                                            // --- SỬA LỖI LẶP UPDATE ---
-                                                                            // Bỏ onClick ở đây
                                                                         >
                                                                             <TableCell>
                                                                                 <Checkbox
                                                                                     checked={members.some(m => m.ID_NGUOIDUNG === student.ID_NGUOIDUNG)}
                                                                                     onCheckedChange={(checked) => handleCheckboxChange(student, checked)}
                                                                                     aria-label={`Select ${student.HODEM_VA_TEN}`}
-                                                                                    // Bỏ onClick stopPropagation nếu có
                                                                                 />
                                                                             </TableCell>
                                                                             <TableCell className="font-medium">{student.HODEM_VA_TEN}</TableCell>
@@ -241,21 +255,20 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                                                                     )) : (
                                                                         <TableRow>
                                                                             <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                                                                                {ungroupedStudents.length === 0 ? 'Không có sinh viên nào chưa có nhóm.' : 'Không tìm thấy sinh viên phù hợp.'}
+                                                                                {debouncedSearchTerm.length < 2 ? "Gõ ít nhất 2 ký tự để tìm..." : "Không tìm thấy sinh viên."}
                                                                             </TableCell>
                                                                         </TableRow>
                                                                     )}
                                                                 </TableBody>
-                                                                {/* --- KẾT THÚC SỬA LỖI HYDRATION --- */}
                                                             </Table>
                                                         )}
                                                     </ScrollArea>
                                                 </div>
                                             </div>
 
-                                            {/* Cột thành viên đã chọn */}
+                                            {/* Cột 2: thành viên đã chọn */}
                                             <div className="flex flex-col space-y-3">
-                                                <FormLabel className="flex items-center gap-2"><UserCheck className="h-5 w-5"/> Thành viên đã chọn ({members.length})</FormLabel>
+                                                <Label className="flex items-center gap-2"><UserCheck className="h-5 w-5"/> Thành viên đã chọn ({members.length})</Label>
                                                 <Card className="flex-grow min-h-[300px] max-h-[calc(450px+48px)]">
                                                     <ScrollArea className="h-full max-h-[calc(450px+48px)]">
                                                         <CardContent className="p-3 space-y-2">
@@ -283,7 +296,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                                                                             >
                                                                                 <Crown className="h-4 w-4" />
                                                                             </Button>
-                                                                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleCheckboxChange(member, false)} title="Xóa khỏi nhóm">
+                                                                            <Button type="button" variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => handleRemoveSelected(member.ID_NGUOIDUNG)} title="Xóa khỏi nhóm">
                                                                                 <X className="h-4 w-4" />
                                                                             </Button>
                                                                         </div>

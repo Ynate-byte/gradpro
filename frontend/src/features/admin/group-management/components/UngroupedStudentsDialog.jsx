@@ -109,8 +109,7 @@ export function UngroupedStudentsDialog({ isOpen, setIsOpen, planId }) {
                             // Sử dụng Skeleton
                             <StudentListSkeleton />
                         ) : (
-                            <Table className="relative"> {/* Thêm relative */}
-                                {/* Header dính */}
+                            <Table className="relative">
                                 <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
                                     <TableRow>
                                         <TableHead className="w-[60px]">Ảnh</TableHead>

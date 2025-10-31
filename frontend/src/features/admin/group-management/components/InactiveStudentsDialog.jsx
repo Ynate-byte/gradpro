@@ -153,7 +153,6 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            {/* Increase max-width, adjust padding */}
             <DialogContent className="sm:max-w-4xl h-[85vh] flex flex-col p-0">
                 <DialogHeader className="p-6 pb-4 border-b">
                     <DialogTitle className="flex items-center gap-2 text-xl">
@@ -165,7 +164,6 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                     </DialogDescription>
                 </DialogHeader>
 
-                {/* Search Input */}
                  <div className="px-6 pt-4 pb-2">
                      <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -186,8 +184,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                             // Use Skeleton
                             <InactiveStudentListSkeleton />
                         ) : (
-                            <Table className="relative"> {/* Add relative */}
-                                {/* Sticky Header */}
+                            <Table className="relative">
                                 <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
                                     <TableRow>
                                         <TableHead className="w-[50px]">
@@ -244,7 +241,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                     </ScrollArea>
                 </div>
 
-                <DialogFooter className="p-6 pt-4 border-t flex justify-between sm:justify-between"> {/* Align buttons */}
+                <DialogFooter className="p-6 pt-4 border-t flex justify-between sm:justify-between">
                     {/* Show selected count */}
                     <div className="text-sm text-muted-foreground pt-2">
                          Đã chọn: {selected.size}

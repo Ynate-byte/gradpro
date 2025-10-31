@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { toast } from 'sonner';
-import { addMembersToGroup, searchUngroupedStudents } from '@/api/adminGroupService';
+import { addMembersToGroup, getUngroupedStudents } from '@/api/adminGroupService';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -62,8 +62,8 @@ export function AddStudentDialog({ isOpen, setIsOpen, group, onSuccess, planId }
             setSelectedStudents([]);
             setSearchTerm('');
             
-            searchUngroupedStudents(planId, '') // Lấy tất cả
-                .then(setAllStudents)
+            getUngroupedStudents(planId) // Lấy tất cả
+                .then(setAllStudents)
                 .catch((error) => {
                     console.error("Lỗi khi tải danh sách sinh viên:", error); // Log lỗi
                     toast.error("Lỗi khi tải danh sách sinh viên.");

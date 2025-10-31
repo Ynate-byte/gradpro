@@ -628,7 +628,6 @@ class ThesisPlanController extends Controller
             'participant_ids.*' => [
                 'required',
                 'integer',
-                // Đảm bảo ID tham gia thuộc kế hoạch đang xét
                 Rule::exists('SINHVIEN_THAMGIA', 'ID_THAMGIA')->where('ID_KEHOACH', $plan->ID_KEHOACH)
             ]
         ], [
@@ -687,19 +686,23 @@ class ThesisPlanController extends Controller
      */
     public function searchStudentsForPlan(Request $request, KehoachKhoaluan $plan)
     {
-         // 1. Sửa validation: 'search' là 'required'
+         // 1. Nâng cấp Validation: Yêu cầu 'search' tối thiểu 2 ký tự (hoặc null)
          $request->validate([
-             'search' => 'required|string|min:2|max:100'
+            'search' => 'nullable|string|min:2|max:100'
          ], [
-             'search.required' => 'Vui lòng nhập từ khóa tìm kiếm.',
              'search.min' => 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự.',
          ]);
-
-         $searchTerm = $request->search;
          
-         // Lấy danh sách ID sinh viên đã tham gia kế hoạch
-         $existingStudentIds = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)->pluck('ID_SINHVIEN');
+         $searchTerm = $request->search;
 
+         // 2. TỐI ƯU: Nếu search rỗng hoặc quá ngắn, trả về mảng rỗng ngay lập tức
+         if (!$searchTerm) {
+             return response()->json([]);
+         }
+         
+         // 3. Lấy ID SV đã tham gia (logic này vẫn đúng)
+         $existingStudentIds = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)->pluck('ID_SINHVIEN');
+ 
          $query = Sinhvien::with(['nguoidung' => function ($q) {
              $q->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL');
          }, 'chuyennganh' => function ($q) {
@@ -707,19 +710,19 @@ class ThesisPlanController extends Controller
          }])
              // Lọc ra các sinh viên chưa tham gia
              ->whereNotIn('ID_SINHVIEN', $existingStudentIds)
-             // 2. Bắt buộc tìm kiếm (bỏ when, dùng whereHas trực tiếp)
+             // 4. Bắt buộc tìm kiếm (không còn when/!when)
              ->whereHas('nguoidung', function ($q) use ($searchTerm) {
                   $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
                       ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
                       ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
              })
              ->select('SINHVIEN.ID_SINHVIEN', 'SINHVIEN.ID_NGUOIDUNG', 'SINHVIEN.ID_CHUYENNGANH');
-
-         // 3. Luôn luôn giới hạn kết quả
+ 
+         // 5. Luôn giới hạn kết quả
          $query->limit(20); 
          $students = $query->get();
-
-         // Định dạng lại kết quả trả về
+ 
+         // 6. Định dạng (logic này vẫn đúng)
          $results = $students->map(function ($sv) {
              if (!$sv->nguoidung) {
                  Log::warning("Sinhvien ID {$sv->ID_SINHVIEN} is missing Nguoidung relationship in searchStudentsForPlan.");
@@ -734,7 +737,7 @@ class ThesisPlanController extends Controller
                  'TEN_CHUYENNGANH' => $sv->chuyennganh?->TEN_CHUYENNGANH,
             ];
          })->filter();
-
+ 
          return response()->json($results);
     }
 }
