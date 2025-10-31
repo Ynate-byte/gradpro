@@ -36,7 +36,7 @@ class ThesisPlanController extends Controller
         ]);
 
         $query = KehoachKhoaluan::with('nguoiTao')
-                               ->orderBy('KEHOACH_KHOALUAN.NGAYTAO', 'desc');
+                                ->orderBy('KEHOACH_KHOALUAN.NGAYTAO', 'desc');
 
         if ($request->filled('search')) {
             $query->where('TEN_DOT', 'like', '%' . $request->search . '%');
@@ -204,9 +204,9 @@ class ThesisPlanController extends Controller
             // Trưởng khoa sửa các trạng thái chờ duyệt
             elseif ($this->isTruongKhoa()) {
                  if(in_array($plan->TRANGTHAI, ['Chờ phê duyệt', 'Chờ duyệt chỉnh sửa'])){
-                      $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
-                      $plan->ID_NGUOIPHEDUYET = Auth::id();
-                      $plan->BINHLUAN_PHEDUYET = null;
+                       $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
+                       $plan->ID_NGUOIPHEDUYET = Auth::id();
+                       $plan->BINHLUAN_PHEDUYET = null;
                  }
                  // Nếu là 'Đã phê duyệt', 'Đang chấm điểm', trạng thái giữ nguyên
             }
@@ -254,7 +254,7 @@ class ThesisPlanController extends Controller
     public function submitForApproval(KehoachKhoaluan $plan)
     {
          if (!(($this->isGiaoVu() || $this->isAdmin()) && $plan->ID_NGUOITAO === Auth::id())) {
-              return response()->json(['message' => 'Bạn không có quyền gửi duyệt kế hoạch này.'], 403);
+             return response()->json(['message' => 'Bạn không có quyền gửi duyệt kế hoạch này.'], 403);
          }
 
         if ($plan->TRANGTHAI !== 'Bản nháp') {
@@ -640,25 +640,25 @@ class ThesisPlanController extends Controller
 
         // Lấy thông tin sinh viên để kiểm tra trạng thái nhóm
         $participantsInfo = SinhvienThamgia::with('sinhvien.nguoidung')
-                                 ->whereIn('ID_THAMGIA', $participantIds)
-                                 ->get();
+                              ->whereIn('ID_THAMGIA', $participantIds)
+                              ->get();
 
         $studentNamesInGroups = [];
         foreach ($participantsInfo as $participant) {
             if ($participant->sinhvien?->ID_NGUOIDUNG) {
                  // Kiểm tra sinh viên có thuộc nhóm nào trong kế hoạch này không
                  $isInGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $participant->sinhvien->ID_NGUOIDUNG)
-                     ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
-                     ->exists();
+                    ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
+                    ->exists();
                  if ($isInGroup) {
-                      $studentNamesInGroups[] = $participant->sinhvien->nguoidung->HODEM_VA_TEN ?? $participant->sinhvien->ID_SINHVIEN;
+                     $studentNamesInGroups[] = $participant->sinhvien->nguoidung->HODEM_VA_TEN ?? $participant->sinhvien->ID_SINHVIEN;
                  }
             }
         }
 
         if (!empty($studentNamesInGroups)) {
              return response()->json([
-                  'message' => 'Không thể xóa vì các sinh viên sau đang ở trong nhóm: ' . implode(', ', $studentNamesInGroups) . '. Vui lòng xóa họ khỏi nhóm trước.'
+                 'message' => 'Không thể xóa vì các sinh viên sau đang ở trong nhóm: ' . implode(', ', $studentNamesInGroups) . '. Vui lòng xóa họ khỏi nhóm trước.'
              ], 409);
         }
 
@@ -679,58 +679,62 @@ class ThesisPlanController extends Controller
 
     /**
      * Tìm kiếm sinh viên (chưa tham gia kế hoạch này) để thêm vào.
-     * Giới hạn 20 kết quả khi có từ khóa tìm kiếm.
+     * * ----- TỐI ƯU HÓA (CHO 1000+ NGƯỜI DÙNG) -----
+     * Sửa đổi:
+     * 1. Yêu cầu bắt buộc phải có `search` (min: 2 ký tự)
+     * 2. Bỏ logic `when(!$searchTerm)` để không bao giờ trả về tất cả.
+     * 3. Luôn `limit(20)` kết quả trả về.
      */
     public function searchStudentsForPlan(Request $request, KehoachKhoaluan $plan)
     {
-         $request->validate(['search' => 'nullable|string|min:2']);
+         // 1. Sửa validation: 'search' là 'required'
+         $request->validate([
+             'search' => 'required|string|min:2|max:100'
+         ], [
+             'search.required' => 'Vui lòng nhập từ khóa tìm kiếm.',
+             'search.min' => 'Từ khóa tìm kiếm phải có ít nhất 2 ký tự.',
+         ]);
+
          $searchTerm = $request->search;
+         
          // Lấy danh sách ID sinh viên đã tham gia kế hoạch
          $existingStudentIds = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)->pluck('ID_SINHVIEN');
- 
+
          $query = Sinhvien::with(['nguoidung' => function ($q) {
-              $q->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL');
+             $q->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL');
          }, 'chuyennganh' => function ($q) {
-              $q->select('ID_CHUYENNGANH', 'TEN_CHUYENNGANH');
+             $q->select('ID_CHUYENNGANH', 'TEN_CHUYENNGANH');
          }])
-               // Lọc ra các sinh viên chưa tham gia
-               ->whereNotIn('ID_SINHVIEN', $existingStudentIds)
-               // Áp dụng tìm kiếm nếu có
-               ->when($searchTerm, function ($query, $searchTerm) {
-                    return $query->whereHas('nguoidung', function ($q) use ($searchTerm) {
-                         $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
-                              ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
-                              ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
-                    });
-               })
-               // Sắp xếp theo tên người dùng nếu không có từ khóa tìm kiếm
-               ->when(!$searchTerm, function ($query) {
-                    return $query->join('NGUOIDUNG', 'SINHVIEN.ID_NGUOIDUNG', '=', 'NGUOIDUNG.ID_NGUOIDUNG')
-                               ->orderBy('NGUOIDUNG.HODEM_VA_TEN');
-               })
-               ->select('SINHVIEN.ID_SINHVIEN', 'SINHVIEN.ID_NGUOIDUNG', 'SINHVIEN.ID_CHUYENNGANH');
- 
-         if ($searchTerm) {
-              $query->limit(20); // Giới hạn kết quả khi tìm kiếm
-         }
+             // Lọc ra các sinh viên chưa tham gia
+             ->whereNotIn('ID_SINHVIEN', $existingStudentIds)
+             // 2. Bắt buộc tìm kiếm (bỏ when, dùng whereHas trực tiếp)
+             ->whereHas('nguoidung', function ($q) use ($searchTerm) {
+                  $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
+                      ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
+                      ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
+             })
+             ->select('SINHVIEN.ID_SINHVIEN', 'SINHVIEN.ID_NGUOIDUNG', 'SINHVIEN.ID_CHUYENNGANH');
+
+         // 3. Luôn luôn giới hạn kết quả
+         $query->limit(20); 
          $students = $query->get();
- 
+
          // Định dạng lại kết quả trả về
          $results = $students->map(function ($sv) {
-              if (!$sv->nguoidung) {
-                  Log::warning("Sinhvien ID {$sv->ID_SINHVIEN} is missing Nguoidung relationship in searchStudentsForPlan.");
-                  return null;
-              }
-             return [
+             if (!$sv->nguoidung) {
+                 Log::warning("Sinhvien ID {$sv->ID_SINHVIEN} is missing Nguoidung relationship in searchStudentsForPlan.");
+                 return null;
+             }
+            return [
                  'ID_SINHVIEN' => $sv->ID_SINHVIEN,
                  'ID_NGUOIDUNG' => $sv->nguoidung->ID_NGUOIDUNG,
                  'HODEM_VA_TEN' => $sv->nguoidung->HODEM_VA_TEN,
                  'MA_DINHDANH' => $sv->nguoidung->MA_DINHDANH,
                  'EMAIL' => $sv->nguoidung->EMAIL,
                  'TEN_CHUYENNGANH' => $sv->chuyennganh?->TEN_CHUYENNGANH,
-             ];
+            ];
          })->filter();
- 
+
          return response()->json($results);
     }
 }

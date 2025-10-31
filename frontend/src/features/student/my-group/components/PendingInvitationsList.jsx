@@ -58,9 +58,12 @@ export function PendingInvitationsList({ invitations, refreshData }) {
 
             {/* --- SỬA LỖI ACCESSIBILITY --- */}
             <AlertDialog open={alertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setAlertInfo({ isOpen: false, action: null, invitationId: null })}>
+                {/* Thêm aria-labelledby và aria-describedby */}
                 <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
                     <AlertDialogHeader>
+                        {/* Thêm id cho Title */}
                         <AlertDialogTitle id={alertTitleId}>Xác nhận hành động</AlertDialogTitle>
+                        {/* Thêm id cho Description */}
                         <AlertDialogDescription id={alertDescriptionId}>
                             {alertInfo.action === 'accept'
                                 ? "Bạn có chắc chắn muốn tham gia nhóm này không? Các lời mời khác sẽ bị từ chối."

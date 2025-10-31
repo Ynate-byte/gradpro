@@ -716,4 +716,133 @@ class NhomController extends Controller
             return response()->json(['message' => 'Nộp sản phẩm thất bại. Vui lòng thử lại.'], 500);
         }
     }
+    public function getSubmissions(Request $request, PhancongDetaiNhom $phancong)
+    {
+        $user = $request->user();
+
+        // Kiểm tra xem người dùng có thuộc nhóm của phân công này không
+        $isMember = ThanhvienNhom::where('ID_NHOM', $phancong->ID_NHOM)
+                                ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+                                ->exists();
+        
+        // SỬA LỖI 403: Cho phép Admin/Giáo vụ/Trưởng khoa xem
+        if (!$isMember && !$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
+             return response()->json(['message' => 'Bạn không thuộc nhóm này.'], 403);
+        }
+
+        $submissions = NopSanpham::where('ID_PHANCONG', $phancong->ID_PHANCONG)
+            ->with(['files', 'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN', 'nguoiXacNhan:ID_NGUOIDUNG,HODEM_VA_TEN'])
+            ->orderBy('NGAY_NOP', 'desc')
+            ->get();
+
+        return response()->json($submissions);
+    }
+
+    /**
+     * Xử lý nộp sản phẩm (tạo phiếu nộp mới).
+     */
+    public function submitProduct(Request $request, PhancongDetaiNhom $phancong)
+    {
+        $user = $request->user();
+
+        // Kiểm tra xem người dùng có thuộc nhóm của phân công này không
+        $isMember = ThanhvienNhom::where('ID_NHOM', $phancong->ID_NHOM)
+                                ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+                                ->exists();
+
+        if (!$isMember) {
+            return response()->json(['message' => 'Bạn không thuộc nhóm này.'], 403);
+        }
+
+        // Kiểm tra trạng thái phân công (chỉ cho phép nộp khi 'Đang thực hiện')
+        if ($phancong->TRANGTHAI !== 'Đang thực hiện') {
+            return response()->json(['message' => 'Không thể nộp. Đề tài không ở trạng thái "Đang thực hiện".'], 400);
+        }
+
+        // Kiểm tra xem có lần nộp nào đang 'Chờ xác nhận' không
+        $isPending = NopSanpham::where('ID_PHANCONG', $phancong->ID_PHANCONG)
+                                ->where('TRANGTHAI', 'Chờ xác nhận')
+                                ->exists();
+        if ($isPending) {
+            return response()->json(['message' => 'Bạn có một lần nộp đang chờ xác nhận. Vui lòng đợi admin duyệt.'], 409);
+        }
+
+        // Validate input
+        $validated = $request->validate([
+            'BaoCaoPDF' => 'nullable|file|mimes:pdf|max:20480', // 20MB
+            'SourceCodeZIP' => 'nullable|file|mimes:zip,rar,7z|max:102400', // 100MB
+            'LinkDemo' => 'nullable|url|max:500',
+            'LinkRepository' => 'nullable|url|max:500',
+        ]);
+
+        if (empty($validated)) {
+             throw ValidationException::withMessages(['files' => 'Phải nộp ít nhất 1 sản phẩm (file hoặc link).']);
+        }
+
+        $filesToInsert = [];
+        $storagePath = "submissions/plan_{$phancong->nhom->ID_KEHOACH}/group_{$phancong->ID_NHOM}";
+
+        try {
+            $newSubmission = DB::transaction(function () use ($phancong, $user, $validated, $request, $storagePath, &$filesToInsert) {
+                $submission = NopSanpham::create([
+                    'ID_PHANCONG' => $phancong->ID_PHANCONG,
+                    'ID_NGUOI_NOP' => $user->ID_NGUOIDUNG,
+                    'TRANGTHAI' => 'Chờ xác nhận',
+                ]);
+
+                // Xử lý file
+                foreach (['BaoCaoPDF', 'SourceCodeZIP'] as $fileType) {
+                    if ($request->hasFile($fileType)) {
+                        $file = $request->file($fileType);
+                        $path = $file->store($storagePath, 'public');
+                        $filesToInsert[] = [
+                            'ID_NOP_SANPHAM' => $submission->ID_NOP_SANPHAM,
+                            'LOAI_FILE' => $fileType,
+                            'DUONG_DAN_HOAC_NOI_DUNG' => $path,
+                            'TEN_FILE_GOC' => $file->getClientOriginalName(),
+                            'KICH_THUOC_FILE' => $file->getSize(),
+                        ];
+                    }
+                }
+
+                // Xử lý links
+                foreach (['LinkDemo', 'LinkRepository'] as $linkType) {
+                    if (!empty($validated[$linkType])) {
+                        $filesToInsert[] = [
+                            'ID_NOP_SANPHAM' => $submission->ID_NOP_SANPHAM,
+                            'LOAI_FILE' => $linkType,
+                            'DUONG_DAN_HOAC_NOI_DUNG' => $validated[$linkType],
+                            'TEN_FILE_GOC' => null,
+                            'KICH_THUOC_FILE' => null,
+                        ];
+                    }
+                }
+
+                if (!empty($filesToInsert)) {
+                    FileNopSanpham::insert($filesToInsert);
+                }
+
+                // TODO: Gửi thông báo cho Admin/Giáo vụ/Trưởng khoa
+
+                return $submission;
+            });
+
+            return response()->json([
+                'message' => 'Nộp sản phẩm thành công! Vui lòng chờ admin xác nhận.',
+                'submission' => $newSubmission->load('files')
+            ], 201);
+
+        } catch (ValidationException $e) {
+            return response()->json(['message' => 'Dữ liệu không hợp lệ.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            // Xóa file đã tải lên nếu transaction thất bại
+            foreach ($filesToInsert as $fileData) {
+                if ($fileData['LOAI_FILE'] !== 'LinkDemo' && $fileData['LOAI_FILE'] !== 'LinkRepository') {
+                    Storage::disk('public')->delete($fileData['DUONG_DAN_HOAC_NOI_DUNG']);
+                }
+            }
+            Log::error('submitProduct failed: ' . $e->getMessage());
+            return response()->json(['message' => 'Nộp sản phẩm thất bại. Vui lòng thử lại.'], 500);
+        }
+    }
 }

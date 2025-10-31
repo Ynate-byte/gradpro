@@ -32,6 +32,7 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
       }
       onSuccess()
     } catch (error) {
+      console.error(`Thao tác ${type} thất bại:`, error); // Log lỗi đàng hoàng
       toast.error(error.response?.data?.message || "Thao tác thất bại.")
     } finally {
       setAlertInfo({ isOpen: false, type: null })
@@ -60,6 +61,8 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
         return {}
     }
   }
+  
+  const alertContent = getAlertContent();
 
   return (
     <>
@@ -75,6 +78,7 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
             <Pencil className="mr-2 h-4 w-4" />
             Sửa thông tin
           </DropdownMenuItem>
+          {/* Nút Thêm thành viên vẫn gọi hàm onAddStudent như cũ */}
           <DropdownMenuItem onClick={() => onAddStudent(group)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Thêm thành viên
@@ -104,6 +108,8 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      
+      {/* SỬA LỖI ACCESSIBILITY */}
       <AlertDialog
         open={alertInfo.isOpen}
         onOpenChange={(isOpen) => !isOpen && setAlertInfo({ isOpen: false, type: null })}
@@ -111,10 +117,10 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
         <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
           <AlertDialogHeader>
             <AlertDialogTitle id={alertTitleId}>
-              {getAlertContent().title}
+              {alertContent.title}
             </AlertDialogTitle>
             <AlertDialogDescription id={alertDescriptionId}>
-              {getAlertContent().description}
+              {alertContent.description}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
