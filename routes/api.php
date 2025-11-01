@@ -49,6 +49,11 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/{phancong}', [NhomController::class, 'getSubmissions']); // Lấy lịch sử nộp
             Route::post('/{phancong}', [NhomController::class, 'submitProduct']); // Nộp sản phẩm
         });
+
+        // ----- THÊM 2 ROUTE MỚI VÀO ĐÂY -----
+        Route::get('/plan/{planId}/available-students', [NhomController::class, 'searchAvailableStudents']);
+        Route::post('/{nhom}/invite-multiple', [NhomController::class, 'inviteMultipleMembers']);
+        // ----- KẾT THÚC 2 ROUTE MỚI -----
     });
     Route::post('/requests/{yeucau}/cancel', [NhomController::class, 'cancelJoinRequest']);
     Route::get('/student/my-active-plans', [NhomController::class, 'getActivePlansForStudent']);

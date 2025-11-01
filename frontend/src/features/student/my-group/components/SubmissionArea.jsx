@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react'; // Bỏ useEffect
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; // Dùng cho link
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getSubmissions, submitProduct } from '@/api/groupService';
 import { toast } from 'sonner';
@@ -11,9 +10,11 @@ import { Loader2, UploadCloud, FileText, Link, Send, History, CheckCircle, XCirc
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
-// Component con: Hiển thị 1 file/link trong lịch sử
+// Component con: SubmissionFileItem (Không đổi)
 const SubmissionFileItem = ({ file }) => {
+  // ... (Không đổi)
   const isLink = file.LOAI_FILE === 'LinkDemo' || file.LOAI_FILE === 'LinkRepository';
   const Icon = isLink ? Link : FileText;
   const label = {
@@ -41,8 +42,10 @@ const SubmissionFileItem = ({ file }) => {
   );
 };
 
-// Component con: Hiển thị 1 lần nộp trong lịch sử
+
+// Component con: SubmissionAttempt (Không đổi)
 const SubmissionAttempt = ({ attempt }) => {
+  // ... (Không đổi)
   const getStatusProps = () => {
     switch (attempt.TRANGTHAI) {
       case 'Đã xác nhận':
@@ -89,99 +92,101 @@ const SubmissionAttempt = ({ attempt }) => {
   );
 };
 
-// Component chính
-export function SubmissionArea({ phancong, refreshData }) {
-  const [history, setHistory] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
+// Component chính (Đã nâng cấp)
+export function SubmissionArea({ phancong, planId }) { // <-- Thay `refreshData` bằng `planId`
   const [files, setFiles] = useState({ BaoCaoPDF: null, SourceCodeZIP: null });
   const [links, setLinks] = useState({ LinkDemo: '', LinkRepository: '' });
 
   const phancongId = phancong?.ID_PHANCONG;
+  const queryClient = useQueryClient();
 
-  const fetchHistory = useCallback(async () => {
-    if (!phancongId) {
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const data = await getSubmissions(phancongId);
-      setHistory(data || []);
-    } catch (error) {
+  // Nâng cấp: Tải lịch sử bằng useQuery
+  const {
+    data: history = [], // Đặt giá trị mặc định là mảng rỗng
+    isLoading,
+    isRefetching,
+    refetch,
+  } = useQuery({
+    queryKey: ['submissions', phancongId],
+    queryFn: () => getSubmissions(phancongId),
+    enabled: !!phancongId,
+    onError: () => {
       toast.error("Không thể tải lịch sử nộp bài.");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [phancongId]);
+    },
+  });
 
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+  // Nâng cấp: Nộp bài bằng useMutation
+  const submitMutation = useMutation({
+    mutationFn: (formData) => submitProduct(phancongId, formData),
+    onSuccess: (res) => {
+      toast.success(res.message);
+      // Reset form
+      setFiles({ BaoCaoPDF: null, SourceCodeZIP: null });
+      setLinks({ LinkDemo: '', LinkRepository: '' });
+      // Xóa cache của 2 query liên quan
+      queryClient.invalidateQueries({ queryKey: ['submissions', phancongId] });
+      queryClient.invalidateQueries({ queryKey: ['myGroupDetails', planId] });
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || "Nộp bài thất bại.");
+    }
+  });
 
   const handleFileChange = (e, fileType) => {
+    // ... (Không đổi)
     const file = e.target.files[0];
     if (file) setFiles(prev => ({ ...prev, [fileType]: file }));
   };
 
   const handleLinkChange = (e, linkType) => {
+    // ... (Không đổi)
     setLinks(prev => ({ ...prev, [linkType]: e.target.value }));
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!files.BaoCaoPDF && !files.SourceCodeZIP && !links.LinkDemo && !links.LinkRepository) {
       toast.error("Bạn phải nộp ít nhất 1 sản phẩm (file hoặc link).");
       return;
     }
 
-    setIsSubmitting(true);
     const formData = new FormData();
     if (files.BaoCaoPDF) formData.append('BaoCaoPDF', files.BaoCaoPDF);
     if (files.SourceCodeZIP) formData.append('SourceCodeZIP', files.SourceCodeZIP);
     if (links.LinkDemo) formData.append('LinkDemo', links.LinkDemo);
     if (links.LinkRepository) formData.append('LinkRepository', links.LinkRepository);
 
-    try {
-      const res = await submitProduct(phancongId, formData);
-      toast.success(res.message);
-      // Reset form
-      setFiles({ BaoCaoPDF: null, SourceCodeZIP: null });
-      setLinks({ LinkDemo: '', LinkRepository: '' });
-      // Tải lại cả trang MyGroup để cập nhật trạng thái chung
-      refreshData();
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Nộp bài thất bại.");
-    } finally {
-      setIsSubmitting(false);
-    }
+    submitMutation.mutate(formData);
   };
 
   // Kiểm tra trạng thái có cho phép nộp bài hay không
   const latestSubmission = history[0];
   const canSubmit = phancong.TRANGTHAI === 'Đang thực hiện' &&
-      (!latestSubmission || latestSubmission.TRANGTHAI === 'Yêu cầu nộp lại');
+    (!latestSubmission || latestSubmission.TRANGTHAI === 'Yêu cầu nộp lại');
 
   return (
     <div className="space-y-8">
-      {/* 1. Khu vực nộp bài (chỉ hiển thị nếu được phép) */}
+      {/* 1. Khu vực nộp bài */}
       {canSubmit && (
         <Card className="border-primary shadow-lg">
+          {/* ... (Header của Card nộp bài - không đổi) ... */}
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UploadCloud className="h-6 w-6 text-primary" /> Nộp sản phẩm Khóa luận
             </CardTitle>
             <CardDescription>
-              Tải lên các file và đường link sản phẩm của nhóm. Chỉ nhóm trưởng mới có thể nộp. (Lưu ý: Bạn phải nộp lại TẤT CẢ các mục nếu bị yêu cầu nộp lại).
+              Tải lên các file và đường link sản phẩm của nhóm. (Lưu ý: Bạn phải nộp lại TẤT CẢ các mục nếu bị yêu cầu nộp lại).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* ... (Các Input fields - không đổi) ... */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label htmlFor="BaoCaoPDF">1. Báo cáo tổng kết (PDF)*</Label>
+                <Label htmlFor="BaoCaoPDF">1. Báo cáo tổng kết (PDF)</Label>
                 <Input id="BaoCaoPDF" type="file" accept=".pdf" onChange={e => handleFileChange(e, 'BaoCaoPDF')} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="SourceCodeZIP">2. Source Code (ZIP, RAR)*</Label>
+                <Label htmlFor="SourceCodeZIP">2. Source Code (ZIP, RAR)</Label>
                 <Input id="SourceCodeZIP" type="file" accept=".zip,.rar,.7z" onChange={e => handleFileChange(e, 'SourceCodeZIP')} />
               </div>
               <div className="space-y-2">
@@ -193,9 +198,10 @@ export function SubmissionArea({ phancong, refreshData }) {
                 <Input id="LinkRepository" type="url" placeholder="https://github.com/..." value={links.LinkRepository} onChange={e => handleLinkChange(e, 'LinkRepository')} />
               </div>
             </div>
-            <Button onClick={handleSubmit} disabled={isSubmitting} className="w-full sm:w-auto">
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-              {isSubmitting ? 'Đang nộp...' : 'Xác nhận Nộp sản phẩm'}
+            {/* Cập nhật trạng thái Button */}
+            <Button onClick={handleSubmit} disabled={submitMutation.isPending} className="w-full sm:w-auto">
+              {submitMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              {submitMutation.isPending ? 'Đang nộp...' : 'Xác nhận Nộp sản phẩm'}
             </Button>
           </CardContent>
         </Card>
@@ -208,14 +214,15 @@ export function SubmissionArea({ phancong, refreshData }) {
             <div className="flex items-center gap-2">
               <History className="h-6 w-6" /> Lịch sử Nộp bài
             </div>
-            <Button variant="ghost" size="icon" onClick={fetchHistory} disabled={isLoading}>
-              <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
+            {/* Cập nhật Button Refresh */}
+            <Button variant="ghost" size="icon" onClick={() => refetch()} disabled={isLoading || isRefetching}>
+              <RefreshCw className={cn("h-4 w-4", (isLoading || isRefetching) && "animate-spin")} />
             </Button>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {isLoading ? (
-            <div className="text-center p-8"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></div>
+            <div className="text-center p-8"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /></div>
           ) : history.length > 0 ? (
             history.map(attempt => (
               <SubmissionAttempt key={attempt.ID_NOP_SANPHAM} attempt={attempt} />

@@ -137,4 +137,18 @@ export const submitProduct = async (phancongId, formData) => {
     return data;
 };
 
-/* ----- 🚀 KẾT THÚC API NỘP SẢN PHẨM 🚀 ----- */
+export const searchAvailableStudents = async (planId, params) => {
+  const { data } = await axiosClient.get(`/nhom/plan/${planId}/available-students`, { params });
+  return data;
+}
+
+/* ------------------------------------------------------------
+ * 1️⃣7️⃣ [MỚI] Mời nhiều thành viên
+ * ------------------------------------------------------------ */
+export const inviteMultipleMembers = async (groupId, userIds, message) => {
+  const { data } = await axiosClient.post(`/nhom/${groupId}/invite-multiple`, {
+    user_ids: userIds,
+    LOINHAN: message
+  });
+  return data;
+}

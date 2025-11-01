@@ -31,12 +31,10 @@ class NhomController extends Controller
     {
         $user = $request->user();
 
-        // ===== SỬA LỖI 500 =====
         // Kiểm tra nếu người dùng không có bản ghi sinhvien (vd: là Admin/GV)
         if (!$user->sinhvien) {
             return response()->json([]); // Trả về mảng rỗng
         }
-        // =======================
 
         // Giờ $user->sinhvien đã an toàn
         $sinhvienId = $user->sinhvien->ID_SINHVIEN;
@@ -59,6 +57,7 @@ class NhomController extends Controller
 
     /**
      * Lấy thông tin nhóm hiện tại của người dùng.
+     * [NÂNG CẤP]: Lấy TẤT CẢ lời mời và yêu cầu, không chỉ 'Đang chờ'.
      */
     public function getMyGroup(Request $request)
     {
@@ -69,9 +68,9 @@ class NhomController extends Controller
             $thanhvienQuery = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
 
             if ($planId) {
-                 $thanhvienQuery->whereHas('nhom', function ($query) use ($planId) {
-                     $query->where('ID_KEHOACH', $planId);
-                 });
+                $thanhvienQuery->whereHas('nhom', function ($query) use ($planId) {
+                    $query->where('ID_KEHOACH', $planId);
+                });
             }
 
             $thanhvien = $thanhvienQuery->first();
@@ -87,15 +86,18 @@ class NhomController extends Controller
                 'nhomtruong',
                 'chuyennganh',
                 'khoabomon',
+                
                 'yeucaus' => function($query) {
-                    $query->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)->with(['nguoidung' => function($q) {
+                    $query->with(['nguoidung' => function($q) {
                         $q->with(['vaitro', 'sinhvien.chuyennganh']);
-                    }]);
+                    }])
+                    ->orderByRaw("CASE WHEN TRANGTHAI = 'Đang chờ' THEN 1 ELSE 2 END, NGAYTAO DESC");
                 },
-                // Tải các lời mời (invitations) đã gửi đi và đang chờ
                 'loimois' => function($query) {
-                    $query->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)->with('nguoiduocmoi.sinhvien.chuyennganh');
+                    $query->with('nguoiduocmoi.sinhvien.chuyennganh')
+                    ->orderByRaw("CASE WHEN TRANGTHAI = 'Đang chờ' THEN 1 ELSE 2 END, NGAYTAO DESC");
                 },
+
                 'phancongDetaiNhom.detai'
                 ])->find($thanhvien->ID_NHOM);
 
@@ -122,12 +124,10 @@ class NhomController extends Controller
         $user = $request->user();
         $planId = $request->input('ID_KEHOACH');
 
-        // SỬA LỖI 500: Kiểm tra $user->sinhvien tồn tại
         if (!$user->sinhvien) {
             return response()->json(['message' => 'Tài khoản của bạn không phải là sinh viên.'], 403);
         }
 
-        // Kiểm tra xem người dùng đã có nhóm trong kế hoạch này chưa
         $existingMembership = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
             ->whereHas('nhom', function ($query) use ($planId) {
                 $query->where('ID_KEHOACH', $planId);
@@ -148,10 +148,9 @@ class NhomController extends Controller
             'TEN_NHOM.unique' => 'Tên nhóm này đã tồn tại trong kế hoạch này.'
         ]);
 
-        // Kiểm tra xem SV có tham gia kế hoạch không
         $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $validated['ID_KEHOACH'])
-                                            ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
-                                            ->exists();
+                                        ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
+                                        ->exists();
         if (!$isParticipant) {
             return response()->json(['message' => 'Bạn không có quyền tạo nhóm trong kế hoạch này.'], 403);
         }
@@ -188,14 +187,12 @@ class NhomController extends Controller
         $request->validate(['ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
         $kehoachId = $request->ID_KEHOACH;
 
-        // SỬA LỖI 500: Kiểm tra $user->sinhvien tồn tại
         if(!$user->sinhvien) {
              return response()->json(['data' => []]);
         }
-        // Kiểm tra xem SV có tham gia kế hoạch không
         $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $kehoachId)
-                                            ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
-                                            ->exists();
+                                        ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
+                                        ->exists();
         if (!$isParticipant) {
              return response()->json(['data' => []]);
         }
@@ -217,13 +214,11 @@ class NhomController extends Controller
 
         $nhoms = $query->with('nhomtruong', 'chuyennganh', 'khoabomon')->paginate(15);
 
-        // Lấy danh sách ID các nhóm mà người dùng đã gửi yêu cầu (đang chờ)
         $sent_requests = YeucauVaoNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
-            ->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING) // Chỉ kiểm tra yêu cầu đang chờ
+            ->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)
             ->whereIn('ID_NHOM', $nhoms->pluck('ID_NHOM'))
-            ->get(['ID_NHOM', 'ID_YEUCAU']); // Lấy cả ID_YEUCAU
+            ->get(['ID_NHOM', 'ID_YEUCAU']);
 
-        // Chuyển đổi sang map để dễ tra cứu
         $sentRequestMap = $sent_requests->pluck('ID_YEUCAU', 'ID_NHOM');
 
         $nhoms->getCollection()->transform(function ($nhom) use ($sentRequestMap) {
@@ -239,17 +234,16 @@ class NhomController extends Controller
 
     /**
      * Gửi yêu cầu xin tham gia một nhóm.
+     * [NÂNG CẤP]: Giới hạn 8 yêu cầu "Đang chờ" cho mỗi nhóm.
      */
     public function requestToJoin(Request $request, Nhom $nhom)
     {
         $user = $request->user();
 
-        // SỬA LỖI 500: Kiểm tra $user->sinhvien tồn tại
         if (!$user->sinhvien) {
             return response()->json(['message' => 'Tài khoản của bạn không phải là sinh viên.'], 403);
         }
 
-        // Kiểm tra xem người dùng đã có nhóm trong kế hoạch này chưa
         $existingMembership = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
             ->whereHas('nhom', function ($query) use ($nhom) {
                 $query->where('ID_KEHOACH', $nhom->ID_KEHOACH);
@@ -259,10 +253,9 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn đã là thành viên của một nhóm khác trong kế hoạch này.'], 409);
         }
         
-        // Kiểm tra xem SV có tham gia kế hoạch không
         $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $nhom->ID_KEHOACH)
-                                            ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
-                                            ->exists();
+                                        ->where('ID_SINHVIEN', $user->sinhvien->ID_SINHVIEN)
+                                        ->exists();
         if (!$isParticipant) {
             return response()->json(['message' => 'Bạn không thuộc kế hoạch khóa luận của nhóm này.'], 403);
         }
@@ -272,11 +265,15 @@ class NhomController extends Controller
             return response()->json(['message' => 'Không thể gửi yêu cầu. Nhóm này không còn mở để nhận thành viên.'], 400);
         }
 
-        // Kiểm tra xem đã gửi yêu cầu đang chờ chưa
+        $pendingCount = $nhom->yeucaus()->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)->count();
+        if ($pendingCount >= 8) {
+            return response()->json(['message' => 'Nhóm này đã có quá nhiều yêu cầu đang chờ. Vui lòng thử lại sau.'], 400);
+        }
+
         $existingRequest = YeucauVaoNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                                            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
-                                            ->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)
-                                            ->exists();
+                                        ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+                                        ->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)
+                                        ->exists();
         if ($existingRequest) {
             return response()->json(['message' => 'Bạn đã gửi yêu cầu tới nhóm này rồi.'], 409);
         }
@@ -288,7 +285,6 @@ class NhomController extends Controller
             'TRANGTHAI' => YeucauVaoNhom::STATUS_PENDING,
         ]);
 
-        // Tạo thông báo cho nhóm trưởng
         Notification::create([
             'user_id' => $nhom->ID_NHOMTRUONG,
             'type' => 'JOIN_REQUEST_RECEIVED',
@@ -304,6 +300,7 @@ class NhomController extends Controller
 
     /**
      * Mời một thành viên khác vào nhóm (chỉ nhóm trưởng).
+     * [NÂNG CẤP]: Giới hạn 8 lời mời "Đang chờ" cho mỗi nhóm.
      */
     public function inviteMember(Request $request, Nhom $nhom)
     {
@@ -317,6 +314,11 @@ class NhomController extends Controller
             return response()->json(['message' => 'Nhóm đã đủ số lượng thành viên tối đa.'], 400);
         }
 
+        $pendingCount = $nhom->loimois()->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)->count();
+        if ($pendingCount >= 8) {
+            return response()->json(['message' => 'Nhóm đã gửi quá 8 lời mời đang chờ. Vui lòng đợi các sinh viên khác phản hồi.'], 400);
+        }
+
         $validated = $request->validate([
             'MA_DINHDANH' => 'required|string|exists:NGUOIDUNG,MA_DINHDANH',
             'LOINHAN' => 'nullable|string|max:150',
@@ -328,20 +330,17 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn không thể mời chính mình.'], 400);
         }
 
-        // SỬA LỖI 500: Kiểm tra $memberToInvite->sinhvien tồn tại
         if (!$memberToInvite->sinhvien) {
              return response()->json(['message' => 'Chỉ có thể mời sinh viên vào nhóm.'], 400);
         }
 
-        // Kiểm tra SV được mời có tham gia kế hoạch không
         $isParticipant = SinhvienThamgia::where('ID_KEHOACH', $nhom->ID_KEHOACH)
-                                            ->where('ID_SINHVIEN', $memberToInvite->sinhvien->ID_SINHVIEN)
-                                            ->exists();
+                                        ->where('ID_SINHVIEN', $memberToInvite->sinhvien->ID_SINHVIEN)
+                                        ->exists();
         if (!$isParticipant) {
              return response()->json(['message' => 'Sinh viên này không thuộc kế hoạch khóa luận của nhóm bạn.'], 403);
         }
 
-        // Kiểm tra xem người được mời đã có nhóm trong kế hoạch này chưa
         $alreadyInGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $memberToInvite->ID_NGUOIDUNG)
             ->whereHas('nhom', function ($query) use ($nhom) {
                 $query->where('ID_KEHOACH', $nhom->ID_KEHOACH);
@@ -350,7 +349,6 @@ class NhomController extends Controller
              return response()->json(['message' => 'Sinh viên này đã ở trong một nhóm khác thuộc kế hoạch này.'], 409);
         }
 
-        // Kiểm tra xem đã mời người này (và đang chờ) chưa
         $existingInvite = LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
                                       ->where('ID_NGUOI_DUOCMOI', $memberToInvite->ID_NGUOIDUNG)
                                       ->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)
@@ -369,7 +367,6 @@ class NhomController extends Controller
             'TRANGTHAI' => LoimoiNhom::STATUS_PENDING,
         ]);
 
-        // Tạo thông báo cho người được mời
         Notification::create([
             'user_id' => $memberToInvite->ID_NGUOIDUNG,
             'type' => 'GROUP_INVITATION',
@@ -379,10 +376,9 @@ class NhomController extends Controller
             ]
         ]);
 
-
         return response()->json([
             'message' => 'Đã gửi lời mời thành công.',
-             'invite' => $invite->load('nguoiduocmoi.sinhvien.chuyennganh') // Trả về lời mời vừa tạo
+             'invite' => $invite->load('nguoiduocmoi.sinhvien.chuyennganh')
         ], 200);
     }
 
@@ -460,7 +456,9 @@ class NhomController extends Controller
         });
     }
 
-    // ***** HÀM MỚI: Hủy lời mời (do nhóm trưởng) *****
+    /**
+     * Hủy lời mời (do nhóm trưởng)
+     */
     public function cancelInvitation(Request $request, Nhom $nhom, LoimoiNhom $loimoi)
     {
         $user = $request->user();
@@ -478,7 +476,9 @@ class NhomController extends Controller
         return response()->json(['message' => 'Đã hủy lời mời thành công.']);
     }
 
-    // ***** HÀM MỚI: Hủy yêu cầu tham gia (do người xin) *****
+    /**
+     * Hủy yêu cầu tham gia (do người xin)
+     */
     public function cancelJoinRequest(Request $request, YeucauVaoNhom $yeucau)
     {
         $user = $request->user();
@@ -533,10 +533,10 @@ class NhomController extends Controller
             } else {
                 $thanhvien->delete();
                 $nhom->decrement('SO_THANHVIEN_HIENTAI');
-                 if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < $nhom->SOB_THANHVIEN_TOIDA) {
+                if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < 4) {
                     $nhom->TRANGTHAI = 'Đang mở';
                     $nhom->save();
-                 }
+                }
             }
         });
 
@@ -559,8 +559,8 @@ class NhomController extends Controller
         }
 
         $newLeaderIsMember = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                                            ->where('ID_NGUOIDUNG', $newLeaderId)
-                                            ->exists();
+                                        ->where('ID_NGUOIDUNG', $newLeaderId)
+                                        ->exists();
 
         if (!$newLeaderIsMember) {
             return response()->json(['message' => 'Người được chọn không phải là thành viên của nhóm.'], 400);
@@ -569,13 +569,13 @@ class NhomController extends Controller
         $nhom->ID_NHOMTRUONG = $newLeaderId;
         $nhom->save();
 
-        // Trả về nhóm đã cập nhật (với nhóm trưởng mới)
         return response()->json([
             'message' => 'Đã chuyển quyền trưởng nhóm thành công.',
-            'group' => $nhom->load('nhomtruong') // Tải lại thông tin nhóm trưởng mới
+            'group' => $nhom->load('nhomtruong')
         ]);
     }
-        /**
+
+    /**
      * Lấy chi tiết nhóm theo ID
      */
     public function getGroupById($id)
@@ -591,7 +591,6 @@ class NhomController extends Controller
             'phancongDetaiNhom.gvhd.nguoidung'
         ])->findOrFail($id);
 
-        // Thêm thông tin đề tài và giảng viên nếu có
         $assignment = $nhom->phancongDetaiNhom;
         if ($assignment) {
             $nhom->detai = $assignment->detai;
@@ -610,12 +609,10 @@ class NhomController extends Controller
     {
         $user = $request->user();
 
-        // Kiểm tra xem người dùng có thuộc nhóm của phân công này không
         $isMember = ThanhvienNhom::where('ID_NHOM', $phancong->ID_NHOM)
                                 ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
                                 ->exists();
 
-        // SỬA LỖI 403: Cho phép Admin/Giáo vụ/Trưởng khoa xem
         if (!$isMember && !$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
              return response()->json(['message' => 'Bạn không thuộc nhóm này.'], 403);
         }
@@ -635,7 +632,6 @@ class NhomController extends Controller
     {
         $user = $request->user();
 
-        // Kiểm tra xem người dùng có thuộc nhóm của phân công này không
         $isMember = ThanhvienNhom::where('ID_NHOM', $phancong->ID_NHOM)
                                 ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
                                 ->exists();
@@ -644,12 +640,10 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn không thuộc nhóm này.'], 403);
         }
 
-        // Kiểm tra trạng thái phân công (chỉ cho phép nộp khi 'Đang thực hiện')
         if ($phancong->TRANGTHAI !== 'Đang thực hiện') {
             return response()->json(['message' => 'Không thể nộp. Đề tài không ở trạng thái "Đang thực hiện".'], 400);
         }
 
-        // Kiểm tra xem có lần nộp nào đang 'Chờ xác nhận' không
         $isPending = NopSanpham::where('ID_PHANCONG', $phancong->ID_PHANCONG)
                                 ->where('TRANGTHAI', 'Chờ xác nhận')
                                 ->exists();
@@ -657,10 +651,9 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn có một lần nộp đang chờ xác nhận. Vui lòng đợi admin duyệt.'], 409);
         }
 
-        // Validate input
         $validated = $request->validate([
-            'BaoCaoPDF' => 'nullable|file|mimes:pdf|max:20480', // 20MB
-            'SourceCodeZIP' => 'nullable|file|mimes:zip,rar,7z|max:102400', // 100MB
+            'BaoCaoPDF' => 'nullable|file|mimes:pdf|max:20480',
+            'SourceCodeZIP' => 'nullable|file|mimes:zip,rar,7z|max:102400',
             'LinkDemo' => 'nullable|url|max:500',
             'LinkRepository' => 'nullable|url|max:500',
         ]);
@@ -680,7 +673,6 @@ class NhomController extends Controller
                     'TRANGTHAI' => 'Chờ xác nhận',
                 ]);
 
-                // Xử lý file
                 foreach (['BaoCaoPDF', 'SourceCodeZIP'] as $fileType) {
                     if ($request->hasFile($fileType)) {
                         $file = $request->file($fileType);
@@ -695,7 +687,6 @@ class NhomController extends Controller
                     }
                 }
 
-                // Xử lý links
                 foreach (['LinkDemo', 'LinkRepository'] as $linkType) {
                     if (!empty($validated[$linkType])) {
                         $filesToInsert[] = [
@@ -712,8 +703,6 @@ class NhomController extends Controller
                     FileNopSanpham::insert($filesToInsert);
                 }
 
-                // TODO: Gửi thông báo cho Admin/Giáo vụ/Trưởng khoa
-
                 return $submission;
             });
 
@@ -725,7 +714,6 @@ class NhomController extends Controller
         } catch (ValidationException $e) {
             return response()->json(['message' => 'Dữ liệu không hợp lệ.', 'errors' => $e->errors()], 422);
         } catch (\Exception $e) {
-            // Xóa file đã tải lên nếu transaction thất bại
             foreach ($filesToInsert as $fileData) {
                 if ($fileData['LOAI_FILE'] !== 'LinkDemo' && $fileData['LOAI_FILE'] !== 'LinkRepository') {
                     Storage::disk('public')->delete($fileData['DUONG_DAN_HOAC_NOI_DUNG']);
@@ -734,5 +722,152 @@ class NhomController extends Controller
             Log::error('submitProduct failed: ' . $e->getMessage());
             return response()->json(['message' => 'Nộp sản phẩm thất bại. Vui lòng thử lại.'], 500);
         }
+    }
+
+
+    /**
+     * [MỚI] Tìm kiếm sinh viên chưa có nhóm trong kế hoạch (cho Nhóm trưởng).
+     */
+    public function searchAvailableStudents(Request $request, $planId)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'search' => 'nullable|string|max:100',
+            'chuyen_nganh_ids' => 'nullable|array',
+            'chuyen_nganh_ids.*' => 'integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
+            'page' => 'integer|min:1',
+            'per_page' => 'integer|min:5|max:100',
+        ]);
+
+        $studentsInGroupIds = ThanhvienNhom::query()
+            ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $planId))
+            ->pluck('ID_NGUOIDUNG');
+
+        $studentsInGroupIds->push($user->ID_NGUOIDUNG);
+
+        $query = Nguoidung::query()
+            ->with(['sinhvien.chuyennganh:ID_CHUYENNGANH,TEN_CHUYENNGANH'])
+            ->where('TRANGTHAI_KICHHOAT', true)
+            ->whereHas('sinhvien.cacDotThamGia', function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            })
+            ->whereNotIn('ID_NGUOIDUNG', $studentsInGroupIds)
+            ->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH');
+
+        if (!empty($validated['search'])) {
+            $searchTerm = $validated['search'];
+            $query->where(function ($q) use ($searchTerm) {
+                $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
+                  ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%");
+            });
+        }
+
+        if (!empty($validated['chuyen_nganh_ids'])) {
+            $query->whereHas('sinhvien', function ($q) use ($validated) {
+                $q->whereIn('ID_CHUYENNGANH', $validated['chuyen_nganh_ids']);
+            });
+        }
+
+        $students = $query
+            ->orderBy('HODEM_VA_TEN')
+            ->paginate($validated['per_page'] ?? 10);
+
+        return response()->json($students);
+    }
+
+    /**
+     * [MỚI] Mời nhiều thành viên vào nhóm (chỉ nhóm trưởng).
+     * [NÂNG CẤP]: Gỡ bỏ kiểm tra 4 thành viên, giữ lại 8 lời mời chờ.
+     */
+    public function inviteMultipleMembers(Request $request, Nhom $nhom)
+    {
+        $user = $request->user();
+
+        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
+        $validated = $request->validate([
+            'user_ids' => 'required|array|min:1',
+            'user_ids.*' => 'required|integer|exists:NGUOIDUNG,ID_NGUOIDUNG',
+            'LOINHAN' => 'nullable|string|max:150',
+        ]);
+
+        $userIds = $validated['user_ids'];
+        $count = count($userIds);
+
+        // --- NÂNG CẤP: Kiểm tra giới hạn 8 lời mời "Đang chờ" ---
+        $pendingCount = $nhom->loimois()->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)->count();
+        if (($pendingCount + $count) > 8) {
+            return response()->json(['message' => "Bạn chỉ có thể gửi tối đa 8 lời mời đang chờ. (Hiện tại: $pendingCount)"], 400);
+        }
+        // --- KẾT THÚC NÂNG CẤP ---
+
+        // ----- ĐÃ GỠ BỎ LOGIC KIỂM TRA 4 THÀNH VIÊN -----
+        // if (($nhom->SO_THANHVIEN_HIENTAI + $count) > 4) {
+        //     return response()->json(['message' => 'Số lượng mời vượt quá số chỗ còn lại của nhóm.'], 400);
+        // }
+        // ----- KẾT THÚC GỠ BỎ -----
+
+        $planId = $nhom->ID_KEHOACH;
+        $now = now();
+        $expiresAt = $now->copy()->addDays(4);
+
+        $conflicts = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $userIds)
+            ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $planId))
+            ->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN')
+            ->get();
+
+        if ($conflicts->isNotEmpty()) {
+            $names = $conflicts->pluck('nguoidung.HODEM_VA_TEN')->implode(', ');
+            return response()->json(['message' => "Không thể mời: {$names} đã ở trong nhóm khác."], 409);
+        }
+        
+        $pendingInvites = LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
+            ->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)
+            ->whereIn('ID_NGUOI_DUOCMOI', $userIds)
+            ->pluck('ID_NGUOI_DUOCMOI');
+
+        $invitesToCreate = [];
+        $notificationsToCreate = [];
+
+        foreach ($userIds as $userId) {
+            if ($pendingInvites->contains($userId)) {
+                continue;
+            }
+
+            $invitesToCreate[] = [
+                'ID_NHOM' => $nhom->ID_NHOM,
+                'ID_NGUOI_DUOCMOI' => $userId,
+                'ID_NGUOIMOI' => $user->ID_NGUOIDUNG,
+                'LOINHAN' => $validated['LOINHAN'],
+                'NGAY_HETHAN' => $expiresAt,
+                'TRANGTHAI' => LoimoiNhom::STATUS_PENDING,
+                'NGAYTAO' => $now,
+            ];
+            
+            $notificationsToCreate[] = [
+                'user_id' => $userId,
+                'type' => 'GROUP_INVITATION',
+                'data' => json_encode([
+                    'group_name' => $nhom->TEN_NHOM,
+                    'inviter_name' => $user->HODEM_VA_TEN,
+                ]),
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        
+        if (empty($invitesToCreate)) {
+            return response()->json(['message' => 'Các sinh viên này đã được mời trước đó và đang chờ phản hồi.'], 409);
+        }
+
+        LoimoiNhom::insert($invitesToCreate);
+        Notification::insert($notificationsToCreate);
+
+        return response()->json([
+            'message' => 'Đã gửi lời mời thành công đến ' . count($invitesToCreate) . ' sinh viên.',
+        ], 200);
     }
 }

@@ -413,8 +413,8 @@ class GroupAdminController extends Controller
             });
 
         $students = $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH')
-                          ->limit(20)
-                          ->get();
+                            ->limit(20)
+                            ->get();
 
         return response()->json($students);
     }
@@ -424,14 +424,21 @@ class GroupAdminController extends Controller
      */
     public function createWithMembers(Request $request)
     {
+        // ----- SỬA LỖI 500 (Dòng 439) -----
         $validated = $request->validate([
             'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
-            'TEN_NHOM' => ['required', 'string', 'max:100', Rule::unique('NHOM')->where('ID_KEHOACH', $validated['plan_id'])],
+            'TEN_NHOM' => [
+                'required', 
+                'string', 
+                'max:100', 
+                Rule::unique('NHOM')->where('ID_KEHOACH', $request->input('plan_id')) // Sửa $validated['plan_id'] thành $request->input('plan_id')
+            ],
             'MOTA' => 'nullable|string|max:255',
             'ID_NHOMTRUONG' => 'required|exists:NGUOIDUNG,ID_NGUOIDUNG',
             'member_ids' => 'required|array|min:1',
             'member_ids.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG',
         ]);
+        // ----- KẾT THÚC SỬA LỖI -----
 
         if (!in_array($validated['ID_NHOMTRUONG'], $validated['member_ids'])) {
             return response()->json(['message' => 'Nhóm trưởng phải là một trong các thành viên được chọn.'], 422);
@@ -520,8 +527,8 @@ class GroupAdminController extends Controller
                                 ->pluck('ID_SINHVIEN', 'ID_NGUOIDUNG');
 
         $existingStudentIdsInPlan = SinhvienThamgia::where('ID_KEHOACH', $planId)
-                                                    ->whereIn('ID_SINHVIEN', $studentMap->values())
-                                                    ->pluck('ID_SINHVIEN');
+                                                ->whereIn('ID_SINHVIEN', $studentMap->values())
+                                                ->pluck('ID_SINHVIEN');
 
         $missingStudentIds = $studentMap->values()->diff($existingStudentIdsInPlan);
 
