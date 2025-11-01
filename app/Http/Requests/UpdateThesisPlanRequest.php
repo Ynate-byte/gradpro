@@ -28,13 +28,14 @@ class UpdateThesisPlanRequest extends FormRequest
             'KHOAHOC' => 'required|string|max:10',
             'HEDAOTAO' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
             'SO_TUAN_THUCHIEN' => 'required|integer|min:1|max:52',
-            'NGAY_BATDAU' => 'required|date',
-            'NGAY_KETHUC' => 'required|date|after_or_equal:NGAY_BATDAU',
+            'NGAY_BATDAU' => 'required|date_format:Y-m-d',
+            'NGAY_KETHUC' => 'required|date_format:Y-m-d|after_or_equal:NGAY_BATDAU',
+
             'mocThoigians' => 'required|array|min:1',
             'mocThoigians.*.id' => 'nullable|integer',
             'mocThoigians.*.TEN_SUKIEN' => 'required|string|max:255',
             'mocThoigians.*.NGAY_BATDAU' => 'required|date',
-            'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU',
+            'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU', // Giữ nguyên 'date'
             'mocThoigians.*.MOTA' => 'nullable|string',
             'mocThoigians.*.VAITRO_THUCHIEN' => 'nullable|string|max:255',
         ];

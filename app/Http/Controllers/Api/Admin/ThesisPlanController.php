@@ -80,17 +80,18 @@ class ThesisPlanController extends Controller
 
             $planData = collect($validated)->except('mocThoigians')->all();
             
+            $currentUser = $request->user();
             $isTruongKhoa = $this->isTruongKhoa();
             
-            // Thiết lập trạng thái và người phê duyệt ban đầu
-            // Trưởng khoa -> Đã phê duyệt, Admin/Giáo vụ -> Chờ phê duyệt
-            $trangThai = $isTruongKhoa ? 'Đã phê duyệt' : 'Chờ phê duyệt';
-            $nguoiPheDuyet = $isTruongKhoa ? $request->user()->ID_NGUOIDUNG : null;
+            $trangThai = $isTruongKhoa ? 'Đã phê duyệt' : 'Bản nháp';
+            $nguoiPheDuyet = $isTruongKhoa ? $currentUser->ID_NGUOIDUNG : null;
 
             $plan = KehoachKhoaluan::create(array_merge($planData, [
-                'ID_NGUOITAO' => $request->user()->ID_NGUOIDUNG,
+                'ID_NGUOITAO' => $currentUser->ID_NGUOIDUNG,
                 'TRANGTHAI' => $trangThai,
                 'ID_NGUOIPHEDUYET' => $nguoiPheDuyet,
+                'NGAYTAO' => now(), // Đảm bảo NGAYTAO được set
+                'NGAYCAPNHAT' => now(), // Đảm bảo NGAYCAPNHAT được set
             ]));
 
             // Tạo các mốc thời gian liên quan
@@ -106,13 +107,9 @@ class ThesisPlanController extends Controller
 
             DB::commit();
             
-            // Xóa cache bộ lọc sau khi tạo kế hoạch mới
             Cache::forget('plan_filter_options');
 
-            if ($isTruongKhoa) {
-                 return response()->json($plan->load('mocThoigians', 'nguoiTao', 'nguoiPheDuyet'), 201);
-            }
-            return response()->json($plan->load('mocThoigians', 'nguoiTao'), 201);
+            return response()->json($plan->load('mocThoigians', 'nguoiTao', 'nguoiPheDuyet'), 201);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to create thesis plan: ' . $e->getMessage());
@@ -135,35 +132,40 @@ class ThesisPlanController extends Controller
     {
         $isCreator = $plan->ID_NGUOITAO == Auth::id();
         
-        // Kiểm tra quyền chỉnh sửa
         if ($this->isTruongKhoa()) {
-            // Trưởng khoa được sửa mọi trạng thái, trừ khi đã hoàn thành
-            if ($plan->TRANGTHAI === 'Đã hoàn thành') {
-                return response()->json(['message' => 'Không thể chỉnh sửa kế hoạch đã hoàn thành.'], 403);
-            }
+             if ($plan->TRANGTHAI === 'Đã hoàn thành') {
+                 return response()->json(['message' => 'Không thể chỉnh sửa kế hoạch đã hoàn thành.'], 403);
+             }
         } else {
-            // Admin và Giáo vụ có quyền sửa dựa trên trạng thái hiện tại
-            $canEditDraft = in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa']) && ($isCreator || $this->isAdmin());
-            $canEditActive = $plan->TRANGTHAI === 'Đang thực hiện' && ($this->isGiaoVu() || $this->isAdmin());
-
-            if (!($canEditDraft || $canEditActive)) {
-                return response()->json(['message' => 'Bạn không có quyền chỉnh sửa kế hoạch ở trạng thái này.'], 403);
-            }
+             $canEditDraft = in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa']) && ($isCreator || $this->isAdmin());
+             $canEditActive = $plan->TRANGTHAI === 'Đang thực hiện' && ($this->isGiaoVu() || $this->isAdmin());
+             if (!($canEditDraft || $canEditActive)) {
+                 return response()->json(['message' => 'Bạn không có quyền chỉnh sửa kế hoạch ở trạng thái này.'], 403);
+             }
         }
 
-
         $validated = $request->validated();
+        
+        $isPlanRunning = in_array($plan->TRANGTHAI, ['Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành']);
+        
+        $formattedPlanDate = $plan->NGAY_BATDAU->format('Y-m-d'); 
+
+        if ($isPlanRunning && isset($validated['NGAY_BATDAU']) && $validated['NGAY_BATDAU'] !== $formattedPlanDate) {
+            return response()->json(['message' => 'Không thể thay đổi Ngày Bắt Đầu khi kế hoạch đang thực hiện hoặc đã hoàn thành.'], 403);
+        }
+        
+        if ($isPlanRunning) {
+            unset($validated['NGAY_BATDAU']);
+        }
 
         try {
             DB::beginTransaction();
-
+            
+            // Cập nhật kế hoạch (chỉ với các trường đã validate và được phép)
             $plan->update(collect($validated)->except('mocThoigians')->all());
 
-            // Đồng bộ hóa các mốc thời gian (xóa những mốc không còn tồn tại)
             $incomingIds = collect($validated['mocThoigians'])->pluck('id')->filter();
             $plan->mocThoigians()->whereNotIn('ID', $incomingIds)->delete();
-
-            // Cập nhật hoặc tạo mới các mốc thời gian
             foreach ($validated['mocThoigians'] as $moc) {
                 MocThoigian::updateOrCreate(
                     ['ID' => $moc['id'] ?? null, 'ID_KEHOACH' => $plan->ID_KEHOACH],
@@ -177,45 +179,36 @@ class ThesisPlanController extends Controller
                 );
             }
             
-            // Xử lý thay đổi trạng thái sau khi cập nhật
             if (in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa'])) {
                 if (($this->isGiaoVu() || $this->isAdmin()) && ($isCreator || $this->isAdmin())) {
-                    // Admin/Giáo vụ sửa nháp -> Về Bản nháp (cần Gửi duyệt lại)
                     $plan->TRANGTHAI = 'Bản nháp';
                     $plan->BINHLUAN_PHEDUYET = null;
                 } elseif ($this->isTruongKhoa() && ($isCreator || $this->isAdmin())) {
-                    // Trưởng khoa tự sửa nháp/yêu cầu chỉnh sửa -> Duyệt luôn
                     $plan->TRANGTHAI = 'Đã phê duyệt';
                     $plan->BINHLUAN_PHEDUYET = null;
                     $plan->ID_NGUOIPHEDUYET = Auth::id();
                 }
             }
-            // Sửa khi đang Đang thực hiện
             elseif ($plan->TRANGTHAI === 'Đang thực hiện') {
-                if ($this->isGiaoVu()) {
-                    // Giáo vụ sửa -> Chuyển sang trạng thái chờ duyệt chỉnh sửa
-                    $plan->TRANGTHAI = 'Chờ duyệt chỉnh sửa';
-                    Log::info("Plan ID {$plan->ID_KEHOACH} updated by Giao Vu. Awaiting re-approval.");
-                } elseif ($this->isTruongKhoa() || $this->isAdmin()) {
-                    // Trưởng khoa/Admin sửa -> Tự động áp dụng, giữ nguyên trạng thái
-                    Log::info("Plan ID {$plan->ID_KEHOACH} updated and auto-approved by Truong Khoa/Admin.");
-                }
+                 if ($this->isGiaoVu()) {
+                     $plan->TRANGTHAI = 'Chờ duyệt chỉnh sửa';
+                     Log::info("Plan ID {$plan->ID_KEHOACH} updated by Giao Vu. Awaiting re-approval.");
+                 } elseif ($this->isTruongKhoa() || $this->isAdmin()) {
+                     Log::info("Plan ID {$plan->ID_KEHOACH} updated and auto-approved by Truong Khoa/Admin.");
+                 }
             }
-            // Trưởng khoa sửa các trạng thái chờ duyệt
             elseif ($this->isTruongKhoa()) {
                  if(in_array($plan->TRANGTHAI, ['Chờ phê duyệt', 'Chờ duyệt chỉnh sửa'])){
-                       $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
-                       $plan->ID_NGUOIPHEDUYET = Auth::id();
-                       $plan->BINHLUAN_PHEDUYET = null;
+                        $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
+                        $plan->ID_NGUOIPHEDUYET = Auth::id();
+                        $plan->BINHLUAN_PHEDUYET = null;
                  }
-                 // Nếu là 'Đã phê duyệt', 'Đang chấm điểm', trạng thái giữ nguyên
             }
             
             $plan->save();
 
             DB::commit();
             
-            // Xóa cache bộ lọc sau khi cập nhật
             Cache::forget('plan_filter_options');
 
             return response()->json($plan->load('mocThoigians'));
@@ -231,19 +224,23 @@ class ThesisPlanController extends Controller
      */
     public function destroy(KehoachKhoaluan $plan)
     {
-        if (!($plan->ID_NGUOITAO === Auth::id() || $this->isAdmin())) {
+        $isTruongKhoa = $this->isTruongKhoa();
+        $isCreatorOrAdmin = ($plan->ID_NGUOITAO === Auth::id() || $this->isAdmin());
+
+        if ($isTruongKhoa) {
+            if ($plan->TRANGTHAI === 'Đã hoàn thành') {
+                 return response()->json(['message' => 'Không thể xóa kế hoạch đã hoàn thành.'], 403);
+            }
+        } else if ($isCreatorOrAdmin) {
+            if ($plan->TRANGTHAI !== 'Bản nháp') {
+                return response()->json(['message' => 'Chỉ có thể xóa kế hoạch ở trạng thái "Bản nháp".'], 403);
+            }
+        } else {
              return response()->json(['message' => 'Bạn không có quyền xóa kế hoạch này.'], 403);
         }
-
-        if ($plan->TRANGTHAI !== 'Bản nháp') {
-            return response()->json(['message' => 'Chỉ có thể xóa kế hoạch ở trạng thái "Bản nháp".'], 403);
-        }
-
+        
         $plan->delete();
-
-        // Xóa cache bộ lọc sau khi xóa kế hoạch
         Cache::forget('plan_filter_options');
-
         return response()->json(null, 204);
     }
 
@@ -251,19 +248,19 @@ class ThesisPlanController extends Controller
      * Gửi kế hoạch (từ 'Bản nháp') để chuyển sang trạng thái 'Chờ phê duyệt'.
      * Chỉ người tạo (là Giáo vụ/Admin) mới có quyền gửi.
      */
-    public function submitForApproval(KehoachKhoaluan $plan)
+    public function submitForApproval(Request $request, KehoachKhoaluan $plan)
     {
          if (!(($this->isGiaoVu() || $this->isAdmin()) && $plan->ID_NGUOITAO === Auth::id())) {
-             return response()->json(['message' => 'Bạn không có quyền gửi duyệt kế hoạch này.'], 403);
+              return response()->json(['message' => 'Bạn không có quyền gửi duyệt kế hoạch này.'], 403);
          }
 
-        if ($plan->TRANGTHAI !== 'Bản nháp') {
-            return response()->json(['message' => 'Chỉ có thể gửi duyệt kế hoạch ở trạng thái "Bản nháp".'], 400);
-        }
-
-        $plan->update(['TRANGTHAI' => 'Chờ phê duyệt']);
-        
-        return response()->json(['message' => 'Đã gửi kế hoạch để phê duyệt thành công.']);
+         if ($plan->TRANGTHAI !== 'Bản nháp') {
+             return response()->json(['message' => 'Chỉ có thể gửi duyệt kế hoạch ở trạng thái "Bản nháp".'], 400);
+         }
+         
+         $plan->update(['TRANGTHAI' => 'Chờ phê duyệt']);
+         
+         return response()->json(['message' => 'Đã gửi kế hoạch để phê duyệt thành công.']);
     }
 
     /**
