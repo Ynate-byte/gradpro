@@ -29,12 +29,19 @@ class GroupAdminController extends Controller
             'plan_id' => 'sometimes|nullable|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
             'search' => 'nullable|string|max:100',
             'statuses' => 'nullable|array',
-            'statuses.*' => 'in:Đang mở,Đã đủ thành viên',
+            'statuses.*' => 'in:Đang mở,Đã đủ thành viên,Đang thực hiện,Đã hoàn thành,Không đạt',
             'is_special' => 'nullable|array',
             'is_special.*' => 'boolean',
         ]);
 
-        $query = Nhom::with(['nhomtruong', 'chuyennganh', 'khoabomon', 'thanhviens.nguoidung', 'phancongDetaiNhom']);
+        $query = Nhom::with([
+            'nhomtruong', 
+            'chuyennganh', 
+            'khoabomon', 
+            'thanhviens.nguoidung', 
+            'phancongDetaiNhom.detai',
+            'phancongDetaiNhom.gvhd.nguoidung'
+        ]);
 
         if ($request->filled('plan_id')) {
             $query->where('ID_KEHOACH', $request->input('plan_id'));
@@ -45,13 +52,36 @@ class GroupAdminController extends Controller
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('TEN_NHOM', 'like', '%' . $searchTerm . '%')
                   ->orWhereHas('thanhviens.nguoidung', function ($subQ) use ($searchTerm) {
-                      $subQ->where('HODEM_VA_TEN', 'like', '%' . $searchTerm . '%');
-                  });
+                        $subQ->where('HODEM_VA_TEN', 'like', '%' . $searchTerm . '%');
+                    });
             });
         }
 
         if ($request->filled('statuses')) {
-            $query->whereIn('TRANGTHAI', $request->statuses);
+            $statuses = $request->statuses;
+            
+            $groupStatuses = array_intersect($statuses, ['Đang mở', 'Đã đủ thành viên']);
+            $assignmentStatuses = array_intersect($statuses, ['Đang thực hiện', 'Đã hoàn thành', 'Không đạt']);
+
+            $query->where(function ($q) use ($groupStatuses, $assignmentStatuses) {
+                if (!empty($groupStatuses) && !empty($assignmentStatuses)) {
+                    $q->where(function ($subQ) use ($groupStatuses) {
+                        $subQ->whereIn('TRANGTHAI', $groupStatuses)
+                             ->whereDoesntHave('phancongDetaiNhom');
+                    })->orWhereHas('phancongDetaiNhom', function ($subQ) use ($assignmentStatuses) {
+                        $subQ->whereIn('TRANGTHAI', $assignmentStatuses);
+                    });
+                } elseif (!empty($groupStatuses)) {
+                    $q->where(function ($subQ) use ($groupStatuses) {
+                        $subQ->whereIn('TRANGTHAI', $groupStatuses)
+                             ->whereDoesntHave('phancongDetaiNhom');
+                    });
+                } elseif (!empty($assignmentStatuses)) {
+                    $q->whereHas('phancongDetaiNhom', function ($subQ) use ($assignmentStatuses) {
+                        $subQ->whereIn('TRANGTHAI', $assignmentStatuses);
+                    });
+                }
+            });
         }
 
         if ($request->filled('is_special')) {

@@ -30,7 +30,8 @@ import {
     CheckCircle,
     XCircle,
     AlertCircle,
-    RefreshCw
+    RefreshCw,
+    UserCircle, // <-- ĐÃ THÊM ICON MỚI
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -152,6 +153,11 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
     const phancong = group?.phancong_detai_nhom;
     const phancongId = phancong?.ID_PHANCONG;
 
+    // ----- SỬA ĐỔI: Thêm 2 biến này -----
+    const detai = phancong?.detai;
+    const gvhd = phancong?.gvhd;
+    // ----- KẾT THÚC SỬA ĐỔI -----
+
     // SỬA LỖI 403/500: Hàm fetchHistory giờ đã gọi API của Admin
     const fetchHistory = useCallback(async () => {
         if (!phancongId) {
@@ -225,18 +231,45 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                 {/* Khu vực nội dung có thể cuộn */}
                 <ScrollArea className="flex-grow overflow-y-auto">
                     <div className="p-6 space-y-6">
-                        {/* Card thông tin chung của nhóm (Giữ nguyên) */}
+                        {/* Card thông tin chung của nhóm (ĐÃ SỬA ĐỔI) */}
                         <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
                             <CardHeader>
                                 <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
                                     <Info className="h-5 w-5 text-blue-500" /> Thông tin chung
                                 </CardTitle>
                             </CardHeader>
+                            {/* ----- SỬA ĐỔI NỘI DUNG CARD ----- */}
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4">
-                                <InfoItem icon={BookOpen} label="Thuộc Kế hoạch ID" value={group.ID_KEHOACH} />
-                                <InfoItem icon={CalendarDays} label="Ngày tạo" value={formatNullableDate(group.NGAYTAO)} />
-                                <InfoItem icon={Clock} label="Cập nhật lần cuối" value={formatNullableDate(group.NGAYCAPNHAT)} />
+                                {/* 1. Xóa InfoItem ID_KEHOACH */}
+
+                                {/* 2. Thêm InfoItem cho Đề tài (nếu có) */}
+                                <InfoItem 
+                                    icon={BookOpen} 
+                                    label="Đề tài thực hiện" 
+                                    value={detai?.TEN_DETAI} 
+                                    className="sm:col-span-2" // Choán 2 cột
+                                />
+                                
+                                {/* 3. Thêm InfoItem cho GVHD (nếu có) */}
+                                <InfoItem 
+                                    icon={UserCircle} 
+                                    label="Giảng viên hướng dẫn" 
+                                    value={gvhd?.nguoidung?.HODEM_VA_TEN} // Truy cập sâu vào nguoidung
+                                    className="sm:col-span-2" // Choán 2 cột
+                                />
+
+                                <InfoItem 
+                                    icon={CalendarDays} 
+                                    label="Ngày tạo nhóm" 
+                                    value={formatNullableDate(group.NGAYTAO)} 
+                                />
+                                <InfoItem 
+                                    icon={Clock} 
+                                    label="Cập nhật lần cuối" 
+                                    value={formatNullableDate(group.NGAYCAPNHAT)} 
+                                />
                             </CardContent>
+                            {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
                         </Card>
 
                         {/* Card danh sách thành viên */}
