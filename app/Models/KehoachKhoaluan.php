@@ -59,4 +59,9 @@ class KehoachKhoaluan extends Model
     {
         return $this->hasMany(Nhom::class, 'ID_KEHOACH', 'ID_KEHOACH');
     }
+
+    public function hoidongs()
+    {
+        return $this->hasMany(Hoidong::class, 'ID_KEHOACH', 'ID_KEHOACH');
+    }
 }

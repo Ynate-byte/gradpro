@@ -13,4 +13,22 @@ class Chuyennganh extends Model
     protected $primaryKey = 'ID_CHUYENNGANH';
     public $timestamps = false;
     const CREATED_AT = 'NGAYTAO';
+
+    protected $fillable = [
+        'MA_CHUYENNGANH',
+        'TEN_CHUYENNGANH',
+        'MOTA',
+        'TRANGTHAI_KICHHOAT',
+    ];
+
+    public function giangviens()
+    {
+        // Giả định giảng viên cũng có ID_CHUYENNGANH (nếu không, quan hệ này sẽ không hoạt động)
+        return $this->hasMany(Giangvien::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');
+    }
+
+    public function hoidongs()
+    {
+        return $this->hasMany(Hoidong::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');
+    }
 }

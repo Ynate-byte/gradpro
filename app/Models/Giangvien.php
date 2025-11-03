@@ -31,4 +31,14 @@ class Giangvien extends Model
     {
         return $this->belongsTo(KhoaBomon::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
     }
+
+    public function hoidongs()
+    {
+        return $this->belongsToMany(
+            \App\Models\Hoidong::class,
+            'HOIDONG_GIANGVIEN', // Tên bảng pivot
+            'ID_GIANGVIEN',      // Khóa ngoại của model hiện tại
+            'ID_HOIDONG'         // Khóa ngoại của model liên kết
+        )->withPivot('VAITRO');
+    }
 }

@@ -20,6 +20,10 @@ const StudentThesisTopicsPage = lazy(() => import('./features/student/thesis-top
 // --- Import các components Giảng viên ---
 const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
 const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/groups-management/index.jsx'));
+// [ĐÃ CẬP NHẬT] Đường dẫn import mới
+const GiangVienHoiDong = lazy(() => import('./features/lecturer/council/index.jsx'));
+const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCouncilPage.jsx'));
+const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx')); 
 
 // --- Import các components Quản trị ---
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
@@ -31,6 +35,11 @@ const TemplateManagementPage = lazy(() => import('./features/admin/thesis-plan-t
 const TemplateFormPage = lazy(() => import('./features/admin/thesis-plan-template-management/TemplateFormPage.jsx'));
 const AdminThesisTopicsPage = lazy(() => import('./features/admin/thesis-topic-management/index.jsx'));
 const SubmissionManagementPage = lazy(() => import('./features/admin/submission-management/index.jsx'));
+const HoidongPage = lazy(() => import('./features/admin/hoidong/index.jsx'));
+
+// Trang chấm điểm của Admin
+const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomChamDiem.jsx'));
+const ChamDiemChiTiet = lazy(() => import('./features/admin/chamdiem/ChamDiemChiTiet.jsx'));
 
 
 // Component placeholder cho các trang chưa có nội dung
@@ -63,17 +72,22 @@ function PublicRoute({ children }) {
 function App() {
   const { user } = useAuth();
 
-  // ----- THÊM MỚI: Logic kiểm tra quyền Admin -----
-  const userRoleName = user?.vaitro?.TEN_VAITRO;
-  const userPositionName = user?.giangvien?.CHUCVU;
+  // ----- Logic kiểm tra quyền -----
+  const role = user?.vaitro?.TEN_VAITRO;
+  const position = user?.giangvien?.CHUCVU;
 
-  const isAdmin = userRoleName === 'Admin';
-  const isTruongKhoa = userRoleName === 'Trưởng khoa' || userPositionName === 'Trưởng khoa';
-  const isGiaoVu = userRoleName === 'Giáo vụ' || userPositionName === 'Giáo vụ';
+  const isAdmin = role === 'Admin';
+  const isTruongKhoa = role === 'Trưởng khoa' || position === 'Trưởng khoa';
+  const isGiaoVu = role === 'Giáo vụ' || position === 'Giáo vụ';
+  const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role); // Giảng viên thường
+  const isSinhVien = role === 'Sinh viên';
 
-  // Admin, Trưởng khoa, Giáo vụ đều có thể xem các route /admin
+  // Quyền xem menu Admin (Admin, Trưởng khoa, Giáo vụ)
   const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu;
-  // ----- KẾT THÚC THÊM MỚI -----
+  // Quyền xem các mục của Giảng viên (GV, TK, GVụ, Admin)
+  const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
+  // Quyền chấm điểm (GV, TK, GVụ, Admin)
+  const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
 
   return (
@@ -110,13 +124,7 @@ function App() {
           <Route path="history" element={<PlaceholderPage title="Lịch sử" />} />
           <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
           <Route path="students" element={<PlaceholderPage title="Sinh viên" />} />
-          {/* Routes chung cho tất cả */}
-          {user && user.vaitro.TEN_VAITRO === 'Giảng viên' && (
-            <>
-              <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />
-              <Route path="projects/groups" element={<PlaceholderPage title="Quản lý nhóm" />} />
-            </>
-          )}
+
           <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
           <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />
 
@@ -125,7 +133,7 @@ function App() {
           <Route path="news/:id" element={<NewsDetail />} />
 
           {/* Routes dành cho Sinh viên */}
-          {user && user.vaitro.TEN_VAITRO === 'Sinh viên' && (
+          {isSinhVien && (
             <>
               <Route path="projects/topics" element={<StudentThesisTopicsPage />} />
               <Route path="projects/my-plans" element={<MyPlansPage />} />
@@ -134,24 +142,37 @@ function App() {
             </>
           )}
 
-          {/* Routes dành cho Giảng viên */}
-          {user && user.vaitro.TEN_VAITRO === 'Giảng viên' && (
+          {/* Routes dành cho Giảng viên (Bao gồm GV, TK, GVụ, Admin) */}
+          {canViewGiangVienRoutes && (
             <>
-              <Route path="lecturer/thesis-topics" element={<LecturerThesisTopicsPage />} />
+              {!isSinhVien && <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />}
               <Route path="lecturer/groups-management" element={<LecturerGroupsManagementPage />} />
+              
+              {/* [ĐÃ CẬP NHẬT] Routes cho Hội đồng (Giảng viên) */}
+              <Route path="lecturer/council" element={<GiangVienHoiDong />} />
+              <Route path="lecturer/council/:id" element={<GiangVienChinhSua />} />
+              
+              {/* [ĐÃ CẬP NHẬT] Routes cho Chấm điểm (Giảng viên) */}
+              <Route path="lecturer/grading" element={<LecturerGradingPage />} />
             </>
           )}
 
-          {/* ----- SỬA ĐỔI: Dùng canViewAdminRoutes ----- */}
+          {/* Routes dành cho Admin/Giáo vụ/Trưởng khoa */}
+          {canChamDiem && (
+            <>
+              {/* Route cho Admin nhập điểm hộ */}
+              <Route path="admin/cham-diem" element={<ListNhomChamDiem />} />
+              <Route path="admin/cham-diem/:idNhom" element={<ChamDiemChiTiet />} />  
+            </>
+          )}
+
           {/* Routes dành cho Admin, Trưởng Khoa, Giáo Vụ */}
-          {user && canViewAdminRoutes && (
+          {canViewAdminRoutes && (
             <>
               <Route path="admin/users" element={<UserManagementPage />} />
               <Route path="admin/groups" element={<GroupAdminPage />} />
-
-              {/* Routes dành cho Admin Quản lý Tin tức */}
               <Route path="admin/news" element={<NewsManagementPage />} />
-
+              
               {/* Routes Quản lý Kế hoạch Khóa luận */}
               <Route path="admin/thesis-plans" element={<ThesisPlanManagementPage />} />
               <Route path="admin/thesis-plans/create" element={<PlanFormPage />} />
@@ -165,12 +186,15 @@ function App() {
               <Route path="admin/templates" element={<TemplateManagementPage />} />
               <Route path="admin/templates/create" element={<TemplateFormPage />} />
               <Route path="admin/templates/:templateId/edit" element={<TemplateFormPage />} />
+              
               {/* Routes Quản lý Đề tài Khóa luận */}
               <Route path="admin/thesis-topics" element={<AdminThesisTopicsPage />} />
               <Route path="admin/submissions" element={<SubmissionManagementPage />} />
+
+              {/* Routes Quản lý Hội đồng */}
+              <Route path="admin/hoidong/*" element={<HoidongPage />} />
             </>
           )}
-          {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
         </Route>
 
         {/* Route dự phòng (chuyển hướng về trang chủ) */}

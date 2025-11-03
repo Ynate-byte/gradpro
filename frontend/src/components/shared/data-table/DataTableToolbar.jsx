@@ -45,6 +45,7 @@ export function DataTableToolbar({
   chuyenNganhFilterOptions,
   khoaBomonFilterColumnId,
   khoaBomonFilterOptions,
+  khoaBomonFilterTitle,
 }) {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState(null);
@@ -122,7 +123,7 @@ export function DataTableToolbar({
         <DataTableFacetedFilterGroup
             key="khoa_bomon_filter"
             column={table.getColumn(khoaBomonFilterColumnId || "khoa_bomon_id")}
-            title="Khoa/Bộ môn"
+            title={khoaBomonFilterTitle || "Khoa/Bộ môn"}
             options={khoaBomonFilterOptions}
             className="min-w-[200px]"
         />

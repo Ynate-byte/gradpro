@@ -73,4 +73,36 @@ class Nhom extends Model
     {
         return $this->hasOneThrough(Detai::class, PhancongDetaiNhom::class, 'ID_NHOM', 'ID_DETAI', 'ID_NHOM', 'ID_DETAI');
     }
+
+    public function hoidongs()
+    {
+        return $this->belongsToMany(
+            Hoidong::class,
+            'HOIDONG_NHOM', // Tên bảng pivot
+            'ID_NHOM',
+            'ID_HOIDONG'
+        )
+        ->withTimestamps('created_at', 'updated_at');
+    }
+
+
+    public function diemTongKet()
+    {
+        return $this->hasOne(DiemTongKet::class, 'ID_NHOM', 'ID_NHOM');
+    }
+
+    public function diemHuongDan()
+    {
+        return $this->hasMany(DiemHuongDan::class, 'ID_NHOM', 'ID_NHOM');
+    }
+
+    public function diemPhanBien()
+    {
+        return $this->hasMany(DiemPhanBien::class, 'ID_NHOM', 'ID_NHOM');
+    }
+
+    public function diemHoiDong()
+    {
+        return $this->hasMany(DiemHoiDong::class, 'ID_NHOM', 'ID_NHOM');
+    }
 }

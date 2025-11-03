@@ -40,7 +40,8 @@ class GroupAdminController extends Controller
             'khoabomon', 
             'thanhviens.nguoidung', 
             'phancongDetaiNhom.detai',
-            'phancongDetaiNhom.gvhd.nguoidung'
+            'phancongDetaiNhom.gvhd.nguoidung',
+            'diemTongKet'
         ]);
 
         if ($request->filled('plan_id')) {
