@@ -16,6 +16,14 @@ use App\Http\Controllers\Api\Admin\SubmissionController as AdminSubmissionContro
 use App\Http\Controllers\Api\Admin\GiangVienController;
 use App\Http\Controllers\Api\Admin\HoiDongController;
 use App\Http\Controllers\Api\ChamDiemController;
+// ----- [THAY ĐỔI] Bổ sung use statements -----
+use App\Http\Controllers\Api\Admin\TopicAssignmentController;
+use App\Http\Controllers\Api\DepartmentHead\TopicAssignmentController as DepartmentHeadTopicController;
+use App\Http\Controllers\Api\Lecturer\TopicAssignmentController as LecturerTopicController;
+use App\Http\Controllers\Api\Lecturer\QuotaController as LecturerQuotaController;
+use App\Http\Controllers\Api\Admin\QuotaController;
+use App\Http\Controllers\Api\DepartmentHead\QuotaController as DepartmentHeadQuotaController;
+// ----- [KẾT THÚC THAY ĐỔI] -----
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -57,7 +65,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::post('/requests/{yeucau}/cancel', [NhomController::class, 'cancelJoinRequest']);
     Route::get('/student/my-active-plans', [NhomController::class, 'getActivePlansForStudent']);
-    Route::get('/groups/{id}', [NhomController::class, 'getGroupById']); // Dùng cho Giảng viên xem chi tiết
+    // ----- [THAY ĐỔI] Route getGroupById đã được di chuyển xuống dưới -----
 
     // ---------------- LỜI MỜI & THÔNG BÁO ----------------
     Route::get('/invitations', [InvitationController::class, 'getPendingInvitations']);
@@ -88,6 +96,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/submit-approval', [DetaiController::class, 'submitForApproval']);
         Route::post('/{id}/approve-reject', [DetaiController::class, 'approveOrReject']); // Của Giảng viên tự duyệt? (đã tồn tại)
         Route::post('/{id}/suggestions', [DetaiController::class, 'addSuggestion']);
+        // ----- [THAY ĐỔI] Thêm route reply suggestion -----
+        Route::post('/suggestions/{suggestionId}/reply', [DetaiController::class, 'replyToSuggestion']);
+        // ----- [KẾT THÚC THAY ĐỔI] -----
         Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
         Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); // GV xem nhóm đăng ký đề tài của mình
@@ -95,15 +106,21 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/my-registered-topic', [DetaiController::class, 'getMyRegisteredTopic']);
         Route::get('/giangvien/groups', [DetaiController::class, 'getGroupsForLecturer']); // GV xem các nhóm mình HƯỚNG DẪN
     });
+    // ----- [THAY ĐỔI] Bổ sung comment và di chuyển route getGroupById -----
+    // Route kiểm tra trưởng nhóm
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);
+    
+    // Route lấy chi tiết nhóm
+    Route::get('/groups/{id}', [NhomController::class, 'getGroupById']);
+    // ----- [KẾT THÚC THAY ĐỔI] -----
 
     Route::prefix('admin')->group(function () {
 
         // ----- KẾ HOẠCH KHÓA LUẬN -----
         Route::get('thesis-plans/list-all', [ThesisPlanController::class, 'getAllPlans']);
         Route::post('thesis-plans/preview-new', [ThesisPlanController::class, 'previewNewPlan']);
-        Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']);
+        Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']); // <-- ĐÃ DI CHUYỂN
         Route::apiResource('thesis-plans', ThesisPlanController::class)->parameters(['thesis-plans' => 'plan']);
         Route::post('thesis-plans/{plan}/submit-approval', [ThesisPlanController::class, 'submitForApproval']);
         Route::post('thesis-plans/{plan}/approve', [ThesisPlanController::class, 'approve']);
@@ -151,6 +168,18 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/approve-reject', [DetaiAdminController::class, 'approveOrReject']);
         });
         
+        // ----- [THAY ĐỔI] Thêm route Quản lý Quota (Admin) -----
+        Route::prefix('quotas')->group(function () {
+            Route::get('/departments', [QuotaController::class, 'getDepartments']);
+            Route::get('/assignments', [QuotaController::class, 'getAssignments']);
+            Route::get('/statistics', [QuotaController::class, 'getStatistics']);
+            Route::post('/assign-department-quota', [QuotaController::class, 'assignDepartmentQuota']);
+            Route::post('/auto-assign-quotas', [QuotaController::class, 'autoAssignQuotas']);
+            Route::put('/{assignment}/status', [QuotaController::class, 'updateAssignmentStatus']);
+            Route::delete('/{assignment}', [QuotaController::class, 'removeAssignment']);
+        });
+        // ----- [KẾT THÚC THAY ĐỔI] -----
+        
         Route::prefix('submissions')->group(function () {
             Route::get('/', [AdminSubmissionController::class, 'index']); // Lấy danh sách chờ duyệt
             Route::get('/{submission}', [AdminSubmissionController::class, 'show']); // Lấy chi tiết 1 lần nộp
@@ -179,9 +208,49 @@ Route::middleware('auth:sanctum')->group(function () {
 
     });
 
+    // ----- [THAY ĐỔI] Thêm routes cho Trưởng bộ môn -----
+    Route::prefix('department-head')->group(function () {
+        // --Phân công quota đề tài cho giảng viên trong bộ môn ---
+        Route::prefix('quotas')->group(function () {
+            Route::get('/lecturers', [DepartmentHeadQuotaController::class, 'getLecturers']);
+            Route::post('/assign-lecturer-quota', [DepartmentHeadQuotaController::class, 'assignLecturerQuota']);
+            Route::post('/auto-assign-lecturer-quotas', [DepartmentHeadQuotaController::class, 'autoAssignLecturerQuotas']);
+        });
+
+        // --Phân công đề tài cụ thể cho giảng viên trong bộ môn ---
+        Route::prefix('topic-assignments')->group(function () {
+            Route::get('/lecturers', [DepartmentHeadTopicController::class, 'getLecturers']);
+            Route::post('/assign-topic-quota', [DepartmentHeadTopicController::class, 'assignTopicQuota']);
+            Route::post('/auto-assign-topic-quotas', [DepartmentHeadTopicController::class, 'autoAssignTopicQuotas']);
+            Route::get('/available-topics', [DepartmentHeadTopicController::class, 'getAvailableTopics']);
+            Route::post('/assign-specific-topic', [DepartmentHeadTopicController::class, 'assignSpecificTopic']);
+        });
+    });
+    // ----- [KẾT THÚC THAY ĐỔI] -----
+
+
+    // ----- [THAY ĐỔI] Bổ sung routes cho Giảng viên -----
     Route::prefix('giangvien')->group(function () {
         Route::get('/my-hoidong', [HoiDongController::class, 'getHoiDongByGiangVien']);
+
+        // --Phân công quota đề tài cho giảng viên trong bộ môn ---
+        Route::prefix('quotas')->group(function () {
+            Route::get('/lecturers', [LecturerQuotaController::class, 'getLecturers']);
+            Route::post('/assign-lecturer-quota', [LecturerQuotaController::class, 'assignLecturerQuota']);
+            Route::post('/auto-assign-lecturer-quotas', [LecturerQuotaController::class, 'autoAssignLecturerQuotas']);
+            Route::get('/my-quota', [LecturerQuotaController::class, 'getMyQuota']);
+        });
+
+        // --Phân công đề tài cho giảng viên trong cùng bộ môn ---
+        Route::prefix('topic-assignments')->group(function () {
+            Route::get('/lecturers', [LecturerTopicController::class, 'getLecturers']);
+            Route::post('/assign-topic-quota', [LecturerTopicController::class, 'assignTopicQuota']);
+            Route::post('/auto-assign-topic-quotas', [LecturerTopicController::class, 'autoAssignTopicQuotas']);
+            Route::get('/available-topics', [LecturerTopicController::class, 'getAvailableTopics']);
+            Route::post('/assign-specific-topic', [LecturerTopicController::class, 'assignSpecificTopic']);
+        });
     });
+    // ----- [KẾT THÚC THAY ĐỔI] -----
 
     Route::prefix('chamdiem')->group(function () {
         Route::get('/my-tasks', [ChamDiemController::class, 'getMyGradingTasks']);

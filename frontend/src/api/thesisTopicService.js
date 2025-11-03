@@ -48,6 +48,11 @@ const thesisTopicService = {
         const response = await axiosConfig.post(`/detai/${id}/suggestions`, suggestionData);
         return response;
     },
+    
+    replyToSuggestion: async (suggestionId, replyData) => {
+        const response = await axiosConfig.post(`/detai/suggestions/${suggestionId}/reply`, replyData);
+        return response;
+    },
 
     // Get available topics for registration
     getAvailableTopics: async (params = {}) => {

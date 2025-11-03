@@ -17,12 +17,16 @@ class GoiyDetai extends Model
     protected $fillable = [
         'ID_DETAI',
         'ID_NGUOI_GOIY',
+        'ID_GIANGVIEN',
         'NOIDUNG_GOIY',
         'NGAYTAO',
+        'PHAN_HOI',
+        'NGAY_PHAN_HOI',
     ];
 
     protected $casts = [
         'NGAYTAO' => 'datetime',
+        'NGAY_PHAN_HOI' => 'datetime',
     ];
 
     // Relationships
@@ -34,5 +38,10 @@ class GoiyDetai extends Model
     public function nguoiGoiy(): BelongsTo
     {
         return $this->belongsTo(Giangvien::class, 'ID_NGUOI_GOIY', 'ID_GIANGVIEN');
+    }
+
+    public function giangvien(): BelongsTo
+    {
+        return $this->belongsTo(Giangvien::class, 'ID_GIANGVIEN', 'ID_GIANGVIEN');
     }
 }

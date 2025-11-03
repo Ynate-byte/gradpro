@@ -10,10 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
-import { Send, UserPlus } from 'lucide-react';
+import { Send, UserPlus, MessageSquare } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import SuggestionDialog from './SuggestionDialog';
+import ReplyDialog from './ReplyDialog';
 import { toast } from 'sonner';
 
 const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
@@ -21,6 +22,8 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(false);
     const [showSuggestionDialog, setShowSuggestionDialog] = useState(false);
+    const [showReplyDialog, setShowReplyDialog] = useState(false);
+    const [selectedSuggestion, setSelectedSuggestion] = useState(null);
 
     useEffect(() => {
         if (open && topicId) {
@@ -57,7 +60,14 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
         }
     };
 
+    const handleReplyToSuggestion = (suggestion) => {
+        setSelectedSuggestion(suggestion);
+        setShowReplyDialog(true);
+    };
 
+    const handleReplySuccess = () => {
+        loadTopicDetails(); // Reload to show updated suggestion with reply
+    };
 
     const getStatusBadge = (status) => {
         const statusConfig = {
@@ -213,13 +223,44 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                                         <div key={suggestion.ID_GOIY} className="border rounded-lg p-4 bg-gray-50">
                                             <div className="flex justify-between items-start mb-2">
                                                 <span className="text-sm font-medium text-gray-700">
-                                                    {suggestion.nguoiGoiy?.nguoidung?.HODEM_VA_TEN || 'N/A'}
+                                                    {suggestion.giangvien?.nguoidung?.HODEM_VA_TEN || 'N/A'}
                                                 </span>
                                                 <span className="text-xs text-gray-500">
                                                     {new Date(suggestion.NGAYTAO).toLocaleDateString('vi-VN')}
                                                 </span>
                                             </div>
-                                            <p className="text-gray-600">{suggestion.NOIDUNG_GOIY}</p>
+                                            <p className="text-gray-600 mb-3">{suggestion.NOIDUNG_GOIY}</p>
+
+                                            {/* Reply section */}
+                                            {suggestion.PHAN_HOI && (
+                                                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mt-3">
+                                                    <div className="flex justify-between items-start mb-1">
+                                                        <span className="text-sm font-medium text-blue-700">
+                                                            Phản hồi từ người tạo đề tài
+                                                        </span>
+                                                        <span className="text-xs text-blue-600">
+                                                            {suggestion.NGAY_PHAN_HOI ? new Date(suggestion.NGAY_PHAN_HOI).toLocaleDateString('vi-VN') : ''}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-blue-600">{suggestion.PHAN_HOI}</p>
+                                                </div>
+                                            )}
+
+                                            {/* Reply button for topic proposer */}
+                                            {topic.ID_NGUOI_DEXUAT === user?.giangvien?.ID_GIANGVIEN &&
+                                                !suggestion.PHAN_HOI &&
+                                                (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Chờ duyệt' || topic.TRANGTHAI === 'Yêu cầu chỉnh sửa') && (
+                                                    <div className="mt-3">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleReplyToSuggestion(suggestion)}
+                                                        >
+                                                            <MessageSquare className="w-4 h-4 mr-1" />
+                                                            Phản hồi
+                                                        </Button>
+                                                    </div>
+                                                )}
                                         </div>
                                     ))}
                                 </div>
@@ -262,6 +303,13 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                     onOpenChange={setShowSuggestionDialog}
                     onSubmit={handleSubmitSuggestion}
                     topic={topic}
+                />
+
+                <ReplyDialog
+                    open={showReplyDialog}
+                    onOpenChange={setShowReplyDialog}
+                    suggestion={selectedSuggestion}
+                    onReplySuccess={handleReplySuccess}
                 />
             </DialogContent>
         </Dialog>

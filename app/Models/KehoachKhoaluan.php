@@ -24,6 +24,7 @@ class KehoachKhoaluan extends Model
         'SO_TUAN_THUCHIEN',
         'SO_THANHVIEN_TOITHIEU',
         'SO_THANHVIEN_TOIDA',
+        'SO_NHOM_DUKIEN',
         'TRANGTHAI',
         'TRANGTHAI_KICHHOAT',
         'NGAY_BATDAU',

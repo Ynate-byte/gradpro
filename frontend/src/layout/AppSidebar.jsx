@@ -28,7 +28,7 @@ export function AppSidebar() {
 
     // --- Kiểm tra vai trò và chức vụ ---
     const role = user?.vaitro?.TEN_VAITRO;
-    const position = user?.giangvien?.CHUCVU;
+    const position = user?.giangvien?.CHUCVU; // Biến này được sử dụng cho logic của bạn
 
     const isAdmin = role === 'Admin';
     const isTruongKhoa = role === 'Trưởng khoa' || position === 'Trưởng khoa';
@@ -73,6 +73,14 @@ export function AppSidebar() {
                         // Giảng viên (và các vai trò cao hơn)
                         ...(canViewGiangVienRoutes ? [
                             { href: "/lecturer/groups-management", title: "Quản lý nhóm SV" },
+                            
+                            // ----- [ĐOẠN CODE MỚI CỦA BẠN ĐÃ ĐƯỢC THÊM VÀO ĐÂY] -----
+                            {
+                                href: "/lecturer/quota-management",
+                                title: position === 'Trưởng bộ môn' ? "Phân công" : "Thông tin Quota"
+                            },
+                            // ----- [KẾT THÚC ĐOẠN CODE MỚI] -----
+
                         ] : []),
                     ],
                 },
@@ -204,11 +212,11 @@ export function AppSidebar() {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" className="w-56">
-                          <DropdownMenuLabel>GradPro</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => navigate('/')}>
+                        <DropdownMenuLabel>GradPro</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onClick={() => navigate('/')}>
                             <LayoutDashboard className="mr-2 size-4" /> Trang chủ
-                          </DropdownMenuItem>
+                        </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </SidebarHeader>
@@ -261,7 +269,7 @@ export function AppSidebar() {
                                 <span className="text-sm font-semibold truncate w-full">{user?.HODEM_VA_TEN}</span>
                                 <span className="text-xs text-muted-foreground truncate w-full">{user?.EMAIL}</span>
                             </div>
-                             <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden shrink-0" />
+                               <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden shrink-0" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" className="w-56">

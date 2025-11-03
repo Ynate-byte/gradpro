@@ -131,7 +131,7 @@ class DetaiController extends Controller
            'chuyennganh',
            'kehoachKhoaluan',
            'goiyDetai' => function ($query) {
-               $query->with(['nguoiGoiy.nguoidung'])
+               $query->with(['nguoiGoiy.nguoidung', 'giangvien.nguoidung'])
                      ->orderBy('NGAYTAO', 'desc');
            },
            'phancongDetaiNhom.nhom.nhomtruong',
@@ -213,9 +213,12 @@ class DetaiController extends Controller
        $currentUser = Auth::user();
        $lecturer = Giangvien::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
 
-    if (!$lecturer || $topic->ID_NGUOI_DEXUAT != $lecturer->ID_GIANGVIEN) {
-    return response()->json(['message' => 'Unauthorized'], 403);
-}
+        $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
+       $isAdmin = $currentUser->vaitro->TEN_VAITRO === 'Admin';
+
+       if (!$isProposer && !$isAdmin) {
+           return response()->json(['message' => 'Unauthorized'], 403);
+       }
 
        if ($topic->TRANGTHAI !== 'Nháp') {
            return response()->json(['message' => 'Topic is not in draft status'], 400);
@@ -316,17 +319,70 @@ class DetaiController extends Controller
        $suggestion = GoiyDetai::create([
            'ID_DETAI' => $id,
            'ID_NGUOI_GOIY' => $lecturer->ID_GIANGVIEN,
+           'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
            'NOIDUNG_GOIY' => $request->NOIDUNG_GOIY,
            'NGAYTAO' => now(),
        ]);
 
        // Load relationships for response
-       $suggestion->load(['nguoiGoiy.nguoidung']);
+       $suggestion->load(['nguoiGoiy.nguoidung', 'giangvien.nguoidung']);
 
        return response()->json([
            'message' => 'Góp ý đã được gửi thành công',
            'suggestion' => $suggestion
        ], 201);
+   }
+
+   public function replyToSuggestion(Request $request, $suggestionId)
+   {
+       // Validate input
+       $validator = Validator::make($request->all(), [
+           'PHAN_HOI' => 'required|string|min:10|max:1000',
+       ], [
+           'PHAN_HOI.required' => 'Nội dung phản hồi là bắt buộc',
+           'PHAN_HOI.min' => 'Nội dung phản hồi phải có ít nhất 10 ký tự',
+           'PHAN_HOI.max' => 'Nội dung phản hồi không được vượt quá 1000 ký tự',
+       ]);
+
+       if ($validator->fails()) {
+           return response()->json(['errors' => $validator->errors()], 422);
+       }
+
+       // Find the suggestion
+       $suggestion = GoiyDetai::findOrFail($suggestionId);
+
+       // Get current authenticated user
+       $currentUser = Auth::user();
+
+       // Check if user is a lecturer
+       $lecturer = Giangvien::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
+       if (!$lecturer) {
+           return response()->json(['message' => 'Chỉ giảng viên mới có thể phản hồi góp ý'], 403);
+       }
+
+       // Check if the lecturer is the topic proposer
+       if ($suggestion->detai->ID_NGUOI_DEXUAT !== $lecturer->ID_GIANGVIEN) {
+           return response()->json(['message' => 'Chỉ người tạo đề tài mới có thể phản hồi góp ý'], 403);
+       }
+
+       // Check if topic is in a state where replies are allowed
+       if (!in_array($suggestion->detai->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa'])) {
+           return response()->json(['message' => 'Không thể phản hồi góp ý cho đề tài đã duyệt'], 403);
+       }
+
+       // Update suggestion with reply
+       $suggestion->update([
+           'PHAN_HOI' => $request->PHAN_HOI,
+           'NGAY_PHAN_HOI' => now(),
+       ]);
+
+       // Load relationships for response
+       $suggestion->load(['nguoiGoiy.nguoidung', 'giangvien.nguoidung']);
+
+       return response()->json([
+           'message' => 'Phản hồi đã được gửi thành công',
+           'suggestion' => $suggestion
+       ], 200);
    }
 
    /**

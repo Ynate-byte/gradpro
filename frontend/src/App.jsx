@@ -36,6 +36,7 @@ const TemplateFormPage = lazy(() => import('./features/admin/thesis-plan-templat
 const AdminThesisTopicsPage = lazy(() => import('./features/admin/thesis-topic-management/index.jsx'));
 const SubmissionManagementPage = lazy(() => import('./features/admin/submission-management/index.jsx'));
 const HoidongPage = lazy(() => import('./features/admin/hoidong/index.jsx'));
+const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
 
 // Trang chấm điểm của Admin
 const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomChamDiem.jsx'));
@@ -147,7 +148,7 @@ function App() {
             <>
               {!isSinhVien && <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />}
               <Route path="lecturer/groups-management" element={<LecturerGroupsManagementPage />} />
-              
+              <Route path="lecturer/quota-management" element={<LecturerQuotaManagementPage />} />
               {/* [ĐÃ CẬP NHẬT] Routes cho Hội đồng (Giảng viên) */}
               <Route path="lecturer/council" element={<GiangVienHoiDong />} />
               <Route path="lecturer/council/:id" element={<GiangVienChinhSua />} />
