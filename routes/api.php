@@ -16,7 +16,6 @@ use App\Http\Controllers\Api\Admin\SubmissionController as AdminSubmissionContro
 use App\Http\Controllers\Api\Admin\GiangVienController;
 use App\Http\Controllers\Api\Admin\HoiDongController;
 use App\Http\Controllers\Api\ChamDiemController;
-// ----- [THAY ĐỔI] Bổ sung use statements -----
 use App\Http\Controllers\Api\Admin\TopicAssignmentController;
 use App\Http\Controllers\Api\DepartmentHead\TopicAssignmentController as DepartmentHeadTopicController;
 use App\Http\Controllers\Api\Lecturer\TopicAssignmentController as LecturerTopicController;
@@ -90,7 +89,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('detai')->group(function () {
         Route::get('/', [DetaiController::class, 'index']);
         Route::post('/', [DetaiController::class, 'store']);
-        Route::get('/{id}', [DetaiController::class, 'show']);
+
+        // ----- [SỬA LỖI 404] Các route tĩnh (static) PHẢI được định nghĩa TRƯỚC các route động (dynamic) -----
+        Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
+        Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); // GV xem nhóm đăng ký đề tài của mình
+        Route::get('/supervised', [DetaiController::class, 'getSupervisedTopics']);
+        Route::get('/my-registered-topic', [DetaiController::class, 'getMyRegisteredTopic']);
+        Route::get('/giangvien/groups', [DetaiController::class, 'getGroupsForLecturer']); // GV xem các nhóm mình HƯỚNG DẪN
+        // ----- [KẾT THÚC SỬA LỖI 404] -----
+
+        Route::get('/{id}', [DetaiController::class, 'show']); // Route động (phải nằm sau)
         Route::put('/{id}', [DetaiController::class, 'update']);
         Route::delete('/{id}', [DetaiController::class, 'destroy']);
         Route::post('/{id}/submit-approval', [DetaiController::class, 'submitForApproval']);
@@ -99,12 +107,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // ----- [THAY ĐỔI] Thêm route reply suggestion -----
         Route::post('/suggestions/{suggestionId}/reply', [DetaiController::class, 'replyToSuggestion']);
         // ----- [KẾT THÚC THAY ĐỔI] -----
-        Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
-        Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); // GV xem nhóm đăng ký đề tài của mình
-        Route::get('/supervised', [DetaiController::class, 'getSupervisedTopics']);
-        Route::get('/my-registered-topic', [DetaiController::class, 'getMyRegisteredTopic']);
-        Route::get('/giangvien/groups', [DetaiController::class, 'getGroupsForLecturer']); // GV xem các nhóm mình HƯỚNG DẪN
     });
     // ----- [THAY ĐỔI] Bổ sung comment và di chuyển route getGroupById -----
     // Route kiểm tra trưởng nhóm

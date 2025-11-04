@@ -40,7 +40,7 @@ const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota
 
 // ===== THAY ĐỔI 1: Import component Quản lý Quota của Admin =====
 // (Component này đang nằm trong thư mục 'lecturer' nhưng thực chất là UI của Admin)
-const AdminQuotaManager = lazy(() => import('./features/lecturer/quota-management/components/QuotaManager.jsx'));
+const AdminQuotaManager = lazy(() => import('./features/admin/thesis-topic-management/components/QuotaManager.jsx'));
 // ===== KẾT THÚC THAY ĐỔI 1 =====
 
 // Trang chấm điểm của Admin
