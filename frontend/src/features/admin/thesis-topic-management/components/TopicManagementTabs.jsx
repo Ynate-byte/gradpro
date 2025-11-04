@@ -6,7 +6,8 @@ import { CheckCircle, XCircle, Edit, Eye, Search } from "lucide-react";
 import { toast } from "sonner";
 import TopicDetailDialog from "../../../lecturer/thesis-topics/components/TopicDetailDialog";
 import RejectDialog from "./RejectDialog";
-import TopicAssignmentTab from "./TopicAssignmentTab";
+// ===== THAY ĐỔI 1: Gỡ bỏ import không dùng nữa =====
+// import TopicAssignmentTab from "./TopicAssignmentTab"; 
 import { thesisTopicService } from "@/api/thesisTopicService";
 import { Input } from "@/components/ui/input";
 import {
@@ -16,7 +17,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Gỡ bỏ Tabs
+// ===== KẾT THÚC THAY ĐỔI 1 =====
 
 const TopicManagementTabs = () => {
     const [topics, setTopics] = useState([]);
@@ -119,133 +121,131 @@ const TopicManagementTabs = () => {
     }
 
     return (
-        <Tabs defaultValue="approval" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="approval">Duyệt Đề tài</TabsTrigger>
-                <TabsTrigger value="assignment">Phân công đề tài</TabsTrigger>
-            </TabsList>
+        // ===== THAY ĐỔI 2: Gỡ bỏ <Tabs> wrapper =====
+        <div className="w-full space-y-6">
+            
+            {/* Nội dung của tab "approval" cũ được đưa ra ngoài */}
+            <div className="container mx-auto p-6">
+                {/* Header */}
+                <div className="mb-6">
+                    <h2 className="text-xl font-semibold">Duyệt Đề tài Khóa luận</h2>
+                    <p className="text-gray-600">Xem xét và phê duyệt các đề tài được đề xuất</p>
+                </div>
 
-            <TabsContent value="approval" className="space-y-6">
-                <div className="container mx-auto p-6">
-                    {/* Header */}
-                    <div className="mb-6">
-                        <h2 className="text-xl font-semibold">Duyệt Đề tài Khóa luận</h2>
-                        <p className="text-gray-600">Xem xét và phê duyệt các đề tài được đề xuất</p>
+                {/* Bộ lọc */}
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                    <div className="relative flex-1">
+                        <Input
+                            placeholder="Tìm theo tên đề tài..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="pl-10"
+                        />
+                        <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
                     </div>
 
-                    {/* Bộ lọc */}
-                    <div className="flex flex-col md:flex-row gap-4 mb-6">
-                        <div className="relative flex-1">
-                            <Input
-                                placeholder="Tìm theo tên đề tài..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10"
-                            />
-                            <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-                        </div>
+                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+                        <SelectTrigger className="w-[200px]">
+                            <SelectValue placeholder="Trạng thái" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Tất cả trạng thái</SelectItem>
+                            <SelectItem value="Chờ duyệt">Chờ duyệt</SelectItem>
+                            <SelectItem value="Từ chối">Từ chối</SelectItem>
+                            <SelectItem value="Đã duyệt">Đã duyệt</SelectItem>
+                            <SelectItem value="Yêu cầu chỉnh sửa">Yêu cầu chỉnh sửa</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
 
-                        <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                            <SelectTrigger className="w-[200px]">
-                                <SelectValue placeholder="Trạng thái" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                                <SelectItem value="Chờ duyệt">Chờ duyệt</SelectItem>
-                                <SelectItem value="Từ chối">Từ chối</SelectItem>
-                                <SelectItem value="Đã duyệt">Đã duyệt</SelectItem>
-                                <SelectItem value="Yêu cầu chỉnh sửa">Yêu cầu chỉnh sửa</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Bảng danh sách */}
-                    <Card>
-                        <CardContent className="p-0">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-gray-100 text-sm text-gray-700">
+                {/* Bảng danh sách */}
+                <Card>
+                    <CardContent className="p-0">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-gray-100 text-sm text-gray-700">
+                                <tr>
+                                    <th className="p-3 w-[30%]">Tên đề tài</th>
+                                    <th className="p-3 w-[15%]">Mã đề tài</th>
+                                    <th className="p-3 w-[20%]">Giảng viên đề xuất</th>
+                                    <th className="p-3 w-[15%]">Số nhóm tối đa</th>
+                                    <th className="p-3 w-[15%]">Trạng thái</th>
+                                    <th className="p-3 w-[10%] text-right">Thao tác</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filteredTopics.length === 0 ? (
                                     <tr>
-                                        <th className="p-3 w-[30%]">Tên đề tài</th>
-                                        <th className="p-3 w-[15%]">Mã đề tài</th>
-                                        <th className="p-3 w-[20%]">Giảng viên đề xuất</th>
-                                        <th className="p-3 w-[15%]">Số nhóm tối đa</th>
-                                        <th className="p-3 w-[15%]">Trạng thái</th>
-                                        <th className="p-3 w-[10%] text-right">Thao tác</th>
+                                        <td colSpan="6" className="text-center py-6 text-gray-500">
+                                            Không có đề tài nào.
+                                        </td>
                                     </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredTopics.length === 0 ? (
-                                        <tr>
-                                            <td colSpan="6" className="text-center py-6 text-gray-500">
-                                                Không có đề tài nào.
+                                ) : (
+                                    filteredTopics.map((topic) => (
+                                        <tr
+                                            key={topic.ID_DETAI}
+                                            className="border-b hover:bg-gray-50 transition-colors"
+                                        >
+                                            <td className="p-3 font-medium text-gray-900">
+                                                {topic.TEN_DETAI}
+                                            </td>
+                                            <td className="p-3">{topic.MA_DETAI}</td>
+                                            <td className="p-3">{topic.ten_giang_vien || "N/A"}</td>
+                                            <td className="p-3">{topic.SO_NHOM_TOIDA}</td>
+                                            <td className="p-3">{getStatusBadge(topic.TRANGTHAI)}</td>
+                                            <td className="p-3 text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleViewTopicDetails(topic.ID_DETAI)}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-1" /> Xem
+                                                    </Button>
+
+                                                    {topic.TRANGTHAI === "Chờ duyệt" && (
+                                                        <>
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                className="bg-green-500 text-white hover:bg-green-600"
+                                                                onClick={() => handleApprove(topic.ID_DETAI)}
+                                                            >
+                                                                <CheckCircle className="w-4 h-4 mr-1" /> Duyệt
+                                                            </Button>
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                className="bg-red-500 text-white hover:bg-red-600"
+                                                                onClick={() => handleReject(topic)}
+                                                            >
+                                                                <XCircle className="w-4 h-4 mr-1" /> Từ chối
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => handleRequestEdit(topic)}
+                                                            >
+                                                                <Edit className="w-4 h-4 mr-1" /> Yêu cầu chỉnh sửa
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
-                                    ) : (
-                                        filteredTopics.map((topic) => (
-                                            <tr
-                                                key={topic.ID_DETAI}
-                                                className="border-b hover:bg-gray-50 transition-colors"
-                                            >
-                                                <td className="p-3 font-medium text-gray-900">
-                                                    {topic.TEN_DETAI}
-                                                </td>
-                                                <td className="p-3">{topic.MA_DETAI}</td>
-                                                <td className="p-3">{topic.ten_giang_vien || "N/A"}</td>
-                                                <td className="p-3">{topic.SO_NHOM_TOIDA}</td>
-                                                <td className="p-3">{getStatusBadge(topic.TRANGTHAI)}</td>
-                                                <td className="p-3 text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleViewTopicDetails(topic.ID_DETAI)}
-                                                        >
-                                                            <Eye className="w-4 h-4 mr-1" /> Xem
-                                                        </Button>
-
-                                                        {topic.TRANGTHAI === "Chờ duyệt" && (
-                                                            <>
-                                                                <Button
-                                                                    variant="default"
-                                                                    size="sm"
-                                                                    className="bg-green-500 text-white hover:bg-green-600"
-                                                                    onClick={() => handleApprove(topic.ID_DETAI)}
-                                                                >
-                                                                    <CheckCircle className="w-4 h-4 mr-1" /> Duyệt
-                                                                </Button>
-                                                                <Button
-                                                                    variant="destructive"
-                                                                    size="sm"
-                                                                    className="bg-red-500 text-white hover:bg-red-600"
-                                                                    onClick={() => handleReject(topic)}
-                                                                >
-                                                                    <XCircle className="w-4 h-4 mr-1" /> Từ chối
-                                                                </Button>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() => handleRequestEdit(topic)}
-                                                                >
-                                                                    <Edit className="w-4 h-4 mr-1" /> Yêu cầu chỉnh sửa
-                                                                </Button>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    )}
-                                </tbody>
-                            </table>
-                        </CardContent>
-                    </Card>
-                </div>
-            </TabsContent>
-
-            <TabsContent value="assignment">
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </CardContent>
+                </Card>
+            </div>
+            
+            {/* ===== THAY ĐỔI 3: Gỡ bỏ TabsContent "assignment" ===== */}
+            {/* <TabsContent value="assignment">
                 <TopicAssignmentTab />
             </TabsContent>
+            */}
 
             {/* Dialogs */}
             <TopicDetailDialog
@@ -260,7 +260,8 @@ const TopicManagementTabs = () => {
                 topic={selectedTopic}
                 actionType={actionType}
             />
-        </Tabs>
+        </div>
+        // ===== KẾT THÚC THAY ĐỔI 2 =====
     );
 };
 

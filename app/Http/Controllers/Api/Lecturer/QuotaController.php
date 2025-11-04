@@ -338,7 +338,7 @@ class QuotaController extends Controller
             ->count();
 
         // Get actual assigned topics count for this plan
-        $actualAssigned = \App\Models\PhancongGvDetai::where('ID_GIANGVIEN', $lecturerId)
+        $actualAssigned = \App\Models\PhancongDetaiNhom::where('ID_GVHD', $lecturerId)
             ->whereNotNull('ID_DETAI')
             ->where('TRANGTHAI', 'Đang phân công')
             ->whereHas('detai', function($q) use ($planId) {

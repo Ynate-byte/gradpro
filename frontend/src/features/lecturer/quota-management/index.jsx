@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
 import axios from '@/api/axiosConfig';
 import { useAuth } from '@/contexts/AuthContext';
+// ===== THAY ĐỔI 1: Import lại component Quản lý =====
 import LecturerQuotaManager from "./components/QuotaManager";
 
 const LecturerQuotaManagementPage = () => {
@@ -20,6 +21,8 @@ const LecturerQuotaManagementPage = () => {
 
     // Load plans when component mounts
     useEffect(() => {
+        // ===== THAY ĐỔI 2: Chỉ load plans nếu LÀ Giảng viên thường =====
+        // (Trưởng bộ môn sẽ load plans bên trong component <LecturerQuotaManager />)
         if (!isDepartmentHead) {
             loadPlans();
         }
@@ -27,6 +30,7 @@ const LecturerQuotaManagementPage = () => {
 
     // Load quota data when selectedPlan changes
     useEffect(() => {
+        // ===== THAY ĐỔI 3: Chỉ load quota cá nhân nếu LÀ Giảng viên thường =====
         if (!isDepartmentHead && selectedPlan) {
             loadMyQuota();
         } else if (!isDepartmentHead) {
@@ -34,10 +38,12 @@ const LecturerQuotaManagementPage = () => {
         }
     }, [selectedPlan, isDepartmentHead]);
 
-    // If department head, show management interface
+    // ===== THAY ĐỔI 4: KHÔI PHỤC LẠI LOGIC if (isDepartmentHead) =====
+    // (Đây là logic tôi đã xóa nhầm ở bước trước)
     if (isDepartmentHead) {
         return <LecturerQuotaManager />;
     }
+    // ===== KẾT THÚC THAY ĐỔI 4 =====
 
     const loadPlans = async () => {
         setIsLoading(true);

@@ -23,7 +23,7 @@ const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/grou
 // [ĐÃ CẬP NHẬT] Đường dẫn import mới
 const GiangVienHoiDong = lazy(() => import('./features/lecturer/council/index.jsx'));
 const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCouncilPage.jsx'));
-const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx')); 
+const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx'));
 
 // --- Import các components Quản trị ---
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
@@ -37,6 +37,11 @@ const AdminThesisTopicsPage = lazy(() => import('./features/admin/thesis-topic-m
 const SubmissionManagementPage = lazy(() => import('./features/admin/submission-management/index.jsx'));
 const HoidongPage = lazy(() => import('./features/admin/hoidong/index.jsx'));
 const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
+
+// ===== THAY ĐỔI 1: Import component Quản lý Quota của Admin =====
+// (Component này đang nằm trong thư mục 'lecturer' nhưng thực chất là UI của Admin)
+const AdminQuotaManager = lazy(() => import('./features/lecturer/quota-management/components/QuotaManager.jsx'));
+// ===== KẾT THÚC THAY ĐỔI 1 =====
 
 // Trang chấm điểm của Admin
 const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomChamDiem.jsx'));
@@ -194,6 +199,10 @@ function App() {
 
               {/* Routes Quản lý Hội đồng */}
               <Route path="admin/hoidong/*" element={<HoidongPage />} />
+
+              {/* ===== THAY ĐỔI 2: Thêm route Quản lý Quota cho Admin ===== */}
+              <Route path="admin/quota-management" element={<AdminQuotaManager />} />
+              {/* ===== KẾT THÚC THAY ĐỔI 2 ===== */}
             </>
           )}
         </Route>
