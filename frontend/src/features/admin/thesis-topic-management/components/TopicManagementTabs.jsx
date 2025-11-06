@@ -1,268 +1,354 @@
-import React, { useState, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Edit, Eye, Search } from "lucide-react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from "sonner";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DataTable } from '@/components/shared/data-table/DataTable';
+import { getColumns } from "./columns";
+
+import { thesisTopicService } from "@/api/thesisTopicService";
+import { getChuyenNganhs } from "@/api/userService";
 import TopicDetailDialog from "../../../lecturer/thesis-topics/components/TopicDetailDialog";
 import RejectDialog from "./RejectDialog";
-// ===== THAY ĐỔI 1: Gỡ bỏ import không dùng nữa =====
-// import TopicAssignmentTab from "./TopicAssignmentTab"; 
-import { thesisTopicService } from "@/api/thesisTopicService";
-import { Input } from "@/components/ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select";
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Gỡ bỏ Tabs
-// ===== KẾT THÚC THAY ĐỔI 1 =====
+import { useDebounce } from "@/hooks/useDebounce";
+import { cn } from "@/lib/utils";
+
+const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass }) => (
+  <motion.div
+    className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4"
+    variants={itemVariants}
+  >
+    <div className={cn("p-3 rounded-lg", iconBgClass)}>
+      <Icon className={cn("h-6 w-6", iconColorClass)} />
+    </div>
+    <div className="flex-1">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={value}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="text-2xl font-bold h-8"
+        >
+          {value === 'loading' ? <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /> : value}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  </motion.div>
+);
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } }
+};
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } }
+};
+
+const tableVariants = {
+  hidden: { opacity: 0, y: 30, scale: 0.98 },
+  visible: { 
+    opacity: 1, 
+    y: 0,
+    scale: 1,
+    transition: { type: "spring", stiffness: 80, damping: 18, duration: 0.5 }
+  },
+  exit: { opacity: 0, y: -30, scale: 0.98, transition: { duration: 0.3 } }
+};
+
+const columnVisibility = {
+  "chuyen_nganh_id": false,
+};
 
 const TopicManagementTabs = () => {
-    const [topics, setTopics] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [showTopicDetailDialog, setShowTopicDetailDialog] = useState(false);
-    const [showRejectDialog, setShowRejectDialog] = useState(false);
-    const [selectedTopicId, setSelectedTopicId] = useState(null);
-    const [selectedTopic, setSelectedTopic] = useState(null);
-    const [actionType, setActionType] = useState(""); // 'reject' or 'request_edit'
-    const [searchTerm, setSearchTerm] = useState("");
-    const [selectedStatus, setSelectedStatus] = useState("all");
+  const [allTopics, setAllTopics] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(true);
 
-    useEffect(() => {
-        loadTopics();
-    }, []);
+  const [activeTab, setActiveTab] = useState("Chờ duyệt");
+  const [searchTerm, setSearchTerm] = useState("");
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const [columnFilters, setColumnFilters] = useState([]);
+  const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
 
-    const loadTopics = async () => {
-        try {
-            setLoading(true);
-            const response = await thesisTopicService.getAdminTopics();
-            setTopics(response.data || []);
-        } catch (error) {
-            console.error("Error loading topics:", error);
-            toast.error("Không thể tải danh sách đề tài.");
-        } finally {
-            setLoading(false);
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [sorting, setSorting] = useState([]);
+  const [rowSelection, setRowSelection] = useState({});
+
+  const [showTopicDetailDialog, setShowTopicDetailDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
+  const [selectedTopicId, setSelectedTopicId] = useState(null);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [actionType, setActionType] = useState("");
+
+  useEffect(() => {
+    loadAllData();
+  }, []);
+
+  const loadAllData = async () => {
+    try {
+      setLoading(true);
+      setLoadingStats(true);
+      const [topicRes, cnRes] = await Promise.all([
+        thesisTopicService.getAdminTopics(),
+        getChuyenNganhs().catch(() => [])
+      ]);
+
+      setAllTopics(topicRes.data || []);
+      setChuyenNganhOptions(
+        (cnRes || []).map(cn => ({ 
+          label: cn.TEN_CHUYENNGANH, 
+          value: String(cn.ID_CHUYENNGANH) 
+        }))
+      );
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast.error("Không thể tải dữ liệu.");
+    } finally {
+      setLoading(false);
+      setLoadingStats(false);
+    }
+  };
+
+  const handleViewTopicDetails = (topicId) => {
+    setSelectedTopicId(topicId);
+    setShowTopicDetailDialog(true);
+  };
+
+  const handleApprove = async (topicId) => {
+    try {
+      await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
+      toast.success("Đề tài đã được duyệt thành công!");
+      loadAllData();
+    } catch (error) {
+      console.error("Error approving topic:", error);
+      toast.error("Có lỗi xảy ra khi duyệt đề tài.");
+      throw error;
+    }
+  };
+
+  const handleReject = (topic) => {
+    setSelectedTopic(topic);
+    setActionType("reject");
+    setShowRejectDialog(true);
+  };
+
+  const handleRequestEdit = (topic) => {
+    setSelectedTopic(topic);
+    setActionType("request_edit");
+    setShowRejectDialog(true);
+  };
+
+  const handleRejectSubmit = async (reason) => {
+    try {
+      const action = actionType === "reject" ? "reject" : "request_edit";
+      await thesisTopicService.adminApproveOrReject(selectedTopic.ID_DETAI, {
+        action,
+        reason,
+      });
+      const message = actionType === "reject"
+        ? "Đề tài đã bị từ chối."
+        : "Đã yêu cầu chỉnh sửa đề tài.";
+      toast.success(message);
+      setShowRejectDialog(false);
+      loadAllData();
+    } catch (error) {
+      console.error("Error processing topic:", error);
+      toast.error("Có lỗi xảy ra khi xử lý yêu cầu.");
+      throw error;
+    }
+  };
+
+  const processedData = useMemo(() => {
+    let filtered = allTopics.filter(t => {
+      const matchesSearch =
+        t.TEN_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        t.MA_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+
+      const matchesTab = activeTab === "Tất cả" || t.TRANGTHAI === activeTab;
+
+      const matchesFilters = columnFilters.every(filter => {
+        if (filter.id === 'chuyen_nganh_id') {
+          const filterValues = new Set(filter.value);
+          return filterValues.has(String(t.chuyennganh?.ID_CHUYENNGANH));
         }
-    };
+        return true;
+      });
 
-    const handleViewTopicDetails = (topicId) => {
-        setSelectedTopicId(topicId);
-        setShowTopicDetailDialog(true);
-    };
-
-    const handleApprove = async (topicId) => {
-        try {
-            await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
-            toast.success("Đề tài đã được duyệt thành công!");
-            loadTopics();
-        } catch (error) {
-            console.error("Error approving topic:", error);
-            toast.error("Có lỗi xảy ra khi duyệt đề tài.");
-        }
-    };
-
-    const handleReject = (topic) => {
-        setSelectedTopic(topic);
-        setActionType("reject");
-        setShowRejectDialog(true);
-    };
-
-    const handleRequestEdit = (topic) => {
-        setSelectedTopic(topic);
-        setActionType("request_edit");
-        setShowRejectDialog(true);
-    };
-
-    const handleRejectSubmit = async (reason) => {
-        try {
-            const action = actionType === "reject" ? "reject" : "request_edit";
-            await thesisTopicService.adminApproveOrReject(selectedTopic.ID_DETAI, {
-                action,
-                reason,
-            });
-            const message =
-                actionType === "reject"
-                    ? "Đề tài đã bị từ chối."
-                    : "Đã yêu cầu chỉnh sửa đề tài.";
-            toast.success(message);
-            setShowRejectDialog(false);
-            loadTopics();
-        } catch (error) {
-            console.error("Error processing topic:", error);
-            toast.error("Có lỗi xảy ra khi xử lý yêu cầu.");
-        }
-    };
-
-    const getStatusBadge = (status) => {
-        const statusConfig = {
-            "Nháp": { label: "Nháp", className: "bg-gray-100 text-gray-700" },
-            "Chờ duyệt": { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700" },
-            "Yêu cầu chỉnh sửa": { label: "Yêu cầu chỉnh sửa", className: "bg-red-100 text-red-700" },
-            "Đã duyệt": { label: "Đã duyệt", className: "bg-green-100 text-green-700" },
-            "Đã đầy": { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
-            "Đã khóa": { label: "Đã khóa", className: "bg-red-200 text-red-800" },
-            "Từ chối": { label: "Từ chối", className: "bg-red-100 text-red-700" },
-        };
-        const config = statusConfig[status] || { label: status, className: "bg-gray-100 text-gray-700" };
-        return <Badge className={`px-3 py-1 ${config.className}`}>{config.label}</Badge>;
-    };
-
-    const filteredTopics = topics.filter((t) => {
-        const matchesSearch = t.TEN_DETAI?.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesStatus = selectedStatus === "all" || t.TRANGTHAI === selectedStatus;
-        return matchesSearch && matchesStatus;
+      return matchesSearch && matchesTab && matchesFilters;
     });
 
-    if (loading) {
-        return <div className="flex justify-center items-center h-64">Đang tải...</div>;
+    if (sorting.length > 0) {
+      const { id, desc } = sorting[0];
+      filtered.sort((a, b) => {
+        let valA = a[id] || a[id.toLowerCase()];
+        let valB = b[id] || b[id.toLowerCase()];
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+        if (typeof valA === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+        if (valA < valB) return desc ? 1 : -1;
+        if (valA > valB) return desc ? -1 : 1;
+        return 0;
+      });
     }
 
-    return (
-        // ===== THAY ĐỔI 2: Gỡ bỏ <Tabs> wrapper =====
-        <div className="w-full space-y-6">
-            
-            {/* Nội dung của tab "approval" cũ được đưa ra ngoài */}
-            <div className="container mx-auto p-6">
-                {/* Header */}
-                <div className="mb-6">
-                    <h2 className="text-xl font-semibold">Duyệt Đề tài Khóa luận</h2>
-                    <p className="text-gray-600">Xem xét và phê duyệt các đề tài được đề xuất</p>
-                </div>
+    const stats = {
+      total: allTopics.length,
+      pending: allTopics.filter(t => t.TRANGTHAI === 'Chờ duyệt').length,
+      approved: allTopics.filter(t => t.TRANGTHAI === 'Đã duyệt').length,
+      editRequest: allTopics.filter(t => 
+        t.TRANGTHAI === 'Yêu cầu chỉnh sửa' || t.TRANGTHAI === 'Từ chối'
+      ).length,
+    };
 
-                {/* Bộ lọc */}
-                <div className="flex flex-col md:flex-row gap-4 mb-6">
-                    <div className="relative flex-1">
-                        <Input
-                            placeholder="Tìm theo tên đề tài..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10"
-                        />
-                        <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
-                    </div>
-
-                    <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                        <SelectTrigger className="w-[200px]">
-                            <SelectValue placeholder="Trạng thái" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Tất cả trạng thái</SelectItem>
-                            <SelectItem value="Chờ duyệt">Chờ duyệt</SelectItem>
-                            <SelectItem value="Từ chối">Từ chối</SelectItem>
-                            <SelectItem value="Đã duyệt">Đã duyệt</SelectItem>
-                            <SelectItem value="Yêu cầu chỉnh sửa">Yêu cầu chỉnh sửa</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
-
-                {/* Bảng danh sách */}
-                <Card>
-                    <CardContent className="p-0">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-gray-100 text-sm text-gray-700">
-                                <tr>
-                                    <th className="p-3 w-[30%]">Tên đề tài</th>
-                                    <th className="p-3 w-[15%]">Mã đề tài</th>
-                                    <th className="p-3 w-[20%]">Giảng viên đề xuất</th>
-                                    <th className="p-3 w-[15%]">Số nhóm tối đa</th>
-                                    <th className="p-3 w-[15%]">Trạng thái</th>
-                                    <th className="p-3 w-[10%] text-right">Thao tác</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {filteredTopics.length === 0 ? (
-                                    <tr>
-                                        <td colSpan="6" className="text-center py-6 text-gray-500">
-                                            Không có đề tài nào.
-                                        </td>
-                                    </tr>
-                                ) : (
-                                    filteredTopics.map((topic) => (
-                                        <tr
-                                            key={topic.ID_DETAI}
-                                            className="border-b hover:bg-gray-50 transition-colors"
-                                        >
-                                            <td className="p-3 font-medium text-gray-900">
-                                                {topic.TEN_DETAI}
-                                            </td>
-                                            <td className="p-3">{topic.MA_DETAI}</td>
-                                            <td className="p-3">{topic.ten_giang_vien || "N/A"}</td>
-                                            <td className="p-3">{topic.SO_NHOM_TOIDA}</td>
-                                            <td className="p-3">{getStatusBadge(topic.TRANGTHAI)}</td>
-                                            <td className="p-3 text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => handleViewTopicDetails(topic.ID_DETAI)}
-                                                    >
-                                                        <Eye className="w-4 h-4 mr-1" /> Xem
-                                                    </Button>
-
-                                                    {topic.TRANGTHAI === "Chờ duyệt" && (
-                                                        <>
-                                                            <Button
-                                                                variant="default"
-                                                                size="sm"
-                                                                className="bg-green-500 text-white hover:bg-green-600"
-                                                                onClick={() => handleApprove(topic.ID_DETAI)}
-                                                            >
-                                                                <CheckCircle className="w-4 h-4 mr-1" /> Duyệt
-                                                            </Button>
-                                                            <Button
-                                                                variant="destructive"
-                                                                size="sm"
-                                                                className="bg-red-500 text-white hover:bg-red-600"
-                                                                onClick={() => handleReject(topic)}
-                                                            >
-                                                                <XCircle className="w-4 h-4 mr-1" /> Từ chối
-                                                            </Button>
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => handleRequestEdit(topic)}
-                                                            >
-                                                                <Edit className="w-4 h-4 mr-1" /> Yêu cầu chỉnh sửa
-                                                            </Button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))
-                                )}
-                            </tbody>
-                        </table>
-                    </CardContent>
-                </Card>
-            </div>
-            
-            {/* ===== THAY ĐỔI 3: Gỡ bỏ TabsContent "assignment" ===== */}
-            {/* <TabsContent value="assignment">
-                <TopicAssignmentTab />
-            </TabsContent>
-            */}
-
-            {/* Dialogs */}
-            <TopicDetailDialog
-                open={showTopicDetailDialog}
-                onOpenChange={setShowTopicDetailDialog}
-                topicId={selectedTopicId}
-            />
-            <RejectDialog
-                open={showRejectDialog}
-                onOpenChange={setShowRejectDialog}
-                onSubmit={handleRejectSubmit}
-                topic={selectedTopic}
-                actionType={actionType}
-            />
-        </div>
-        // ===== KẾT THÚC THAY ĐỔI 2 =====
+    const pageCount = Math.ceil(filtered.length / pagination.pageSize);
+    const pagedData = filtered.slice(
+      pagination.pageIndex * pagination.pageSize,
+      (pagination.pageIndex + 1) * pagination.pageSize
     );
+
+    return { pagedData, pageCount, stats };
+  }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
+
+  useEffect(() => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
+  }, [activeTab, columnFilters, debouncedSearchTerm]);
+
+  const columns = useMemo(() => getColumns({
+    onViewDetails: handleViewTopicDetails,
+    onApprove: handleApprove,
+    onReject: handleReject,
+    onRequestEdit: handleRequestEdit
+  }), [handleApprove, handleReject, handleRequestEdit, handleViewTopicDetails]);
+
+  return (
+    <motion.div
+      className="flex-1 space-y-6 p-4 md:p-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <motion.div
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
+        <StatCard
+          icon={BookOpen}
+          title="Tổng số Đề tài"
+          value={loadingStats ? 'loading' : processedData.stats.total}
+          iconBgClass="bg-blue-100 dark:bg-blue-900/30"
+          iconColorClass="text-blue-600 dark:text-blue-400"
+        />
+        <StatCard
+          icon={Clock}
+          title="Chờ duyệt"
+          value={loadingStats ? 'loading' : processedData.stats.pending}
+          iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
+          iconColorClass="text-yellow-600 dark:text-yellow-400"
+        />
+        <StatCard
+          icon={CheckCircle}
+          title="Đã duyệt"
+          value={loadingStats ? 'loading' : processedData.stats.approved}
+          iconBgClass="bg-green-100 dark:bg-green-900/30"
+          iconColorClass="text-green-600 dark:text-green-400"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          title="Cần xử lý"
+          value={loadingStats ? 'loading' : processedData.stats.editRequest}
+          iconBgClass="bg-orange-100 dark:bg-orange-900/30"
+          iconColorClass="text-orange-600 dark:text-orange-400"
+        />
+      </motion.div>
+
+      <motion.div
+        initial={{ y: 30, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.5, delay: 0.3, type: "spring", stiffness: 100 }}
+      >
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <motion.div
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            <TabsList>
+              <TabsTrigger value="Tất cả">Tất cả</TabsTrigger>
+              <TabsTrigger value="Chờ duyệt">Chờ duyệt</TabsTrigger>
+              <TabsTrigger value="Đã duyệt">Đã duyệt</TabsTrigger>
+              <TabsTrigger value="Yêu cầu chỉnh sửa">Yêu cầu chỉnh sửa</TabsTrigger>
+              <TabsTrigger value="Từ chối">Từ chối</TabsTrigger>
+              <TabsTrigger value="Nháp">Nháp</TabsTrigger>
+            </TabsList>
+          </motion.div>
+
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              variants={tableVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+            >
+              <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
+                <DataTable
+                  columns={columns}
+                  data={processedData.pagedData}
+                  pageCount={processedData.pageCount}
+                  loading={loading}
+                  pagination={pagination}
+                  setPagination={setPagination}
+                  columnFilters={columnFilters}
+                  setColumnFilters={setColumnFilters}
+                  sorting={sorting}
+                  setSorting={setSorting}
+                  onAddUser={() => {}}
+                  addBtnText={null}
+                  onImportUser={null}
+                  onSuccess={loadAllData}
+                  searchColumnId="TEN_DETAI"
+                  searchPlaceholder="Tìm theo tên, GV, mã..."
+                  searchTerm={searchTerm}
+                  onSearchChange={setSearchTerm}
+                  chuyenNganhFilterColumnId="chuyen_nganh_id"
+                  chuyenNganhFilterOptions={chuyenNganhOptions}
+                  columnVisibility={columnVisibility}
+                  state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
+                  onRowSelectionChange={setRowSelection}
+                />
+              </TabsContent>
+            </motion.div>
+          </AnimatePresence>
+        </Tabs>
+      </motion.div>
+
+      <TopicDetailDialog
+        open={showTopicDetailDialog}
+        onOpenChange={setShowTopicDetailDialog}
+        topicId={selectedTopicId}
+      />
+
+      <RejectDialog
+        open={showRejectDialog}
+        onOpenChange={setShowRejectDialog}
+        onSubmit={handleRejectSubmit}
+        topic={selectedTopic}
+        actionType={actionType}
+      />
+    </motion.div>
+  );
 };
 
 export default TopicManagementTabs;

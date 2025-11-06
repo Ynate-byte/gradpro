@@ -1,369 +1,433 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Users, BookOpen, Layers, Info } from 'lucide-react';
+import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
-// [SỬA] Import đúng service cho Giảng viên/Trưởng BM
-import lecturerQuotaService from '@/api/lecturerQuotaService'; 
+import lecturerQuotaService from '@/api/lecturerQuotaService';
 import axios from '@/api/axiosConfig';
+import { motion, AnimatePresence } from 'framer-motion';
+import { cn } from '@/lib/utils';
+
+const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColorClass }) => (
+  <motion.div
+    className="bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1"
+    whileHover={{ y: -4 }}
+    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+  >
+    <motion.div
+      className={cn("p-3 rounded-lg", iconBgClass)}
+      animate={{
+        scale: value === 'loading' ? [1, 1.08, 1] : 1,
+        rotate: value === 'loading' ? [0, 5, -5, 0] : 0
+      }}
+      transition={{
+        duration: 2,
+        repeat: value === 'loading' ? Infinity : 0,
+        ease: "easeInOut"
+      }}
+    >
+      <Icon className={cn("h-6 w-6", iconColorClass)} />
+    </motion.div>
+    <div className="flex-1">
+      <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+      <div className="flex items-center gap-2 h-8 overflow-hidden">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={value}
+            initial={{ opacity: 0, y: 20, scale: 0.8 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.8 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="flex items-center gap-2"
+          >
+            {value === 'loading' ? (
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            ) : (
+              <p className="text-2xl font-bold">{value}</p>
+            )}
+          </motion.div>
+        </AnimatePresence>
+      </div>
+      {description && (
+        <motion.p
+          className="text-xs text-muted-foreground mt-0.5"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1 }}
+        >
+          {description}
+        </motion.p>
+      )}
+    </div>
+  </motion.div>
+);
+
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.08 } }
+};
 
 const QuotaManager = () => {
-    // [SỬA] Đổi tên state cho rõ ràng
-    const [departmentQuotaInfo, setDepartmentQuotaInfo] = useState({});
-    const [lecturers, setLecturers] = useState([]);
-    const [selectedLecturerId, setSelectedLecturerId] = useState('');
-    
-    const [quotaAmount, setQuotaAmount] = useState('');
-    const [note, setNote] = useState('');
-    const [selectedPlan, setSelectedPlan] = useState('');
-    const [plans, setPlans] = useState([]);
-    const [isLoading, setIsLoading] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false); // Thêm state cho submit
+  const [departmentQuotaInfo, setDepartmentQuotaInfo] = useState({});
+  const [lecturers, setLecturers] = useState([]);
+  const [selectedLecturerId, setSelectedLecturerId] = useState('');
+  const [quotaAmount, setQuotaAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [selectedPlan, setSelectedPlan] = useState('');
+  const [plans, setPlans] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-    useEffect(() => {
-        loadPlans();
-    }, []);
+  useEffect(() => {
+    loadPlans();
+  }, []);
 
-    useEffect(() => {
-        if (selectedPlan) {
-            loadData();
-        } else {
-            setDepartmentQuotaInfo({});
-            setLecturers([]);
-        }
-    }, [selectedPlan]);
+  useEffect(() => {
+    if (selectedPlan) {
+      loadData();
+    } else {
+      setDepartmentQuotaInfo({});
+      setLecturers([]);
+    }
+  }, [selectedPlan]);
 
-    const loadPlans = async () => {
-        setIsLoading(true);
-        try {
-            const response = await axios.get('/admin/thesis-plans/list-all');
-            setPlans(response.data);
-            if (response.data.length > 0 && !selectedPlan) {
-                setSelectedPlan(response.data[0].ID_KEHOACH);
-            }
-        } catch (error) {
-            console.error('Lỗi khi tải danh sách kế hoạch:', error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+  const loadPlans = async () => {
+    setIsLoading(true);
+    try {
+      const response = await axios.get('/admin/thesis-plans/list-all');
+      const plansData = response.data || [];
+      setPlans(plansData);
+      if (plansData.length > 0 && !selectedPlan) {
+        setSelectedPlan(String(plansData[0].ID_KEHOACH));
+      }
+    } catch (error) {
+      console.error('Lỗi khi tải danh sách kế hoạch:', error);
+      toast.error('Lỗi khi tải danh sách kế hoạch');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    const loadData = async () => {
-        if (!selectedPlan) return;
-        setIsLoading(true);
-        try {
-            // [SỬA] Gọi API lấy danh sách giảng viên của Trưởng BM
-            const response = await lecturerQuotaService.getLecturers({ plan_id: selectedPlan });
-            setDepartmentQuotaInfo(response.data);
-            setLecturers(response.data.lecturers || []);
-        } catch (error) {
-            toast.error('Lỗi khi tải dữ liệu giảng viên');
-            console.error(error);
-        } finally {
-            setIsLoading(false);
-        }
-    };
+  const loadData = async () => {
+    if (!selectedPlan) return;
+    setIsLoading(true);
+    try {
+      const response = await lecturerQuotaService.getLecturers({ plan_id: selectedPlan });
+      setDepartmentQuotaInfo(response.data);
+      setLecturers(response.data.lecturers || []);
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Lỗi khi tải dữ liệu giảng viên');
+      console.error(error);
+      setDepartmentQuotaInfo({});
+      setLecturers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    // [SỬA] Hàm Phân công thủ công cho Giảng viên
-    const handleAssignQuota = async () => {
-        if (!selectedLecturerId || quotaAmount === '' || !selectedPlan) {
-            toast.error('Vui lòng chọn kế hoạch, giảng viên và nhập số lượng đề tài');
-            return;
-        }
+  const handleAssignQuota = async () => {
+    if (!selectedLecturerId || quotaAmount === '' || !selectedPlan) {
+      toast.error('Vui lòng chọn giảng viên và nhập số lượng đề tài');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await lecturerQuotaService.assignLecturerQuota({
+        ID_KEHOACH: selectedPlan,
+        ID_GIANGVIEN: selectedLecturerId,
+        SO_DETAI_QUOTA: parseInt(quotaAmount),
+        GHICHU: note
+      });
+      toast.success('Cập nhật quota cho giảng viên thành công');
+      setSelectedLecturerId('');
+      setQuotaAmount('');
+      setNote('');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Lỗi khi phân công đề tài');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-        setIsSubmitting(true);
-        try {
-            await lecturerQuotaService.assignLecturerQuota({
-                ID_KEHOACH: selectedPlan,
-                ID_GIANGVIEN: selectedLecturerId,
-                SO_DETAI_QUOTA: parseInt(quotaAmount),
-                GHICHU: note
-            });
+  const handleAutoAssignQuotas = async () => {
+    if (!selectedPlan) {
+      toast.error('Vui lòng chọn kế hoạch');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await lecturerQuotaService.autoAssignLecturerQuotas({
+        ID_KEHOACH: selectedPlan
+      });
+      toast.success('Tự động phân công đề tài cho giảng viên thành công');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Lỗi khi tự động phân công');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-            toast.success('Cập nhật quota cho giảng viên thành công');
-            setSelectedLecturerId('');
-            setQuotaAmount('');
-            setNote('');
-            loadData(); // Tải lại dữ liệu
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Lỗi khi phân công đề tài');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
+  const getQuotaStatus = (quota, actual) => {
+    if (quota === 0) return <Badge variant="outline">Chưa phân công</Badge>;
+    if (actual >= quota) return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700">Đủ</Badge>;
+    return <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700">Còn {quota - actual}</Badge>;
+  };
 
-    // [SỬA] Hàm Phân công tự động cho Giảng viên
-    const handleAutoAssignQuotas = async () => {
-        if (!selectedPlan) {
-            toast.error('Vui lòng chọn kế hoạch');
-            return;
-        }
+  const renderContent = () => {
+    if (isLoading && !isSubmitting) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-blue-500">
+          <Loader2 className="h-8 w-8 animate-spin mb-4" />
+          <p>Đang tải dữ liệu bộ môn...</p>
+        </div>
+      );
+    }
 
-        setIsSubmitting(true);
-        try {
-            await lecturerQuotaService.autoAssignLecturerQuotas({
-                ID_KEHOACH: selectedPlan
-            });
+    if (!selectedPlan) {
+      return (
+        <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-card rounded-lg p-6 border-2 border-dashed">
+          <Info className="h-8 w-8 mb-4 text-orange-500" />
+          <p className="text-lg font-semibold">Vui lòng chọn một Kế hoạch Khóa luận</p>
+          {plans.length === 0 && <p className="text-sm mt-2">Hiện tại không có Kế hoạch nào.</p>}
+        </div>
+      );
+    }
 
-            toast.success('Tự động phân công đề tài cho giảng viên thành công');
-            loadData();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Lỗi khi tự động phân công');
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
-
-    const getQuotaStatus = (quota, actual) => {
-        if (quota === 0) return <Badge variant="outline">Chưa phân công</Badge>;
-        if (actual >= quota) return <Badge className="bg-green-500 hover:bg-green-600 text-white">Đủ</Badge>;
-        return <Badge variant="default">Còn {quota - actual}</Badge>;
-    };
-
-    // [SỬA] StatCard mới cho Trưởng BM
-    const StatCard = ({ title, value, subText }) => (
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{value}</div>
-                {subText && <p className="text-xs text-gray-500">{subText}</p>}
-            </CardContent>
-        </Card>
-    );
-
-    const renderContent = () => {
-        if (isLoading && !isSubmitting) { // Chỉ hiển thị loading toàn trang khi loadData
-            return (
-                <div className="flex flex-col items-center justify-center h-64 text-blue-500">
-                    <Loader2 className="h-8 w-8 animate-spin mb-4" />
-                    <p>Đang tải dữ liệu kế hoạch...</p>
-                </div>
-            );
-        }
-
-        if (!selectedPlan) {
-            return (
-                <div className="flex flex-col items-center justify-center h-64 text-gray-500 bg-gray-50 rounded-lg p-6 border-2 border-dashed">
-                    <Info className="h-8 w-8 mb-4 text-orange-500" />
-                    <p className="text-lg font-semibold">Vui lòng chọn một Kế hoạch Khóa luận để bắt đầu quản lý Quota.</p>
-                    {plans.length === 0 && <p className="text-sm mt-2">Hiện tại không có Kế hoạch nào được tạo.</p>}
-                </div>
-            );
-        }
-
-        // [SỬA] Giao diện khi có kế hoạch được chọn (UI Trưởng BM)
-        const totalDeptQuota = departmentQuotaInfo.department_quota || 0;
-        const totalAssignedToLecturers = lecturers.reduce((sum, gv) => sum + (gv.quota_assigned || 0), 0);
-        const remainingForDept = totalDeptQuota - totalAssignedToLecturers;
-
-        return (
-            <div className="space-y-6">
-                {/* 1. Tổng quan Bộ môn */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <StatCard
-                        title="Tổng Quota Bộ môn"
-                        value={totalDeptQuota}
-                        subText="Tổng số đề tài được Admin giao"
-                    />
-                    <StatCard
-                        title="Đã Phân công (GV)"
-                        value={totalAssignedToLecturers}
-                        subText={`Đã phân cho ${lecturers.length} giảng viên`}
-                    />
-                    <StatCard
-                        title="Quota Bộ môn Còn lại"
-                        value={remainingForDept}
-                        subText="Chưa phân cho giảng viên"
-                    />
-                </div>
-
-                {/* 2. TỰ ĐỘNG PHÂN CÔNG */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Tự động Phân công (Giảng viên)</CardTitle>
-                        <CardDescription>
-                            Chia đều <span className="font-bold text-blue-600">{totalDeptQuota}</span> đề tài của bộ môn cho <span className="font-bold text-blue-600">{lecturers.length}</span> giảng viên.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex justify-between items-center bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-                            <div className="text-sm text-gray-700">
-                                <strong>Tổng đề tài cần phân bổ:</strong> <span className="font-bold text-lg text-purple-600">{totalDeptQuota}</span>
-                                <p className="text-xs text-gray-500 mt-1">Lưu ý: Thao tác này sẽ ghi đè lên tất cả quota thủ công của giảng viên trong kế hoạch này.</p>
-                            </div>
-                            <Button
-                                onClick={handleAutoAssignQuotas}
-                                disabled={!selectedPlan || isLoading || isSubmitting || totalDeptQuota === 0}
-                                className="bg-red-600 hover:bg-red-700 transition duration-150"
-                            >
-                                {isSubmitting ? (<Loader2 className="mr-2 h-5 w-5 animate-spin" />) : null}
-                                Tự động phân công (GV)
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* 3. ĐIỀU CHỈNH THỦ CÔNG (Giảng viên) */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Điều chỉnh Thủ công (Giảng viên)</CardTitle>
-                        <CardDescription>
-                            Cập nhật số lượng quota đề tài tối đa cho từng giảng viên.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-                            {/* Chọn Giảng viên */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Giảng viên</label>
-                                <Select
-                                    value={selectedLecturerId.toString()}
-                                    onValueChange={(value) => setSelectedLecturerId(value)}
-                                    disabled={!selectedPlan || isLoading || isSubmitting || lecturers.length === 0}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Chọn giảng viên" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {lecturers.map(gv => (
-                                            <SelectItem key={gv.ID_GIANGVIEN} value={gv.ID_GIANGVIEN.toString()}>
-                                                {gv.TEN_GIANGVIEN} ({gv.HOCVI})
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            {/* Số đề tài Quota */}
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Quota (Số đề tài)</label>
-                                <Input
-                                    type="number"
-                                    placeholder="Số lượng"
-                                    value={quotaAmount}
-                                    onChange={(e) => setQuotaAmount(e.target.value)}
-                                    min="0"
-                                    disabled={!selectedPlan || isLoading || isSubmitting}
-                                />
-                            </div>
-
-                            {/* Ghi chú */}
-                            <div className="md:col-span-2">
-                                <label className="block text-sm font-medium mb-1">Ghi chú (tùy chọn)</label>
-                                <Textarea
-                                    placeholder="Lý do điều chỉnh (nếu có)"
-                                    value={note}
-                                    onChange={(e) => setNote(e.target.value)}
-                                    rows={1}
-                                    disabled={!selectedPlan || isLoading || isSubmitting}
-                                />
-                            </div>
-
-                            {/* Nút Cập nhật */}
-                            <Button
-                                onClick={handleAssignQuota}
-                                disabled={!selectedLecturerId || quotaAmount === '' || !selectedPlan || isLoading || isSubmitting}
-                            >
-                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Cập nhật (GV)
-                            </Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* 4. BẢNG CHI TIẾT QUOTA GIẢNG VIÊN */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Bảng Chi tiết Quota Giảng viên</CardTitle>
-                        <CardDescription>Tổng hợp quota đã được giao và tình trạng sử dụng đề tài của từng giảng viên.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {lecturers.length === 0 ? (
-                            <div className="py-4 text-center text-gray-500">
-                                Không có giảng viên nào trong Bộ môn này.
-                            </div>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow className="bg-gray-100 hover:bg-gray-100">
-                                        <TableHead className="w-[30%]">Giảng viên</TableHead>
-                                        <TableHead>Học vị</TableHead>
-                                        <TableHead className="text-center font-bold text-blue-700">Quota Được Giao</TableHead>
-                                        <TableHead className="text-center">Đề tài Đã Tạo</TableHead>
-                                        <TableHead className="text-center">Trạng Thái</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {lecturers.map(gv => (
-                                        <TableRow key={gv.ID_GIANGVIEN} className="hover:bg-blue-50/50">
-                                            <TableCell className="font-semibold">{gv.TEN_GIANGVIEN}</TableCell>
-                                            <TableCell>{gv.HOCVI || 'N/A'}</TableCell>
-                                            <TableCell className="text-center font-bold text-blue-600">
-                                                {gv.quota_assigned || 0}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {gv.topics_created || 0}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {getQuotaStatus(gv.quota_assigned || 0, gv.topics_created || 0)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
-        );
-    };
-    // --- KẾT THÚC RENDER CONTENT ---
+    const totalDeptQuota = departmentQuotaInfo.department_quota || 0;
+    const totalAssignedToLecturers = lecturers.reduce((sum, gv) => sum + (gv.quota_assigned || 0), 0);
+    const remainingForDept = totalDeptQuota - totalAssignedToLecturers;
 
     return (
-        <div className="space-y-6">
-            {/* 1. Khu vực Chọn Kế hoạch (Luôn hiển thị) */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                        <Layers className="h-5 w-5 text-blue-600" />
-                        <span>Phân công Đề tài cho Giảng viên</span>
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="flex items-center space-x-4">
-                        <label className="text-sm font-medium whitespace-nowrap">Chọn Kế hoạch Khóa luận:</label>
-                        <Select
-                            value={selectedPlan}
-                            onValueChange={setSelectedPlan}
-                            disabled={isLoading}
-                        >
-                            <SelectTrigger className="w-[300px]">
-                                <SelectValue placeholder="Chọn kế hoạch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {plans.map(plan => (
-                                    <SelectItem key={plan.ID_KEHOACH} value={plan.ID_KEHOACH.toString()}>
-                                        {plan.TEN_DOT} - {plan.NAMHOC}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {isLoading && <Loader2 className="h-4 w-4 animate-spin text-blue-500" />}
-                    </div>
-                </CardContent>
-            </Card>
+      <motion.div
+        className="space-y-6"
+        key={selectedPlan}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
+      >
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <StatCard
+            icon={Layers}
+            title="Tổng Quota Bộ môn"
+            value={totalDeptQuota}
+            description="Được Admin giao"
+            iconBgClass="bg-blue-100 dark:bg-blue-900/30"
+            iconColorClass="text-blue-600 dark:text-blue-400"
+          />
+          <StatCard
+            icon={Users}
+            title="Đã Phân công (GV)"
+            value={totalAssignedToLecturers}
+            description={`Cho ${lecturers.length} giảng viên`}
+            iconBgClass="bg-green-100 dark:bg-green-900/30"
+            iconColorClass="text-green-600 dark:text-green-400"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            title="Quota Bộ môn Còn lại"
+            value={remainingForDept}
+            description="Chưa phân cho giảng viên"
+            iconBgClass={cn(remainingForDept > 0 ? "bg-orange-100 dark:bg-orange-900/30" : "bg-green-100 dark:bg-green-900/30")}
+            iconColorClass={cn(remainingForDept > 0 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400")}
+          />
+        </motion.div>
 
-            {/* 2. Nội dung chính (Điều kiện) */}
-            {renderContent()}
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Tự động Phân công (Giảng viên)</CardTitle>
+            <CardDescription>
+              Chia đều <span className="font-bold text-primary">{totalDeptQuota}</span> đề tài của bộ môn cho <span className="font-bold text-primary">{lecturers.length}</span> giảng viên.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter className="bg-muted/50 dark:bg-card/50 p-4 border-t">
+            <div className="flex justify-between items-center w-full">
+              <p className="text-xs text-muted-foreground max-w-md">
+                <strong>Lưu ý:</strong> Thao tác này sẽ ghi đè lên tất cả quota thủ công của giảng viên trong kế hoạch này.
+              </p>
+              <Button
+                onClick={handleAutoAssignQuotas}
+                disabled={!selectedPlan || isLoading || isSubmitting || totalDeptQuota === 0}
+                variant="destructive"
+              >
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Tự động phân công
+              </Button>
+            </div>
+          </CardFooter>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Điều chỉnh Thủ công (Giảng viên)</CardTitle>
+            <CardDescription>
+              Cập nhật số lượng quota đề tài tối đa cho từng giảng viên.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+              <div>
+                <label className="block text-sm font-medium mb-1">Giảng viên</label>
+                <Select
+                  value={selectedLecturerId ? String(selectedLecturerId) : ""}
+                  onValueChange={(value) => setSelectedLecturerId(value)}
+                  disabled={!selectedPlan || isLoading || isSubmitting || lecturers.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn giảng viên" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {lecturers.map(gv => (
+                      <SelectItem key={gv.ID_GIANGVIEN} value={String(gv.ID_GIANGVIEN)}>
+                        {gv.TEN_GIANGVIEN} ({gv.HOCVI})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Quota (Số đề tài)</label>
+                <Input
+                  type="number"
+                  placeholder="Số lượng"
+                  value={quotaAmount}
+                  onChange={(e) => setQuotaAmount(e.target.value)}
+                  min="0"
+                  disabled={!selectedPlan || isLoading || isSubmitting}
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium mb-1">Ghi chú (tùy chọn)</label>
+                <Textarea
+                  placeholder="Lý do điều chỉnh (nếu có)"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  rows={1}
+                  disabled={!selectedPlan || isLoading || isSubmitting}
+                />
+              </div>
+
+              <Button
+                onClick={handleAssignQuota}
+                disabled={!selectedLecturerId || quotaAmount === '' || !selectedPlan || isLoading || isSubmitting}
+              >
+                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                Cập nhật
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Bảng Chi tiết Quota Giảng viên</CardTitle>
+            <CardDescription>Tổng hợp quota đã được giao và tình trạng sử dụng đề tài của từng giảng viên.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {lecturers.length === 0 ? (
+              <div className="py-4 text-center text-muted-foreground">
+                Không có giảng viên nào trong Bộ môn này.
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[30%]">Giảng viên</TableHead>
+                    <TableHead>Học vị</TableHead>
+                    <TableHead className="text-center font-bold text-primary">Quota Được Giao</TableHead>
+                    <TableHead className="text-center">Đề tài Đã Tạo</TableHead>
+                    <TableHead className="text-center">Trạng Thái</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lecturers.map(gv => (
+                    <TableRow key={gv.ID_GIANGVIEN} className="hover:bg-muted/50">
+                      <TableCell className="font-semibold">{gv.TEN_GIANGVIEN}</TableCell>
+                      <TableCell>{gv.HOCVI || 'N/A'}</TableCell>
+                      <TableCell className="text-center font-bold text-primary">
+                        {gv.quota_assigned || 0}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {gv.topics_created || 0}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {getQuotaStatus(gv.quota_assigned || 0, gv.topics_created || 0)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
     );
+  };
+
+  return (
+    <motion.div
+      className="flex-1 space-y-6 p-4 md:p-8"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+    >
+      <Card>
+        <CardHeader className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-100">
+              <Layers className="h-5 w-5 text-blue-500" />
+              Phân công Đề tài (Trưởng Bộ môn)
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Phân bổ quota đề tài của bộ môn cho các giảng viên.
+            </CardDescription>
+          </div>
+          <div className="flex items-center space-x-4">
+            <label className="text-sm font-medium whitespace-nowrap text-muted-foreground">Chọn Kế hoạch:</label>
+            <Select
+              value={selectedPlan ? String(selectedPlan) : ""}
+              onValueChange={setSelectedPlan}
+              disabled={isLoading}
+            >
+              <SelectTrigger className="w-full md:w-[300px] bg-background">
+                <SelectValue placeholder="Chọn kế hoạch" />
+              </SelectTrigger>
+              <SelectContent>
+                {isLoading ? (
+                  <div className="flex items-center justify-center p-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                ) : plans.length === 0 ? (
+                  <div className="p-2 text-center text-sm text-muted-foreground">Không có kế hoạch</div>
+                ) : (
+                  plans.map(plan => (
+                    <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                      {plan.TEN_DOT} - {plan.NAMHOC}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {renderContent()}
+    </motion.div>
+  );
 };
 
 export default QuotaManager;
