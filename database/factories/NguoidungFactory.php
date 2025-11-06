@@ -20,7 +20,8 @@ class NguoidungFactory extends Factory
         return [
             'HODEM_VA_TEN' => $this->faker->name(),
             'EMAIL' => $this->faker->unique()->safeEmail(),
-            'MATKHAU_BAM' => Hash::make('123'), // Mật khẩu mặc định
+            'MATKHAU_BAM' => Hash::make('123'),
+            'NGAYSINH' => $this->faker->date('Y-m-d', '2004-12-31'),
             'LA_DANGNHAP_LANDAU' => true,
             'TRANGTHAI_KICHHOAT' => true,
         ];
@@ -36,6 +37,7 @@ class NguoidungFactory extends Factory
             return [
                 'ID_VAITRO' => $sinhVienRole->ID_VAITRO,
                 'MA_DINHDANH' => '2001' . $this->faker->unique()->numberBetween(200000, 229999),
+                // Ngày sinh đã được đặt ở definition()
             ];
         })->afterCreating(function (Nguoidung $nguoidung) {
             Sinhvien::create([
@@ -58,6 +60,7 @@ class NguoidungFactory extends Factory
             return [
                 'ID_VAITRO' => $giangVienRole->ID_VAITRO,
                 'MA_DINHDANH' => 'GV' . $this->faker->unique()->numberBetween(100, 999),
+                'NGAYSINH' => $this->faker->date('Y-m-d', '1995-12-31'),
             ];
         })->afterCreating(function (Nguoidung $nguoidung) {
             Giangvien::create([

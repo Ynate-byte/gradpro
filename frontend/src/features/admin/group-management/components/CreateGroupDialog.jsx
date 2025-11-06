@@ -21,7 +21,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label'; // <-- SỬA LỖI: THÊM DÒNG NÀY
+import { Label } from '@/components/ui/label'; // <-- SỬA LỖI: ĐÃ THÊM DÒNG NÀY
 
 // Schema không đổi
 const createGroupSchema = z.object({
@@ -97,7 +97,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
                 setSearchResults(data || []);
             })
             .catch((error) => {
-                console.error("Lỗi khi tìm sinh viên chưa có nhóm:", error); // Log lỗi
+                console.error("Lỗi khi tìm sinh viên chưa có nhóm:", error); // Ghi log lỗi
                 toast.error("Lỗi khi tìm kiếm sinh viên.");
             })
             .finally(() => {
@@ -167,7 +167,7 @@ export function CreateGroupDialog({ isOpen, setIsOpen, onSuccess, planId }) {
             onSuccess();
             setIsOpen(false);
         } catch (error) {
-            console.error("Lỗi khi tạo nhóm:", error); // Log lỗi
+            console.error("Lỗi khi tạo nhóm:", error); // Ghi log lỗi
             toast.error(error.response?.data?.message || "Tạo nhóm thất bại.");
         } finally {
             setIsLoading(false);

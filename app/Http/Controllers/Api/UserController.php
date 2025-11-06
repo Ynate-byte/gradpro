@@ -10,7 +10,7 @@ use App\Models\KhoaBomon;
 use App\Models\Sinhvien;
 use App\Models\Giangvien;
 use App\Models\Nhom;
-use App\Models\SinhvienThamgia; // <-- Đảm bảo đã import
+use App\Models\SinhvienThamgia;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -23,6 +23,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Throwable;
+use Carbon\Carbon;
 
 class UserController extends Controller
 {
@@ -125,6 +126,7 @@ class UserController extends Controller
             'HODEM_VA_TEN' => 'required|string|max:100',
             'EMAIL' => 'required|email|unique:NGUOIDUNG,EMAIL',
             'MA_DINHDANH' => 'required|string|max:20|unique:NGUOIDUNG,MA_DINHDANH',
+            'NGAYSINH' => 'nullable|date|before_or_equal:today',
             'ID_VAITRO' => 'required|integer|exists:VAITRO,ID_VAITRO',
             'password' => 'nullable|string|min:6',
             'TRANGTHAI_KICHHOAT' => 'sometimes|boolean',
@@ -135,6 +137,8 @@ class UserController extends Controller
             'MA_DINHDANH.unique' => 'Mã định danh này đã tồn tại.',
             'ID_VAITRO.required' => 'Vui lòng chọn vai trò.',
             'ID_VAITRO.exists' => 'Vai trò được chọn không hợp lệ.',
+            'NGAYSINH.date' => 'Ngày sinh không hợp lệ.',
+            'NGAYSINH.before_or_equal' => 'Ngày sinh không được ở tương lai.',
         ]);
 
         $selectedRoleId = (int)$validatedData['ID_VAITRO'];
@@ -175,6 +179,7 @@ class UserController extends Controller
                 'HODEM_VA_TEN' => $validatedData['HODEM_VA_TEN'],
                 'EMAIL' => $validatedData['EMAIL'],
                 'MA_DINHDANH' => $validatedData['MA_DINHDANH'],
+                'NGAYSINH' => $validatedData['NGAYSINH'] ?? null,
                 'ID_VAITRO' => $selectedRoleId,
                 'MATKHAU_BAM' => Hash::make($request->input('password', '123456')),
                 'LA_DANGNHAP_LANDAU' => true,
@@ -234,6 +239,7 @@ class UserController extends Controller
             'HODEM_VA_TEN' => 'sometimes|required|string|max:100',
             'EMAIL' => ['sometimes', 'required', 'email', Rule::unique('NGUOIDUNG')->ignore($id, 'ID_NGUOIDUNG')],
             'MA_DINHDANH' => ['sometimes', 'required', 'string', 'max:20', Rule::unique('NGUOIDUNG')->ignore($id, 'ID_NGUOIDUNG')],
+            'NGAYSINH' => 'nullable|date|before_or_equal:today',
             'TRANGTHAI_KICHHOAT' => 'sometimes|boolean',
             'password' => 'nullable|string|min:6',
             'sinhvien_details' => 'nullable|array',
@@ -241,6 +247,8 @@ class UserController extends Controller
         ], [
             'EMAIL.unique' => 'Email này đã được sử dụng.',
             'MA_DINHDANH.unique' => 'Mã định danh này đã tồn tại.',
+            'NGAYSINH.date' => 'Ngày sinh không hợp lệ.',
+            'NGAYSINH.before_or_equal' => 'Ngày sinh không được ở tương lai.',
         ]);
 
         $detailsValidator = null;
@@ -275,7 +283,8 @@ class UserController extends Controller
         DB::transaction(function () use ($user, $request, $validatedData, $userRoleId, $vaitroSV, $giangVienRoles) {
             // Lọc dữ liệu chỉ dành cho bảng NGUOIDUNG
             $userOnlyData = collect($validatedData)->only([
-                'HODEM_VA_TEN', 'EMAIL', 'MA_DINHDANH', 'TRANGTHAI_KICHHOAT'
+                'HODEM_VA_TEN', 'EMAIL', 'MA_DINHDANH', 'TRANGTHAI_KICHHOAT',
+                'NGAYSINH'
             ])->filter(fn ($value) => $value !== null)->all();
 
             // Nếu có password mới thì hash và thêm vào
@@ -569,6 +578,7 @@ class UserController extends Controller
             'validRows.*.email' => 'required|email',
             'validRows.*.ma_dinh_danh' => 'required|string',
             'validRows.*.ID_VAITRO' => 'required|integer|exists:VAITRO,ID_VAITRO',
+            'validRows.*.ngay_sinh' => 'nullable|string',
             'validRows.*.ten_chuyen_nganh' => 'nullable|string',
             'validRows.*.nien_khoa' => 'nullable|string',
             'validRows.*.he_dao_tao' => 'nullable|string',
@@ -597,6 +607,18 @@ class UserController extends Controller
                 if (Nguoidung::where('MA_DINHDANH', $row['ma_dinh_danh'])->exists()) {
                     $errors[] = "Dòng " . ($index + 1) . ": Mã định danh '{$row['ma_dinh_danh']}' đã tồn tại trong hệ thống.";
                     continue;
+                }
+
+                $ngaySinh = null;
+                if (!empty($row['ngay_sinh'])) {
+                    try {
+                        // Carbon sẽ tự động thử parse các định dạng 'd/m/Y' hoặc 'Y-m-d'
+                        // str_replace để xử lý format d/m/Y
+                        $ngaySinh = Carbon::parse(str_replace('/', '-', $row['ngay_sinh']))->format('Y-m-d');
+                    } catch (\Exception $e) {
+                        Log::warning("Import: Không thể parse ngày sinh '{$row['ngay_sinh']}' cho dòng ".($index + 1));
+                        $ngaySinh = null; // Bỏ qua nếu không parse được
+                    }
                 }
 
                 $user = Nguoidung::create([

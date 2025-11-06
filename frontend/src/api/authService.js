@@ -2,12 +2,12 @@ import axiosClient from './axiosConfig';
 
 /**
  * Gửi yêu cầu đăng nhập đến server.
- * @param {string} email - Email của người dùng.
+ * @param {string} identifier - Email hoặc Mã số sinh viên của người dùng.
  * @param {string} password - Mật khẩu của người dùng.
  * @returns {Promise<object>} Dữ liệu trả về từ API, bao gồm user và access_token.
  */
-export const login = async (email, password) => {
-    const response = await axiosClient.post('/login', { email, password });
+export const login = async (identifier, password) => {
+    const response = await axiosClient.post('/login', { identifier, password });
     return response.data;
 };
 

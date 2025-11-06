@@ -31,11 +31,11 @@ import {
     XCircle,
     AlertCircle,
     RefreshCw,
-    UserCircle, // <-- ĐÃ THÊM ICON MỚI
+    UserCircle,
+    Calendar,
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-// SỬA LỖI 403/500: Import từ adminSubmissionService
 import { getSubmissionsForPhancong } from '@/api/adminSubmissionService'; 
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -68,79 +68,79 @@ const InfoItem = ({ icon: Icon, label, value, className = "" }) => (
 
 // ----- (Component SubmissionFileItem không đổi) -----
 const SubmissionFileItem = ({ file }) => {
-  const isLink = file.LOAI_FILE === 'LinkDemo' || file.LOAI_FILE === 'LinkRepository';
-  const Icon = isLink ? LinkIcon : FileText;
-  const label = {
-    BaoCaoPDF: 'Báo cáo PDF',
-    SourceCodeZIP: 'Source Code (ZIP)',
-    LinkDemo: 'Link Demo',
-    LinkRepository: 'Link Repository',
-  }[file.LOAI_FILE] || file.LOAI_FILE;
+    const isLink = file.LOAI_FILE === 'LinkDemo' || file.LOAI_FILE === 'LinkRepository';
+    const Icon = isLink ? LinkIcon : FileText;
+    const label = {
+        BaoCaoPDF: 'Báo cáo PDF',
+        SourceCodeZIP: 'Source Code (ZIP)',
+        LinkDemo: 'Link Demo',
+        LinkRepository: 'Link Repository',
+    }[file.LOAI_FILE] || file.LOAI_FILE;
 
-  return (
-    <a
-      href={file.url} // Accessor 'url' từ model
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-2 p-2 rounded-md border bg-muted/50 hover:bg-muted transition-colors"
-    >
-      <Icon className="h-4 w-4 text-primary" />
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{label}</p>
-        <p className="text-xs text-muted-foreground truncate">
-          {isLink ? file.DUONG_DAN_HOAC_NOI_DUNG : file.TEN_FILE_GOC}
-        </p>
-      </div>
-    </a>
-  );
+    return (
+        <a
+            href={file.url} // Accessor 'url' từ model
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 p-2 rounded-md border bg-muted/50 hover:bg-muted transition-colors"
+        >
+            <Icon className="h-4 w-4 text-primary" />
+            <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{label}</p>
+                <p className="text-xs text-muted-foreground truncate">
+                    {isLink ? file.DUONG_DAN_HOAC_NOI_DUNG : file.TEN_FILE_GOC}
+                </p>
+            </div>
+        </a>
+    );
 };
 
 // ----- (Component SubmissionAttempt không đổi) -----
 const SubmissionAttempt = ({ attempt }) => {
-  const getStatusProps = () => {
-    switch (attempt.TRANGTHAI) {
-      case 'Đã xác nhận':
-        return { Icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50 border-green-200' };
-      case 'Yêu cầu nộp lại':
-        return { Icon: XCircle, color: 'text-red-600', bg: 'bg-red-50 border-red-200' };
-      case 'Chờ xác nhận':
-      default:
-        return { Icon: Loader2, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' };
-    }
-  };
-  const { Icon, color, bg } = getStatusProps();
-  const submittedAt = format(parseISO(attempt.NGAY_NOP), 'dd/MM/yyyy, HH:mm', { locale: vi });
+    const getStatusProps = () => {
+        switch (attempt.TRANGTHAI) {
+            case 'Đã xác nhận':
+                return { Icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50 border-green-200' };
+            case 'Yêu cầu nộp lại':
+                return { Icon: XCircle, color: 'text-red-600', bg: 'bg-red-50 border-red-200' };
+            case 'Chờ xác nhận':
+            default:
+                return { Icon: Loader2, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' };
+        }
+    };
+    const { Icon, color, bg } = getStatusProps();
+    const submittedAt = format(parseISO(attempt.NGAY_NOP), 'dd/MM/yyyy, HH:mm', { locale: vi });
 
-  return (
-    <Card className={cn("overflow-hidden", bg)}>
-      <CardHeader className="p-4">
-        <div className="flex justify-between items-center">
-          <CardTitle className={cn("text-base font-semibold flex items-center gap-2", color)}>
-            <Icon className={cn("h-5 w-5", attempt.TRANGTHAI === 'Chờ xác nhận' && 'animate-spin')} />
-            {attempt.TRANGTHAI}
-          </CardTitle>
-          <div className="text-xs text-muted-foreground">
-            <p>Nộp lúc: {submittedAt}</p>
-            <p>Người nộp: {attempt.nguoi_nop?.HODEM_VA_TEN || 'N/A'}</p>
-          </div>
-        </div>
-        {attempt.TRANGTHAI === 'Yêu cầu nộp lại' && attempt.PHANHOI_ADMIN && (
-          <Alert variant="destructive" className="mt-3 bg-red-100/50">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <p className="font-semibold">Phản hồi từ Admin ({attempt.nguoi_xac_nhan?.HODEM_VA_TEN}):</p>
-              <p className="italic">"{attempt.PHANHOI_ADMIN}"</p>
-            </AlertDescription>
-          </Alert>
-        )}
-      </CardHeader>
-      <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-        {attempt.files.map(file => (
-          <SubmissionFileItem key={file.ID_FILE} file={file} />
-        ))}
-      </CardContent>
-    </Card>
-  );
+    return (
+        <Card className={cn("overflow-hidden", bg)}>
+            <CardHeader className="p-4">
+                <div className="flex justify-between items-center">
+                    <CardTitle className={cn("text-base font-semibold flex items-center gap-2", color)}>
+                        <Icon className={cn("h-5 w-5", attempt.TRANGTHAI === 'Chờ xác nhận' && 'animate-spin')} />
+                        {attempt.TRANGTHAI}
+                    </CardTitle>
+                    <div className="text-xs text-muted-foreground">
+                        <p>Nộp lúc: {submittedAt}</p>
+                        <p>Người nộp: {attempt.nguoi_nop?.HODEM_VA_TEN || 'N/A'}</p>
+                    </div>
+                </div>
+                {attempt.TRANGTHAI === 'Yêu cầu nộp lại' && attempt.PHANHOI_ADMIN && (
+                    <Alert variant="destructive" className="mt-3 bg-red-100/50">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                            <p className="font-semibold">Phản hồi từ Admin ({attempt.nguoi_xac_nhan?.HODEM_VA_TEN}):</p>
+                            <p className="italic">"{attempt.PHANHOI_ADMIN}"</p>
+                        </AlertDescription>
+                    </Alert>
+                )}
+            </CardHeader>
+            <CardContent className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {attempt.files.map(file => (
+                    <SubmissionFileItem key={file.ID_FILE} file={file} />
+                ))}
+            </CardContent>
+        </Card>
+    );
 };
 
 
@@ -153,12 +153,9 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
     const phancong = group?.phancong_detai_nhom;
     const phancongId = phancong?.ID_PHANCONG;
 
-    // ----- SỬA ĐỔI: Thêm 2 biến này -----
     const detai = phancong?.detai;
     const gvhd = phancong?.gvhd;
-    // ----- KẾT THÚC SỬA ĐỔI -----
 
-    // SỬA LỖI 403/500: Hàm fetchHistory giờ đã gọi API của Admin
     const fetchHistory = useCallback(async () => {
         if (!phancongId) {
             setIsLoadingHistory(false);
@@ -166,11 +163,10 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
         }
         setIsLoadingHistory(true);
         try {
-            // Gọi hàm getSubmissionsForPhancong (AdminSubmissionController)
             const data = await getSubmissionsForPhancong(phancongId); 
             setHistory(data || []);
         } catch (error) {
-            console.error("Lỗi khi tải lịch sử nộp bài (Admin):", error); // Log lỗi
+            console.error("Lỗi khi tải lịch sử nộp bài (Admin):", error); // Ghi log lỗi
             toast.error("Không thể tải lịch sử nộp bài.");
         } finally {
             setIsLoadingHistory(false);
@@ -185,12 +181,11 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
             setHistory([]); // Reset lịch sử khi không có phân công
         }
     }, [isOpen, phancongId, fetchHistory]);
-    // ----- KẾT THÚC SỬA LỖI -----
 
     if (!group) return null;
 
     const formatNullableDate = (dateString, formatString = 'dd/MM/yyyy HH:mm') => {
-        if (!dateString) return null;
+        if (!dateString || dateString.startsWith('0000-00-00')) return null; // Sửa lỗi ngày 0000-00-00
         try {
             const date = parseISO(dateString);
             if (isValid(date)) {
@@ -210,11 +205,19 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                     <SheetTitle className="text-2xl font-bold text-gray-800 dark:text-gray-100">{group.TEN_NHOM}</SheetTitle>
                     <SheetDescription className="text-gray-600 dark:text-gray-300">{group.MOTA || 'Không có mô tả.'}</SheetDescription>
                     <div className="flex flex-wrap items-center gap-2 pt-2">
-                        {group.LA_NHOM_DACBIET && (
+                        
+                        {/* ----- [SỬA LỖI] Đổi IF thành IF/ELSE ----- */}
+                        {group.LA_NHOM_DACBIET ? (
                             <Badge variant="default" className="bg-blue-500 text-white gap-1.5 hover:bg-blue-600">
                                 <Star className="h-3 w-3" /> Đặc biệt
                             </Badge>
+                        ) : (
+                            <Badge variant="outline" className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-300 dark:border-gray-600 gap-1.5">
+                                <Users className="h-3 w-3" /> Nhóm thường
+                            </Badge>
                         )}
+                        {/* ----- [KẾT THÚC SỬA LỖI] ----- */}
+
                         {group.TRANGTHAI === 'Đã đủ thành viên' && (
                             <Badge variant="secondary" className="bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
                                 Đã đủ TV ({group.SO_THANHVIEN_HIENTAI}/4)
@@ -238,24 +241,20 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                                     <Info className="h-5 w-5 text-blue-500" /> Thông tin chung
                                 </CardTitle>
                             </CardHeader>
-                            {/* ----- SỬA ĐỔI NỘI DUNG CARD ----- */}
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4">
-                                {/* 1. Xóa InfoItem ID_KEHOACH */}
-
-                                {/* 2. Thêm InfoItem cho Đề tài (nếu có) */}
+                                
                                 <InfoItem 
                                     icon={BookOpen} 
                                     label="Đề tài thực hiện" 
-                                    value={detai?.TEN_DETAI} 
-                                    className="sm:col-span-2" // Choán 2 cột
+                                    value={detai?.TEN_DETAI}
+                                    className="sm:col-span-2"
                                 />
                                 
-                                {/* 3. Thêm InfoItem cho GVHD (nếu có) */}
                                 <InfoItem 
                                     icon={UserCircle} 
                                     label="Giảng viên hướng dẫn" 
-                                    value={gvhd?.nguoidung?.HODEM_VA_TEN} // Truy cập sâu vào nguoidung
-                                    className="sm:col-span-2" // Choán 2 cột
+                                    value={gvhd?.nguoidung?.HODEM_VA_TEN}
+                                    className="sm:col-span-2"
                                 />
 
                                 <InfoItem 
@@ -269,7 +268,6 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                                     value={formatNullableDate(group.NGAYCAPNHAT)} 
                                 />
                             </CardContent>
-                            {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
                         </Card>
 
                         {/* Card danh sách thành viên */}
@@ -291,7 +289,6 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                                                         </AvatarFallback>
                                                     </Avatar>
                                                     <div className="flex-grow">
-                                                        {/* SỬA LỖI DOM: Thay <p> bằng <div> */}
                                                         <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
                                                             {member.nguoidung.HODEM_VA_TEN}
                                                             {member.ID_NGUOIDUNG === group.ID_NHOMTRUONG && (
@@ -307,10 +304,29 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                                             <Separator className="my-3 bg-blue-200 dark:bg-blue-700" />
                                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
                                                 <InfoItem icon={Mail} label="Email" value={member.nguoidung.EMAIL} className="col-span-2 sm:col-span-1" />
+                                                
+                                                <InfoItem 
+                                                    icon={Calendar} 
+                                                    label="Ngày sinh" 
+                                                    value={formatNullableDate(member.nguoidung.NGAYSINH, 'dd/MM/yyyy')} 
+                                                    className="col-span-2 sm:col-span-1" 
+                                                />
+
                                                 <InfoItem icon={Phone} label="Điện thoại" value={member.nguoidung.SO_DIENTHOAI || 'Chưa cập nhật'} className="col-span-2 sm:col-span-1" />
                                                 <InfoItem icon={CalendarPlus} label="Ngày vào nhóm" value={formatNullableDate(member.NGAY_VAONHOM, 'dd/MM/yyyy')} className="col-span-2 sm:col-span-1" />
-                                                <InfoItem icon={BookOpen} label="Chuyên ngành" value={member.nguoidung.sinhvien?.chuyennganh?.TEN_CHUYENNGANH ?? <span className="italic text-gray-400 dark:text-gray-500">N/A</span>} className="col-span-2 sm:col-span-1" />
-                                                <InfoItem icon={Users} label="Lớp" value={member.nguoidung.sinhvien?.TEN_LOP ?? <span className="italic text-gray-400 dark:text-gray-500">N/A</span>} className="col-span-2 sm:col-span-1" />
+                                                
+                                                <InfoItem 
+                                                    icon={BookOpen} 
+                                                    label="Chuyên ngành" 
+                                                    value={member.nguoidung.sinhvien?.chuyennganh?.TEN_CHUYENNGANH}
+                                                    className="col-span-2 sm:col-span-1" 
+                                                />
+                                                <InfoItem 
+                                                    icon={Users} 
+                                                    label="Lớp" 
+                                                    value={member.nguoidung.sinhvien?.TEN_LOP}
+                                                    className="col-span-2 sm:col-span-1" 
+                                                />
                                             </div>
                                         </div>
                                     ))

@@ -38,7 +38,7 @@ class GroupAdminController extends Controller
             'nhomtruong', 
             'chuyennganh', 
             'khoabomon', 
-            'thanhviens.nguoidung', 
+            'thanhviens.nguoidung.sinhvien.chuyennganh', 
             'phancongDetaiNhom.detai',
             'phancongDetaiNhom.gvhd.nguoidung',
             'diemTongKet'
@@ -52,9 +52,9 @@ class GroupAdminController extends Controller
             $searchTerm = $request->search;
             $query->where(function ($q) use ($searchTerm) {
                 $q->where('TEN_NHOM', 'like', '%' . $searchTerm . '%')
-                  ->orWhereHas('thanhviens.nguoidung', function ($subQ) use ($searchTerm) {
-                        $subQ->where('HODEM_VA_TEN', 'like', '%' . $searchTerm . '%');
-                    });
+                    ->orWhereHas('thanhviens.nguoidung', function ($subQ) use ($searchTerm) {
+                            $subQ->where('HODEM_VA_TEN', 'like', '%' . $searchTerm . '%');
+                        });
             });
         }
 
@@ -558,8 +558,8 @@ class GroupAdminController extends Controller
                                 ->pluck('ID_SINHVIEN', 'ID_NGUOIDUNG');
 
         $existingStudentIdsInPlan = SinhvienThamgia::where('ID_KEHOACH', $planId)
-                                                ->whereIn('ID_SINHVIEN', $studentMap->values())
-                                                ->pluck('ID_SINHVIEN');
+                                        ->whereIn('ID_SINHVIEN', $studentMap->values())
+                                        ->pluck('ID_SINHVIEN');
 
         $missingStudentIds = $studentMap->values()->diff($existingStudentIdsInPlan);
 

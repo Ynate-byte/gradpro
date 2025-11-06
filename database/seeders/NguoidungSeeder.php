@@ -14,10 +14,13 @@ use Illuminate\Support\Str;
 
 class NguoidungSeeder extends Seeder
 {
+    /**
+     * Chạy seeder cho cơ sở dữ liệu.
+     */
     public function run(): void
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        // Truncate theo thứ tự phụ thuộc ngược
+        // Xóa dữ liệu cũ theo thứ tự phụ thuộc ngược
         Giangvien::truncate();
         Sinhvien::truncate();
         Nguoidung::truncate();
@@ -35,8 +38,9 @@ class NguoidungSeeder extends Seeder
             Nguoidung::create([
                 'MA_DINHDANH' => 'ADMIN01',
                 'EMAIL' => 'admin@gradpro.test',
-                'MATKHAU_BAM' => Hash::make('123'),
+                'MATKHAU_BAM' => Hash::make('123'), // Mật khẩu mặc định
                 'HODEM_VA_TEN' => 'Quản Trị Viên',
+                'NGAYSINH' => '1990-01-01', // Thêm ngày sinh
                 'ID_VAITRO' => $adminRole->ID_VAITRO,
                 'TRANGTHAI_KICHHOAT' => true,
                 'LA_DANGNHAP_LANDAU' => false,
@@ -44,7 +48,7 @@ class NguoidungSeeder extends Seeder
             ]);
         }
         
-        // *** BỔ SUNG LẠI GIÁO VỤ ***
+        // 2. Tạo Giáo vụ
         $this->command->info('Đang tạo tài khoản Giáo vụ...');
         $khoaCntt = KhoaBomon::where('TEN_KHOA_BOMON', 'Mạng máy tính và An ninh thông tin')->first(); 
         if (!$khoaCntt) {
@@ -56,8 +60,9 @@ class NguoidungSeeder extends Seeder
              $giaoVuUser = Nguoidung::create([
                 'MA_DINHDANH' => 'GVU.CNTT',
                 'EMAIL' => 'giao.vu@gradpro.test', // Email mà KehoachKhoaluanSeeder tìm kiếm
-                'MATKHAU_BAM' => Hash::make('123'),
+                'MATKHAU_BAM' => Hash::make('123'), // Mật khẩu mặc định
                 'HODEM_VA_TEN' => 'Trần Thị Thu Hà (Giáo vụ)',
+                'NGAYSINH' => '1995-05-10', // Thêm ngày sinh
                 'ID_VAITRO' => $giaoVuRole->ID_VAITRO,
                 'TRANGTHAI_KICHHOAT' => true,
                 'LA_DANGNHAP_LANDAU' => false,
@@ -71,10 +76,8 @@ class NguoidungSeeder extends Seeder
         } else {
             $this->command->error('Không thể tạo Giáo vụ do không tìm thấy vai trò hoặc khoa/bộ môn.');
         }
-        // *** KẾT THÚC BỔ SUNG ***
 
-
-        // 2. TẠO GIẢNG VIÊN MỚI THEO DANH SÁCH
+        // 3. TẠO GIẢNG VIÊN MỚI THEO DANH SÁCH
         $this->command->info('Đang tạo dữ liệu cho Giảng viên...');
 
         $roleMap = [
@@ -94,7 +97,7 @@ class NguoidungSeeder extends Seeder
         ];
         
         $khoaBomonDbMap = KhoaBomon::whereIn('TEN_KHOA_BOMON', array_values($boMonSeederMap))
-                                 ->pluck('ID_KHOA_BOMON', 'TEN_KHOA_BOMON');
+                                    ->pluck('ID_KHOA_BOMON', 'TEN_KHOA_BOMON');
 
         $lecturersData = [
             // KHDT
@@ -158,6 +161,7 @@ class NguoidungSeeder extends Seeder
         ];
 
         $gvCounter = 1;
+        $faker = \Faker\Factory::create(); // Tạo instance của Faker
 
         foreach ($lecturersData as $data) {
             $hocvi = $this->parseHocVi($data['hocvi']);
@@ -179,7 +183,6 @@ class NguoidungSeeder extends Seeder
                 $email = $this->generateEmailFromName($data['ten']);
             }
             
-            // Sửa lỗi email .eu.vn
             if ($email === 'trangnthuyen@huit.eu.vn') {
                 $email = 'trangnthuyen@huit.edu.vn';
             }
@@ -188,8 +191,9 @@ class NguoidungSeeder extends Seeder
             $user = Nguoidung::create([
                 'MA_DINHDANH' => 'GV' . str_pad($gvCounter++, 3, '0', STR_PAD_LEFT),
                 'EMAIL' => $email,
-                'MATKHAU_BAM' => Hash::make('123'),
+                'MATKHAU_BAM' => Hash::make('123'), // Mật khẩu mặc định
                 'HODEM_VA_TEN' => $data['ten'],
+                'NGAYSINH' => $faker->date('Y-m-d', '1995-12-31'), // Thêm ngày sinh giả lập
                 'ID_VAITRO' => $vaitroId,
                 'TRANGTHAI_KICHHOAT' => true,
                 'LA_DANGNHAP_LANDAU' => false,
@@ -206,10 +210,11 @@ class NguoidungSeeder extends Seeder
 
         $this->command->info("Đã tạo thành công " . ($gvCounter - 1) . " giảng viên.");
 
-        // 3. TẠO SINH VIÊN
+        // 4. TẠO SINH VIÊN
         $this->command->info('Đang tạo dữ liệu cho 3 SV cụ thể...');
         
         if ($svRole) {
+            // Factory đã được cập nhật để dùng mk '123' và ngày sinh giả lập
             Nguoidung::factory()->asSinhVien()->create([
                 'HODEM_VA_TEN' => 'Trần Văn An',
                 'EMAIL' => 'sv.antv@gradpro.test',
@@ -227,7 +232,7 @@ class NguoidungSeeder extends Seeder
             ]);
         }
 
-        // *** TẠO 50 SV TÊN TIẾNG VIỆT ***
+        // 5. TẠO 50 SV TÊN TIẾNG VIỆT
         $this->command->info('Đang tạo dữ liệu cho 50 SV Tiếng Việt...');
         
         $vietnameseNames = [
@@ -248,6 +253,7 @@ class NguoidungSeeder extends Seeder
                 $email = $this->generateStudentEmailFromName($name, $index);
                 $mssv = '200121' . str_pad($index + 1, 3, '0', STR_PAD_LEFT); 
                 
+                // Factory đã được cập nhật để dùng mk '123' và ngày sinh giả lập
                 Nguoidung::factory()
                     ->asSinhVien() 
                     ->create([
@@ -259,10 +265,8 @@ class NguoidungSeeder extends Seeder
             }
         }
         $this->command->info('Đã tạo 50 SV Tiếng Việt.');
-        // *** KẾT THÚC THAY ĐỔI ***
 
-
-        // Cập nhật trạng thái cho một số SV
+        // 6. Cập nhật trạng thái cho một số SV
         Nguoidung::whereHas('vaitro', fn($q) => $q->where('TEN_VAITRO', 'Sinh viên'))
             ->inRandomOrder()
             ->limit(3)
@@ -291,7 +295,6 @@ class NguoidungSeeder extends Seeder
     /**
      * Phân tích chuỗi chức vụ
      * Chỉ trả về các giá trị có trong ENUM
-     * *** ĐÃ SỬA LỖI LOGIC ***
      */
     private function parseChucVu(?string $text): ?string
     {
@@ -310,7 +313,6 @@ class NguoidungSeeder extends Seeder
 
     /**
      * Xác định ID_VAITRO dựa trên chức vụ
-     * *** ĐÃ SỬA LỖI LOGIC ***
      */
     private function parseVaitro(?string $text, array $roleMap): int
     {

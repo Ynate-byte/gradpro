@@ -33,6 +33,7 @@ class UsersImport implements ToCollection, WithHeadingRow
                 'email' => 'required|email|unique:NGUOIDUNG,EMAIL',
                 'ma_dinh_danh' => 'required|string|max:20|unique:NGUOIDUNG,MA_DINHDANH',
                 'vai_tro' => ['required', Rule::in(['Sinh viên', 'Giảng viên'])],
+                'ngay_sinh' => 'nullable|date_format:d/m/Y,Y-m-d,m/d/Y',
             ]);
 
             if ($validator->fails()) {

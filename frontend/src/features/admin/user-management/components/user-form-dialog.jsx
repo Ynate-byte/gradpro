@@ -4,7 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { toast } from "sonner";
 import { userFormSchema } from './user-form-schema';
 import { createUser, updateUser, getRoles, getChuyenNganhs, getKhoaBomons } from '@/api/userService';
-import { User, Mail, Hash, KeyRound, Briefcase, GraduationCap, Loader2, Building, BookOpen, Award } from 'lucide-react';
+import { User, Mail, Hash, KeyRound, Briefcase, GraduationCap, Loader2, Building, BookOpen, Award, Calendar } from 'lucide-react';
+import { format, parseISO, isValid } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -53,6 +54,7 @@ export function UserFormDialog({ isOpen, setIsOpen, editingUser, onSuccess }) {
             HODEM_VA_TEN: '',
             EMAIL: '',
             MA_DINHDANH: '',
+            NGAYSINH: '',
             ID_VAITRO: '',
             password: '',
             TRANGTHAI_KICHHOAT: true,
@@ -85,11 +87,18 @@ export function UserFormDialog({ isOpen, setIsOpen, editingUser, onSuccess }) {
             if (isEditMode && editingUser) {
                 const svDetails = editingUser.sinhvien || { ID_CHUYENNGANH: '', NIENKHOA: '', HEDAOTAO: '', TEN_LOP: '' };
                 const gvDetails = editingUser.giangvien || { ID_KHOA_BOMON: '', HOCVI: '', CHUCVU: null };
-
+                let formattedNgaySinh = '';
+                if (editingUser.NGAYSINH) {
+                    const date = parseISO(editingUser.NGAYSINH);
+                    if (isValid(date)) {
+                        formattedNgaySinh = format(date, 'yyyy-MM-dd');
+                    }
+                }
                 form.reset({
                     HODEM_VA_TEN: editingUser.HODEM_VA_TEN || '',
                     EMAIL: editingUser.EMAIL || '',
                     MA_DINHDANH: editingUser.MA_DINHDANH || '',
+                    NGAYSINH: formattedNgaySinh,
                     ID_VAITRO: String(editingUser.ID_VAITRO || ''),
                     TRANGTHAI_KICHHOAT: editingUser.TRANGTHAI_KICHHOAT === 1 || editingUser.TRANGTHAI_KICHHOAT === true,
                     sinhvien_details: {
@@ -110,6 +119,7 @@ export function UserFormDialog({ isOpen, setIsOpen, editingUser, onSuccess }) {
                     HODEM_VA_TEN: '',
                     EMAIL: '',
                     MA_DINHDANH: '',
+                    NGAYSINH: '',
                     ID_VAITRO: '',
                     password: '',
                     TRANGTHAI_KICHHOAT: true,
@@ -129,6 +139,7 @@ export function UserFormDialog({ isOpen, setIsOpen, editingUser, onSuccess }) {
             HODEM_VA_TEN: data.HODEM_VA_TEN,
             EMAIL: data.EMAIL,
             MA_DINHDANH: data.MA_DINHDANH,
+            NGAYSINH: data.NGAYSINH || null,
             ID_VAITRO: data.ID_VAITRO,
             TRANGTHAI_KICHHOAT: data.TRANGTHAI_KICHHOAT,
             ...( (!isEditMode || data.password) && { password: data.password } ),
@@ -232,6 +243,21 @@ export function UserFormDialog({ isOpen, setIsOpen, editingUser, onSuccess }) {
                                                             <FormLabel className="text-gray-700 dark:text-gray-200">Mã định danh (MSSV/MSGV) *</FormLabel>
                                                             <FormControl>
                                                                 <Input className="border-blue-300 dark:border-blue-600 focus:ring-blue-500" placeholder="200120..." {...field} />
+                                                            </FormControl>
+                                                            <FormMessage className="text-red-500" />
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <FormField
+                                                    name="NGAYSINH"
+                                                    control={form.control}
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="text-gray-700 dark:text-gray-200">Ngày sinh</FormLabel>
+                                                            <FormControl>
+                                                                <Input className="border-blue-300 dark:border-blue-600 focus:ring-blue-500" type="date" {...field} value={field.value || ''} />
                                                             </FormControl>
                                                             <FormMessage className="text-red-500" />
                                                         </FormItem>

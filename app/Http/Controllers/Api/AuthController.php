@@ -18,15 +18,20 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'email' => 'required|email',
+            'identifier' => 'required|string',
             'password' => 'required',
         ]);
 
-        $user = Nguoidung::where('EMAIL', $request->email)->first();
+        $identifier = $request->identifier;
+
+        $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL);
+        $fieldToSearch = $isEmail ? 'EMAIL' : 'MA_DINHDANH';
+
+        $user = Nguoidung::where($fieldToSearch, $identifier)->first();
 
         if (!$user || !$user->TRANGTHAI_KICHHOAT || !Hash::check($request->password, $user->MATKHAU_BAM)) {
             throw ValidationException::withMessages([
-                'email' => ['Thông tin đăng nhập không chính xác hoặc tài khoản đã bị khóa.'],
+                'identifier' => ['Thông tin đăng nhập không chính xác hoặc tài khoản đã bị khóa.'],
             ]);
         }
 
@@ -39,7 +44,7 @@ class AuthController extends Controller
             'message' => 'Đăng nhập thành công',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('vaitro', 'giangvien')
+            'user' => $user->load('vaitro', 'giangvien', 'sinhvien')
         ]);
     }
 

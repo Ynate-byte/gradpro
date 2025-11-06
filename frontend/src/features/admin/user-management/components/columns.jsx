@@ -3,13 +3,13 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DataTableRowActions } from "./row-actions";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ArrowUp, ArrowDown, ShieldCheck, Briefcase, GraduationCap, Circle } from "lucide-react"; // Thêm Circle
-import { format, formatDistanceToNow } from 'date-fns';
+import { ArrowUpDown, ArrowUp, ArrowDown, ShieldCheck, Briefcase, GraduationCap, Circle } from "lucide-react";
+import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'; // Đã import
 import { vi } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils"; // Import cn
+import { cn } from "@/lib/utils";
 
-// Lấy ký tự đầu của tên và họ
+// Helper: Lấy ký tự đầu của tên và họ
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -22,10 +22,10 @@ const getInitials = (name) => {
 // Cấu hình vai trò với icon và màu badge mới
 const roleConfig = {
     'Admin': { icon: ShieldCheck, color: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700" },
-    'Giảng viên': { icon: Briefcase, color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700" }, // Đổi sang Indigo
-    'Sinh viên': { icon: GraduationCap, color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" }, // Màu xanh dương cho Sinh viên
+    'Giảng viên': { icon: Briefcase, color: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300 border-indigo-200 dark:border-indigo-700" },
+    'Sinh viên': { icon: GraduationCap, color: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" },
     'Giáo vụ': { icon: Briefcase, color: "bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300 border-purple-200 dark:border-purple-700" },
-    'Trưởng khoa': { icon: Briefcase, color: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border-teal-200 dark:border-teal-700" }, // Đổi sang Teal
+    'Trưởng khoa': { icon: Briefcase, color: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border-teal-200 dark:border-teal-700" },
 };
 
 
@@ -60,6 +60,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         ),
         enableSorting: false,
         enableHiding: false,
+        size: 40, // <-- SỬA LỖI CĂN CHỈNH
     },
     {
         accessorKey: "HODEM_VA_TEN",
@@ -74,7 +75,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         ),
         cell: ({ row }) => (
             <div className="flex items-center gap-3 pl-2">
-                <Avatar className="h-9 w-9 border"> {/* Thêm border */}
+                <Avatar className="h-9 w-9 border">
                     <AvatarFallback>{getInitials(row.original.HODEM_VA_TEN)}</AvatarFallback>
                 </Avatar>
                 <div className="flex flex-col">
@@ -89,7 +90,8 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                     </span>
                 </div>
             </div>
-        )
+        ),
+        minSize: 250, // <-- SỬA LỖI CĂN CHỈNH
     },
     {
         accessorKey: "MA_DINHDANH",
@@ -98,7 +100,40 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             <div className="font-mono text-sm">
                 {row.original.MA_DINHDANH}
             </div>
-        )
+        ),
+        size: 140, // <-- SỬA LỖI CĂN CHỈNH
+    },
+    {
+        accessorKey: "NGAYSINH",
+        header: ({ column }) => (
+            <Button
+                variant="ghost"
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+                Ngày sinh
+                <SortIndicator column={column} />
+            </Button>
+        ),
+        cell: ({ row }) => {
+            const ngaySinh = row.original.NGAYSINH;
+            // ----- [SỬA LỖI NGÀY SINH] -----
+            // Kiểm tra null, undefined, và '0000-00-00'
+            if (!ngaySinh || ngaySinh.startsWith('0000-00-00')) {
+                return <span className="text-xs text-muted-foreground">Chưa có</span>;
+            }
+            // ----- [KẾT THÚC SỬA LỖI] -----
+            try {
+                const date = parseISO(ngaySinh);
+                if (isValid(date)) {
+                    return <div className="text-sm">{format(date, 'dd/MM/yyyy')}</div>;
+                }
+                // Lỗi này không nên xảy ra nếu seeder đúng
+                return <span className="text-xs text-red-500">Ngày lỗi</span>; 
+            } catch (e) {
+                return <span className="text-xs text-red-500">Ngày lỗi</span>;
+            }
+        },
+        size: 120, // <-- SỬA LỖI CĂN CHỈNH
     },
     {
         id: "vai_tro",
@@ -108,16 +143,16 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             const roleName = row.original.vaitro.TEN_VAITRO;
             const positionName = row.original.giangvien?.CHUCVU;
             const displayRoleName = positionName || roleName;
-            // Ưu tiên config theo chức vụ nếu có, nếu không thì theo vai trò
             const config = roleConfig[displayRoleName] || roleConfig[roleName] || {};
             const Icon = config.icon || null;
             return (
-                <Badge variant="outline" className={cn('gap-1.5', config.color)}> {/* Thêm border từ config */}
+                <Badge variant="outline" className={cn('gap-1.5', config.color)}>
                     {Icon && <Icon className="h-3.5 w-3.5" />}
                     {displayRoleName}
                 </Badge>
             );
         },
+        minSize: 150, // <-- SỬA LỖI CĂN CHỈNH
     },
     {
         id: "unit_major",
@@ -143,17 +178,18 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                     N/A
                 </div>
             );
-        }
+        },
+        minSize: 200, // <-- SỬA LỖI CĂN CHỈNH
     },
     { // Cột ẩn để lọc chuyên ngành
         id: "chuyen_nganh_id",
         accessorFn: row => String(row.original?.sinhvien?.ID_CHUYENNGANH),
-        enableHiding: false, // Giữ lại để filter hoạt động
+        enableHiding: false,
     },
     { // Cột ẩn để lọc khoa/bộ môn
         id: "khoa_bomon_id",
         accessorFn: row => String(row.original?.giangvien?.ID_KHOA_BOMON),
-        enableHiding: false, // Giữ lại để filter hoạt động
+        enableHiding: false,
     },
     {
         id: "trang_thai",
@@ -163,7 +199,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             const isActive = row.getValue("trang_thai");
             return (
                 <div className="flex items-center gap-2">
-                    {/* Sử dụng icon Circle thay cho span */}
                     <Circle className={`h-2.5 w-2.5 ${isActive ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500'}`} />
                     <span className="text-muted-foreground text-xs">
                         {isActive ? "Hoạt động" : "Vô hiệu"}
@@ -171,6 +206,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             );
         },
+        size: 120, // <-- SỬA LỖI CĂN CHỈNH
     },
     {
         accessorKey: "NGAYTAO",
@@ -192,12 +228,14 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                     </Tooltip>
                 </TooltipProvider>
             );
-        }
+        },
+        size: 130, // <-- SỬA LỖI CĂN CHỈNH
     },
     {
         id: "actions",
         cell: ({ row }) => (
             <DataTableRowActions row={row} onEdit={onEdit} onSuccess={onSuccess} />
         ),
+        size: 60, // <-- SỬA LỖI CĂN CHỈNH
     },
 ];

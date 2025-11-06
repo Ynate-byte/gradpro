@@ -23,10 +23,15 @@ class Nguoidung extends Authenticatable
         'EMAIL',
         'MATKHAU_BAM',
         'HODEM_VA_TEN',
+        'NGAYSINH',
         'SO_DIENTHOAI',
         'ID_VAITRO',
         'LA_DANGNHAP_LANDAU',
         'TRANGTHAI_KICHHOAT',
+    ];
+    
+    protected $casts = [
+        'NGAYSINH' => 'date',
     ];
 
     protected $hidden = [

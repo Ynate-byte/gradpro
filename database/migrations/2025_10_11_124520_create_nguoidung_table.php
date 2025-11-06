@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('EMAIL', 100)->unique();
             $table->string('MATKHAU_BAM', 255);
             $table->string('HODEM_VA_TEN', 100);
+            $table->date('NGAYSINH')->nullable();
             $table->string('SO_DIENTHOAI', 15)->nullable();
             $table->unsignedBigInteger('ID_VAITRO');
             $table->boolean('LA_DANGNHAP_LANDAU')->default(true);

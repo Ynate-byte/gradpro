@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-// import axiosClient from '@/api/axiosConfig'; // <-- BỎ DÒNG NÀY
-import { login as loginService } from '@/api/authService'; // <-- THÊM DÒNG NÀY
+import { login as loginService } from '@/api/authService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+// 1. Thay Mail bằng UserSquare (hoặc icon nào đó chung chung)
+import { UserSquare, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
-    const [email, setEmail] = useState('');
+    // 2. Sửa state 'email' thành 'identifier'
+    const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [remember, setRemember] = useState(false);
     const [error, setError] = useState('');
@@ -23,16 +24,16 @@ export default function Login() {
         setLoading(true);
 
         try {
-            // THAY ĐỔI: Gọi hàm login từ authService
-            const data = await loginService(email, password);
-            // Hàm login trong AuthContext vẫn được giữ nguyên
+            // 3. Truyền 'identifier' vào service
+            const data = await loginService(identifier, password);
             auth.login(data.user, data.access_token, remember);
         } catch (err) {
             if (err.response && err.response.data) {
                 const message = err.response.data.message || 'Có lỗi xảy ra.';
                 const errors = err.response.data.errors;
-                if (errors && (errors.email || errors.EMAIL)) {
-                    setError((errors.email || errors.EMAIL)[0]);
+                // 4. Sửa 'errors.email' thành 'errors.identifier'
+                if (errors && (errors.identifier || errors.IDENTIFIER)) {
+                    setError((errors.identifier || errors.IDENTIFIER)[0]);
                 } else {
                     setError(message);
                 }
@@ -60,12 +61,20 @@ export default function Login() {
                     </div>
                     
                     <form onSubmit={handleLogin} className="space-y-6">
-                        {/* Các trường input và button giữ nguyên */}
+                        {/* 5. Sửa đổi trường Input Email/Identifier */}
                         <div className="space-y-2">
-                            <Label htmlFor="email">Email</Label>
+                            <Label htmlFor="identifier">Email hoặc Mã số sinh viên</Label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                                <Input id="email" type="email" placeholder="you@example.com" className="pl-10 h-12" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                                <UserSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
+                                <Input 
+                                    id="identifier" 
+                                    type="text" // Đổi type="email" thành "text"
+                                    placeholder="Email hoặc Mã số sinh viên" 
+                                    className="pl-10 h-12" 
+                                    value={identifier} // Sửa value
+                                    onChange={(e) => setIdentifier(e.target.value)} // Sửa onChange
+                                    required 
+                                />
                             </div>
                         </div>
 

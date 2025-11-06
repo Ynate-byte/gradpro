@@ -9,6 +9,8 @@ export const userFormSchema = z.object({
         .max(100),
     EMAIL: z.string().email({ message: "Địa chỉ email không hợp lệ." }),
     MA_DINHDANH: z.string().min(3, { message: "Mã định danh không được để trống." }),
+    NGAYSINH: z.string().nullable().optional(),
+
     ID_VAITRO: z
         .string()
         .refine((val) => val !== "", { message: "Vui lòng chọn vai trò." }),
@@ -20,8 +22,7 @@ export const userFormSchema = z.object({
         .optional()
         .or(z.literal('')),
 
-    // ----- SỬA LỖI: Các trường bên trong phải là optional() hoặc nullable() -----
-    // Logic .refine() bên dưới sẽ chịu trách nhiệm kiểm tra bắt buộc
+
     sinhvien_details: z.object({
         ID_CHUYENNGANH: z.string().optional().nullable(),
         NIENKHOA: z.string().optional().nullable(),
@@ -34,11 +35,9 @@ export const userFormSchema = z.object({
         HOCVI: z.string().optional().nullable(),
         CHUCVU: z.string().optional().nullable(),
     }).optional(),
-    // ----- KẾT THÚC SỬA LỖI -----
 
 }).refine(
     (data) => {
-        // Nếu là Sinh viên (ID "3"), kiểm tra các trường chi tiết
         if (data.ID_VAITRO === "3") {
             return (
                 !!data.sinhvien_details &&
@@ -51,11 +50,10 @@ export const userFormSchema = z.object({
     },
     {
         message: "Vui lòng điền đầy đủ Chuyên ngành, Niên khóa, và Hệ ĐT.",
-        path: ["sinhvien_details.ID_CHUYENNGANH"], // Gán lỗi vào một trường cụ thể
+        path: ["sinhvien_details.ID_CHUYENNGANH"],
     }
 ).refine(
     (data) => {
-        // Nếu là Giảng viên/Giáo vụ/Trưởng khoa, kiểm tra các trường chi tiết
         if (GIANGVIEN_RELATED_ROLES.includes(data.ID_VAITRO)) {
             return (
                 !!data.giangvien_details &&
@@ -67,6 +65,6 @@ export const userFormSchema = z.object({
     },
     {
         message: "Vui lòng điền đầy đủ Khoa/Bộ môn và Học vị.",
-        path: ["giangvien_details.ID_KHOA_BOMON"], // Gán lỗi vào một trường cụ thể
+        path: ["giangvien_details.ID_KHOA_BOMON"],
     }
 );
