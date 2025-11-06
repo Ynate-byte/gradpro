@@ -24,8 +24,8 @@ const ReplyDialog = ({ open, onOpenChange, suggestion, onReplySuccess }) => {
             return;
         }
 
-        if (trimmedContent.length < 10) {
-            toast.error('Nội dung phản hồi phải có ít nhất 10 ký tự');
+        if (trimmedContent.length < 1) { // Gỡ bỏ giới hạn 10 ký tự cho phản hồi nhanh
+            toast.error('Nội dung phản hồi phải có ít nhất 1 ký tự');
             return;
         }
 
@@ -36,9 +36,13 @@ const ReplyDialog = ({ open, onOpenChange, suggestion, onReplySuccess }) => {
 
         try {
             setLoading(true);
-            const response = await thesisTopicService.replyToSuggestion(suggestion.ID_GOIY, {
-                PHAN_HOI: trimmedContent
+            // ----- [SỬA LỖI] -----
+            // Gọi hàm API mới và truyền ID của Góp Ý
+            const response = await thesisTopicService.addReplyToSuggestion(suggestion.ID_GOIY, {
+                NOIDUNG: trimmedContent
             });
+            // ----- [KẾT THÚC SỬA LỖI] -----
+
             toast.success(response.data.message || 'Phản hồi đã được gửi thành công!');
             setReplyContent('');
             onOpenChange(false);
@@ -48,7 +52,7 @@ const ReplyDialog = ({ open, onOpenChange, suggestion, onReplySuccess }) => {
         } catch (error) {
             console.error('Error replying to suggestion:', error);
             const errorMessage = error.response?.data?.message ||
-                (error.response?.data?.errors?.PHAN_HOI && error.response.data.errors.PHAN_HOI[0]) ||
+                (error.response?.data?.errors?.NOIDUNG && error.response.data.errors.NOIDUNG[0]) || // Sửa key lỗi
                 'Có lỗi xảy ra khi gửi phản hồi.';
             toast.error(errorMessage);
         } finally {
@@ -67,6 +71,7 @@ const ReplyDialog = ({ open, onOpenChange, suggestion, onReplySuccess }) => {
                 <DialogHeader>
                     <DialogTitle>Phản hồi góp ý</DialogTitle>
                     <DialogDescription>
+                        {/* Sửa lại tên trường cho nhất quán (nếu đã sửa ở file trước) */}
                         Phản hồi cho góp ý của giảng viên {suggestion?.giangvien?.nguoidung?.HODEM_VA_TEN || 'N/A'}
                     </DialogDescription>
                 </DialogHeader>

@@ -49,10 +49,22 @@ const thesisTopicService = {
         return response;
     },
     
+    // ----- [SỬA LỖI] -----
+    // Xóa hàm replyToSuggestion cũ
+    /*
     replyToSuggestion: async (suggestionId, replyData) => {
         const response = await axiosConfig.post(`/detai/suggestions/${suggestionId}/reply`, replyData);
         return response;
     },
+    */
+
+    // Thêm hàm mới để gọi controller PhanhoiGoiyController
+    addReplyToSuggestion: async (suggestionId, replyData) => {
+        // Sử dụng route mới: /api/detai/goiy/{goiy}/reply
+        const response = await axiosConfig.post(`/detai/goiy/${suggestionId}/reply`, replyData);
+        return response;
+    },
+    // ----- [KẾT THÚC SỬA LỖI] -----
 
     // Get available topics for registration
     getAvailableTopics: async (params = {}) => {

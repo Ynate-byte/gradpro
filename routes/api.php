@@ -22,7 +22,7 @@ use App\Http\Controllers\Api\Lecturer\TopicAssignmentController as LecturerTopic
 use App\Http\Controllers\Api\Lecturer\QuotaController as LecturerQuotaController;
 use App\Http\Controllers\Api\Admin\QuotaController;
 use App\Http\Controllers\Api\DepartmentHead\QuotaController as DepartmentHeadQuotaController;
-// ----- [KẾT THÚC THAY ĐỔI] -----
+use App\Http\Controllers\Api\PhanhoiGoiyController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -104,9 +104,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/submit-approval', [DetaiController::class, 'submitForApproval']);
         Route::post('/{id}/approve-reject', [DetaiController::class, 'approveOrReject']); // Của Giảng viên tự duyệt? (đã tồn tại)
         Route::post('/{id}/suggestions', [DetaiController::class, 'addSuggestion']);
-        // ----- [THAY ĐỔI] Thêm route reply suggestion -----
-        Route::post('/suggestions/{suggestionId}/reply', [DetaiController::class, 'replyToSuggestion']);
-        // ----- [KẾT THÚC THAY ĐỔI] -----
+        Route::post('/goiy/{goiy}/reply', [PhanhoiGoiyController::class, 'store']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
     });
     // ----- [THAY ĐỔI] Bổ sung comment và di chuyển route getGroupById -----

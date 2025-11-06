@@ -126,17 +126,23 @@ class DetaiController extends Controller
     */
    public function show($id)
    {
+       // ----- [SỬA LỖI] -----
+       // Cập nhật eager loading để tải các phản hồi mới
        $topic = Detai::with([
            'nguoiDexuat.nguoidung',
            'chuyennganh',
            'kehoachKhoaluan',
            'goiyDetai' => function ($query) {
-               $query->with(['nguoiGoiy.nguoidung', 'giangvien.nguoidung'])
+               $query->with([
+                        'giangvien.nguoidung', // Người góp ý
+                        'phanhois.giangvien.nguoidung' // Những người phản hồi
+                     ])
                      ->orderBy('NGAYTAO', 'desc');
            },
            'phancongDetaiNhom.nhom.nhomtruong',
            'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung'
        ])->findOrFail($id);
+       // ----- [KẾT THÚC SỬA LỖI] -----
 
        // Check if student can only view approved topics
        $currentUser = Auth::user();
@@ -238,7 +244,7 @@ class DetaiController extends Controller
        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
            return response()->json(['message' => 'Unauthorized'], 403);
        }
-     $validator = Validator::make($request->all(), [
+      $validator = Validator::make($request->all(), [
            'action' => 'required|in:approve,reject',
            'reason' => 'nullable|string',
        ]);
@@ -306,7 +312,9 @@ class DetaiController extends Controller
     return response()->json(['message' => 'Không thể góp ý cho đề tài của chính mình'], 403);
 }
 
-       // Check if lecturer already suggested on this topic
+       // ----- [SỬA LỖI] -----
+       // Gỡ bỏ đoạn kiểm tra "đã góp ý" để cho phép góp ý nhiều lần.
+       /*
        $existingSuggestion = GoiyDetai::where('ID_DETAI', $id)
            ->where('ID_NGUOI_GOIY', $lecturer->ID_GIANGVIEN)
            ->first();
@@ -314,6 +322,8 @@ class DetaiController extends Controller
        if ($existingSuggestion) {
            return response()->json(['message' => 'Bạn đã góp ý cho đề tài này rồi'], 409);
        }
+       */
+       // ----- [KẾT THÚC SỬA LỖI] -----
 
        // Create suggestion
        $suggestion = GoiyDetai::create([
@@ -325,7 +335,7 @@ class DetaiController extends Controller
        ]);
 
        // Load relationships for response
-       $suggestion->load(['nguoiGoiy.nguoidung', 'giangvien.nguoidung']);
+       $suggestion->load(['giangvien.nguoidung']); // [SỬA] Đổi 'nguoiGoiy' thành 'giangvien' cho nhất quán
 
        return response()->json([
            'message' => 'Góp ý đã được gửi thành công',
@@ -333,57 +343,16 @@ class DetaiController extends Controller
        ], 201);
    }
 
+    // ----- [SỬA LỖI] -----
+    // Xóa toàn bộ hàm `replyToSuggestion` khỏi DetaiController.
+    // Logic này sẽ được chuyển sang PhanhoiGoiyController
+    // ----- [KẾT THÚC SỬA LỖI] -----
+   /*
    public function replyToSuggestion(Request $request, $suggestionId)
    {
-       // Validate input
-       $validator = Validator::make($request->all(), [
-           'PHAN_HOI' => 'required|string|min:10|max:1000',
-       ], [
-           'PHAN_HOI.required' => 'Nội dung phản hồi là bắt buộc',
-           'PHAN_HOI.min' => 'Nội dung phản hồi phải có ít nhất 10 ký tự',
-           'PHAN_HOI.max' => 'Nội dung phản hồi không được vượt quá 1000 ký tự',
-       ]);
-
-       if ($validator->fails()) {
-           return response()->json(['errors' => $validator->errors()], 422);
-       }
-
-       // Find the suggestion
-       $suggestion = GoiyDetai::findOrFail($suggestionId);
-
-       // Get current authenticated user
-       $currentUser = Auth::user();
-
-       // Check if user is a lecturer
-       $lecturer = Giangvien::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
-       if (!$lecturer) {
-           return response()->json(['message' => 'Chỉ giảng viên mới có thể phản hồi góp ý'], 403);
-       }
-
-       // Check if the lecturer is the topic proposer
-       if ($suggestion->detai->ID_NGUOI_DEXUAT !== $lecturer->ID_GIANGVIEN) {
-           return response()->json(['message' => 'Chỉ người tạo đề tài mới có thể phản hồi góp ý'], 403);
-       }
-
-       // Check if topic is in a state where replies are allowed
-       if (!in_array($suggestion->detai->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa'])) {
-           return response()->json(['message' => 'Không thể phản hồi góp ý cho đề tài đã duyệt'], 403);
-       }
-
-       // Update suggestion with reply
-       $suggestion->update([
-           'PHAN_HOI' => $request->PHAN_HOI,
-           'NGAY_PHAN_HOI' => now(),
-       ]);
-
-       // Load relationships for response
-       $suggestion->load(['nguoiGoiy.nguoidung', 'giangvien.nguoidung']);
-
-       return response()->json([
-           'message' => 'Phản hồi đã được gửi thành công',
-           'suggestion' => $suggestion
-       ], 200);
+       // ... (TOÀN BỘ HÀM NÀY ĐÃ BỊ XÓA) ...
    }
+   */
 
    /**
     * Get available topics for students
@@ -638,7 +607,7 @@ class DetaiController extends Controller
            'detai.chuyennganh',
            'gvhd.nguoidung'
        ])->whereHas('detai', function ($q) use ($lecturer) {
-         $q->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN);
+          $q->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN);
        })->orderBy('NGAY_PHANCONG', 'desc')->get();
 
        return response()->json($assignments);
@@ -655,7 +624,7 @@ class DetaiController extends Controller
        $currentUser = Auth::user();
        $lecturer = Giangvien::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
 
-      $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
+     $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
        $isAdmin = $currentUser->vaitro->TEN_VAITRO === 'Admin';
 
        if (!$isProposer && !$isAdmin) {

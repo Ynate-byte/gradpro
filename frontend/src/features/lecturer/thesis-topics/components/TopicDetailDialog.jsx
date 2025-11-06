@@ -196,12 +196,14 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                         </Card>
                     )}
 
-                    {/* Suggestions */}
+                    {/* ----- [SỬA LỖI] ----- */}
+                    {/* Cập nhật logic hiển thị Góp ý và Phản hồi (dạng lồng nhau) */}
                     <Card>
                         <CardHeader>
                             <div className="flex justify-between items-center">
                                 <CardTitle>Góp ý từ giảng viên</CardTitle>
                                 <div className="flex gap-2">
+                                    {/* Giảng viên khác (không phải người đề xuất) có thể góp ý */}
                                     {topic.ID_NGUOI_DEXUAT !== user?.giangvien?.ID_GIANGVIEN && (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Chờ duyệt') && (
                                         <Button
                                             variant="outline"
@@ -212,7 +214,6 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                                             Thêm góp ý
                                         </Button>
                                     )}
-
                                 </div>
                             </div>
                         </CardHeader>
@@ -221,46 +222,53 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                                 <div className="space-y-4">
                                     {topic.goiyDetai.map((suggestion) => (
                                         <div key={suggestion.ID_GOIY} className="border rounded-lg p-4 bg-gray-50">
+                                            {/* 1. Góp ý gốc */}
                                             <div className="flex justify-between items-start mb-2">
                                                 <span className="text-sm font-medium text-gray-700">
                                                     {suggestion.giangvien?.nguoidung?.HODEM_VA_TEN || 'N/A'}
                                                 </span>
                                                 <span className="text-xs text-gray-500">
-                                                    {new Date(suggestion.NGAYTAO).toLocaleDateString('vi-VN')}
+                                                    {new Date(suggestion.NGAYTAO).toLocaleString('vi-VN')}
                                                 </span>
                                             </div>
-                                            <p className="text-gray-600 mb-3">{suggestion.NOIDUNG_GOIY}</p>
+                                            <p className="text-gray-800 mb-3">{suggestion.NOIDUNG_GOIY}</p>
 
-                                            {/* Reply section */}
-                                            {suggestion.PHAN_HOI && (
-                                                <div className="bg-blue-50 border-l-4 border-blue-400 p-3 mt-3">
-                                                    <div className="flex justify-between items-start mb-1">
-                                                        <span className="text-sm font-medium text-blue-700">
-                                                            Phản hồi từ người tạo đề tài
-                                                        </span>
-                                                        <span className="text-xs text-blue-600">
-                                                            {suggestion.NGAY_PHAN_HOI ? new Date(suggestion.NGAY_PHAN_HOI).toLocaleDateString('vi-VN') : ''}
-                                                        </span>
-                                                    </div>
-                                                    <p className="text-blue-600">{suggestion.PHAN_HOI}</p>
+                                            {/* 2. Danh sách các phản hồi (lồng) */}
+                                            {suggestion.phanhois && suggestion.phanhois.length > 0 && (
+                                                <div className="space-y-3 pl-4 border-l-2 border-gray-300 ml-2">
+                                                    {suggestion.phanhois.map((reply) => (
+                                                        <div key={reply.ID_PHANHOI} className="bg-white p-3 rounded-md shadow-sm border">
+                                                            <div className="flex justify-between items-start mb-1">
+                                                                <span className="text-sm font-medium text-blue-700">
+                                                                    {reply.giangvien?.nguoidung?.HODEM_VA_TEN || 'N/A'}
+                                                                    {/* Đánh dấu nếu là người tạo đề tài */}
+                                                                    {reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT && (
+                                                                        <Badge variant="secondary" className="ml-2 text-xs">Tác giả</Badge>
+                                                                    )}
+                                                                </span>
+                                                                <span className="text-xs text-gray-500">
+                                                                    {new Date(reply.created_at).toLocaleString('vi-VN')}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-gray-700">{reply.NOIDUNG}</p>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )}
 
-                                            {/* Reply button for topic proposer */}
-                                            {topic.ID_NGUOI_DEXUAT === user?.giangvien?.ID_GIANGVIEN &&
-                                                !suggestion.PHAN_HOI &&
-                                                (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Chờ duyệt' || topic.TRANGTHAI === 'Yêu cầu chỉnh sửa') && (
-                                                    <div className="mt-3">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => handleReplyToSuggestion(suggestion)}
-                                                        >
-                                                            <MessageSquare className="w-4 h-4 mr-1" />
-                                                            Phản hồi
-                                                        </Button>
-                                                    </div>
-                                                )}
+                                            {/* 3. Nút Phản hồi (cho cả 2 bên) */}
+                                            {(topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Chờ duyệt' || topic.TRANGTHAI === 'Yêu cầu chỉnh sửa') && (
+                                                <div className="mt-3">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handleReplyToSuggestion(suggestion)}
+                                                    >
+                                                        <MessageSquare className="w-4 h-4 mr-1" />
+                                                        Phản hồi
+                                                    </Button>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -269,6 +277,8 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                             )}
                         </CardContent>
                     </Card>
+                    {/* ----- [KẾT THÚC SỬA LỖI] ----- */}
+
 
                     {/* Registered Groups */}
                     {topic.phancongDetaiNhom && topic.phancongDetaiNhom.length > 0 && (
