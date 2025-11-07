@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils";
 const statusConfig = {
     'Đang mở': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700',
     'Đã đủ thành viên': 'bg-gray-100 text-gray-600 dark:bg-gray-800/60 dark:text-gray-400 border-gray-200 dark:border-gray-700/60',
-    // Thêm các trạng thái từ phancong_detai_nhom
     'Đang thực hiện': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700',
     'Đã hoàn thành': 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border-teal-200 dark:border-teal-700',
     'Không đạt': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700',

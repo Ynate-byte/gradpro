@@ -216,15 +216,25 @@ Route::middleware('auth:sanctum')->group(function () {
         });
 
         Route::prefix('hoidong')->group(function () {
-            Route::get('/', [HoiDongController::class, 'index']);
-            Route::post('/', [HoiDongController::class, 'create']); // Tạo (thủ công hoặc tự động)
+            // [THÊM MỚI] 2 ROUTE GÂY LỖI 404
+            // Phải đặt route tĩnh TRƯỚC route động
+            Route::get('/statistics', [HoiDongController::class, 'getStatistics']);
             Route::get('/kehoach-options', [HoiDongController::class, 'getKeHoachOptions']);
             Route::get('/chuyennganh-options', [HoiDongController::class, 'getChuyenNganhOptions']);
             Route::get('/{idKeHoach}/nhoms', [HoiDongController::class, 'getNhomTheoKeHoach']);
             Route::post('/phanbo-nhom', [HoiDongController::class, 'phanBoNhom']);
+
+            // Route gốc
+            Route::get('/', [HoiDongController::class, 'index']);
+            Route::post('/', [HoiDongController::class, 'create']); // Tạo (thủ công hoặc tự động)
+            
+            // Route động (phải đặt sau)
             Route::get('/{id}', [HoiDongController::class, 'show']);
             Route::put('/{id}', [HoiDongController::class, 'update']);
             Route::delete('/{id}', [HoiDongController::class, 'destroy']);
+            
+            // [THÊM MỚI] Route cho inline edit
+            Route::patch('/{id}/update-phong', [HoiDongController::class, 'updatePhong']);
             Route::delete('/{idHoiDong}/nhom/{idNhom}', [HoiDongController::class, 'xoaPhanBoNhom']);
         });
 

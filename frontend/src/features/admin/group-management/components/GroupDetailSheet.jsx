@@ -4,8 +4,13 @@ import {
     SheetContent,
     SheetHeader,
     SheetTitle,
-    SheetDescription
 } from "@/components/ui/sheet";
+import {
+    Accordion,
+    AccordionContent,
+    AccordionItem,
+    AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +38,6 @@ import {
     RefreshCw,
     UserCircle,
     Calendar,
-    ChevronDown, // ----- [THÊM MỚI] -----
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -42,9 +46,6 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
 
-/**
- * Hàm trợ giúp để lấy chữ cái đầu của họ và tên.
- */
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -52,9 +53,6 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 };
 
-/**
- * Component tái sử dụng để hiển thị một mục thông tin với icon, nhãn và giá trị.
- */
 const InfoItem = ({ icon: Icon, label, value, className = "" }) => (
     <div className={`flex items-start ${className}`}>
         <Icon className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
@@ -67,7 +65,6 @@ const InfoItem = ({ icon: Icon, label, value, className = "" }) => (
     </div>
 );
 
-// ----- (Component SubmissionFileItem không đổi) -----
 const SubmissionFileItem = ({ file }) => {
     const isLink = file.LOAI_FILE === 'LinkDemo' || file.LOAI_FILE === 'LinkRepository';
     const Icon = isLink ? LinkIcon : FileText;
@@ -96,7 +93,6 @@ const SubmissionFileItem = ({ file }) => {
     );
 };
 
-// ----- (Component SubmissionAttempt không đổi) -----
 const SubmissionAttempt = ({ attempt }) => {
     const getStatusProps = () => {
         switch (attempt.TRANGTHAI) {
@@ -145,9 +141,6 @@ const SubmissionAttempt = ({ attempt }) => {
     );
 };
 
-/**
- * Component chính hiển thị chi tiết thông tin nhóm trong một giao diện Sheet.
- */
 export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
     const [history, setHistory] = useState([]);
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
@@ -197,82 +190,11 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
         return dateString;
     };
 
-    // ----- [THÊM MỚI] Component MemberItem (lồng bên trong) -----
-    const MemberItem = ({ member, isLeader }) => {
-        const [isOpen, setIsOpen] = useState(false);
-        const user = member.nguoidung;
-        const sinhvien = user.sinhvien;
-
-        return (
-            <div className="p-4 border border-blue-100 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 shadow-sm transition hover:shadow-md">
-                <div
-                    className="flex items-center justify-between cursor-pointer"
-                    onClick={() => setIsOpen(!isOpen)}
-                    aria-expanded={isOpen}
-                    aria-controls={`member-details-${member.ID_THANHVIEN}`}
-                >
-                    <div className="flex items-center gap-3 min-w-0">
-                        <Avatar className="h-10 w-10 border-2 border-blue-300 dark:border-blue-600 shrink-0">
-                            <AvatarFallback className="bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300">
-                                {getInitials(user.HODEM_VA_TEN)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <div className="flex-grow min-w-0">
-                            <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
-                                <span className="truncate">{user.HODEM_VA_TEN}</span>
-                                {isLeader && (
-                                    <Badge variant="outline" className="border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 gap-1 text-xs px-1.5 py-0.5 shrink-0">
-                                        <Crown className="h-3 w-3" />Trưởng nhóm
-                                    </Badge>
-                                )}
-                            </div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.MA_DINHDANH}</p>
-                        </div>
-                    </div>
-                    <ChevronDown className={cn("h-5 w-5 text-gray-400 transition-transform ml-2 shrink-0", isOpen && "rotate-180")} />
-                </div>
-
-                {/* Nội dung chi tiết có thể thu gọn */}
-                {isOpen && (
-                    <div id={`member-details-${member.ID_THANHVIEN}`} className="mt-3">
-                        <Separator className="mb-3 bg-blue-200 dark:bg-blue-700" />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                            <InfoItem icon={Mail} label="Email" value={user.EMAIL} className="col-span-2 sm:col-span-1" />
-                            <InfoItem
-                                icon={Calendar}
-                                label="Ngày sinh"
-                                value={formatNullableDate(user.NGAYSINH, 'dd/MM/yyyy')}
-                                className="col-span-2 sm:col-span-1"
-                            />
-                            <InfoItem icon={Phone} label="Điện thoại" value={user.SO_DIENTHOAI || 'Chưa cập nhật'} className="col-span-2 sm:col-span-1" />
-                            <InfoItem icon={CalendarPlus} label="Ngày vào nhóm" value={formatNullableDate(member.NGAY_VAONHOM, 'dd/MM/yyyy')} className="col-span-2 sm:col-span-1" />
-                            <InfoItem
-                                icon={BookOpen}
-                                label="Chuyên ngành"
-                                value={sinhvien?.chuyennganh?.TEN_CHUYENNGANH}
-                                className="col-span-2 sm:col-span-1"
-                            />
-                            <InfoItem
-                                icon={Users}
-                                label="Lớp"
-                                value={sinhvien?.TEN_LOP}
-                                className="col-span-2 sm:col-span-1"
-                            />
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
-    // ----- [KẾT THÚC THÊM MỚI] -----
-
     return (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetContent className="w-[90vw] sm:max-w-2xl p-0 flex flex-col bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500">
-                {/* Phần Header */}
                 <SheetHeader className="p-6 pb-4 bg-white dark:bg-gray-800 border-b border-blue-200 dark:border-blue-700 shadow-sm">
                     <SheetTitle className="text-2xl font-bold text-gray-800 dark:text-gray-100">{group.TEN_NHOM}</SheetTitle>
-                    <SheetDescription className="text-gray-600 dark:text-gray-300">{group.MOTA || 'Không có mô tả.'}</SheetDescription>
                     <div className="flex flex-wrap items-center gap-2 pt-2">
                         {group.LA_NHOM_DACBIET ? (
                             <Badge variant="default" className="bg-blue-500 text-white gap-1.5 hover:bg-blue-600">
@@ -295,11 +217,8 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                         )}
                     </div>
                 </SheetHeader>
-
-                {/* Khu vực nội dung có thể cuộn */}
                 <ScrollArea className="flex-grow overflow-y-auto">
                     <div className="px-6 pb-6 pt-0 space-y-4">
-                        {/* Card thông tin chung */}
                         <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4 pt-6">
                                 <InfoItem
@@ -327,24 +246,86 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                             </CardContent>
                         </Card>
 
-                        {/* Card danh sách thành viên */}
                         <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                            <CardContent className="space-y-3 pt-6">
+                            <CardContent className="pt-6">
                                 {group.thanhviens && group.thanhviens.length > 0 ? (
-                                    group.thanhviens.map((member) => (
-                                        <MemberItem
-                                            key={member.ID_THANHVIEN}
-                                            member={member}
-                                            isLeader={member.ID_NGUOIDUNG === group.ID_NHOMTRUONG}
-                                        />
-                                    ))
+                                    <Accordion type="single" collapsible className="w-full space-y-3">
+                                        {group.thanhviens.map((member) => {
+                                            
+                                            // [START SỬA LỖI]
+                                            const user = member?.nguoidung;
+                                            // Thêm Guard Clause: Nếu không có user, bỏ qua member này
+                                            if (!user) {
+                                                console.warn("Skipping member with missing 'nguoidung' data:", member);
+                                                return null;
+                                            }
+                                            // Thêm Optional Chaining:
+                                            const sinhvien = user?.sinhvien; 
+                                            // [END SỬA LỖI]
+
+                                            const isLeader = member.ID_NGUOIDUNG === group.ID_NHOMTRUONG;
+                                            return (
+                                                <AccordionItem
+                                                    key={member.ID_THANHVIEN}
+                                                    value={member.ID_THANHVIEN.toString()}
+                                                    className="p-4 border border-blue-100 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 shadow-sm transition hover:shadow-md"
+                                                >
+                                                    <AccordionTrigger className="p-0 hover:no-underline w-full">
+                                                        <div className="flex items-center gap-3 min-w-0">
+                                                            <Avatar className="h-10 w-10 border-2 border-blue-300 dark:border-blue-600 shrink-0">
+                                                                <AvatarFallback className="bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300">
+                                                                    {getInitials(user.HODEM_VA_TEN)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div className="flex-grow min-w-0">
+                                                                <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
+                                                                    <span className="truncate">{user.HODEM_VA_TEN}</span>
+                                                                    {isLeader && (
+                                                                        <Badge variant="outline" className="border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 gap-1 text-xs px-1.5 py-0.5 shrink-0">
+                                                                            <Crown className="h-3 w-3" />Trưởng nhóm
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.MA_DINHDANH}</p>
+                                                            </div>
+                                                        </div>
+                                                    </AccordionTrigger>
+                                                    <AccordionContent className="pt-3">
+                                                        <Separator className="mb-3 bg-blue-200 dark:bg-blue-700" />
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                                                            <InfoItem icon={Mail} label="Email" value={user.EMAIL} className="col-span-2 sm:col-span-1" />
+                                                            <InfoItem
+                                                                icon={Calendar}
+                                                                label="Ngày sinh"
+                                                                value={formatNullableDate(user.NGAYSINH, 'dd/MM/yyyy')}
+                                                                className="col-span-2 sm:col-span-1"
+                                                            />
+                                                            <InfoItem icon={Phone} label="Điện thoại" value={user.SO_DIENTHOAI || 'Chưa cập nhật'} className="col-span-2 sm:col-span-1" />
+                                                            <InfoItem icon={CalendarPlus} label="Ngày vào nhóm" value={formatNullableDate(member.NGAY_VAONHOM, 'dd/MM/yyyy')} className="col-span-2 sm:col-span-1" />
+                                                            <InfoItem
+                                                                icon={BookOpen}
+                                                                label="Chuyên ngành"
+                                                                value={sinhvien?.chuyennganh?.TEN_CHUYENNGANH} // Đã an toàn
+                                                                className="col-span-2 sm:col-span-1"
+                                                            />
+                                                            <InfoItem
+                                                                icon={Users}
+                                                                label="Lớp"
+                                                                value={sinhvien?.TEN_LOP} // Đã an toàn
+                                                                className="col-span-2 sm:col-span-1"
+                                                            />
+                                                        </div>
+                                                    </AccordionContent>
+                                                </AccordionItem>
+                                            );
+                                        })}
+                                    </Accordion>
                                 ) : (
                                     <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Nhóm chưa có thành viên nào.</p>
                                 )}
                             </CardContent>
                         </Card>
 
-                        {/* Card Lịch sử Nộp bài */}
                         {phancong && (
                             <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
                                 <CardHeader>

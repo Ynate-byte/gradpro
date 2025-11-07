@@ -6,7 +6,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, UserX, SlidersHorizontal, FileDown, BookCopy, Loader2, PlusCircle, Circle } from 'lucide-react'; // Thêm Circle
+// [THÊM] Thêm icon ArrowRight
+import { Users, UserX, SlidersHorizontal, FileDown, BookCopy, Loader2, PlusCircle, Circle, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { getGroupStatistics, exportGroups } from '@/api/adminGroupService';
 import { getAllPlans } from '@/api/thesisPlanService';
@@ -17,7 +18,6 @@ import { CreateGroupDialog } from './components/CreateGroupDialog';
 import { GroupDetailSheet } from './components/GroupDetailSheet';
 import { UngroupedStudentsDialog } from './components/UngroupedStudentsDialog';
 
-// --- (statusConfig, groupColumnVisibility không đổi) ---
 const statusConfig = {
     'Bản nháp': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
     'Chờ phê duyệt': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
@@ -31,18 +31,19 @@ const statusConfig = {
 };
 const groupColumnVisibility = { TRANGTHAI: false, LA_NHOM_DACBIET: false };
 
-// --- NÂNG CẤP StatCard với animation ---
+// --- [START SỬA LỖI] Cập nhật StatCard ---
 const StatCard = ({ icon: Icon, title, value, onAction, actionLabel = "Xem danh sách", iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot }) => (
-    <motion.div // Thay Card bằng motion.div
-        className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-shadow hover:shadow-lg" // Tăng padding nhẹ
-        whileHover={{ y: -4, scale: 1.02 }} // Hiệu ứng hover
-        transition={{ type: "spring", stiffness: 300, damping: 15 }} // Transition mượt
+    <motion.div
+        // Thêm 'relative' để định vị icon
+        className="relative bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-shadow hover:shadow-lg"
+        whileHover={{ y: -4, scale: 1.02 }}
+        transition={{ type: "spring", stiffness: 300, damping: 15 }}
     >
         <motion.div
-            className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)} // Thêm flex-shrink-0
-            initial={false} // Không animate ban đầu nếu không loading
+            className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
+            initial={false}
             animate={{
-                scale: value === 'loading' ? [1, 1.1, 1] : 1, // Hiệu ứng scale nhẹ khi loading
+                scale: value === 'loading' ? [1, 1.1, 1] : 1,
             }}
             transition={{
                 duration: 1.5,
@@ -50,52 +51,63 @@ const StatCard = ({ icon: Icon, title, value, onAction, actionLabel = "Xem danh 
                 ease: "easeInOut"
             }}
         >
-            <Icon className={cn("h-6 w-6", iconColorClass)} /> {/* Tăng kích thước icon */}
+            <Icon className={cn("h-6 w-6", iconColorClass)} />
         </motion.div>
-        <div className="flex-1 min-w-0"> {/* Thêm min-w-0 */}
+        <div className="flex-1 min-w-0">
             <h3 className="text-sm font-medium text-muted-foreground truncate">{title}</h3>
-            {/* Animate giá trị thay đổi */}
             <div className="flex items-baseline gap-2 h-8 overflow-hidden">
                 <AnimatePresence mode="wait">
                     <motion.div
-                        key={value} // Key là giá trị để trigger animation khi thay đổi
+                        key={value}
                         initial={{ opacity: 0, y: 15 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -15 }}
                         transition={{ duration: 0.3, ease: "easeOut" }}
-                        className="flex items-baseline gap-2" // Đưa flex vào đây
+                        className="flex items-baseline gap-2"
                     >
                         {value === 'loading' ? (
                             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"/>
                         ) : (
                             <>
-                                <p className="text-2xl font-bold">{value?.toLocaleString('vi-VN') ?? '0'}</p> {/* Thêm toLocaleString */}
-                                {hasStatusDot && ( /* Optional dot indicator */
-                                     <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1, type: "spring" }}>
-                                         <Circle className="h-2.5 w-2.5 fill-green-500 text-green-500" />
-                                     </motion.div>
+                                <p className="text-2xl font-bold">{value?.toLocaleString('vi-VN') ?? '0'}</p>
+                                {hasStatusDot && (
+                                    <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1, type: "spring" }}>
+                                        <Circle className="h-2.5 w-2.5 fill-green-500 text-green-500" />
+                                    </motion.div>
                                 )}
                             </>
                         )}
                     </motion.div>
                 </AnimatePresence>
             </div>
-            {onAction && (
-                <Button variant="link" size="sm" className="px-0 h-auto -mt-1 text-xs" onClick={onAction}> {/* Giảm mt */}
-                    {actionLabel}
-                </Button>
-            )}
+            
+            {/* [ĐÃ XÓA] Bỏ hoàn toàn khối Button/div placeholder */}
+
         </div>
+        
+        {/* [THÊM MỚI] Thêm icon button ở góc */}
+        {onAction && (
+            <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 h-7 w-7 text-muted-foreground hover:text-primary"
+                onClick={onAction}
+                aria-label={actionLabel}
+            >
+                <ArrowRight className="h-4 w-4" />
+            </Button>
+        )}
     </motion.div>
 );
+// --- [END SỬA LỖI] ---
 
-// --- Định nghĩa variants cho animation container và item ---
+
 const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
         opacity: 1,
         transition: {
-            staggerChildren: 0.08, // Thời gian delay giữa các item con
+            staggerChildren: 0.08,
         }
     }
 };
@@ -106,7 +118,7 @@ const itemVariants = {
         y: 0,
         opacity: 1,
         transition: {
-             type: "spring", // Tạo hiệu ứng nảy nhẹ
+             type: "spring",
              stiffness: 100,
              damping: 12
         }
@@ -118,13 +130,12 @@ const tableVariants = {
     visible: {
         opacity: 1,
         y: 0,
-        transition: { duration: 0.5, delay: 0.2, ease: "easeOut" } // Delay nhẹ sau khi stats hiện
+        transition: { duration: 0.5, delay: 0.2, ease: "easeOut" }
     }
 };
 
 
 export default function GroupAdminPage() {
-    // --- (Các state không đổi) ---
     const [allPlans, setAllPlans] = useState([])
     const [selectedPlanId, setSelectedPlanId] = useState('')
     const [stats, setStats] = useState(null)
@@ -140,7 +151,6 @@ export default function GroupAdminPage() {
     const [columnFilters, setColumnFilters] = useState([]);
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-    // --- (useEffect và các hàm xử lý không đổi) ---
     useEffect(() => {
         getAllPlans()
             .then(data => {
@@ -172,7 +182,7 @@ export default function GroupAdminPage() {
     }, [selectedPlanId])
     useEffect(() => { fetchStats() }, [fetchStats])
     const handleViewDetails = (group) => { setViewingGroup(group); setIsDetailSheetOpen(true); }
-    const handleExport = async () => { /* ... */
+    const handleExport = async () => {
         if (!selectedPlanId) {
             toast.warning("Vui lòng chọn một kế hoạch để xuất file.")
             return
@@ -200,15 +210,13 @@ export default function GroupAdminPage() {
 
 
     return (
-        // --- THÊM motion.div bao ngoài cùng cho animation fade-in ---
         <motion.div
-            className="space-y-6 p-4 md:p-8"
+            className="flex flex-col h-[calc(100vh-var(--header-height,56px))] p-4 md:p-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
         >
-            {/* --- (Phần Buttons và Select không đổi nhiều, có thể thêm animation nhẹ nếu muốn) --- */}
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 flex-shrink-0">
                  <div className="flex flex-wrap items-center gap-2">
                      <Button onClick={() => setIsCreateGroupOpen(true)} disabled={!selectedPlanId}>
                          <PlusCircle className="mr-2 h-4 w-4" /> Tạo nhóm mới
@@ -220,45 +228,43 @@ export default function GroupAdminPage() {
                          <FileDown className="mr-2 h-4 w-4" /> Xuất danh sách
                      </Button>
                  </div>
+
+                 <div className="flex items-center gap-2 w-full md:w-auto">
+                     <BookCopy className="h-5 w-5 text-muted-foreground shrink-0" />
+                     <Select onValueChange={setSelectedPlanId} value={selectedPlanId}>
+                         <SelectTrigger className="w-full md:w-[500px]">
+                             <SelectValue placeholder="Chọn một kế hoạch..." />
+                         </SelectTrigger>
+                         <SelectContent>
+                             {allPlans.length > 0 ? (
+                                 allPlans.map(plan => {
+                                     const config = statusConfig[plan.TRANGTHAI] || 'bg-gray-100 text-gray-800';
+                                     return (
+                                         <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                             <div className="flex items-center justify-between w-full">
+                                                 <span>{plan.TEN_DOT}</span>
+                                                 <Badge variant="outline" className={cn('border-0 text-xs ml-4', config)}>
+                                                     {plan.TRANGTHAI}
+                                                 </Badge>
+                                             </div>
+                                         </SelectItem>
+                                     )
+                                 })
+                             ) : (
+                                 <div className="p-4 text-center text-sm text-muted-foreground">Không tìm thấy kế hoạch nào.</div>
+                             )}
+                         </SelectContent>
+                     </Select>
+                 </div>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
-                 <BookCopy className="h-5 w-5 text-muted-foreground shrink-0" />
-                 <Select onValueChange={setSelectedPlanId} value={selectedPlanId}>
-                     <SelectTrigger className="w-full sm:w-[500px]">
-                         <SelectValue placeholder="Chọn một kế hoạch..." />
-                     </SelectTrigger>
-                     <SelectContent>
-                         {allPlans.length > 0 ? (
-                             allPlans.map(plan => {
-                                 const config = statusConfig[plan.TRANGTHAI] || 'bg-gray-100 text-gray-800';
-                                 return (
-                                     <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                         <div className="flex items-center justify-between w-full">
-                                             <span>{plan.TEN_DOT}</span>
-                                             <Badge variant="outline" className={cn('border-0 text-xs ml-4', config)}>
-                                                 {plan.TRANGTHAI}
-                                             </Badge>
-                                         </div>
-                                     </SelectItem>
-                                 )
-                             })
-                         ) : (
-                             <div className="p-4 text-center text-sm text-muted-foreground">Không tìm thấy kế hoạch nào.</div>
-                         )}
-                     </SelectContent>
-                 </Select>
-            </div>
 
-
-            {/* --- ÁP DỤNG ANIMATION CHO GRID STATS --- */}
             <motion.div
-                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0 mb-6"
                 variants={containerVariants}
                 initial="hidden"
                 animate="visible"
             >
-                {/* Wrap mỗi StatCard bằng motion.div */}
                 <motion.div variants={itemVariants}>
                     <StatCard
                         icon={Users}
@@ -295,56 +301,55 @@ export default function GroupAdminPage() {
                          value={isLoadingStats ? 'loading' : stats?.fullGroups}
                          iconBgClass="bg-green-100 dark:bg-green-900/30"
                          iconColorClass="text-green-600 dark:text-green-400"
-                         hasStatusDot={stats?.fullGroups > 0} // Ví dụ thêm dot nếu có nhóm đủ
+                         hasStatusDot={stats?.fullGroups > 0}
                      />
                  </motion.div>
             </motion.div>
 
-            {/* --- ÁP DỤNG ANIMATION CHO DATATABLE --- */}
             <motion.div
-                className="space-y-4"
+                className="flex-grow min-h-0"
                 variants={tableVariants}
                 initial="hidden"
                 animate="visible"
             >
                 {selectedPlanId ? (
                     <GroupDataTable
+                        className="h-full"
                         key={`${selectedPlanId}-${refreshTrigger}`}
                         planId={selectedPlanId}
                         onSuccess={handleSuccess}
                         onViewDetails={handleViewDetails}
                         searchTerm={searchTerm}
-                        debouncedSearchTerm={debouncedSearchTerm} // Pass debounced for API
+                        debouncedSearchTerm={debouncedSearchTerm}
                         onSearchChange={setSearchTerm}
                         columnFilters={columnFilters}
                         setColumnFilters={setColumnFilters}
                         columnVisibility={groupColumnVisibility}
                     />
                 ) : (
-                    <div className="text-center text-muted-foreground p-8 border rounded-lg">
+                    <div className="flex h-full items-center justify-center text-muted-foreground p-8 border rounded-lg">
                         {allPlans.length > 0 ? "Vui lòng chọn một kế hoạch để xem danh sách nhóm." : "Không có kế hoạch nào để hiển thị."}
                     </div>
                 )}
             </motion.div>
 
-            {/* Dialogs/Sheet: Có thể wrap bằng AnimatePresence nếu muốn hiệu ứng exit */}
-             <AnimatePresence>
-                 {isInactiveStudentOpen && (
-                     <InactiveStudentsDialog
-                         isOpen={isInactiveStudentOpen}
-                         setIsOpen={setIsInactiveStudentOpen}
-                         onSuccess={handleSuccess}
-                         planId={selectedPlanId}
-                     />
-                 )}
-                 {isAutoGroupOpen && (
+            <AnimatePresence>
+                {isInactiveStudentOpen && (
+                    <InactiveStudentsDialog
+                        isOpen={isInactiveStudentOpen}
+                        setIsOpen={setIsInactiveStudentOpen}
+                        onSuccess={handleSuccess}
+                        planId={selectedPlanId}
+                    />
+                )}
+                {isAutoGroupOpen && (
                     <AutoGroupDialog
                         isOpen={isAutoGroupOpen}
                         setIsOpen={setIsAutoGroupOpen}
                         onSuccess={handleSuccess}
                         planId={selectedPlanId}
                     />
-                 )}
+                )}
                 {isCreateGroupOpen && (
                     <CreateGroupDialog
                         isOpen={isCreateGroupOpen}

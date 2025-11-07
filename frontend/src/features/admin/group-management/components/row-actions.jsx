@@ -1,5 +1,5 @@
 import React, { useState, useId } from 'react'
-import { MoreHorizontal, Pencil, UserPlus, Trash2, Star, ShieldAlert, UserX } from "lucide-react"
+import { MoreHorizontal, Pencil, UserPlus, Star, ShieldAlert, UserX } from "lucide-react" // Bỏ Trash2
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
@@ -18,7 +18,7 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
     setAlertInfo({ isOpen: true, type: type })
   }
 
-  // Xử lý hành động (đánh dấu đặc biệt, giải tán, hoặc xóa nhóm)
+  // Xử lý hành động (đánh dấu đặc biệt hoặc giải tán)
   const handleAction = async () => {
     const { type } = alertInfo
     try {
@@ -26,13 +26,13 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
         const newStatus = !group.LA_NHOM_DACBIET
         const res = await markGroupAsSpecial(group.ID_NHOM, newStatus)
         toast.success(res.message)
-      } else if (type === 'delete' || type === 'disband') {
+      } else if (type === 'disband') { // [SỬA] Chỉ giữ lại 'disband'
         await deleteGroup(group.ID_NHOM)
-        toast.success(`Đã ${type === 'delete' ? 'xóa' : 'giải tán'} nhóm "${group.TEN_NHOM}".`)
+        toast.success(`Đã giải tán nhóm "${group.TEN_NHOM}".`)
       }
       onSuccess()
     } catch (error) {
-      console.error(`Thao tác ${type} thất bại:`, error); // Log lỗi đàng hoàng
+      console.error(`Thao tác ${type} thất bại:`, error);
       toast.error(error.response?.data?.message || "Thao tác thất bại.")
     } finally {
       setAlertInfo({ isOpen: false, type: null })
@@ -52,11 +52,7 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
           title: 'Xác nhận Giải tán Nhóm?',
           description: `Hành động này sẽ xóa nhóm "${group.TEN_NHOM}" và loại bỏ tất cả thành viên khỏi nhóm. Bạn chắc chắn muốn tiếp tục?`
         }
-      case 'delete':
-        return {
-          title: 'Xác nhận Xóa Nhóm?',
-          description: `Hành động này không thể hoàn tác. Xóa vĩnh viễn nhóm "${group.TEN_NHOM}"?`
-        }
+      // [SỬA] Bỏ case 'delete'
       default:
         return {}
     }
@@ -78,7 +74,6 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
             <Pencil className="mr-2 h-4 w-4" />
             Sửa thông tin
           </DropdownMenuItem>
-          {/* Nút Thêm thành viên vẫn gọi hàm onAddStudent như cũ */}
           <DropdownMenuItem onClick={() => onAddStudent(group)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Thêm thành viên
@@ -93,23 +88,18 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
             {group.LA_NHOM_DACBIET ? 'Gỡ đặc biệt' : 'Đánh dấu đặc biệt'}
           </DropdownMenuItem>
           <DropdownMenuItem
-            className="text-amber-600 focus:text-amber-700"
+            className="text-destructive focus:text-destructive" // [SỬA] Đổi màu thành destructive (đỏ)
             onClick={() => openConfirmation('disband')}
           >
             <UserX className="mr-2 h-4 w-4" />
             Giải tán nhóm
           </DropdownMenuItem>
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onClick={() => openConfirmation('delete')}
-          >
-            <Trash2 className="mr-2 h-4 w-4" />
-            Xóa vĩnh viễn
-          </DropdownMenuItem>
+          
+          {/* [ĐÃ XÓA] Bỏ DropdownMenuItem "Xóa vĩnh viễn" */}
+
         </DropdownMenuContent>
       </DropdownMenu>
       
-      {/* SỬA LỖI ACCESSIBILITY */}
       <AlertDialog
         open={alertInfo.isOpen}
         onOpenChange={(isOpen) => !isOpen && setAlertInfo({ isOpen: false, type: null })}
@@ -127,7 +117,7 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
             <AlertDialogCancel>Hủy</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAction}
-              className={(alertInfo.type === 'delete' || alertInfo.type === 'disband') ? "bg-destructive hover:bg-destructive/90" : ""}
+              className={alertInfo.type === 'disband' ? "bg-destructive hover:bg-destructive/90" : ""} // [SỬA] Cập nhật điều kiện
             >
               Xác nhận
             </AlertDialogAction>

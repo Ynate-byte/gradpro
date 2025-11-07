@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react'; // Added useMemo, useCallback
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { getInactiveStudents, removeInactiveStudentsFromPlan } from '@/api/adminGroupService';
 import { toast } from 'sonner';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -6,18 +6,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from '@/components/ui/scroll-area';
-// ----- [THÊM MỚI] Thêm Alert và animation -----
 import { Loader2, UserX, Search, UserCircle, Users, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { motion, AnimatePresence } from 'framer-motion';
-// ----- [KẾT THÚC THÊM MỚI] -----
-import { Input } from '@/components/ui/input'; // Added Input
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'; // Added Avatar
-import { useDebounce } from '@/hooks/useDebounce'; // Added useDebounce
-import { Skeleton } from '@/components/ui/skeleton'; // Added Skeleton
-import { cn } from '@/lib/utils'; // Added cn
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useDebounce } from '@/hooks/useDebounce';
+import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 
-// ... (Helper getInitials và Skeleton giữ nguyên) ...
 // Helper to get initials
 const getInitials = (name) => {
     if (!name) return '?';
@@ -53,7 +50,6 @@ const InactiveStudentListSkeleton = ({ count = 8 }) => (
         </TableBody>
     </Table>
 );
-// ... (Kết thúc Skeleton) ...
 
 
 export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId }) {
@@ -63,7 +59,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
     const [isProcessing, setIsProcessing] = useState(false);
     const [searchTerm, setSearchTerm] = useState(''); // State for search term
     const debouncedSearchTerm = useDebounce(searchTerm, 300); // Debounce search
-    const [apiError, setApiError] = useState(null); // <-- [THÊM MỚI] State cho lỗi persistent
+    const [apiError, setApiError] = useState(null);
 
     // Fetch initial data
     const fetchData = useCallback(() => {
@@ -71,7 +67,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
             setIsLoading(true);
             setSelected(new Set()); // Reset selection
             setSearchTerm(''); // Reset search
-            setApiError(null); // <-- [THÊM MỚI] Xóa lỗi khi mở
+            setApiError(null);
             getInactiveStudents(planId)
                 .then(data => setAllStudents(data || [])) // Store in allStudents
                 .catch(() => toast.error("Lỗi khi tải danh sách sinh viên."))
@@ -81,13 +77,13 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
              setAllStudents([]);
              setSelected(new Set());
              setSearchTerm('');
-             setApiError(null); // <-- [THÊM MỚI] Xóa lỗi khi đóng
+             setApiError(null);
         }
     }, [isOpen, planId]);
 
     useEffect(() => {
         fetchData();
-    }, [fetchData]); // Use the memoized fetchData
+    }, [fetchData]);
 
     // Filter students based on search term
     const filteredStudents = useMemo(() => {
@@ -100,7 +96,6 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
         );
     }, [debouncedSearchTerm, allStudents]);
 
-    // [THÊM MỚI] Xóa lỗi khi người dùng bắt đầu tìm kiếm
     useEffect(() => {
         if (debouncedSearchTerm) {
             setApiError(null);
@@ -109,7 +104,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
 
     // Handle single student selection
     const handleSelect = (participantId) => { 
-        setApiError(null); // <-- [THÊM MỚI] Xóa lỗi khi chọn
+        setApiError(null);
         setSelected(prev => {
             const newSelected = new Set(prev);
             if (newSelected.has(participantId)) {
@@ -123,7 +118,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
 
     // Handle select/deselect all *filtered* students
     const handleSelectAllFiltered = () => {
-        setApiError(null); // <-- [THÊM MỚI] Xóa lỗi khi chọn
+        setApiError(null);
         const currentFilteredIds = new Set(filteredStudents.map(s => s.ID_THAMGIA)); 
         const currentSelectedFiltered = Array.from(selected).filter(id => currentFilteredIds.has(id));
 
@@ -158,7 +153,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
              return;
         }
         setIsProcessing(true);
-        setApiError(null); // <-- [THÊM MỚI] Xóa lỗi cũ trước khi thử
+        setApiError(null);
         try {
             const participantIds = Array.from(selected);
             const payload = {
@@ -168,21 +163,18 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
             const res = await removeInactiveStudentsFromPlan(payload); 
             toast.success(res.message || "Đã xóa sinh viên khỏi kế hoạch.");
             onSuccess(); // Refresh parent component
-            setIsOpen(false); // <-- [THAY ĐỔI] Chỉ đóng khi thành công
+            setIsOpen(false);
         } catch (error) {
-            // ----- [SỬA LỖI] Hiển thị lỗi 409 chi tiết -----
             const errorMsg = error.response?.data?.message || "Thao tác thất bại. Vui lòng thử lại.";
-            setApiError(errorMsg); // <-- [THÊM MỚI] Gán lỗi vào state
+            setApiError(errorMsg);
 
-            // Vẫn thông báo toast ngắn gọn
             if (error.response?.status === 409) {
                  toast.error("Thao tác bị chặn", {
-                    description: "Xem chi tiết lỗi trong dialog."
+                     description: "Xem chi tiết lỗi trong dialog."
                  });
             } else {
-                toast.error("Lỗi:", { description: errorMsg });
+                 toast.error("Lỗi:", { description: errorMsg });
             }
-            // ----- [KẾT THÚC SỬA LỖI] -----
         } finally {
             setIsProcessing(false);
         }
@@ -191,7 +183,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
             <DialogContent className="sm:max-w-4xl h-[85vh] flex flex-col p-0">
-                <DialogHeader className="p-6 pb-4 border-b">
+                <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
                     <DialogTitle className="flex items-center gap-2 text-xl">
                         <UserX className="h-6 w-6 text-orange-600" />
                         Sinh viên chưa từng đăng nhập ({isLoading ? '...' : filteredStudents.length})
@@ -203,7 +195,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                     </DialogDescription>
                 </DialogHeader>
 
-                 <div className="px-6 pt-4 pb-2">
+                 <div className="px-6 pt-4 pb-2 flex-shrink-0">
                      <div className="relative">
                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                          <Input
@@ -218,7 +210,6 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
 
                 {/* Table Area */}
                 <div className="flex-grow min-h-0 px-6 pb-6">
-                    {/* ----- [THÊM MỚI] Hiển thị lỗi API ----- */}
                     <AnimatePresence>
                         {apiError && (
                             <motion.div
@@ -237,11 +228,11 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                             </motion.div>
                         )}
                     </AnimatePresence>
-                    {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
 
-                    <ScrollArea className="h-[calc(85vh-330px)] border rounded-md">
+                    {/* [START SỬA LỖI] Đổi h-[calc(...)] thành h-full */}
+                    <ScrollArea className="h-full border rounded-md">
+                    {/* [END SỬA LỖI] */}
                         {isLoading ? (
-                            // Use Skeleton
                             <InactiveStudentListSkeleton />
                         ) : (
                             <Table className="relative">
@@ -266,8 +257,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                                     {filteredStudents.length > 0 ? (
                                         filteredStudents.map(student => (
                                             <TableRow
-                                                key={student.ID_NGUOIDUNG} // Key vẫn là ID_NGUOIDUNG (unique)
-                                                // Highlight selected row
+                                                key={student.ID_NGUOIDUNG}
                                                 data-state={selected.has(student.ID_THAMGIA) ? 'selected' : ''}
                                             >
                                                 <TableCell>
@@ -301,8 +291,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                     </ScrollArea>
                 </div>
 
-                <DialogFooter className="p-6 pt-4 border-t flex justify-between sm:justify-between">
-                    {/* Show selected count */}
+                <DialogFooter className="p-6 pt-4 border-t flex-shrink-0 justify-between sm:justify-between">
                     <div className="text-sm text-muted-foreground pt-2">
                         Đã chọn: {selected.size}
                     </div>
@@ -314,7 +303,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                             variant="destructive"
                             disabled={selected.size === 0 || isProcessing}
                             onClick={handleRemove}
-                            className="min-w-[150px]" // Set min width for button consistency
+                            className="min-w-[150px]"
                         >
                             {isProcessing ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

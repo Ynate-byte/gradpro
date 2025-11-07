@@ -66,6 +66,61 @@ class HoiDongController extends Controller
     }
 
     /**
+     * [MỚI] Lấy dữ liệu thống kê cho StatCards
+     */
+    public function getStatistics(Request $request)
+    {
+        $validated = $request->validate([
+            'kehoach' => 'nullable|integer|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+        ]);
+
+        $planId = $validated['kehoach'] ?? null;
+
+        // Bắt đầu query
+        $query = Hoidong::query();
+
+        if ($planId) {
+            $query->where('ID_KEHOACH', $planId);
+        } else {
+             // Nếu không có planId, chỉ lấy các kế hoạch đang hoạt động
+            $query->whereHas('kehoach', function ($q) {
+                $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa']);
+            });
+        }
+
+        // 1. Tổng số hội đồng
+        $totalHoiDong = (clone $query)->count();
+
+        // 2. Tổng số HĐ Phản Biện
+        $totalPhanBien = (clone $query)->where('LOAI', 'phanbien')->count();
+
+        // 3. Tổng số HĐ Bảo Vệ
+        $totalBaoVe = (clone $query)->where('LOAI', 'hoidong')->count();
+
+        // 4. Tổng số nhóm đã phân bổ
+        $hoidongIds = (clone $query)->pluck('ID_HOIDONG');
+
+        $nhomDaPhanBo = DB::table('HOIDONG_NHOM')
+            ->whereIn('ID_HOIDONG', $hoidongIds)
+            ->distinct('ID_NHOM')
+            ->count('ID_NHOM');
+            
+        // 5. Tổng số thành viên (GV)
+        $totalThanhVien = DB::table('HOIDONG_GIANGVIEN')
+             ->whereIn('ID_HOIDONG', $hoidongIds)
+             ->distinct('ID_GIANGVIEN')
+             ->count('ID_GIANGVIEN');
+
+        return response()->json([
+            'totalHoiDong' => $totalHoiDong,
+            'totalPhanBien' => $totalPhanBien,
+            'totalBaoVe' => $totalBaoVe,
+            'nhomDaPhanBo' => $nhomDaPhanBo,
+            'totalThanhVien' => $totalThanhVien,
+        ]);
+    }
+
+    /**
      * Tạo hội đồng (tự động hoặc thủ công)
      */
     public function create(Request $request)
@@ -323,6 +378,31 @@ class HoiDongController extends Controller
     }
 
     /**
+     * [MỚI] Cập nhật nhanh phòng (Inline Edit)
+     */
+    public function updatePhong(Request $request, $id)
+    {
+        $hoidong = Hoidong::find($id);
+        if (!$hoidong) {
+            return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
+        }
+
+        $validated = $request->validate([
+            'PHONG' => 'nullable|string|max:50',
+        ]);
+
+        try {
+            $hoidong->update(['PHONG' => $validated['PHONG'] ?? null]);
+            return response()->json([
+                'message' => 'Cập nhật phòng thành công!',
+                'PHONG' => $hoidong->PHONG
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Cập nhật thất bại: ' . $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Xóa hội đồng
      */
     public function destroy($id)
@@ -413,7 +493,7 @@ class HoiDongController extends Controller
                     'hoidongs:ID_HOIDONG,TEN_HOIDONG',
                     'phancongDetaiNhom' => function ($query) {
                         $query->select('ID_PHANCONG', 'ID_NHOM', 'ID_DETAI')
-                              ->with('detai:ID_DETAI,TEN_DETAI');
+                            ->with('detai:ID_DETAI,TEN_DETAI');
                     },
                     'phancongDetaiNhom.gvhd'
                 ])
