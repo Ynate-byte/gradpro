@@ -175,23 +175,20 @@ class PlanParticipantsImport implements ToCollection
     }
 
     private function getValue($row, $index)
-    {
-        if ($index === false || $index === null || !isset($row[$index])) {
-            return null;
-        }
-        $value = $row[$index];
-        if (is_string($value)) {
-            $converted = @iconv('Windows-1252', 'UTF-8//IGNORE', $value);
-            if ($converted === false) {
-                $converted = @iconv('Windows-1258', 'UTF-8//IGNORE', $value);
-            }
-            if ($converted === false) {
-                $converted = mb_convert_encoding($value, 'UTF-8', 'UTF-8');
-            }
-            $value = $converted !== false ? $converted : $value;
-        }
+{
+    if ($index === false || $index === null || !isset($row[$index])) {
+        return null;
+    }
+    
+    $value = $row[$index];
+
+    // Chỉ trim nếu là string, không chuyển đổi encoding
+    if (is_string($value)) {
         return trim($value);
     }
+
+    return $value; // Trả về giá trị gốc (có thể là số, null, v.v.)
+}
 
     private function parseDate($value)
     {

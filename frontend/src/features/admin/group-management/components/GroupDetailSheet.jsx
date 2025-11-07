@@ -33,10 +33,11 @@ import {
     RefreshCw,
     UserCircle,
     Calendar,
+    ChevronDown, // ----- [THÊM MỚI] -----
 } from 'lucide-react';
 import { format, isValid, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { getSubmissionsForPhancong } from '@/api/adminSubmissionService'; 
+import { getSubmissionsForPhancong } from '@/api/adminSubmissionService';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from '@/lib/utils';
@@ -79,7 +80,7 @@ const SubmissionFileItem = ({ file }) => {
 
     return (
         <a
-            href={file.url} // Accessor 'url' từ model
+            href={file.url}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 p-2 rounded-md border bg-muted/50 hover:bg-muted transition-colors"
@@ -108,6 +109,7 @@ const SubmissionAttempt = ({ attempt }) => {
                 return { Icon: Loader2, color: 'text-yellow-600', bg: 'bg-yellow-50 border-yellow-200' };
         }
     };
+
     const { Icon, color, bg } = getStatusProps();
     const submittedAt = format(parseISO(attempt.NGAY_NOP), 'dd/MM/yyyy, HH:mm', { locale: vi });
 
@@ -143,7 +145,6 @@ const SubmissionAttempt = ({ attempt }) => {
     );
 };
 
-
 /**
  * Component chính hiển thị chi tiết thông tin nhóm trong một giao diện Sheet.
  */
@@ -152,7 +153,6 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
     const [isLoadingHistory, setIsLoadingHistory] = useState(true);
     const phancong = group?.phancong_detai_nhom;
     const phancongId = phancong?.ID_PHANCONG;
-
     const detai = phancong?.detai;
     const gvhd = phancong?.gvhd;
 
@@ -163,10 +163,10 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
         }
         setIsLoadingHistory(true);
         try {
-            const data = await getSubmissionsForPhancong(phancongId); 
+            const data = await getSubmissionsForPhancong(phancongId);
             setHistory(data || []);
         } catch (error) {
-            console.error("Lỗi khi tải lịch sử nộp bài (Admin):", error); // Ghi log lỗi
+            console.error("Lỗi khi tải lịch sử nộp bài (Admin):", error);
             toast.error("Không thể tải lịch sử nộp bài.");
         } finally {
             setIsLoadingHistory(false);
@@ -178,14 +178,14 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
             fetchHistory();
         } else if (!phancongId) {
             setIsLoadingHistory(false);
-            setHistory([]); // Reset lịch sử khi không có phân công
+            setHistory([]);
         }
     }, [isOpen, phancongId, fetchHistory]);
 
     if (!group) return null;
 
     const formatNullableDate = (dateString, formatString = 'dd/MM/yyyy HH:mm') => {
-        if (!dateString || dateString.startsWith('0000-00-00')) return null; // Sửa lỗi ngày 0000-00-00
+        if (!dateString || dateString.startsWith('0000-00-00')) return null;
         try {
             const date = parseISO(dateString);
             if (isValid(date)) {
@@ -197,16 +197,83 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
         return dateString;
     };
 
+    // ----- [THÊM MỚI] Component MemberItem (lồng bên trong) -----
+    const MemberItem = ({ member, isLeader }) => {
+        const [isOpen, setIsOpen] = useState(false);
+        const user = member.nguoidung;
+        const sinhvien = user.sinhvien;
+
+        return (
+            <div className="p-4 border border-blue-100 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 shadow-sm transition hover:shadow-md">
+                <div
+                    className="flex items-center justify-between cursor-pointer"
+                    onClick={() => setIsOpen(!isOpen)}
+                    aria-expanded={isOpen}
+                    aria-controls={`member-details-${member.ID_THANHVIEN}`}
+                >
+                    <div className="flex items-center gap-3 min-w-0">
+                        <Avatar className="h-10 w-10 border-2 border-blue-300 dark:border-blue-600 shrink-0">
+                            <AvatarFallback className="bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300">
+                                {getInitials(user.HODEM_VA_TEN)}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-grow min-w-0">
+                            <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2 flex-wrap">
+                                <span className="truncate">{user.HODEM_VA_TEN}</span>
+                                {isLeader && (
+                                    <Badge variant="outline" className="border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 gap-1 text-xs px-1.5 py-0.5 shrink-0">
+                                        <Crown className="h-3 w-3" />Trưởng nhóm
+                                    </Badge>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.MA_DINHDANH}</p>
+                        </div>
+                    </div>
+                    <ChevronDown className={cn("h-5 w-5 text-gray-400 transition-transform ml-2 shrink-0", isOpen && "rotate-180")} />
+                </div>
+
+                {/* Nội dung chi tiết có thể thu gọn */}
+                {isOpen && (
+                    <div id={`member-details-${member.ID_THANHVIEN}`} className="mt-3">
+                        <Separator className="mb-3 bg-blue-200 dark:bg-blue-700" />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                            <InfoItem icon={Mail} label="Email" value={user.EMAIL} className="col-span-2 sm:col-span-1" />
+                            <InfoItem
+                                icon={Calendar}
+                                label="Ngày sinh"
+                                value={formatNullableDate(user.NGAYSINH, 'dd/MM/yyyy')}
+                                className="col-span-2 sm:col-span-1"
+                            />
+                            <InfoItem icon={Phone} label="Điện thoại" value={user.SO_DIENTHOAI || 'Chưa cập nhật'} className="col-span-2 sm:col-span-1" />
+                            <InfoItem icon={CalendarPlus} label="Ngày vào nhóm" value={formatNullableDate(member.NGAY_VAONHOM, 'dd/MM/yyyy')} className="col-span-2 sm:col-span-1" />
+                            <InfoItem
+                                icon={BookOpen}
+                                label="Chuyên ngành"
+                                value={sinhvien?.chuyennganh?.TEN_CHUYENNGANH}
+                                className="col-span-2 sm:col-span-1"
+                            />
+                            <InfoItem
+                                icon={Users}
+                                label="Lớp"
+                                value={sinhvien?.TEN_LOP}
+                                className="col-span-2 sm:col-span-1"
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+    // ----- [KẾT THÚC THÊM MỚI] -----
+
     return (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
             <SheetContent className="w-[90vw] sm:max-w-2xl p-0 flex flex-col bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500">
-                {/* Phần Header (Giữ nguyên) */}
+                {/* Phần Header */}
                 <SheetHeader className="p-6 pb-4 bg-white dark:bg-gray-800 border-b border-blue-200 dark:border-blue-700 shadow-sm">
                     <SheetTitle className="text-2xl font-bold text-gray-800 dark:text-gray-100">{group.TEN_NHOM}</SheetTitle>
                     <SheetDescription className="text-gray-600 dark:text-gray-300">{group.MOTA || 'Không có mô tả.'}</SheetDescription>
                     <div className="flex flex-wrap items-center gap-2 pt-2">
-                        
-                        {/* ----- [SỬA LỖI] Đổi IF thành IF/ELSE ----- */}
                         {group.LA_NHOM_DACBIET ? (
                             <Badge variant="default" className="bg-blue-500 text-white gap-1.5 hover:bg-blue-600">
                                 <Star className="h-3 w-3" /> Đặc biệt
@@ -216,8 +283,6 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                                 <Users className="h-3 w-3" /> Nhóm thường
                             </Badge>
                         )}
-                        {/* ----- [KẾT THÚC SỬA LỖI] ----- */}
-
                         {group.TRANGTHAI === 'Đã đủ thành viên' && (
                             <Badge variant="secondary" className="bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200">
                                 Đã đủ TV ({group.SO_THANHVIEN_HIENTAI}/4)
@@ -233,110 +298,53 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
 
                 {/* Khu vực nội dung có thể cuộn */}
                 <ScrollArea className="flex-grow overflow-y-auto">
-                    <div className="p-6 space-y-6">
-                        {/* Card thông tin chung của nhóm (ĐÃ SỬA ĐỔI) */}
+                    <div className="px-6 pb-6 pt-0 space-y-4">
+                        {/* Card thông tin chung */}
                         <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                            <CardHeader>
-                                <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                    <Info className="h-5 w-5 text-blue-500" /> Thông tin chung
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4">
-                                
-                                <InfoItem 
-                                    icon={BookOpen} 
-                                    label="Đề tài thực hiện" 
+                            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-4 pt-6">
+                                <InfoItem
+                                    icon={BookOpen}
+                                    label="Đề tài thực hiện"
                                     value={detai?.TEN_DETAI}
                                     className="sm:col-span-2"
                                 />
-                                
-                                <InfoItem 
-                                    icon={UserCircle} 
-                                    label="Giảng viên hướng dẫn" 
+                                <InfoItem
+                                    icon={UserCircle}
+                                    label="Giảng viên hướng dẫn"
                                     value={gvhd?.nguoidung?.HODEM_VA_TEN}
                                     className="sm:col-span-2"
                                 />
-
-                                <InfoItem 
-                                    icon={CalendarDays} 
-                                    label="Ngày tạo nhóm" 
-                                    value={formatNullableDate(group.NGAYTAO)} 
+                                <InfoItem
+                                    icon={CalendarDays}
+                                    label="Ngày tạo nhóm"
+                                    value={formatNullableDate(group.NGAYTAO)}
                                 />
-                                <InfoItem 
-                                    icon={Clock} 
-                                    label="Cập nhật lần cuối" 
-                                    value={formatNullableDate(group.NGAYCAPNHAT)} 
+                                <InfoItem
+                                    icon={Clock}
+                                    label="Cập nhật lần cuối"
+                                    value={formatNullableDate(group.NGAYCAPNHAT)}
                                 />
                             </CardContent>
                         </Card>
 
                         {/* Card danh sách thành viên */}
                         <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                            <CardHeader>
-                                <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                    <Users className="h-5 w-5 text-blue-500" /> Thành viên ({group.thanhviens?.length ?? 0})
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
+                            <CardContent className="space-y-3 pt-6">
                                 {group.thanhviens && group.thanhviens.length > 0 ? (
-                                    group.thanhviens.map((member, index) => (
-                                        <div key={member.ID_THANHVIEN} className="p-4 border border-blue-100 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 shadow-sm transition hover:shadow-md">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar className="h-10 w-10 border-2 border-blue-300 dark:border-blue-600">
-                                                        <AvatarFallback className="bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-300">
-                                                            {getInitials(member.nguoidung.HODEM_VA_TEN)}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <div className="flex-grow">
-                                                        <div className="font-semibold text-sm text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                                                            {member.nguoidung.HODEM_VA_TEN}
-                                                            {member.ID_NGUOIDUNG === group.ID_NHOMTRUONG && (
-                                                                <Badge variant="outline" className="border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 gap-1 text-xs px-1.5 py-0.5">
-                                                                    <Crown className="h-3 w-3" />Trưởng nhóm
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-xs text-gray-500 dark:text-gray-400">{member.nguoidung.MA_DINHDANH}</p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <Separator className="my-3 bg-blue-200 dark:bg-blue-700" />
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                                                <InfoItem icon={Mail} label="Email" value={member.nguoidung.EMAIL} className="col-span-2 sm:col-span-1" />
-                                                
-                                                <InfoItem 
-                                                    icon={Calendar} 
-                                                    label="Ngày sinh" 
-                                                    value={formatNullableDate(member.nguoidung.NGAYSINH, 'dd/MM/yyyy')} 
-                                                    className="col-span-2 sm:col-span-1" 
-                                                />
-
-                                                <InfoItem icon={Phone} label="Điện thoại" value={member.nguoidung.SO_DIENTHOAI || 'Chưa cập nhật'} className="col-span-2 sm:col-span-1" />
-                                                <InfoItem icon={CalendarPlus} label="Ngày vào nhóm" value={formatNullableDate(member.NGAY_VAONHOM, 'dd/MM/yyyy')} className="col-span-2 sm:col-span-1" />
-                                                
-                                                <InfoItem 
-                                                    icon={BookOpen} 
-                                                    label="Chuyên ngành" 
-                                                    value={member.nguoidung.sinhvien?.chuyennganh?.TEN_CHUYENNGANH}
-                                                    className="col-span-2 sm:col-span-1" 
-                                                />
-                                                <InfoItem 
-                                                    icon={Users} 
-                                                    label="Lớp" 
-                                                    value={member.nguoidung.sinhvien?.TEN_LOP}
-                                                    className="col-span-2 sm:col-span-1" 
-                                                />
-                                            </div>
-                                        </div>
+                                    group.thanhviens.map((member) => (
+                                        <MemberItem
+                                            key={member.ID_THANHVIEN}
+                                            member={member}
+                                            isLeader={member.ID_NGUOIDUNG === group.ID_NHOMTRUONG}
+                                        />
                                     ))
                                 ) : (
                                     <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">Nhóm chưa có thành viên nào.</p>
                                 )}
                             </CardContent>
                         </Card>
-                        
-                        {/* Card Lịch sử Nộp bài (Không đổi) */}
+
+                        {/* Card Lịch sử Nộp bài */}
                         {phancong && (
                             <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
                                 <CardHeader>
@@ -351,7 +359,9 @@ export function GroupDetailSheet({ group, isOpen, setIsOpen }) {
                                 </CardHeader>
                                 <CardContent className="space-y-4">
                                     {isLoadingHistory ? (
-                                        <div className="text-center p-8"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/></div>
+                                        <div className="text-center p-8">
+                                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                                        </div>
                                     ) : history.length > 0 ? (
                                         history.map(attempt => (
                                             <SubmissionAttempt key={attempt.ID_NOP_SANPHAM} attempt={attempt} />
