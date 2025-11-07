@@ -12,8 +12,10 @@ import {
     Users, Activity, Loader2, Circle
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
+// ----- [SỬA LỖI] Gộp 2 dòng import 'format' -----
 import { format, isValid, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
+// ----- [KẾT THÚC SỬA LỖI] -----
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -101,11 +103,19 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
         }
     }, [userId, isOpen, setIsOpen]);
 
+    // ----- [SỬA LỖI] Dùng hàm parse an toàn hơn -----
     const formatNgaySinh = (dateString) => {
         if (!dateString) return null;
         try {
-            const date = parseISO(dateString);
+            // Sử dụng new Date() để xử lý chuỗi Y-m-d an toàn hơn parseISO
+            // vì nó sẽ coi "2000-01-01" là 00:00 local, không phải UTC
+            const date = new Date(dateString);
             if (isValid(date)) {
+                 // Tăng 1 ngày vì new Date("Y-m-d") bị lỗi timezone, coi là 00:00 UTC
+                // (chỉ khi nó không phải là ISO string đầy đủ)
+                if (dateString.length === 10) {
+                        date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+                }
                 return format(date, 'dd/MM/yyyy', { locale: vi });
             }
         } catch (e) {
@@ -113,6 +123,7 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
         }
         return "Ngày không hợp lệ";
     };
+    // ----- [KẾT THÚC SỬA LỖI] -----
 
     return (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
@@ -175,7 +186,9 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
                                         <CardHeader><CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2"><Hash className="h-5 w-5 text-blue-500" />Thông tin chung</CardTitle></CardHeader>
                                         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-4 text-sm">
                                             <InfoItem icon={Hash} label="Mã định danh" value={user.MA_DINHDANH} />
+                                            {/* ----- [THÊM MỚI] ----- */}
                                             <InfoItem icon={Calendar} label="Ngày sinh" value={formatNgaySinh(user.NGAYSINH)} />
+                                            {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
                                             <InfoItem icon={Calendar} label="Ngày tham gia" value={format(new Date(user.NGAYTAO), 'dd/MM/yyyy', { locale: vi })} />
                                             <InfoItem icon={Clock} label="Đăng nhập cuối" value={user.DANGNHAP_CUOI ? format(new Date(user.DANGNHAP_CUOI), 'dd/MM/yyyy HH:mm', { locale: vi }) : 'Chưa đăng nhập'} />
                                         </CardContent>

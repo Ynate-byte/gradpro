@@ -21,20 +21,30 @@ export const getGroupStatistics = (planId) => {
 /**
  * Lấy danh sách sinh viên chưa hoạt động trong một kế hoạch.
  * @param {number} planId - ID của kế hoạch.
- * @returns {Promise<Array>} Danh sách sinh viên.
+ * @returns {Promise<Array>} Danh sách sinh viên (bao gồm ID_THAMGIA).
  */
 export const getInactiveStudents = (planId) => {
     return axiosClient.get('/admin/groups/inactive-students', { params: { plan_id: planId } }).then(res => res.data);
 };
 
 /**
- * Vô hiệu hóa (xóa mềm) nhiều sinh viên.
- * @param {Array<number>} studentIds - Mảng chứa ID của các sinh viên.
+ * [THAY ĐỔI] Xóa sinh viên chưa đăng nhập khỏi kế hoạch VÀ nhóm (Logic thông minh).
+ * @param {object} payload - Gồm { plan_id, participant_ids[] }.
+ * @returns {Promise<object>} Thông báo kết quả.
+ */
+export const removeInactiveStudentsFromPlan = (payload) => {
+    return axiosClient.post('/admin/groups/remove-inactive-students', payload).then(res => res.data);
+};
+
+/**
+ * [KHÔNG DÙNG NỮA] Vô hiệu hóa (xóa mềm) nhiều sinh viên.
+ * @param {Array<number>} studentIds - Mảng chứa ID của các sinh viên (ID_NGUOIDUNG).
  * @returns {Promise<object>} Thông báo kết quả.
  */
 export const removeStudents = (studentIds) => {
     return axiosClient.post('/admin/groups/remove-students', { studentIds }).then(res => res.data);
 };
+
 
 /**
  * Cập nhật thông tin của một nhóm.

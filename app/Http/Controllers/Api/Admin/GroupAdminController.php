@@ -38,7 +38,10 @@ class GroupAdminController extends Controller
             'nhomtruong', 
             'chuyennganh', 
             'khoabomon', 
+            
+            // Sửa lỗi N/A: Thêm eager loading cho sinhvien và chuyennganh của sinhvien
             'thanhviens.nguoidung.sinhvien.chuyennganh', 
+
             'phancongDetaiNhom.detai',
             'phancongDetaiNhom.gvhd.nguoidung',
             'diemTongKet'
@@ -255,19 +258,57 @@ class GroupAdminController extends Controller
 
     /**
      * Lấy danh sách sinh viên chưa kích hoạt (chưa đăng nhập) trong kế hoạch.
+     * [SỬA ĐỔI] Trả về thông tin Nguoidung KÈM THEO ID_THAMGIA
      */
     public function getInactiveStudents(Request $request)
     {
         $request->validate(['plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
         $plan = KehoachKhoaluan::find($request->plan_id);
 
-        $allStudentIdsInPlan = $plan->sinhvienThamgias()->pluck('ID_SINHVIEN');
-        $allUserIdsInPlan = DB::table('SINHVIEN')->whereIn('ID_SINHVIEN', $allStudentIdsInPlan)->pluck('ID_NGUOIDUNG');
-
-        $students = Nguoidung::with('sinhvien.chuyennganh')
-            ->whereIn('ID_NGUOIDUNG', $allUserIdsInPlan)
-            ->whereNull('DANGNHAP_CUOI')
+        // Lấy các bản ghi SINHVIEN_THAMGIA của kế hoạch này
+        $participants = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)
+            ->with([
+                // Tải thông tin sinh viên
+                'sinhvien' => function ($query) {
+                    $query->select('ID_SINHVIEN', 'ID_NGUOIDUNG', 'ID_CHUYENNGANH');
+                },
+                // Tải thông tin người dùng (qua sinhvien)
+                'sinhvien.nguoidung' => function ($query) {
+                    $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL', 'DANGNHAP_CUOI', 'NGAYSINH') // Cũng lấy NGAYSINH
+                          ->whereNull('DANGNHAP_CUOI'); // Lọc người dùng chưa đăng nhập
+                },
+                // Tải chuyên ngành (qua sinhvien)
+                'sinhvien.chuyennganh:ID_CHUYENNGANH,TEN_CHUYENNGANH'
+            ])
+            // Chỉ lấy những ai có người dùng (và người dùng đó chưa đăng nhập)
+            ->whereHas('sinhvien.nguoidung', function ($query) {
+                $query->whereNull('DANGNHAP_CUOI');
+            })
             ->get();
+
+        // Định dạng lại dữ liệu trả về
+        $students = $participants->map(function ($participant) {
+            // Đảm bảo $participant->sinhvien và $participant->sinhvien->nguoidung tồn tại (dù query đã lọc)
+            if (!$participant->sinhvien || !$participant->sinhvien->nguoidung) {
+                return null;
+            }
+
+            $nguoidung = $participant->sinhvien->nguoidung;
+            
+            // Gộp dữ liệu từ NGUOIDUNG và thêm ID_THAMGIA
+            return [
+                'ID_NGUOIDUNG' => $nguoidung->ID_NGUOIDUNG,
+                'ID_THAMGIA' => $participant->ID_THAMGIA, // Đây là ID_THAMGIA (để xóa khỏi kế hoạch)
+                'HODEM_VA_TEN' => $nguoidung->HODEM_VA_TEN,
+                'MA_DINHDANH' => $nguoidung->MA_DINHDANH,
+                'EMAIL' => $nguoidung->EMAIL,
+                'NGAYSINH' => $nguoidung->NGAYSINH,
+                'DANGNHAP_CUOI' => $nguoidung->DANGNHAP_CUOI,
+                'sinhvien' => [
+                    'chuyennganh' => $participant->sinhvien->chuyennganh
+                ]
+            ];
+        })->filter(); // Lọc bỏ các giá trị null (nếu có lỗi data)
 
         return response()->json($students);
     }
@@ -303,18 +344,128 @@ class GroupAdminController extends Controller
     }
 
     /**
-     * Vô hiệu hóa tài khoản của nhiều sinh viên.
+     * [MỚI] Xóa sinh viên chưa đăng nhập khỏi kế hoạch VÀ nhóm (Logic thông minh)
+     * Thực thi logic:
+     * 1. Chặn nếu là trưởng nhóm Đặc Biệt.
+     * 2. Tự động chuyển quyền trưởng nhóm Thường (nếu còn TV).
+     * 3. Tự động xóa nhóm Thường (nếu là TV cuối cùng).
+     * 4. Xóa khỏi `THANHVIEN_NHOM` và `SINHVIEN_THAMGIA`.
      */
-    public function removeStudents(Request $request)
+    public function removeInactiveStudentsFromPlan(Request $request)
     {
         $validated = $request->validate([
-            'studentIds' => 'required|array',
-            'studentIds.*' => 'exists:NGUOIDUNG,ID_NGUOIDUNG'
+            'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'participant_ids' => 'required|array|min:1',
+            'participant_ids.*' => 'exists:SINHVIEN_THAMGIA,ID_THAMGIA',
         ]);
 
-        Nguoidung::whereIn('ID_NGUOIDUNG', $validated['studentIds'])->update(['TRANGTHAI_KICHHOAT' => false]);
+        $planId = $validated['plan_id'];
+        $participantIds = $validated['participant_ids'];
 
-        return response()->json(['message' => 'Đã vô hiệu hóa các sinh viên được chọn thành công.']);
+        // 1. Lấy User IDs từ Participant IDs
+        $participants = SinhvienThamgia::with('sinhvien:ID_SINHVIEN,ID_NGUOIDUNG')
+                            ->whereIn('ID_THAMGIA', $participantIds)
+                            ->where('ID_KEHOACH', $planId) // Đảm bảo họ thuộc kế hoạch này
+                            ->get();
+
+        $userIdsToRemove = $participants->pluck('sinhvien.ID_NGUOIDUNG')->filter()->unique();
+
+        if ($userIdsToRemove->isEmpty()) {
+            return response()->json(['message' => 'Không tìm thấy người dùng hợp lệ để xóa.'], 404);
+        }
+
+        // 2. Kiểm tra xung đột (Trưởng nhóm của NHÓM ĐẶC BIỆT)
+        $conflictingLeaders = Nhom::where('ID_KEHOACH', $planId)
+            ->where('LA_NHOM_DACBIET', true) // Chỉ nhóm đặc biệt
+            ->whereIn('ID_NHOMTRUONG', $userIdsToRemove)
+            ->with('nhomtruong:ID_NGUOIDUNG,HODEM_VA_TEN')
+            ->get();
+
+        if ($conflictingLeaders->isNotEmpty()) {
+            $names = $conflictingLeaders->pluck('nhomtruong.HODEM_VA_TEN')->implode(', ');
+            return response()->json([
+                'message' => "Không thể xóa: {$names}. Họ là trưởng nhóm của nhóm ĐẶC BIỆT. Vui lòng xử lý thủ công."
+            ], 409); // 409 Conflict
+        }
+
+        // 3. Bắt đầu Transaction
+        DB::beginTransaction();
+        try {
+            // 4. Xử lý chuyển quyền trưởng nhóm cho các NHÓM THƯỜNG
+            $leaderGroupsToProcess = Nhom::where('ID_KEHOACH', $planId)
+                ->where('LA_NHOM_DACBIET', false) // Chỉ nhóm thường
+                ->whereIn('ID_NHOMTRUONG', $userIdsToRemove)
+                ->with('thanhviens:ID_NHOM,ID_NGUOIDUNG') // Tải tất cả thành viên
+                ->get();
+
+            $groupsToDelete = collect(); // Nhóm sẽ bị xóa (vì rỗng)
+
+            foreach ($leaderGroupsToProcess as $nhom) {
+                // Tìm một trưởng nhóm mới (người không nằm trong danh sách sắp bị xóa)
+                $newLeader = $nhom->thanhviens
+                                ->whereNotIn('ID_NGUOIDUNG', $userIdsToRemove)
+                                ->first();
+
+                if ($newLeader) {
+                    // Nếu tìm thấy, gán trưởng nhóm mới
+                    $nhom->ID_NHOMTRUONG = $newLeader->ID_NGUOIDUNG;
+                    $nhom->save();
+                } else {
+                    // Nếu không (nhóm chỉ có mình trưởng nhóm này, hoặc tất cả tv đều bị xóa)
+                    // -> đánh dấu để xóa nhóm
+                    $groupsToDelete->push($nhom->ID_NHOM);
+                }
+            }
+
+            // 5. Lấy ID tất cả các nhóm trong kế hoạch
+            $allGroupIdsInPlan = Nhom::where('ID_KEHOACH', $planId)->pluck('ID_NHOM');
+            
+            // 6. Lấy ID các nhóm bị ảnh hưởng (các nhóm mà SV sắp xóa đang tham gia)
+            $affectedGroupIds = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $userIdsToRemove)
+                                ->whereIn('ID_NHOM', $allGroupIdsInPlan)
+                                ->pluck('ID_NHOM')
+                                ->unique();
+
+            // 7. Xóa sinh viên khỏi các nhóm (THANHVIEN_NHOM)
+            ThanhvienNhom::whereIn('ID_NGUOIDUNG', $userIdsToRemove)
+                            ->whereIn('ID_NHOM', $allGroupIdsInPlan)
+                            ->delete();
+
+            // 8. Xóa sinh viên khỏi kế hoạch (SINHVIEN_THAMGIA)
+            SinhvienThamgia::whereIn('ID_THAMGIA', $participantIds)->delete();
+
+            // 9. Cập nhật lại số lượng thành viên (hoặc xóa nhóm nếu rỗng)
+            $allAffectedGroupIds = $affectedGroupIds->merge($groupsToDelete)->unique();
+
+            foreach ($allAffectedGroupIds as $groupId) {
+                // Kiểm tra xem nhóm còn tồn tại không (phòng trường hợp đã bị xóa ở bước 4)
+                $group = Nhom::find($groupId);
+                if (!$group) continue; 
+                
+                $newCount = ThanhvienNhom::where('ID_NHOM', $groupId)->count();
+                
+                if ($newCount == 0) {
+                    // Nếu nhóm rỗng, xóa luôn nhóm
+                    $group->delete();
+                } else {
+                    // Nếu còn, cập nhật lại số lượng
+                    // (Cũng kiểm tra nếu trưởng nhóm cũ bị xóa, gán cho người đầu tiên)
+                    if (!ThanhvienNhom::where('ID_NHOM', $groupId)->where('ID_NGUOIDUNG', $group->ID_NHOMTRUONG)->exists()) {
+                        $group->ID_NHOMTRUONG = ThanhvienNhom::where('ID_NHOM', $groupId)->first()->ID_NGUOIDUNG;
+                    }
+                    $group->SO_THANHVIEN_HIENTAI = $newCount;
+                    $group->save();
+                }
+            }
+
+            DB::commit();
+            return response()->json(['message' => "Đã xóa thành công " . count($participantIds) . " sinh viên khỏi kế hoạch (và khỏi nhóm của họ)."]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Lỗi khi xóa SV chưa đăng nhập: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => 'Xóa thất bại do lỗi server: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -542,7 +693,7 @@ class GroupAdminController extends Controller
 
         $students = $query
             ->with('sinhvien.chuyennganh')
-            ->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL')
+            ->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL', 'NGAYSINH') // Thêm NGAYSINH
             ->orderBy('HODEM_VA_TEN')
             ->get();
 

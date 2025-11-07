@@ -60,7 +60,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         ),
         enableSorting: false,
         enableHiding: false,
-        size: 40, // <-- SỬA LỖI CĂN CHỈNH
+        size: 40, 
     },
     {
         accessorKey: "HODEM_VA_TEN",
@@ -91,7 +91,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             </div>
         ),
-        minSize: 250, // <-- SỬA LỖI CĂN CHỈNH
+        minSize: 250, 
     },
     {
         accessorKey: "MA_DINHDANH",
@@ -101,7 +101,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 {row.original.MA_DINHDANH}
             </div>
         ),
-        size: 140, // <-- SỬA LỖI CĂN CHỈNH
+        size: 140, 
     },
     {
         accessorKey: "NGAYSINH",
@@ -133,7 +133,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 return <span className="text-xs text-red-500">Ngày lỗi</span>;
             }
         },
-        size: 120, // <-- SỬA LỖI CĂN CHỈNH
+        size: 120, 
     },
     {
         id: "vai_tro",
@@ -152,7 +152,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </Badge>
             );
         },
-        minSize: 150, // <-- SỬA LỖI CĂN CHỈNH
+        minSize: 150, 
     },
     {
         id: "unit_major",
@@ -179,7 +179,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             );
         },
-        minSize: 200, // <-- SỬA LỖI CĂN CHỈNH
+        minSize: 200, 
     },
     { // Cột ẩn để lọc chuyên ngành
         id: "chuyen_nganh_id",
@@ -206,7 +206,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             );
         },
-        size: 120, // <-- SỬA LỖI CĂN CHỈNH
+        size: 120, 
     },
     {
         accessorKey: "NGAYTAO",
@@ -229,13 +229,13 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </TooltipProvider>
             );
         },
-        size: 130, // <-- SỬA LỖI CĂN CHỈNH
+        size: 130,
     },
     {
         id: "actions",
         cell: ({ row }) => (
             <DataTableRowActions row={row} onEdit={onEdit} onSuccess={onSuccess} />
         ),
-        size: 60, // <-- SỬA LỖI CĂN CHỈNH
+        size: 60,
     },
 ];

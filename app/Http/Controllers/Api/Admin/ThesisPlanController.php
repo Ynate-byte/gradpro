@@ -11,6 +11,7 @@ use App\Models\ThanhvienNhom;
 use App\Models\SinhvienThamgia;
 use App\Models\Nguoidung;
 use App\Models\Sinhvien;
+use App\Models\Nhom;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -18,6 +19,15 @@ use Illuminate\Support\Facades\Log;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Maatwebsite\Excel\Facades\Excel; // Import Excel
+use stdClass; // Import stdClass
+use App\Imports\PlanParticipantsImport; // Import Class Wizard
+use Illuminate\Support\Facades\Hash; // Import Hash
+use Illuminate\Support\Facades\Validator; // Import Validator
+use Illuminate\Validation\ValidationException; // Import ValidationException
+use Illuminate\Support\Str; // Import Str
+use Carbon\Carbon; // Import Carbon
+use Illuminate\Support\Facades\Storage;
 
 class ThesisPlanController extends Controller
 {
@@ -199,9 +209,9 @@ class ThesisPlanController extends Controller
             }
             elseif ($this->isTruongKhoa()) {
                  if(in_array($plan->TRANGTHAI, ['Chờ phê duyệt', 'Chờ duyệt chỉnh sửa'])){
-                        $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
-                        $plan->ID_NGUOIPHEDUYET = Auth::id();
-                        $plan->BINHLUAN_PHEDUYET = null;
+                     $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
+                     $plan->ID_NGUOIPHEDUYET = Auth::id();
+                     $plan->BINHLUAN_PHEDUYET = null;
                  }
             }
             
@@ -251,7 +261,7 @@ class ThesisPlanController extends Controller
     public function submitForApproval(Request $request, KehoachKhoaluan $plan)
     {
          if (!(($this->isGiaoVu() || $this->isAdmin()) && $plan->ID_NGUOITAO === Auth::id())) {
-              return response()->json(['message' => 'Bạn không có quyền gửi duyệt kế hoạch này.'], 403);
+             return response()->json(['message' => 'Bạn không có quyền gửi duyệt kế hoạch này.'], 403);
          }
 
          if ($plan->TRANGTHAI !== 'Bản nháp') {
@@ -581,7 +591,7 @@ class ThesisPlanController extends Controller
 
     /**
      * Xóa sinh viên khỏi kế hoạch.
-     * Kiểm tra xem sinh viên có đang ở trong nhóm nào thuộc kế hoạch này không.
+     * [HOÀN TÁC] Logic an toàn: Chỉ xóa nếu không ở trong nhóm.
      */
     public function removeParticipant(KehoachKhoaluan $plan, SinhvienThamgia $sinhvienThamgia)
     {
@@ -616,7 +626,7 @@ class ThesisPlanController extends Controller
 
     /**
      * Xóa hàng loạt sinh viên khỏi kế hoạch.
-     * Kiểm tra xem các sinh viên này có đang ở trong nhóm nào không.
+     * [HOÀN TÁC] Logic an toàn: Chỉ xóa nếu không ở trong nhóm.
      */
     public function bulkRemoveParticipants(Request $request, KehoachKhoaluan $plan)
     {
@@ -636,8 +646,8 @@ class ThesisPlanController extends Controller
 
         // Lấy thông tin sinh viên để kiểm tra trạng thái nhóm
         $participantsInfo = SinhvienThamgia::with('sinhvien.nguoidung')
-                              ->whereIn('ID_THAMGIA', $participantIds)
-                              ->get();
+                            ->whereIn('ID_THAMGIA', $participantIds)
+                            ->get();
 
         $studentNamesInGroups = [];
         foreach ($participantsInfo as $participant) {
@@ -675,15 +685,9 @@ class ThesisPlanController extends Controller
 
     /**
      * Tìm kiếm sinh viên (chưa tham gia kế hoạch này) để thêm vào.
-     * * ----- TỐI ƯU HÓA (CHO 1000+ NGƯỜI DÙNG) -----
-     * Sửa đổi:
-     * 1. Yêu cầu bắt buộc phải có `search` (min: 2 ký tự)
-     * 2. Bỏ logic `when(!$searchTerm)` để không bao giờ trả về tất cả.
-     * 3. Luôn `limit(20)` kết quả trả về.
      */
     public function searchStudentsForPlan(Request $request, KehoachKhoaluan $plan)
     {
-         // 1. Nâng cấp Validation: Yêu cầu 'search' tối thiểu 2 ký tự (hoặc null)
          $request->validate([
             'search' => 'nullable|string|min:2|max:100'
          ], [
@@ -692,34 +696,28 @@ class ThesisPlanController extends Controller
          
          $searchTerm = $request->search;
 
-         // 2. TỐI ƯU: Nếu search rỗng hoặc quá ngắn, trả về mảng rỗng ngay lập tức
          if (!$searchTerm) {
              return response()->json([]);
          }
          
-         // 3. Lấy ID SV đã tham gia (logic này vẫn đúng)
          $existingStudentIds = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)->pluck('ID_SINHVIEN');
- 
+
          $query = Sinhvien::with(['nguoidung' => function ($q) {
              $q->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'MA_DINHDANH', 'EMAIL');
          }, 'chuyennganh' => function ($q) {
              $q->select('ID_CHUYENNGANH', 'TEN_CHUYENNGANH');
          }])
-             // Lọc ra các sinh viên chưa tham gia
              ->whereNotIn('ID_SINHVIEN', $existingStudentIds)
-             // 4. Bắt buộc tìm kiếm (không còn when/!when)
              ->whereHas('nguoidung', function ($q) use ($searchTerm) {
-                  $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
-                      ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
-                      ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
+                 $q->where('HODEM_VA_TEN', 'like', "%{$searchTerm}%")
+                     ->orWhere('MA_DINHDANH', 'like', "%{$searchTerm}%")
+                     ->orWhere('EMAIL', 'like', "%{$searchTerm}%");
              })
              ->select('SINHVIEN.ID_SINHVIEN', 'SINHVIEN.ID_NGUOIDUNG', 'SINHVIEN.ID_CHUYENNGANH');
- 
-         // 5. Luôn giới hạn kết quả
+
          $query->limit(20); 
          $students = $query->get();
- 
-         // 6. Định dạng (logic này vẫn đúng)
+
          $results = $students->map(function ($sv) {
              if (!$sv->nguoidung) {
                  Log::warning("Sinhvien ID {$sv->ID_SINHVIEN} is missing Nguoidung relationship in searchStudentsForPlan.");
@@ -734,7 +732,280 @@ class ThesisPlanController extends Controller
                  'TEN_CHUYENNGANH' => $sv->chuyennganh?->TEN_CHUYENNGANH,
             ];
          })->filter();
- 
+
          return response()->json($results);
     }
+
+    /**
+ * Giai đoạn 1: Phân tích file import và trả về header + 5 dòng preview.
+ * Đọc file dựa trên cấu trúc file mẫu (bỏ 9 dòng đầu).
+ */
+public function importAnalyze(Request $request, KehoachKhoaluan $plan)
+{
+    $request->validate([
+        'file' => 'required|mimes:xlsx,xls,csv|max:10240' // 10MB
+    ]);
+
+    try {
+        // Sử dụng toArray để lấy dữ liệu thô
+        $rows = Excel::toArray(new stdClass, $request->file('file'))[0]; // Lấy sheet đầu tiên
+        
+        // Giả định dựa trên file mẫu "KHÓA LUẬN CỬ NHÂN.xls":
+        $headerRowIndex = 9; // Dòng 10 trong file (index 9)
+        $dataRowStartIndex = 10; // Dòng 11 trong file (index 10)
+
+        if (count($rows) < $dataRowStartIndex) {
+            return response()->json(['message' => 'File không có dữ liệu hoặc không đúng định dạng. Dữ liệu cần bắt đầu từ dòng 11.'], 422);
+        }
+
+        // Lấy headers
+        $rawHeaders = $rows[$headerRowIndex] ?? [];
+        $detectedHeaders = [];
+
+        if (empty($rawHeaders) || !is_iterable($rawHeaders)) {
+            return response()->json(['message' => "Dòng header (dòng " . ($headerRowIndex + 1) . ") bị trống hoặc không thể đọc."], 422);
+        }
+
+        foreach ($rawHeaders as $index => $header) {
+            // [ĐÃ SỬA] Quay lại logic (Cột {$index})
+            $headerName = $header ? trim($header) : "(Cột {$index})";
+            
+            // Đổi tên các cột _unnamed_ (thường do Maatwebsite tự thêm nếu header là số)
+            if (preg_match('/_unnamed_(\d+)/', $headerName, $matches)) {
+                // [ĐÃ SỬA] Dùng $matches[1] (là index)
+                $headerName = "(Cột " . ($matches[1]) . ")";
+            }
+            
+            // Logic chống trùng lặp tên
+            $originalHeaderName = $headerName;
+            $count = 2;
+            while (in_array($headerName, $detectedHeaders)) {
+                $headerName = "{$originalHeaderName} ({$count})";
+                $count++;
+            }
+            $detectedHeaders[] = $headerName;
+        }
+
+        // Lấy 5 dòng preview
+        $previewData = array_slice($rows, $dataRowStartIndex, 5);
+
+        // Chuẩn hóa preview data để có số cột bằng header
+        $headerCount = count($detectedHeaders);
+        $normalizedPreviewData = [];
+
+        foreach ($previewData as $row) {
+            $normalizedRow = array_slice($row, 0, $headerCount);
+            // Pad mảng nếu hàng dữ liệu ngắn hơn header
+            if (count($normalizedRow) < $headerCount) {
+                $normalizedRow = array_pad($normalizedRow, $headerCount, null);
+            }
+            $normalizedPreviewData[] = $normalizedRow;
+        }
+
+        return response()->json([
+            'detectedHeaders' => $detectedHeaders,
+            'previewData' => $normalizedPreviewData,
+            'totalRows' => count($rows) - $dataRowStartIndex, // Tổng số dòng dữ liệu
+            'headerRowIndex' => $headerRowIndex, // Gửi về index header
+            'dataRowStartIndex' => $dataRowStartIndex,
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Import Analyze Error: ' . $e->getMessage());
+        return response()->json(['message' => 'Không thể đọc file. File có thể bị hỏng hoặc sai định dạng. Lỗi: ' . $e->getMessage()], 500);
+    }
+}
+
+    /**
+     * Giai đoạn 2 & 3: Nhận file, mapping, defaults -> Validate và trả về Preview
+     */
+    public function importPreview(Request $request, KehoachKhoaluan $plan)
+    {
+        $validator = Validator::make($request->all(), [
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:10240',
+            'mapping' => 'required|array',
+            'mapping.ma_dinh_danh' => 'required|string',
+            'mapping.ho_ten' => 'required|array|min:1',
+            'mapping.ho_ten.*' => 'required|string',
+            'mapping.ngay_sinh' => 'nullable|string',
+            'mapping.ten_lop' => 'nullable|string',
+            'mapping.nien_khoa' => 'required|array',
+            'mapping.nien_khoa.source' => 'required|string', // 'ten_lop' hoặc 'default'
+            'mapping.nien_khoa.value' => 'required|string', // Tên cột (nếu source=ten_lop) hoặc giá trị (nếu source=default)
+            'mapping.nien_khoa.prefix' => 'nullable|string', // vd: 'K'
+            'mapping.nien_khoa.length' => 'nullable|integer', // vd: 2
+            'defaults' => 'required|array',
+            'defaults.ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
+            'defaults.HEDAOTAO' => 'required|string',
+            'defaults.ID_VAITRO' => 'required|integer|exists:VAITRO,ID_VAITRO',
+            'headerRowIndex' => 'required|integer',
+            'dataRowStartIndex' => 'required|integer',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['message' => 'Cấu hình import không hợp lệ.', 'errors' => $validator->errors()], 422);
+        }
+
+        try {
+            $import = new PlanParticipantsImport(
+                $plan->ID_KEHOACH,
+                $request->input('mapping'),
+                $request->input('defaults'),
+                $request->input('headerRowIndex'),
+                $request->input('dataRowStartIndex')
+            );
+
+            Excel::import($import, $request->file('file'));
+
+            $dataToReturn = [
+                'validRows' => $import->validRows,
+                'invalidRows' => $import->invalidRows,
+                'ignoredRows' => $import->ignoredRows,
+            ];
+
+            return response()->json($dataToReturn, 200, [], JSON_INVALID_UTF8_SUBSTITUTE);
+
+        } catch (ValidationException $e) {
+             return response()->json(['message' => 'Lỗi Validation khi import.', 'errors' => $e->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('Import Preview Error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['message' => 'Lỗi máy chủ khi xem trước file: ' . $e->getMessage()], 500);
+        }
+    }
+    
+    /**
+     * Giai đoạn 4: Xử lý (Process) các 'validRows' đã được duyệt
+     */
+    /**
+ * Giai đoạn 4: Xử lý (Process) các 'validRows' đã được duyệt
+ */
+public function importProcess(Request $request, KehoachKhoaluan $plan)
+{
+    $validated = $request->validate([
+        'validRows' => 'required|array',
+        'validRows.*.action' => 'required|in:link,create_and_link',
+        'validRows.*.data' => 'required|array', // BẮT BUỘC CÓ 'data'
+        'defaults' => 'required|array',
+        'defaults.ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
+        'defaults.HEDAOTAO' => 'required|string',
+        'defaults.ID_VAITRO' => 'required|integer|exists:VAITRO,ID_VAITRO',
+    ]);
+
+    $validRows = $validated['validRows'];
+    $defaults = $validated['defaults'];
+    $countLinked = 0;
+    $countCreated = 0;
+
+    DB::beginTransaction();
+    try {
+        foreach ($validRows as $index => $row) {
+            // === KIỂM TRA CẤU TRÚC ROW ===
+            if (!isset($row['action']) || !isset($row['data']) || !is_array($row['data'])) {
+                Log::warning("Invalid row structure at index {$index}", ['row' => $row]);
+                continue;
+            }
+
+            $action = $row['action'];
+            $data = $row['data'];
+
+            // === XỬ LÝ LINK (sinh viên đã tồn tại) ===
+            if ($action === 'link') {
+                if (!isset($data['ID_SINHVIEN'])) {
+                    Log::warning("Missing ID_SINHVIEN in link row", ['data' => $data]);
+                    continue;
+                }
+
+                SinhvienThamgia::create([
+                    'ID_KEHOACH' => $plan->ID_KEHOACH,
+                    'ID_SINHVIEN' => $data['ID_SINHVIEN'],
+                    'DU_DIEUKIEN' => true,
+                    'NGAY_DANGKY' => now(),
+                ]);
+                $countLinked++;
+                continue;
+            }
+
+            // === XỬ LÝ TẠO MỚI + LINK ===
+            if ($action === 'create_and_link') {
+                // Kiểm tra bắt buộc
+                if (empty($data['MA_DINHDANH']) || empty($data['HODEM_VA_TEN'])) {
+                    Log::warning("Missing required fields in create_and_link", ['data' => $data]);
+                    continue;
+                }
+
+                // Tạo email nếu chưa có
+                $email = $data['EMAIL'] ?? null;
+                if (!$email) {
+                    $email = $this->generateEmail($data['HODEM_VA_TEN'], $data['MA_DINHDANH']);
+                    if (Nguoidung::where('EMAIL', $email)->exists()) {
+                        $email = $this->generateEmail($data['HODEM_VA_TEN'], $data['MA_DINHDANH'], true);
+                    }
+                }
+
+                // 1. Tạo Nguoidung
+                $newUser = Nguoidung::create([
+                    'MA_DINHDANH' => $data['MA_DINHDANH'],
+                    'HODEM_VA_TEN' => $data['HODEM_VA_TEN'],
+                    'EMAIL' => $email,
+                    'NGAYSINH' => $data['NGAYSINH'] ?? null,
+                    'MATKHAU_BAM' => Hash::make('123456'),
+                    'ID_VAITRO' => $defaults['ID_VAITRO'],
+                    'LA_DANGNHAP_LANDAU' => true,
+                    'TRANGTHAI_KICHHOAT' => true,
+                ]);
+
+                // 2. Tạo Sinhvien
+                $newSinhvien = $newUser->sinhvien()->create([
+                    'ID_CHUYENNGANH' => $defaults['ID_CHUYENNGANH'],
+                    'NIENKHOA' => $data['NIENKHOA'] ?? null,
+                    'HEDAOTAO' => $defaults['HEDAOTAO'],
+                    'TEN_LOP' => $data['TEN_LOP'] ?? null,
+                ]);
+
+                // 3. Liên kết vào kế hoạch
+                SinhvienThamgia::create([
+                    'ID_KEHOACH' => $plan->ID_KEHOACH,
+                    'ID_SINHVIEN' => $newSinhvien->ID_SINHVIEN,
+                    'DU_DIEUKIEN' => true,
+                    'NGAY_DANGKY' => now(),
+                ]);
+
+                $countCreated++;
+                continue;
+            }
+
+            // Action không hợp lệ
+            Log::warning("Unknown action in row", ['action' => $action]);
+        }
+
+        DB::commit();
+
+        return response()->json([
+            'message' => "Import hoàn tất!",
+            'description' => "Đã liên kết {$countLinked} sinh viên và tạo mới {$countCreated} sinh viên."
+        ]);
+    } catch (\Exception $e) {
+        DB::rollBack();
+        Log::error('Import Process Error: ' . $e->getMessage(), [
+            'trace' => $e->getTraceAsString(),
+            'request' => $request->all()
+        ]);
+        return response()->json([
+            'message' => 'Lỗi nghiêm trọng khi lưu dữ liệu. Toàn bộ thao tác đã được hoàn tác.',
+            'error' => $e->getMessage()
+        ], 500);
+    }
+}
+
+// === THÊM HÀM generateEmail (nếu chưa có trong controller) ===
+private function generateEmail(string $hoTen, string $mssv, bool $addRandom = false): string
+{
+    $parts = explode(' ', $hoTen);
+    $lastName = Str::slug(array_pop($parts));
+    $initials = '';
+    foreach ($parts as $part) {
+        $initials .= mb_substr(Str::slug($part), 0, 1);
+    }
+    $random = $addRandom ? rand(10, 99) : '';
+    return strtolower("{$lastName}{$initials}.{$mssv}{$random}@gradpro.test");
+}
 }

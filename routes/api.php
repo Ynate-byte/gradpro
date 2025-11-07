@@ -64,7 +64,14 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::post('/requests/{yeucau}/cancel', [NhomController::class, 'cancelJoinRequest']);
     Route::get('/student/my-active-plans', [NhomController::class, 'getActivePlansForStudent']);
-    // ----- [THAY ĐỔI] Route getGroupById đã được di chuyển xuống dưới -----
+    // ----- [THAY ĐỔI] Bổ sung comment và di chuyển route getGroupById -----
+    // Route kiểm tra trưởng nhóm
+    Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
+    Route::get('/group-status', [DetaiController::class, 'groupStatus']);
+    
+    // Route lấy chi tiết nhóm
+    Route::get('/groups/{id}', [NhomController::class, 'getGroupById']);
+    // ----- [KẾT THÚC THAY ĐỔI] -----
 
     // ---------------- LỜI MỜI & THÔNG BÁO ----------------
     Route::get('/invitations', [InvitationController::class, 'getPendingInvitations']);
@@ -140,6 +147,12 @@ Route::middleware('auth:sanctum')->group(function () {
         });
         Route::get('thesis-plans/{plan}/search-students', [ThesisPlanController::class, 'searchStudentsForPlan']);
 
+        // ----- [CẬP NHẬT] API IMPORT SINH VIÊN VÀO KẾ HOẠCH (WIZARD) -----
+        Route::post('thesis-plans/{plan}/import-analyze', [ThesisPlanController::class, 'importAnalyze']);
+        Route::post('thesis-plans/{plan}/import-preview', [ThesisPlanController::class, 'importPreview']); // Giai đoạn 2 & 3
+        Route::post('thesis-plans/{plan}/import-process', [ThesisPlanController::class, 'importProcess']); // Giai đoạn 4
+        
+
         // ----- NHÓM (Admin) -----
         Route::prefix('groups')->group(function () {
             Route::get('/', [GroupAdminController::class, 'getGroups']);
@@ -147,7 +160,15 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/inactive-students', [GroupAdminController::class, 'getInactiveStudents']);
             Route::get('/search-ungrouped-students', [GroupAdminController::class, 'searchUngroupedStudents']);
             Route::post('/create-with-members', [GroupAdminController::class, 'createWithMembers']);
-            Route::post('/remove-students', [GroupAdminController::class, 'removeStudents']);
+            
+            // ----- [SỬA LỖI 405] -----
+            // 1. Thay thế route 'remove-students' (vô hiệu hóa)
+            // 2. Bằng route 'remove-inactive-students' (xóa khỏi kế hoạch/nhóm)
+            Route::post('/remove-inactive-students', [GroupAdminController::class, 'removeInactiveStudentsFromPlan']);
+            // Dòng cũ (gây lỗi 405 vì tên route sai):
+            // Route::post('/remove-students', [GroupAdminController::class, 'removeStudents']);
+            // ----- [KẾT THÚC SỬA LỖI] -----
+
             Route::post('/auto-group', [GroupAdminController::class, 'autoGroupStudents']);
             Route::get('/export', [GroupAdminController::class, 'exportGroups']);
             Route::get('/ungrouped-students', [GroupAdminController::class, 'getUngroupedStudents']);

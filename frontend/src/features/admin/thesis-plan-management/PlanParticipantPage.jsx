@@ -7,9 +7,12 @@ import { UserDetailSheet } from '@/features/admin/user-management/components/Use
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getParticipantColumns } from './components/participants/participantColumns';
 import { AddParticipantDialog } from './components/participants/AddParticipantDialog';
+// ----- [THÊM MỚI] -----
+import { ImportWizardDialog } from './components/participants/ImportWizardDialog'; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, UserPlus, Loader2, Trash2 } from 'lucide-react'; 
+import { ChevronLeft, UserPlus, Loader2, Trash2, Upload } from 'lucide-react'; // <-- Thêm Upload
+// ----- [KẾT THÚC THÊM MỚI] -----
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     Breadcrumb,
@@ -57,6 +60,7 @@ export default function PlanParticipantPage() {
     const [sorting, setSorting] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+    const [isImportWizardOpen, setIsImportWizardOpen] = useState(false); // <-- [THÊM MỚI]
     const [columnFilters, setColumnFilters] = useState([]);
     const [rowSelection, setRowSelection] = useState({}); 
     const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState(false); 
@@ -215,6 +219,11 @@ export default function PlanParticipantPage() {
                             Xóa ({selectedRowCount})
                         </Button>
                     )}
+                    {/* ----- [THÊM MỚI] Nút Import ----- */}
+                    <Button variant="outline" size="sm" onClick={() => setIsImportWizardOpen(true)}>
+                        <Upload className="mr-2 h-4 w-4" /> Import Sinh viên
+                    </Button>
+                    {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
                     <Button onClick={() => setIsAddDialogOpen(true)}>
                         <UserPlus className="mr-2 h-4 w-4" /> Thêm Sinh viên
                     </Button>
@@ -223,6 +232,7 @@ export default function PlanParticipantPage() {
 
             <Card>
                 <CardHeader>
+                    {/* ... (Phần CardHeader giữ nguyên) ... */}
                 </CardHeader>
                 <CardContent>
                     <DataTable
@@ -263,6 +273,15 @@ export default function PlanParticipantPage() {
                 onSuccess={fetchData}
                 plan={plan}
             />
+            
+            {/* ----- [THÊM MỚI] Render Dialog Wizard ----- */}
+            <ImportWizardDialog
+                isOpen={isImportWizardOpen}
+                setIsOpen={setIsImportWizardOpen}
+                onSuccess={fetchData}
+                plan={plan}
+            />
+            {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
 
             <UserDetailSheet
                 userId={viewingUserId}
