@@ -209,3 +209,12 @@ export const processPlanImport = (planId, validRows, defaults) => {
             throw error;
         });
 };
+
+export const getPlanSettings = (planId) => {
+    return axiosClient.get(`/admin/thesis-plans/${planId}/settings`).then(res => res.data);
+};
+
+// [THÊM MỚI] Cập nhật cài đặt chi tiết
+export const updatePlanSettings = (planId, settings) => {
+    return axiosClient.put(`/admin/thesis-plans/${planId}/settings`, settings).then(res => res.data);
+};

@@ -7,6 +7,7 @@ use App\Models\Chuyennganh;
 use App\Models\Hoidong;
 use App\Models\KehoachKhoaluan;
 use App\Models\Nhom;
+use App\Models\TyTrongDiem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -15,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 class HoiDongController extends Controller
 {
     /**
-     * Lấy danh sách hội đồng (có tìm kiếm)
+     * Lấy danh sách hội đồng (có tìm kiếm, phân trang, lọc)
      */
     public function index(Request $request)
     {
@@ -39,34 +40,30 @@ class HoiDongController extends Controller
             $query->where('ID_CHUYENNGANH', $request->input('chuyennganh'));
         }
 
-        // [SỬA LỖI]
         // 1. Kiểm tra xem có yêu cầu 'all' (cho trang Phân Bổ) không
         if ($request->boolean('all')) {
-            $hoidongs = $query->get(); // Lấy TẤT CẢ
-            // Transform cho .get()
+            $hoidongs = $query->get();
             $hoidongs->transform(function ($hd) {
                 $hd->so_thanh_vien = $hd->giangviens->count();
                 $hd->so_nhom = $hd->nhoms->count();
                 return $hd;
             });
-            return response()->json($hoidongs); // Trả về một MẢNG
+            return response()->json($hoidongs);
         }
 
         // 2. Mặc định là phân trang (cho trang List)
         $hoidongs = $query->paginate($request->per_page ?? 10);
-
-        // Transform cho .paginate()
         $hoidongs->getCollection()->transform(function ($hd) {
             $hd->so_thanh_vien = $hd->giangviens->count();
             $hd->so_nhom = $hd->nhoms->count();
             return $hd;
         });
 
-        return response()->json($hoidongs); // Trả về ĐỐI TƯỢNG PHÂN TRANG
+        return response()->json($hoidongs);
     }
 
     /**
-     * [MỚI] Lấy dữ liệu thống kê cho StatCards
+     * Lấy dữ liệu thống kê cho StatCards
      */
     public function getStatistics(Request $request)
     {
@@ -75,37 +72,26 @@ class HoiDongController extends Controller
         ]);
 
         $planId = $validated['kehoach'] ?? null;
-
-        // Bắt đầu query
         $query = Hoidong::query();
 
         if ($planId) {
             $query->where('ID_KEHOACH', $planId);
         } else {
-             // Nếu không có planId, chỉ lấy các kế hoạch đang hoạt động
             $query->whereHas('kehoach', function ($q) {
                 $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa']);
             });
         }
 
-        // 1. Tổng số hội đồng
         $totalHoiDong = (clone $query)->count();
-
-        // 2. Tổng số HĐ Phản Biện
         $totalPhanBien = (clone $query)->where('LOAI', 'phanbien')->count();
-
-        // 3. Tổng số HĐ Bảo Vệ
         $totalBaoVe = (clone $query)->where('LOAI', 'hoidong')->count();
 
-        // 4. Tổng số nhóm đã phân bổ
         $hoidongIds = (clone $query)->pluck('ID_HOIDONG');
-
         $nhomDaPhanBo = DB::table('HOIDONG_NHOM')
             ->whereIn('ID_HOIDONG', $hoidongIds)
             ->distinct('ID_NHOM')
             ->count('ID_NHOM');
             
-        // 5. Tổng số thành viên (GV)
         $totalThanhVien = DB::table('HOIDONG_GIANGVIEN')
              ->whereIn('ID_HOIDONG', $hoidongIds)
              ->distinct('ID_GIANGVIEN')
@@ -139,6 +125,8 @@ class HoiDongController extends Controller
             'soLuong' => 'nullable|integer|min:1',
         ]);
 
+        $this->validateCouncilTypeAllowed($validated['ID_KEHOACH'], $validated['LOAI']);
+
         DB::beginTransaction();
         try {
             $isManual = !$request->has('soLuong') || (int)$request->input('soLuong', 1) === 1;
@@ -169,9 +157,7 @@ class HoiDongController extends Controller
             DB::commit();
 
             return response()->json([
-                'message' => $isManual
-                    ? 'Tạo hội đồng thành công!'
-                    : "Tạo {$validated['soLuong']} hội đồng thành công!",
+                'message' => $isManual ? 'Tạo hội đồng thành công!' : "Tạo {$validated['soLuong']} hội đồng thành công!",
             ], 201);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -180,116 +166,6 @@ class HoiDongController extends Controller
             }
             return response()->json(['error' => $e->getMessage()], 500);
         }
-    }
-
-    /**
-     * Helper validation logic cho giảng viên trong hội đồng
-     */
-    private function validateHoiDongGiangviens(string $loai, array $giangviens): void
-    {
-        $count = count($giangviens);
-
-        if ($loai === 'phanbien') {
-            if ($count > 1) {
-                throw ValidationException::withMessages([
-                    'giangviens' => 'Hội đồng phản biện chỉ được có tối đa 1 giảng viên.'
-                ]);
-            }
-        }
-
-        if ($loai === 'hoidong') {
-            if ($count > 3) {
-                throw ValidationException::withMessages([
-                    'giangviens' => 'Hội đồng bảo vệ chỉ được có tối đa 3 giảng viên.'
-                ]);
-            }
-
-            $roles = [];
-            foreach ($giangviens as $gv) {
-                $role = $gv['vaitro'] ?? 'thanhvien';
-
-                if ($role === 'phanbien') {
-                    throw ValidationException::withMessages([
-                        'giangviens' => "Không thể gán vai trò 'phản biện' cho hội đồng bảo vệ."
-                    ]);
-                }
-
-                if (in_array($role, ['chutich', 'thuky']) && in_array($role, $roles)) {
-                    $roleName = $role === 'chutich' ? 'Chủ tịch' : 'Thư ký';
-                    throw ValidationException::withMessages([
-                        'giangviens' => "Vai trò '{$roleName}' đã có người đảm nhiệm. Mỗi hội đồng chỉ có 1 {$roleName}."
-                    ]);
-                }
-
-                if (in_array($role, ['chutich', 'thuky'])) {
-                    $roles[] = $role;
-                }
-            }
-        }
-    }
-
-    /**
-     * Hàm helper tạo 1 hội đồng
-     */
-    private function createSingleHoiDong(array $validated): Hoidong
-    {
-        if (empty($validated['TEN_HOIDONG'])) {
-            $baseName = $validated['LOAI'] === 'phanbien' ? 'HĐ Phản Biện' : 'HĐ Bảo Vệ';
-            $count = Hoidong::where('ID_KEHOACH', $validated['ID_KEHOACH'])->count() + 1;
-            $validated['TEN_HOIDONG'] = "{$baseName} {$count}";
-        }
-
-        $exists = Hoidong::where('TEN_HOIDONG', $validated['TEN_HOIDONG'])
-            ->where('ID_KEHOACH', $validated['ID_KEHOACH'])
-            ->exists();
-
-        if ($exists) {
-            throw ValidationException::withMessages([
-                'TEN_HOIDONG' => 'Tên hội đồng này đã tồn tại trong kế hoạch này.'
-            ]);
-        }
-
-        $giangviens = $validated['giangviens'] ?? [];
-        $hoidongData = collect($validated)->except(['giangviens', 'soLuong'])->all();
-
-        $hoidong = Hoidong::create($hoidongData);
-
-        if (!empty($giangviens)) {
-            $syncData = [];
-            foreach ($giangviens as $gv) {
-                $idGV = $gv['id'] ?? null;
-                if ($idGV) {
-                    $vaitro = $validated['LOAI'] === 'phanbien'
-                        ? 'phanbien'
-                        : ($gv['vaitro'] ?? 'thanhvien');
-                    $syncData[$idGV] = ['VAITRO' => $vaitro];
-                }
-            }
-            $hoidong->giangviens()->sync($syncData);
-        }
-
-        return $hoidong;
-    }
-
-    /**
-     * Lấy chi tiết 1 hội đồng
-     */
-    public function show($id)
-    {
-        $hoidong = Hoidong::with([
-            'giangviens.nguoidung',
-            'giangviens.khoabomon:ID_KHOA_BOMON,TEN_KHOA_BOMON',
-            'kehoach',
-            'chuyennganh',
-            'nhoms.phancongDetaiNhom.detai',
-            'nhoms.phancongDetaiNhom.gvhd.nguoidung'
-        ])->find($id);
-
-        if (!$hoidong) {
-            return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
-        }
-
-        return response()->json($hoidong);
     }
 
     /**
@@ -314,6 +190,12 @@ class HoiDongController extends Controller
             'giangviens.*.id' => 'required_with:giangviens|integer|exists:GIANGVIEN,ID_GIANGVIEN',
             'giangviens.*.vaitro' => 'nullable|string|in:chutich,thuky,thanhvien,phanbien',
         ]);
+
+        $newPlanId = $validated['ID_KEHOACH'] ?? $hoidong->ID_KEHOACH;
+        $newType = $validated['LOAI'] ?? $hoidong->LOAI;
+        if ($newPlanId != $hoidong->ID_KEHOACH || $newType != $hoidong->LOAI) {
+             $this->validateCouncilTypeAllowed($newPlanId, $newType);
+        }
 
         DB::beginTransaction();
         try {
@@ -352,9 +234,7 @@ class HoiDongController extends Controller
                 foreach ($validated['giangviens'] as $gv) {
                     $idGV = $gv['id'] ?? null;
                     if ($idGV) {
-                        $vaitro = $loai === 'phanbien'
-                            ? 'phanbien'
-                            : ($gv['vaitro'] ?? 'thanhvien');
+                        $vaitro = $loai === 'phanbien' ? 'phanbien' : ($gv['vaitro'] ?? 'thanhvien');
                         $syncData[$idGV] = ['VAITRO' => $vaitro];
                     }
                 }
@@ -362,11 +242,9 @@ class HoiDongController extends Controller
             }
 
             DB::commit();
-            $hoidong->load(['giangviens.nguoidung', 'kehoach', 'chuyennganh']);
-
             return response()->json([
                 'message' => 'Cập nhật hội đồng thành công!',
-                'hoidong' => $hoidong,
+                'hoidong' => $hoidong->load(['giangviens.nguoidung', 'kehoach', 'chuyennganh']),
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
@@ -378,25 +256,16 @@ class HoiDongController extends Controller
     }
 
     /**
-     * [MỚI] Cập nhật nhanh phòng (Inline Edit)
+     * Cập nhật nhanh phòng (Inline Edit)
      */
     public function updatePhong(Request $request, $id)
     {
         $hoidong = Hoidong::find($id);
-        if (!$hoidong) {
-            return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
-        }
-
-        $validated = $request->validate([
-            'PHONG' => 'nullable|string|max:50',
-        ]);
-
+        if (!$hoidong) return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
+        $validated = $request->validate(['PHONG' => 'nullable|string|max:50']);
         try {
             $hoidong->update(['PHONG' => $validated['PHONG'] ?? null]);
-            return response()->json([
-                'message' => 'Cập nhật phòng thành công!',
-                'PHONG' => $hoidong->PHONG
-            ]);
+            return response()->json(['message' => 'Cập nhật phòng thành công!', 'PHONG' => $hoidong->PHONG]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Cập nhật thất bại: ' . $e->getMessage()], 500);
         }
@@ -408,23 +277,58 @@ class HoiDongController extends Controller
     public function destroy($id)
     {
         $hoidong = Hoidong::find($id);
-        if (!$hoidong) {
-            return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
-        }
-
+        if (!$hoidong) return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
         DB::beginTransaction();
         try {
             $hoidong->giangviens()->detach();
             $hoidong->nhoms()->detach();
             $hoidong->delete();
-
             DB::commit();
             return response()->json(['message' => 'Đã xóa hội đồng']);
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Lỗi xóa hội đồng: " . $e->getMessage());
-            return response()->json(['error' => 'Không thể xóa hội đồng, đã có lỗi xảy ra.'], 500);
+            return response()->json(['error' => 'Lỗi xóa hội đồng'], 500);
         }
+    }
+
+    /**
+     * Lấy các tùy chọn (Kế hoạch) - Trả thêm cờ allow_phanbien
+     */
+    public function getKeHoachOptions()
+    {
+        $statuses = ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'];
+        $globalSetting = TyTrongDiem::getCurrent();
+        $defaultPhanBien = $globalSetting ? (float)$globalSetting->PHANBIEN : 0.3;
+
+        $plans = KehoachKhoaluan::select('ID_KEHOACH', 'TEN_DOT', 'NAMHOC', 'HOCKY', 'TYTRONG_DIEM_PHANBIEN')
+            ->whereIn('TRANGTHAI', $statuses)
+            ->orderBy('NGAYTAO', 'desc')
+            ->get();
+
+        $plans->transform(function ($plan) use ($defaultPhanBien) {
+            $tyTrongPB = $plan->TYTRONG_DIEM_PHANBIEN ?? $defaultPhanBien;
+            $plan->allow_phanbien = $tyTrongPB > 0;
+            return $plan;
+        });
+
+        return response()->json($plans);
+    }
+
+    /**
+     * Lấy các tùy chọn (Chuyên ngành)
+     */
+    public function getChuyenNganhOptions()
+    {
+        return response()->json(Chuyennganh::select('ID_CHUYENNGANH', 'TEN_CHUYENNGANH')->where('TRANGTHAI_KICHHOAT', true)->get());
+    }
+
+    /**
+     * Lấy chi tiết 1 hội đồng
+     */
+    public function show($id)
+    {
+        $hoidong = Hoidong::with(['giangviens.nguoidung', 'giangviens.khoabomon', 'kehoach', 'chuyennganh', 'nhoms.phancongDetaiNhom.detai', 'nhoms.phancongDetaiNhom.gvhd.nguoidung'])->find($id);
+        return $hoidong ? response()->json($hoidong) : response()->json(['error' => 'Không tìm thấy'], 404);
     }
 
     /**
@@ -433,53 +337,20 @@ class HoiDongController extends Controller
     public function xoaPhanBoNhom($idHoiDong, $idNhom)
     {
         $hoidong = Hoidong::find($idHoiDong);
-        if (!$hoidong) {
-            return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
-        }
-
+        if (!$hoidong) return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
         $nhom = Nhom::find($idNhom);
-        if (!$nhom) {
-            return response()->json(['error' => 'Không tìm thấy nhóm'], 404);
-        }
+        if (!$nhom) return response()->json(['error' => 'Không tìm thấy nhóm'], 404);
 
         DB::beginTransaction();
         try {
             $hoidong->nhoms()->detach($idNhom);
             DB::commit();
-
             return response()->json(['message' => 'Đã xóa nhóm khỏi hội đồng']);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error("Lỗi xóa phân bổ nhóm: " . $e->getMessage());
             return response()->json(['error' => 'Không thể xóa nhóm khỏi hội đồng'], 500);
         }
-    }
-
-    /**
-     * Lấy các tùy chọn (Kế hoạch)
-     */
-    public function getKeHoachOptions()
-    {
-        $statuses = ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'];
-
-        return response()->json(
-            KehoachKhoaluan::select('ID_KEHOACH', 'TEN_DOT', 'NAMHOC', 'HOCKY')
-                ->whereIn('TRANGTHAI', $statuses)
-                ->orderBy('NGAYTAO', 'desc')
-                ->get()
-        );
-    }
-
-    /**
-     * Lấy các tùy chọn (Chuyên ngành)
-     */
-    public function getChuyenNganhOptions()
-    {
-        return response()->json(
-            Chuyennganh::select('ID_CHUYENNGANH', 'TEN_CHUYENNGANH')
-                ->where('TRANGTHAI_KICHHOAT', true)
-                ->get()
-        );
     }
 
     /**
@@ -500,7 +371,6 @@ class HoiDongController extends Controller
                 ->get()
                 ->map(function ($nhom) {
                     $hoidong = $nhom->hoidongs->first();
-
                     return [
                         'ID_NHOM' => $nhom->ID_NHOM,
                         'TEN_NHOM' => $nhom->TEN_NHOM,
@@ -513,14 +383,8 @@ class HoiDongController extends Controller
 
             return response()->json($nhoms);
         } catch (\Exception $e) {
-            Log::error("Lỗi tại getNhomTheoKeHoach: " . $e->getMessage(), [
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'error' => 'Không thể tải dữ liệu nhóm',
-                'message' => $e->getMessage()
-            ], 500);
+            Log::error("Lỗi tại getNhomTheoKeHoach: " . $e->getMessage());
+            return response()->json(['error' => 'Không thể tải dữ liệu nhóm', 'message' => $e->getMessage()], 500);
         }
     }
 
@@ -537,22 +401,15 @@ class HoiDongController extends Controller
         DB::beginTransaction();
         try {
             foreach ($items as $item) {
-                if (!isset($item['ID_NHOM'])) {
-                    continue;
-                }
-
+                if (!isset($item['ID_NHOM'])) continue;
                 $nhom = Nhom::find($item['ID_NHOM']);
-                if (!$nhom) {
-                    continue;
-                }
-
+                if (!$nhom) continue;
                 if (!empty($item['ID_HOIDONG'])) {
                     $nhom->hoidongs()->sync([$item['ID_HOIDONG']]);
                 } else {
                     $nhom->hoidongs()->detach();
                 }
             }
-
             DB::commit();
             return response()->json(['message' => 'Phân bổ hội đồng thành công!']);
         } catch (\Exception $e) {
@@ -569,12 +426,9 @@ class HoiDongController extends Controller
     {
         try {
             $giangvien = auth()->user()->giangvien;
-            if (!$giangvien) {
-                return response()->json(['error' => 'Không tìm thấy thông tin giảng viên cho tài khoản này.'], 404);
-            }
+            if (!$giangvien) return response()->json(['error' => 'Không tìm thấy thông tin giảng viên'], 404);
 
             $id_gv = $giangvien->ID_GIANGVIEN;
-
             $hoidongs = Hoidong::whereHas('giangviens', fn($q) => $q->where('GIANGVIEN.ID_GIANGVIEN', $id_gv))
                 ->with(['kehoach', 'chuyennganh', 'giangviens.nguoidung'])
                 ->get();
@@ -597,10 +451,70 @@ class HoiDongController extends Controller
 
             return response()->json($result);
         } catch (\Exception $e) {
-            return response()->json([
-                'error' => 'Không thể tải danh sách hội đồng cho giảng viên này',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => 'Lỗi tải danh sách hội đồng', 'message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Helper: Kiểm tra loại hội đồng có hợp lệ với kế hoạch không
+     */
+    private function validateCouncilTypeAllowed($planId, $type)
+    {
+        if ($type !== 'phanbien') return;
+        $plan = KehoachKhoaluan::find($planId);
+        if (!$plan) return;
+        $globalSetting = TyTrongDiem::getCurrent();
+        $defaultPhanBien = $globalSetting ? (float)$globalSetting->PHANBIEN : 0.3;
+        $tyTrongPB = $plan->TYTRONG_DIEM_PHANBIEN ?? $defaultPhanBien;
+
+        if ($tyTrongPB <= 0) {
+            throw ValidationException::withMessages(['LOAI' => 'Kế hoạch này không yêu cầu phản biện.']);
+        }
+    }
+
+    /**
+     * Helper: Validate giảng viên trong hội đồng
+     */
+    private function validateHoiDongGiangviens(string $loai, array $giangviens): void
+    {
+        $count = count($giangviens);
+        if ($loai === 'phanbien' && $count > 1) {
+            throw ValidationException::withMessages(['giangviens' => 'Hội đồng phản biện chỉ được có tối đa 1 giảng viên.']);
+        }
+        if ($loai === 'hoidong') {
+            if ($count > 3) throw ValidationException::withMessages(['giangviens' => 'Hội đồng bảo vệ chỉ được có tối đa 3 giảng viên.']);
+            $roles = [];
+            foreach ($giangviens as $gv) {
+                $role = $gv['vaitro'] ?? 'thanhvien';
+                if ($role === 'phanbien') throw ValidationException::withMessages(['giangviens' => "Không thể gán vai trò 'phản biện' cho hội đồng bảo vệ."]);
+                if (in_array($role, ['chutich', 'thuky']) && in_array($role, $roles)) {
+                    throw ValidationException::withMessages(['giangviens' => "Vai trò '{$role}' đã có người đảm nhiệm."]);
+                }
+                if (in_array($role, ['chutich', 'thuky'])) $roles[] = $role;
+            }
+        }
+    }
+
+    private function createSingleHoiDong(array $validated): Hoidong
+    {
+        if (empty($validated['TEN_HOIDONG'])) {
+            $baseName = $validated['LOAI'] === 'phanbien' ? 'HĐ Phản Biện' : 'HĐ Bảo Vệ';
+            $count = Hoidong::where('ID_KEHOACH', $validated['ID_KEHOACH'])->count() + 1;
+            $validated['TEN_HOIDONG'] = "{$baseName} {$count}";
+        }
+        if (Hoidong::where('TEN_HOIDONG', $validated['TEN_HOIDONG'])->where('ID_KEHOACH', $validated['ID_KEHOACH'])->exists()) {
+            throw ValidationException::withMessages(['TEN_HOIDONG' => 'Tên hội đồng đã tồn tại trong kế hoạch này.']);
+        }
+        $hoidong = Hoidong::create(collect($validated)->except(['giangviens', 'soLuong'])->all());
+        if (!empty($validated['giangviens'])) {
+            $syncData = [];
+            foreach ($validated['giangviens'] as $gv) {
+                if (isset($gv['id'])) {
+                    $syncData[$gv['id']] = ['VAITRO' => $validated['LOAI'] === 'phanbien' ? 'phanbien' : ($gv['vaitro'] ?? 'thanhvien')];
+                }
+            }
+            $hoidong->giangviens()->sync($syncData);
+        }
+        return $hoidong;
     }
 }

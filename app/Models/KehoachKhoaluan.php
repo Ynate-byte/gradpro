@@ -33,6 +33,7 @@ class KehoachKhoaluan extends Model
         'BINHLUAN_PHEDUYET',
         'TYTRONG_DIEM_QUATRINH',
         'TYTRONG_DIEM_HOIDONG',
+        'TYTRONG_DIEM_PHANBIEN',
         'ID_NGUOIPHEDUYET',
     ];
 

@@ -130,6 +130,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('thesis-plans/preview-new', [ThesisPlanController::class, 'previewNewPlan']);
         Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']); // <-- ĐÃ DI CHUYỂN
         Route::apiResource('thesis-plans', ThesisPlanController::class)->parameters(['thesis-plans' => 'plan']);
+        Route::get('thesis-plans/{plan}/settings', [ThesisPlanController::class, 'getPlanSettings']);
+        Route::put('thesis-plans/{plan}/settings', [ThesisPlanController::class, 'updatePlanSettings']);
         Route::post('thesis-plans/{plan}/submit-approval', [ThesisPlanController::class, 'submitForApproval']);
         Route::post('thesis-plans/{plan}/approve', [ThesisPlanController::class, 'approve']);
         Route::post('thesis-plans/{plan}/request-changes', [ThesisPlanController::class, 'requestChanges']);

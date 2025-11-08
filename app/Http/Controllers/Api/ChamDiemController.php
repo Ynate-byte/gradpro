@@ -98,7 +98,7 @@ class ChamDiemController extends Controller
     }
 
     /**
-     * Lấy tỷ trọng điểm hiện hành
+     * Lấy tỷ trọng điểm hiện hành (Global)
      */
     public function getTyTrong()
     {
@@ -110,7 +110,7 @@ class ChamDiemController extends Controller
     }
 
     /**
-     * Cập nhật tỷ trọng điểm (Chỉ Admin/Giáo vụ)
+     * Cập nhật tỷ trọng điểm Global (Chỉ Admin/Giáo vụ)
      */
     public function capNhatTyTrong(Request $request)
     {
@@ -141,7 +141,6 @@ class ChamDiemController extends Controller
      */
     private function saveDiem(Request $request, Nhom $nhom, string $loai)
     {
-        // [CẬP NHẬT] Thêm 'NHANXET' vào validation
         $validated = $request->validate([
             'DIEM' => 'required|numeric|min:0|max:10',
             'NHANXET' => 'nullable|string|max:1000'
@@ -164,7 +163,7 @@ class ChamDiemController extends Controller
                 ['ID_NHOM' => $idNhom, 'ID_GIANGVIEN' => $giangvienId],
                 [
                     'DIEM' => $validated['DIEM'],
-                    'NHANXET' => $validated['NHANXET'] ?? null // [CẬP NHẬT] Lưu nhận xét
+                    'NHANXET' => $validated['NHANXET'] ?? null
                 ]
             );
             
@@ -174,11 +173,15 @@ class ChamDiemController extends Controller
             return response()->json(['message' => "Lưu điểm {$loai} thành công!"]);
 
         } catch (\Throwable $e) {
-            DB::rollBack(); // [CẬP NHẬT] Đảm bảo rollback
+            DB::rollBack();
             Log::error("Lỗi lưu điểm {$loai}: " . $e->getMessage(), ['id_nhom' => $idNhom, 'id_gv' => $giangvienId]);
             return response()->json(['error' => 'Lỗi xử lý điểm'], 500);
         }
     }
+
+    /**
+     * Lấy danh sách nhiệm vụ chấm điểm của giảng viên
+     */
     public function getMyGradingTasks(Request $request)
     {
         $giangvien = $request->user()->giangvien;
@@ -188,7 +191,6 @@ class ChamDiemController extends Controller
         $giangvienId = $giangvien->ID_GIANGVIEN;
 
         // 1. Lấy nhóm Hướng dẫn
-        // (Tải quan hệ lồng: nhóm -> phancong -> detai)
         $nhomHuongDan = Nhom::whereHas('phancongDetaiNhom', function ($query) use ($giangvienId) {
             $query->where('ID_GVHD', $giangvienId);
         })
@@ -200,7 +202,7 @@ class ChamDiemController extends Controller
             $query->where('LOAI', 'phanbien')
                   ->whereHas('giangviens', fn($q) => $q->where('GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
-        ->with(['phancongDetaiNhom.detai']) // Tải đề tài của nhóm
+        ->with(['phancongDetaiNhom.detai'])
         ->get();
 
         // 3. Lấy nhóm Hội đồng
@@ -208,7 +210,7 @@ class ChamDiemController extends Controller
             $query->where('LOAI', 'hoidong')
                   ->whereHas('giangviens', fn($q) => $q->where('GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
-        ->with(['phancongDetaiNhom.detai']) // Tải đề tài của nhóm
+        ->with(['phancongDetaiNhom.detai'])
         ->get();
 
         return response()->json([
@@ -225,8 +227,7 @@ class ChamDiemController extends Controller
 
 
     /**
-     * (Admin) Lưu điểm tổng hợp
-     * Ghi chú: Quyền 'can:access-grading-admin' đã được kiểm tra ở route.
+     * (Admin) Lưu điểm tổng hợp (Nhập hộ)
      */
     public function saveCombined(Request $request, Nhom $nhom)
     {
@@ -247,7 +248,6 @@ class ChamDiemController extends Controller
                 ]);
                 
                 if ($validator->fails()) {
-                    // Ném lỗi để rollback transaction
                     throw new \Exception("Dữ liệu điểm không hợp lệ: " . $validator->errors()->first());
                 }
 
@@ -275,47 +275,45 @@ class ChamDiemController extends Controller
         }
     }
 
-
     /**
-     * Cập nhật điểm tổng kết cho nhóm
-     * [ĐÃ NÂNG CẤP] - Đồng bộ logic với frontend useMemo
+     * Cập nhật điểm tổng kết cho nhóm (Ưu tiên tỷ trọng của Kế hoạch)
      */
     private function capNhatTong(Nhom $nhom)
     {
         $idNhom = $nhom->ID_NHOM;
-        $tytrong = TyTrongDiem::getCurrent() 
-            ?? TyTrongDiem::firstOrCreate([], [
-                'HUONGDAN' => 0.4, 'PHANBIEN' => 0.3, 'HOIDONG' => 0.3
-            ]);
+        
+        // 1. Tải kế hoạch của nhóm để lấy tỷ trọng riêng (nếu có)
+        $nhom->load('kehoach');
+        $plan = $nhom->kehoach;
 
-        // 1. Tính điểm trung bình đơn giản cho cả 3 loại
+        // 2. Xác định tỷ trọng (Ưu tiên Plan -> Fallback sang Global Setting)
+        $globalSetting = TyTrongDiem::getCurrent() ?? (object)['HUONGDAN' => 0.4, 'PHANBIEN' => 0.3, 'HOIDONG' => 0.3];
+        
+        $wHD = (float)($plan->TYTRONG_DIEM_QUATRINH ?? $globalSetting->HUONGDAN);
+        $wPB = (float)($plan->TYTRONG_DIEM_PHANBIEN ?? $globalSetting->PHANBIEN);
+        $wHDONG = (float)($plan->TYTRONG_DIEM_HOIDONG ?? $globalSetting->HOIDONG);
+
+        // 3. Tính điểm trung bình thành phần
         $diemHD = DiemHuongDan::where('ID_NHOM', $idNhom)->avg('DIEM');
         $diemPB = DiemPhanBien::where('ID_NHOM', $idNhom)->avg('DIEM');
-        $diemHDONG = DiemHoiDong::where('ID_NHOM', $idNhom)->avg('DIEM'); // <-- Đổi sang logic TB cộng
+        $diemHDONG = DiemHoiDong::where('ID_NHOM', $idNhom)->avg('DIEM');
 
-        // 2. Kiểm tra nhóm này thuộc loại hình nào
+        // 4. Kiểm tra loại hình đánh giá thực tế của nhóm
         $hasHoiDong = $nhom->hoidongs()->where('LOAI', 'hoidong')->exists();
         $hasPhanBien = $nhom->hoidongs()->where('LOAI', 'phanbien')->exists();
-
-        // 3. Lấy tỷ trọng gốc
-        $wHD = (float)($tytrong->HUONGDAN ?? 0);
-        $wPB = (float)($tytrong->PHANBIEN ?? 0);
-        $wHDONG = (float)($tytrong->HOIDONG ?? 0);
 
         $tong = null;
         $final_wHD = 0;
         $final_wPB = 0;
         $final_wHDONG = 0;
 
-        // 4. Áp dụng logic phân bổ trọng số (giống hệt frontend)
-
+        // 5. Logic phân bổ trọng số
         // Kịch bản 1: Có Hội đồng (ưu tiên) -> Bỏ qua Phản biện
         if ($hasHoiDong && $diemHDONG !== null) {
             $final_wHD = $wHD;
             $final_wPB = 0;
             $final_wHDONG = $wPB + $wHDONG; // Cộng dồn trọng số PB vào HĐ
             
-            // Chỉ tính tổng nếu có điểm HD và HĐ
             if ($diemHD !== null) {
                  $tong = ($diemHD * $final_wHD) + ($diemHDONG * $final_wHDONG);
             }
@@ -326,28 +324,27 @@ class ChamDiemController extends Controller
             $final_wPB = $wPB + $wHDONG; // Cộng dồn trọng số HĐ vào PB
             $final_wHDONG = 0;
 
-            // Chỉ tính tổng nếu có điểm HD và PB
             if ($diemHD !== null) {
                 $tong = ($diemHD * $final_wHD) + ($diemPB * $final_wPB);
             }
         }
-        // Kịch bản 3: Chỉ có Hướng dẫn (chưa gán PB/HĐ)
+        // Kịch bản 3: Chỉ có Hướng dẫn
         else if ($diemHD !== null) {
-            $tong = $diemHD; // Chỉ có điểm HD
+            $tong = $diemHD;
         }
 
-        // 5. Chuẩn hóa và làm tròn
+        // 6. Chuẩn hóa và làm tròn
         $finalTong = null;
         if ($tong !== null) {
-             // Logic chuẩn hóa (phòng trường hợp tổng trọng số không phải là 1)
             $totalWeight = $final_wHD + $final_wPB + $final_wHDONG;
-            if ($totalWeight > 0 && $totalWeight < 1.1 && $totalWeight != 1.0) {
+            // Chuẩn hóa nếu tổng trọng số khác 1 (do cộng dồn)
+            if ($totalWeight > 0 && abs($totalWeight - 1.0) > 0.001) {
                 $tong = $tong / $totalWeight;
             }
             $finalTong = round($tong, 2);
         }
 
-        // 6. Lưu vào CSDL
+        // 7. Lưu vào CSDL
         DiemTongKet::updateOrCreate(
             ['ID_NHOM' => $idNhom],
             [

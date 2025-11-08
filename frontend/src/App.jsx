@@ -20,7 +20,6 @@ const StudentThesisTopicsPage = lazy(() => import('./features/student/thesis-top
 // --- Import các components Giảng viên ---
 const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
 const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/groups-management/index.jsx'));
-// [ĐÃ CẬP NHẬT] Đường dẫn import mới
 const GiangVienHoiDong = lazy(() => import('./features/lecturer/council/index.jsx'));
 const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCouncilPage.jsx'));
 const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx'));
@@ -38,14 +37,12 @@ const SubmissionManagementPage = lazy(() => import('./features/admin/submission-
 const HoidongPage = lazy(() => import('./features/admin/hoidong/index.jsx'));
 const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
 
-// ===== THAY ĐỔI 1: Import component Quản lý Quota của Admin =====
-// (Component này đang nằm trong thư mục 'lecturer' nhưng thực chất là UI của Admin)
 const AdminQuotaManager = lazy(() => import('./features/admin/thesis-topic-management/components/QuotaManager.jsx'));
-// ===== KẾT THÚC THAY ĐỔI 1 =====
-
-// Trang chấm điểm của Admin
 const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomChamDiem.jsx'));
 const ChamDiemChiTiet = lazy(() => import('./features/admin/chamdiem/ChamDiemChiTiet.jsx'));
+
+// [QUAN TRỌNG] Thêm dòng import còn thiếu này
+const GeneralSettingsPage = lazy(() => import('./features/admin/settings/GeneralSettingsPage.jsx'));
 
 
 // Component placeholder cho các trang chưa có nội dung
@@ -154,11 +151,8 @@ function App() {
               {!isSinhVien && <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />}
               <Route path="lecturer/groups-management" element={<LecturerGroupsManagementPage />} />
               <Route path="lecturer/quota-management" element={<LecturerQuotaManagementPage />} />
-              {/* [ĐÃ CẬP NHẬT] Routes cho Hội đồng (Giảng viên) */}
               <Route path="lecturer/council" element={<GiangVienHoiDong />} />
               <Route path="lecturer/council/:id" element={<GiangVienChinhSua />} />
-              
-              {/* [ĐÃ CẬP NHẬT] Routes cho Chấm điểm (Giảng viên) */}
               <Route path="lecturer/grading" element={<LecturerGradingPage />} />
             </>
           )}
@@ -166,7 +160,6 @@ function App() {
           {/* Routes dành cho Admin/Giáo vụ/Trưởng khoa */}
           {canChamDiem && (
             <>
-              {/* Route cho Admin nhập điểm hộ */}
               <Route path="admin/cham-diem" element={<ListNhomChamDiem />} />
               <Route path="admin/cham-diem/:idNhom" element={<ChamDiemChiTiet />} />  
             </>
@@ -179,7 +172,6 @@ function App() {
               <Route path="admin/groups" element={<GroupAdminPage />} />
               <Route path="admin/news" element={<NewsManagementPage />} />
               
-              {/* Routes Quản lý Kế hoạch Khóa luận */}
               <Route path="admin/thesis-plans" element={<ThesisPlanManagementPage />} />
               <Route path="admin/thesis-plans/create" element={<PlanFormPage />} />
               <Route path="admin/thesis-plans/:planId/edit" element={<PlanFormPage />} />
@@ -188,21 +180,19 @@ function App() {
                 element={<PlanParticipantPage />}
               />
 
-              {/* Routes Quản lý Kế hoạch Mẫu */}
               <Route path="admin/templates" element={<TemplateManagementPage />} />
               <Route path="admin/templates/create" element={<TemplateFormPage />} />
               <Route path="admin/templates/:templateId/edit" element={<TemplateFormPage />} />
               
-              {/* Routes Quản lý Đề tài Khóa luận */}
               <Route path="admin/thesis-topics" element={<AdminThesisTopicsPage />} />
               <Route path="admin/submissions" element={<SubmissionManagementPage />} />
 
-              {/* Routes Quản lý Hội đồng */}
               <Route path="admin/hoidong/*" element={<HoidongPage />} />
 
-              {/* ===== THAY ĐỔI 2: Thêm route Quản lý Quota cho Admin ===== */}
+              {/* Route này giờ đã có component để render */}
+              <Route path="admin/settings/general" element={<GeneralSettingsPage />} />
+
               <Route path="admin/quota-management" element={<AdminQuotaManager />} />
-              {/* ===== KẾT THÚC THAY ĐỔI 2 ===== */}
             </>
           )}
         </Route>

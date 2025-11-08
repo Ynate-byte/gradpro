@@ -15,7 +15,6 @@ createRoot(document.getElementById('root')).render(
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
           <App />
-          {/* 2. Đặt Toaster ở đây, ngay bên cạnh App */}
           <Toaster richColors position="bottom-right" />
         </QueryClientProvider>
       </AuthProvider>
