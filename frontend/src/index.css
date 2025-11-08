@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    /*
+     * Đảm bảo các thành phần HTML, body, và #root (React container) chiếm
+     * 100% chiều cao và chiều rộng, loại bỏ khoảng trắng dư thừa
+     */
+    html,
+    body,
+    #root {
+        height: 100%;
+        width: 100%;
+    }
+
+    /* Định nghĩa các biến màu và style cho Light Mode (White + Blue) */
+    :root {
+        /* Các biến màu chung */
+        --background: 0 0% 100%; /* White */
+        --foreground: 222.2 84% 4.9%; /* Dark Blue/Black */
+        --card: 0 0% 100%; /* White */
+        --card-foreground: 222.2 84% 4.9%; /* Dark Blue/Black */
+        --popover: 0 0% 100%;
+        --popover-foreground: 222.2 84% 4.9%;
+        --primary: 217.2 91.2% 59.8%; /* Blue */
+        --primary-foreground: 0 0% 98%; /* White */
+        --secondary: 0 0% 96.1%; /* Light Gray */
+        --secondary-foreground: 0 0% 9%;
+        --muted: 0 0% 96.1%;
+        --muted-foreground: 0 0% 45.1%;
+        --accent: 217 91% 96%; /* Light Blue (blue-50) */
+        --accent-foreground: 217.2 91.2% 59.8%; /* Blue */
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 0 0% 89.8%;
+        --input: 0 0% 89.8%;
+        --ring: 217.2 91.2% 59.8%; /* Blue */
+        --radius: 0.5rem;
+
+        /* Các biến màu riêng cho Sidebar ở Light Mode */
+        --sidebar: 0 0% 100%; /* White */
+        --sidebar-foreground: 222.2 84% 4.9%; /* Dark Blue/Black */
+        --sidebar-primary: 217.2 91.2% 59.8%; /* Blue */
+        --sidebar-primary-foreground: 0 0% 98%; /* White */
+        --sidebar-accent: 217 91% 96%; /* Light Blue (blue-50) */
+        --sidebar-accent-foreground: 217.2 91.2% 59.8%; /* Blue */
+        --sidebar-border: 0 0% 94%; /* Light gray border */
+        --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+
+    /* Định nghĩa các biến màu và style cho Dark Mode (Dark Blue Theme) */
+    .dark {
+        /* Các biến màu chung */
+        --background: 222 84% 5%; /* Very Dark Blue */
+        --foreground: 0 0% 98%; /* White */
+        --card: 222 84% 7%; /* Darker Blue */
+        /* ✅ Sửa lại: */
+        --card-foreground: 0 0% 98%;
+        --popover: 222 84% 5%;
+        --popover-foreground: 0 0% 98%;
+        --primary: 217.2 91.2% 59.8%; /* Blue */
+        --primary-foreground: 0 0% 98%; /* White */
+        --secondary: 222 84% 15%; /* Dark Blue Accent */
+        --secondary-foreground: 0 0% 98%;
+        --muted: 222 84% 15%;
+        --muted-foreground: 0 0% 63.9%;
+        --accent: 222 84% 15%;
+        --accent-foreground: 0 0% 98%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 222 84% 15%;
+        --input: 222 84% 15%;
+        --ring: 217.2 91.2% 59.8%; /* Blue */
+
+        /* Các biến màu riêng cho Sidebar ở Dark Mode */
+        --sidebar: 222 84% 5%; /* Very Dark Blue */
+        --sidebar-foreground: 0 0% 98%; /* White */
+        --sidebar-primary: 217.2 91.2% 59.8%; /* Blue */
+        --sidebar-primary-foreground: 0 0% 98%; /* White */
+        --sidebar-accent: 222 84% 15%; /* Dark Blue Accent */
+        --sidebar-accent-foreground: 0 0% 98%; /* White */
+        --sidebar-border: 222 84% 15%;
+        --sidebar-ring: 217.2 91.2% 59.8%;
+    }
+
+    /* Áp dụng style cơ bản cho toàn bộ trang */
+    * {
+        @apply border-border;
+    }
+
+    body {
+        @apply bg-background text-foreground;
+    }
+}
