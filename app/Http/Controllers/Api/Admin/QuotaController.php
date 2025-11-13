@@ -139,7 +139,8 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        // Allow both Admin and Dean (Trưởng khoa)
+        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -216,7 +217,8 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        // Allow both Admin and Dean (Trưởng khoa)
+        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -323,7 +325,8 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        // Allow both Admin and Dean (Trưởng khoa)
+        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -336,7 +339,8 @@ class QuotaController extends Controller
     public function removeAssignment($assignmentId)
     {
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        // Allow both Admin and Dean (Trưởng khoa)
+        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

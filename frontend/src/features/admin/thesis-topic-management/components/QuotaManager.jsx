@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle } from 'lucide-react';
+import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle, Plus, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import quotaService from '@/api/quotaService';
 import axios from '@/api/axiosConfig';
@@ -153,6 +153,24 @@ const QuotaManager = () => {
       loadData();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Lỗi khi phân công đề tài');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleQuickUpdateQuota = async (departmentId, newQuota) => {
+    setIsSubmitting(true);
+    try {
+      await quotaService.assignDepartmentQuota({
+        ID_KEHOACH: selectedPlan,
+        ID_KHOA_BOMON: departmentId,
+        SO_DETAI_QUOTA: newQuota,
+        GHICHU: 'Cập nhật nhanh từ bảng'
+      });
+      toast.success('Cập nhật quota thành công');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Lỗi khi cập nhật quota');
     } finally {
       setIsSubmitting(false);
     }
@@ -379,8 +397,30 @@ const QuotaManager = () => {
                     <TableRow key={dept.ID_KHOA_BOMON} className="hover:bg-muted/50">
                       <TableCell className="font-semibold">{dept.TEN_KHOA_BOMON}</TableCell>
                       <TableCell className="text-center">{dept.total_lecturers || 0}</TableCell>
-                      <TableCell className="text-center font-bold text-primary">
-                        {dept.quota_assigned || 0}
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleQuickUpdateQuota(dept.ID_KHOA_BOMON, Math.max(0, (dept.quota_assigned || 0) - 1))}
+                            disabled={(dept.quota_assigned || 0) <= 0 || isLoadingData}
+                            className="h-6 w-6 p-0"
+                          >
+                            -
+                          </Button>
+                          <span className="min-w-[2rem] text-center font-bold text-primary">
+                            {dept.quota_assigned || 0}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleQuickUpdateQuota(dept.ID_KHOA_BOMON, (dept.quota_assigned || 0) + 1)}
+                            disabled={isLoadingData}
+                            className="h-6 w-6 p-0"
+                          >
+                            +
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {dept.actual_created || 0}

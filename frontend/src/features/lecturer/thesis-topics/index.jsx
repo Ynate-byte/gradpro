@@ -229,10 +229,7 @@ const ThesisTopicsPage = () => {
   };
 
   const handleSubmitForApproval = async (topicId) => {
-    if (myQuota && myQuota.topics_created >= myQuota.quota_assigned) {
-      toast.error('Bạn đã đủ số lượng đề tài cần ra. Không thể gửi duyệt thêm.');
-      return;
-    }
+    // Note: Quota is now minimum requirement, lecturers can create unlimited topics
     try {
       await thesisTopicService.submitForApproval(topicId);
       toast.success("Gửi duyệt đề tài thành công!");
@@ -328,9 +325,76 @@ const ThesisTopicsPage = () => {
     return { pagedData, pageCount };
   }, [topics, activeTab, debouncedSearchTerm, columnFilters, sorting, pagination, user]);
 
+  const processedReviewData = useMemo(() => {
+    if (!topics) return { pagedData: [], pageCount: 0 };
+
+    let filtered = topics.filter(t =>
+      t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
+    );
+
+    if (filtered.length === 0) return { pagedData: [], pageCount: 0 };
+
+    filtered = filtered.filter(t =>
+      t.TEN_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+      t.MA_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    );
+
+    filtered = filtered.filter(t => {
+      return columnFilters.every(filter => {
+        if (filter.id === 'chuyen_nganh_id') {
+          const filterValues = new Set(filter.value);
+          if (filterValues.size === 0) return true;
+          return filterValues.has(String(t.chuyennganh?.ID_CHUYENNGANH));
+        }
+        if (filter.id === 'TRANGTHAI') {
+          const filterValues = new Set(filter.value);
+          if (filterValues.size === 0) return true;
+          return filterValues.has(t.TRANGTHAI);
+        }
+        return true;
+      });
+    });
+
+    if (sorting.length > 0) {
+      const { id, desc } = sorting[0];
+      filtered.sort((a, b) => {
+        let valA = a[id];
+        let valB = b[id];
+        if (id === 'chuyennganh.TEN_CHUYENNGANH') {
+          valA = a.chuyennganh?.TEN_CHUYENNGANH;
+          valB = b.chuyennganh?.TEN_CHUYENNGANH;
+        }
+        if (valA === null || valA === undefined) valA = '';
+        if (valB === null || valB === undefined) valB = '';
+        if (typeof valA === 'string') {
+          valA = valA.toLowerCase();
+          valB = valB.toLowerCase();
+        }
+        if (valA < valB) return desc ? 1 : -1;
+        if (valA > valB) return desc ? -1 : 1;
+        return 0;
+      });
+    }
+
+    const pageCount = Math.ceil(filtered.length / pagination.pageSize);
+    const pagedData = filtered.slice(
+      pagination.pageIndex * pagination.pageSize,
+      (pagination.pageIndex + 1) * pagination.pageSize
+    );
+
+    return { pagedData, pageCount };
+  }, [topics, debouncedSearchTerm, columnFilters, sorting, pagination, user]);
+
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, [activeTab, columnFilters, debouncedSearchTerm]);
+
+  useEffect(() => {
+    if (activeTab === 'review') {
+      setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    }
+  }, [activeTab]);
 
   const columns = useMemo(() => getColumns({
     currentUserId: user?.giangvien?.ID_GIANGVIEN,
@@ -370,7 +434,7 @@ const ThesisTopicsPage = () => {
           </Select>
           <Button
             onClick={() => { setEditingTopic(null); setShowCreateDialog(true); }}
-            disabled={loading || (myQuota && myQuota.topics_created >= myQuota.quota_assigned)}
+            disabled={loading}
           >
             <Plus className="w-4 h-4 mr-2" />
             Tạo đề tài
@@ -388,7 +452,7 @@ const ThesisTopicsPage = () => {
           icon={Users}
           title="Quota được giao"
           value={loadingStats ? 'loading' : myQuota?.quota_assigned ?? 0}
-          description="Số đề tài tối đa được tạo"
+          description="Số đề tài tối thiểu cần ra"
           iconBgClass="bg-blue-100 dark:bg-blue-900/30"
           iconColorClass="text-blue-600 dark:text-blue-400"
         />
@@ -416,6 +480,37 @@ const ThesisTopicsPage = () => {
           iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
           iconColorClass="text-indigo-600 dark:text-indigo-400"
         />
+        <StatCard
+          icon={Send}
+          title="Đề tài được phân công góp ý"
+          value={loadingStats ? 'loading' : topics.filter(t =>
+            t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
+          ).length}
+          description="Đề tài được giao góp ý"
+          iconBgClass="bg-purple-100 dark:bg-purple-900/30"
+          iconColorClass="text-purple-600 dark:text-purple-400"
+        />
+        <StatCard
+          icon={CheckCircle}
+          title="Đề tài đã góp ý"
+          value={loadingStats ? 'loading' : topics.filter(t =>
+            t.goiy_detai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
+          ).length}
+          description="Đã gửi góp ý"
+          iconBgClass="bg-emerald-100 dark:bg-emerald-900/30"
+          iconColorClass="text-emerald-600 dark:text-emerald-400"
+        />
+        <StatCard
+          icon={AlertTriangle}
+          title="Đề tài cần góp ý"
+          value={loadingStats ? 'loading' : topics.filter(t =>
+            t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN) &&
+            !t.goiy_detai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
+          ).length}
+          description="Chưa gửi góp ý"
+          iconBgClass="bg-red-100 dark:bg-red-900/30"
+          iconColorClass="text-red-600 dark:text-red-400"
+        />
       </motion.div>
 
       <motion.div
@@ -427,6 +522,7 @@ const ThesisTopicsPage = () => {
           <TabsList>
             <TabsTrigger value="my">Đề tài của tôi</TabsTrigger>
             <TabsTrigger value="all">Tất cả đề tài (Khoa)</TabsTrigger>
+            <TabsTrigger value="review">Đề tài cần góp ý</TabsTrigger>
           </TabsList>
 
           <AnimatePresence mode="wait">
@@ -438,10 +534,47 @@ const ThesisTopicsPage = () => {
               exit="exit"
             >
               <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
+                {activeTab !== "review" && (
+                  <DataTable
+                    columns={columns}
+                    data={processedData.pagedData}
+                    pageCount={processedData.pageCount}
+                    loading={loading}
+                    pagination={pagination}
+                    setPagination={setPagination}
+                    columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    sorting={sorting}
+                    setSorting={setSorting}
+                    searchColumnId="TEN_DETAI"
+                    searchPlaceholder="Tìm theo tên, GV, mã..."
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    chuyenNganhFilterColumnId="chuyen_nganh_id"
+                    chuyenNganhFilterOptions={specializations.map(c => ({
+                      label: c.TEN_CHUYENNGANH,
+                      value: String(c.ID_CHUYENNGANH)
+                    }))}
+                    statusColumnId="TRANGTHAI"
+                    statusOptions={[
+                      { value: "Nháp", label: "Nháp" },
+                      { value: "Chờ duyệt", label: "Chờ duyệt" },
+                      { value: "Yêu cầu chỉnh sửa", label: "Yêu cầu chỉnh sửa" },
+                      { value: "Đã duyệt", label: "Đã duyệt" },
+                      { value: "Từ chối", label: "Từ chối" },
+                    ]}
+                    columnVisibility={columnVisibility}
+                    state={{ rowSelection, sorting, columnFilters, pagination }}
+                    onRowSelectionChange={setRowSelection}
+                  />
+                )}
+              </TabsContent>
+
+              <TabsContent value="review" className="mt-0 outline-none ring-0">
                 <DataTable
                   columns={columns}
-                  data={processedData.pagedData}
-                  pageCount={processedData.pageCount}
+                  data={processedReviewData.pagedData}
+                  pageCount={processedReviewData.pageCount}
                   loading={loading}
                   pagination={pagination}
                   setPagination={setPagination}
@@ -454,9 +587,9 @@ const ThesisTopicsPage = () => {
                   searchTerm={searchTerm}
                   onSearchChange={setSearchTerm}
                   chuyenNganhFilterColumnId="chuyen_nganh_id"
-                  chuyenNganhFilterOptions={specializations.map(c => ({ 
-                    label: c.TEN_CHUYENNGANH, 
-                    value: String(c.ID_CHUYENNGANH) 
+                  chuyenNganhFilterOptions={specializations.map(c => ({
+                    label: c.TEN_CHUYENNGANH,
+                    value: String(c.ID_CHUYENNGANH)
                   }))}
                   statusColumnId="TRANGTHAI"
                   statusOptions={[

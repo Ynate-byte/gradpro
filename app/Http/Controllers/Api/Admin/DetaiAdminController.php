@@ -77,7 +77,7 @@ class DetaiAdminController extends Controller
     public function approveOrReject(Request $request, $id)
     {
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

@@ -337,14 +337,11 @@ class QuotaController extends Controller
             ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt'])
             ->count();
 
-        // Get actual assigned topics count for this plan
-        $actualAssigned = \App\Models\PhancongDetaiNhom::where('ID_GVHD', $lecturerId)
-            ->whereNotNull('ID_DETAI')
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->whereHas('detai', function($q) use ($planId) {
-                $q->where('ID_KEHOACH', $planId);
-            })
-            ->count();
+        // Get actual assigned topics count for this plan (sum of groups registered for lecturer's topics)
+        $actualAssigned = \App\Models\Detai::where('ID_KEHOACH', $planId)
+            ->where('ID_NGUOI_DEXUAT', $lecturerId)
+            ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt'])
+            ->sum('SO_NHOM_HIENTAI');
 
         // Get total topics assigned in the department
         $totalDepartmentAssigned = QuotaGiangvien::where('ID_KEHOACH', $planId)

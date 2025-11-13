@@ -174,6 +174,26 @@ const QuotaManager = () => {
     }
   };
 
+  const handleAdjustQuota = async (lecturerId, newQuota) => {
+    if (newQuota < 0) return;
+
+    setIsSubmitting(true);
+    try {
+      await lecturerQuotaService.assignLecturerQuota({
+        ID_KEHOACH: selectedPlan,
+        ID_GIANGVIEN: lecturerId,
+        SO_DETAI_QUOTA: newQuota,
+        GHICHU: 'Điều chỉnh nhanh từ bảng'
+      });
+      toast.success('Cập nhật quota thành công');
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Lỗi khi cập nhật quota');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const getQuotaStatus = (quota, actual) => {
     if (quota === 0) return <Badge variant="outline">Chưa phân công</Badge>;
     if (actual >= quota) return <Badge className="bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700">Đủ</Badge>;
@@ -358,7 +378,27 @@ const QuotaManager = () => {
                       <TableCell className="font-semibold">{gv.TEN_GIANGVIEN}</TableCell>
                       <TableCell>{gv.HOCVI || 'N/A'}</TableCell>
                       <TableCell className="text-center font-bold text-primary">
-                        {gv.quota_assigned || 0}
+                        <div className="flex items-center justify-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAdjustQuota(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) - 1)}
+                            disabled={(gv.quota_assigned || 0) <= 0 || isSubmitting}
+                            className="h-6 w-6 p-0"
+                          >
+                            -
+                          </Button>
+                          <span className="min-w-[2rem] text-center">{gv.quota_assigned || 0}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAdjustQuota(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) + 1)}
+                            disabled={isSubmitting}
+                            className="h-6 w-6 p-0"
+                          >
+                            +
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell className="text-center">
                         {gv.topics_created || 0}

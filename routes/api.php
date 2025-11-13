@@ -10,6 +10,7 @@ use App\Http\Controllers\Api\Admin\GroupAdminController;
 use App\Http\Controllers\Api\Admin\ThesisPlanController;
 use App\Http\Controllers\Api\Admin\ThesisPlanTemplateController as AdminTemplateController;
 use App\Http\Controllers\Api\Admin\DetaiAdminController;
+use App\Http\Controllers\Api\DepartmentHead\DetaiController as DepartmentHeadDetaiController;
 use App\Http\Controllers\Api\ThesisPlanTemplateController as UserTemplateController;
 use App\Http\Controllers\Api\DetaiController;
 use App\Http\Controllers\Api\Admin\SubmissionController as AdminSubmissionController;
@@ -258,6 +259,19 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/auto-assign-topic-quotas', [DepartmentHeadTopicController::class, 'autoAssignTopicQuotas']);
             Route::get('/available-topics', [DepartmentHeadTopicController::class, 'getAvailableTopics']);
             Route::post('/assign-specific-topic', [DepartmentHeadTopicController::class, 'assignSpecificTopic']);
+            Route::post('/assign-reviewers', [DepartmentHeadTopicController::class, 'assignReviewers']);
+            Route::post('/auto-assign-reviewers', [DepartmentHeadTopicController::class, 'autoAssignReviewers']);
+            Route::get('/available-topics-for-reviewers', [DepartmentHeadTopicController::class, 'getTopicsForReviewers']);
+        });
+
+        // --Quản lý đề tài trong bộ môn ---
+        Route::prefix('detai')->group(function () {
+            Route::get('/', [DepartmentHeadDetaiController::class, 'index']);
+            Route::get('/pending', [DepartmentHeadDetaiController::class, 'getPendingTopics']);
+            Route::get('/statistics', [DepartmentHeadDetaiController::class, 'getStatistics']);
+            Route::get('/{id}', [DepartmentHeadDetaiController::class, 'show']);
+            Route::post('/{id}/approve-reject', [DepartmentHeadDetaiController::class, 'approveOrReject']);
+
         });
     });
     // ----- [KẾT THÚC THAY ĐỔI] -----
@@ -282,6 +296,8 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/auto-assign-topic-quotas', [LecturerTopicController::class, 'autoAssignTopicQuotas']);
             Route::get('/available-topics', [LecturerTopicController::class, 'getAvailableTopics']);
             Route::post('/assign-specific-topic', [LecturerTopicController::class, 'assignSpecificTopic']);
+            Route::post('/assign-reviewers', [LecturerTopicController::class, 'assignReviewers']);
+            Route::post('/auto-assign-reviewers', [LecturerTopicController::class, 'autoAssignReviewers']);
         });
     });
     // ----- [KẾT THÚC THAY ĐỔI] -----

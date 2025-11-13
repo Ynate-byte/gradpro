@@ -80,6 +80,11 @@ class Detai extends Model
         return $this->hasMany(GoiyDetai::class, 'ID_DETAI', 'ID_DETAI');
     }
 
+    public function phancong_nguoi_gop_y(): HasMany
+    {
+        return $this->hasMany(PhancongNguoiGopY::class, 'ID_DETAI', 'ID_DETAI');
+    }
+
     // Scopes
     public function scopeApproved($query)
     {

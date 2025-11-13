@@ -1,6 +1,5 @@
 import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight,
   LogOut, CircleUserRound, Newspaper, Shield, FileText, CheckCircle, GraduationCap, PenSquare,
@@ -74,20 +73,27 @@ export function AppSidebar() {
             // Giảng viên (và các vai trò cao hơn)
             ...(canViewGiangVienRoutes ? [
               { href: "/lecturer/groups-management", title: "Quản lý nhóm SV" },
-              
+
               // ----- [THAY ĐỔI 2: Ẩn 'Thông tin Quota' nếu là Admin] -----
               {
                 href: "/lecturer/quota-management",
                 title: position === 'Trưởng bộ môn' ? "Phân công (GV)" : "Thông tin Quota",
                 // Ẩn nếu là Sinh viên HOẶC Admin
-                hidden: isSinhVien || isAdmin 
+                hidden: isSinhVien || isAdmin
               },
               // ----- [KẾT THÚC THAY ĐỔI 2] -----
+
+              // ----- [THÊM MỚI] Mục Phân công Người Góp ý cho Trưởng bộ môn -----
+              ...(position === 'Trưởng bộ môn' ? [{
+                href: "/department-head/topic-reviewer-assignment",
+                title: "Phân công Người Góp ý"
+              }] : []),
+              // ----- KẾT THÚC THÊM MỚI -----
 
             ] : []),
           ],
         },
-        
+
         // ----- [ĐÃ CẬP NHẬT] Mục Hội đồng -----
         {
           title: "Hội đồng",
@@ -95,7 +101,7 @@ export function AppSidebar() {
           // Nếu là Giảng viên (còn lại) -> đi đến trang giảng viên
           href: canViewAdminMenu ? "/admin/hoidong" : "/lecturer/council",
           icon: GraduationCap,
-          hidden: !canViewGiangVienRoutes 
+          hidden: !canViewGiangVienRoutes
         },
         // ----- [ĐÃ CẬP NHẬT] Cập nhật link Chấm điểm -----
         {
@@ -105,8 +111,8 @@ export function AppSidebar() {
           href: canViewAdminMenu ? "/admin/cham-diem" : "/lecturer/grading",
           icon: PenSquare,
           hidden: !canChamDiem
-        }
-        // ----- KẾT THÚC CẬP NHẬT -----
+        },
+
       ],
     },
   ];
@@ -125,15 +131,13 @@ export function AppSidebar() {
         // ===== KẾT THÚC THAY ĐỔI 3 =====
         { title: "Đề tài Khóa luận", href: "/admin/thesis-topics", icon: FileText },
         { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
-        // [THÊM MỚI] Menu Thiết lập chung
-        { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
       ],
     },
   ];
 
   // --- Component MenuItem (render đệ quy) ---
   const MenuItem = ({ item }) => {
-    
+
     if (item.hidden) {
       return null;
     }
@@ -277,7 +281,7 @@ export function AppSidebar() {
                 <span className="text-sm font-semibold truncate w-full">{user?.HODEM_VA_TEN}</span>
                 <span className="text-xs text-muted-foreground truncate w-full">{user?.EMAIL}</span>
               </div>
-                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden shrink-0" />
+              <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden shrink-0" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" className="w-56">

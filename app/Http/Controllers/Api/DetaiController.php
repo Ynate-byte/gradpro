@@ -26,7 +26,11 @@ class DetaiController extends Controller
            'chuyennganh',
            'kehoachKhoaluan',
            'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung',
-           'phancongDetaiNhom.nhom.nhomtruong'
+           'phancongDetaiNhom.nhom.nhomtruong',
+           'phancong_nguoi_gop_y.giangvien.nguoidung',
+           'goiyDetai' => function ($query) {
+               $query->with('giangvien.nguoidung');
+           }
        ]);
 
        // Get current user
@@ -140,7 +144,8 @@ class DetaiController extends Controller
                      ->orderBy('NGAYTAO', 'desc');
            },
            'phancongDetaiNhom.nhom.nhomtruong',
-           'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung'
+           'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung',
+           'phancong_nguoi_gop_y.giangvien.nguoidung'
        ])->findOrFail($id);
        // ----- [KẾT THÚC SỬA LỖI] -----
 
