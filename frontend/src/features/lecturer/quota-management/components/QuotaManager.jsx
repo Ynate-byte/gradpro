@@ -179,20 +179,55 @@ const QuotaManager = () => {
 
     setIsSubmitting(true);
     try {
+      // Gọi API cập nhật quota
       await lecturerQuotaService.assignLecturerQuota({
         ID_KEHOACH: selectedPlan,
         ID_GIANGVIEN: lecturerId,
         SO_DETAI_QUOTA: newQuota,
         GHICHU: 'Điều chỉnh nhanh từ bảng'
       });
+
       toast.success('Cập nhật quota thành công');
-      loadData();
+
+      // ✅ Cập nhật lại state cục bộ, không reload toàn bộ
+      setLecturers((prevLecturers) =>
+        prevLecturers.map((gv) =>
+          gv.ID_GIANGVIEN === lecturerId
+            ? { ...gv, quota_assigned: newQuota }
+            : gv
+        )
+      );
+
+      // ✅ Cập nhật tổng thông tin bộ môn (nếu có liên quan)
+      setDepartmentQuotaInfo((prevInfo) => {
+        if (!prevInfo || !prevInfo.department_quota) return prevInfo;
+
+        const totalAssigned = prevInfo.lecturers
+          ? prevInfo.lecturers.reduce(
+            (sum, gv) =>
+              sum +
+              (gv.ID_GIANGVIEN === lecturerId ? newQuota : gv.quota_assigned || 0),
+            0
+          )
+          : 0;
+
+        return {
+          ...prevInfo,
+          lecturers: prevInfo.lecturers.map((gv) =>
+            gv.ID_GIANGVIEN === lecturerId
+              ? { ...gv, quota_assigned: newQuota }
+              : gv
+          ),
+          total_assigned: totalAssigned
+        };
+      });
     } catch (error) {
       toast.error(error.response?.data?.message || 'Lỗi khi cập nhật quota');
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const getQuotaStatus = (quota, actual) => {
     if (quota === 0) return <Badge variant="outline">Chưa phân công</Badge>;
@@ -379,20 +414,43 @@ const QuotaManager = () => {
                       <TableCell>{gv.HOCVI || 'N/A'}</TableCell>
                       <TableCell className="text-center font-bold text-primary">
                         <div className="flex items-center justify-center gap-2">
+                          {/* Nút giảm */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleAdjustQuota(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) - 1)}
+                            onClick={() =>
+                              handleAdjustQuota(gv.ID_GIANGVIEN, Math.max(0, (gv.quota_assigned || 0) - 1))
+                            }
                             disabled={(gv.quota_assigned || 0) <= 0 || isSubmitting}
                             className="h-6 w-6 p-0"
                           >
                             -
                           </Button>
-                          <span className="min-w-[2rem] text-center">{gv.quota_assigned || 0}</span>
+
+                          {/* Ô nhập số */}
+                          <input
+                            type="number"
+                            min="0"
+                            defaultValue={gv.quota_assigned || 0}
+                            className="w-16 text-center border rounded-md h-7 focus:outline-none focus:ring-2 focus:ring-primary"
+                            disabled={isSubmitting}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                const value = parseInt(e.target.value, 10);
+                                if (!isNaN(value)) {
+                                  handleAdjustQuota(gv.ID_GIANGVIEN, value);
+                                }
+                              }
+                            }}
+                          />
+
+                          {/* Nút tăng */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleAdjustQuota(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) + 1)}
+                            onClick={() =>
+                              handleAdjustQuota(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) + 1)
+                            }
                             disabled={isSubmitting}
                             className="h-6 w-6 p-0"
                           >

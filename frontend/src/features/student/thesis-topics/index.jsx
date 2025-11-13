@@ -21,6 +21,7 @@ import { Loader2, Eye, UserPlus, Search, BookCopy } from 'lucide-react';
 import { toast } from 'sonner';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import { getChuyenNganhs } from '@/api/userService';
+import axios from '@/api/axiosConfig';
 
 
 const TopicDetailDialog = ({
@@ -170,6 +171,8 @@ const StudentThesisTopicsPage = () => {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedMajor, setSelectedMajor] = useState('all');
+    const [selectedPlan, setSelectedPlan] = useState('');
+    const [plans, setPlans] = useState([]);
     const [majors, setMajors] = useState([]);
     const [isGroupLeader, setIsGroupLeader] = useState(false);
     const [hasRegisteredTopic, setHasRegisteredTopic] = useState(false);
@@ -181,6 +184,7 @@ const StudentThesisTopicsPage = () => {
     const [selectedTopic, setSelectedTopic] = useState(null);
 
     useEffect(() => {
+        loadPlans();
         loadMajors();
         checkGroupStatus();
         loadTopics();
@@ -193,7 +197,7 @@ const StudentThesisTopicsPage = () => {
         }, 500); // 0.4 giây sau khi người dùng dừng gõ
 
         return () => clearTimeout(delaySearch);
-    }, [searchTerm, selectedMajor]);
+    }, [searchTerm, selectedMajor, selectedPlan]);
 
     const loadTopics = async () => {
         try {
@@ -201,12 +205,26 @@ const StudentThesisTopicsPage = () => {
             const params = {};
             if (searchTerm) params.search = searchTerm;
             if (selectedMajor && selectedMajor !== 'all') params.major_id = selectedMajor;
+            if (selectedPlan) params.plan_id = selectedPlan;
             const response = await thesisTopicService.getTopics(params);
             setTopics(response.data.data || []);
         } catch (error) {
             console.error('Error loading topics:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const loadPlans = async () => {
+        try {
+            const response = await axios.get('/admin/thesis-plans/list-all');
+            const plansData = response.data || [];
+            setPlans(plansData);
+            if (plansData.length > 0 && !selectedPlan) {
+                setSelectedPlan(String(plansData[0].ID_KEHOACH));
+            }
+        } catch (error) {
+            console.error('Error loading plans:', error);
         }
     };
 
@@ -287,6 +305,19 @@ const StudentThesisTopicsPage = () => {
 
                 {/* Dropdown ngắn hơn */}
                 <div className="flex flex-row items-center gap-3 flex-[1] w-full md:w-auto">
+                    <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                        <SelectTrigger className="w-full md:w-48">
+                            <SelectValue placeholder="Chọn kế hoạch" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {plans.map(plan => (
+                                <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                    {plan.TEN_DOT} - {plan.NAMHOC}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
                     <Select value={selectedMajor} onValueChange={setSelectedMajor}>
                         <SelectTrigger className="w-full md:w-48">
                             <SelectValue placeholder="Chuyên ngành" />

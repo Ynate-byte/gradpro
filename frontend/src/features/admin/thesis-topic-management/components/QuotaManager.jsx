@@ -167,14 +167,24 @@ const QuotaManager = () => {
         SO_DETAI_QUOTA: newQuota,
         GHICHU: 'Cập nhật nhanh từ bảng'
       });
+
+      // ✅ Cập nhật ngay trong state departments
+      setDepartments(prev =>
+        prev.map(dept =>
+          dept.ID_KHOA_BOMON === departmentId
+            ? { ...dept, quota_assigned: newQuota }
+            : dept
+        )
+      );
+
       toast.success('Cập nhật quota thành công');
-      loadData();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Lỗi khi cập nhật quota');
     } finally {
       setIsSubmitting(false);
     }
   };
+
 
   const handleAutoAssignQuotas = async () => {
     if (!selectedPlan) {
@@ -399,22 +409,59 @@ const QuotaManager = () => {
                       <TableCell className="text-center">{dept.total_lecturers || 0}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
+                          {/* Nút giảm */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleQuickUpdateQuota(dept.ID_KHOA_BOMON, Math.max(0, (dept.quota_assigned || 0) - 1))}
+                            onClick={() =>
+                              handleQuickUpdateQuota(
+                                dept.ID_KHOA_BOMON,
+                                Math.max(0, (dept.quota_assigned || 0) - 1)
+                              )
+                            }
                             disabled={(dept.quota_assigned || 0) <= 0 || isLoadingData}
                             className="h-6 w-6 p-0"
                           >
                             -
                           </Button>
-                          <span className="min-w-[2rem] text-center font-bold text-primary">
-                            {dept.quota_assigned || 0}
-                          </span>
+
+                          {/* Ô nhập số quota */}
+                          <input
+                            type="number"
+                            value={dept.quota_assigned || 0}
+                            onChange={(e) => {
+                              // chỉ cập nhật tạm thời trong state (không gọi API)
+                              const newValue = parseInt(e.target.value, 10) || 0;
+                              setDepartments(prev =>
+                                prev.map(d =>
+                                  d.ID_KHOA_BOMON === dept.ID_KHOA_BOMON
+                                    ? { ...d, quota_assigned: newValue }
+                                    : d
+                                )
+                              );
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                const newValue = parseInt(e.target.value, 10) || 0;
+                                handleQuickUpdateQuota(dept.ID_KHOA_BOMON, newValue);
+                              }
+                            }}
+                            disabled={isLoadingData}
+                            className="w-16 text-center font-bold text-primary border rounded-md h-6 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                            min={0}
+                          />
+
+
+                          {/* Nút tăng */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleQuickUpdateQuota(dept.ID_KHOA_BOMON, (dept.quota_assigned || 0) + 1)}
+                            onClick={() =>
+                              handleQuickUpdateQuota(
+                                dept.ID_KHOA_BOMON,
+                                (dept.quota_assigned || 0) + 1
+                              )
+                            }
                             disabled={isLoadingData}
                             className="h-6 w-6 p-0"
                           >
