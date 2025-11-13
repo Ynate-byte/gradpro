@@ -11,21 +11,23 @@ const HomePage = lazy(() => import('./features/home/HomePage'));
 const NewsManagementPage = lazy(() => import('./features/news-management/index.jsx'));
 const NewsDetail = lazy(() => import('./features/news-management/NewsDetail'));
 
+// --- Import components Giảng viên (bao gồm Dashboard) ---
+const LecturerDashboard = lazy(() => import('./features/lecturer/dashboard/LecturerDashboard.jsx'));
+const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
+const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/groups-management/index.jsx'));
+const GiangVienHoiDong = lazy(() => import('./features/lecturer/council/index.jsx'));
+const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCouncilPage.jsx'));
+const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx'));
+const LecturerGroupDetailPage = lazy(() => import('./features/lecturer/groups-management/pages/LecturerGroupDetailPage.jsx'));
+const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
+
 // --- Import các components Sinh viên ---
 const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
 const FindGroupPage = lazy(() => import('./features/student/find-group/index.jsx'));
 const MyPlansPage = lazy(() => import('./features/student/my-plans/index.jsx'));
 const StudentThesisTopicsPage = lazy(() => import('./features/student/thesis-topics/index.jsx'));
 const MeetingCalendarPage = lazy(() => import('./features/student/my-group/pages/MeetingCalendarPage.jsx'));
-const KanbanPage = lazy(() => import('./features/student/my-group/pages/KanbanPage.jsx')); // <-- [THÊM MỚI]
-
-// --- Import các components Giảng viên ---
-const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
-const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/groups-management/index.jsx'));
-// [ĐÃ CẬP NHẬT] Đường dẫn import mới
-const GiangVienHoiDong = lazy(() => import('./features/lecturer/council/index.jsx'));
-const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCouncilPage.jsx'));
-const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx'));
+const KanbanPage = lazy(() => import('./features/student/my-group/pages/KanbanPage.jsx'));
 
 // --- Import component Trưởng bộ môn ---
 const TopicReviewerAssignmentPage = lazy(() => import('./features/department-head/topic-reviewer-assignment/index.jsx'));
@@ -41,18 +43,9 @@ const TemplateFormPage = lazy(() => import('./features/admin/thesis-plan-templat
 const AdminThesisTopicsPage = lazy(() => import('./features/admin/thesis-topic-management/index.jsx'));
 const SubmissionManagementPage = lazy(() => import('./features/admin/submission-management/index.jsx'));
 const HoidongPage = lazy(() => import('./features/admin/hoidong/index.jsx'));
-const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
-
-// ===== THAY ĐỔI 1: Import component Quản lý Quota của Admin =====
-// (Component này đang nằm trong thư mục 'lecturer' nhưng thực chất là UI của Admin)
 const AdminQuotaManager = lazy(() => import('./features/admin/thesis-topic-management/components/QuotaManager.jsx'));
-// ===== KẾT THÚC THAY ĐỔI 1 =====
-
-// Trang chấm điểm của Admin
 const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomChamDiem.jsx'));
 const ChamDiemChiTiet = lazy(() => import('./features/admin/chamdiem/ChamDiemChiTiet.jsx'));
-
-// [QUAN TRỌNG] Thêm dòng import còn thiếu này
 const GeneralSettingsPage = lazy(() => import('./features/admin/settings/GeneralSettingsPage.jsx'));
 
 
@@ -132,8 +125,17 @@ function App() {
             </ProtectedRoute>
           }
         >
+          {/* [ĐÃ SỬA] Route trang chủ động theo vai trò */}
+          <Route 
+            index 
+            element={
+              canViewGiangVienRoutes && !isSinhVien 
+                ? <LecturerDashboard />  // Trang chủ của Giảng viên
+                : <HomePage />             // Trang chủ của Sinh viên (hoặc mặc định)
+            } 
+          />
+
           {/* Các Routes chung */}
-          <Route index element={<HomePage />} />
           <Route path="notifications" element={<PlaceholderPage title="Thông báo" />} />
           <Route path="history" element={<PlaceholderPage title="Lịch sử" />} />
           <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
@@ -163,12 +165,10 @@ function App() {
             <>
               {!isSinhVien && <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />}
               <Route path="lecturer/groups-management" element={<LecturerGroupsManagementPage />} />
+              <Route path="lecturer/groups-management/:nhomId/details" element={<LecturerGroupDetailPage />} />
               <Route path="lecturer/quota-management" element={<LecturerQuotaManagementPage />} />
-              {/* [ĐÃ CẬP NHẬT] Routes cho Hội đồng (Giảng viên) */}
               <Route path="lecturer/council" element={<GiangVienHoiDong />} />
               <Route path="lecturer/council/:id" element={<GiangVienChinhSua />} />
-
-              {/* [ĐÃ CẬP NHẬT] Routes cho Chấm điểm (Giảng viên) */}
               <Route path="lecturer/grading" element={<LecturerGradingPage />} />
             </>
           )}
@@ -217,11 +217,9 @@ function App() {
               {/* Routes Quản lý Hội đồng */}
               <Route path="admin/hoidong/*" element={<HoidongPage />} />
 
-              {/* Route này giờ đã có component để render */}
+              {/* Routes Cài đặt & Quota */}
               <Route path="admin/settings/general" element={<GeneralSettingsPage />} />
-              {/* ===== THAY ĐỔI 2: Thêm route Quản lý Quota cho Admin ===== */}
               <Route path="admin/quota-management" element={<AdminQuotaManager />} />
-              {/* ===== KẾT THÚC THAY ĐỔI 2 ===== */}
             </>
           )}
         </Route>

@@ -584,31 +584,53 @@ class NhomController extends Controller
         ]);
     }
 
+    public function getGroupDetailsById(Request $request, Nhom $nhom)
+    {
+        $user = $request->user();
+
+        // 1. Kiểm tra quyền truy cập (Admin, GVHD, hoặc Thành viên)
+        $isGvhd = $user->giangvien?->ID_GIANGVIEN === $nhom->phancongDetaiNhom?->ID_GVHD;
+        $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
+        $isAdmin = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+
+        if (!$isAdmin && !$isGvhd && !$isMember) {
+            return response()->json(['message' => 'Không có quyền truy cập nhóm này.'], 403);
+        }
+        
+        // 2. Tải các quan hệ cần thiết
+        $nhom->load([
+            'phancongDetaiNhom', // <-- Đảm bảo tải ở root
+            
+            'thanhviens.nguoidung.vaitro', 
+            'thanhviens.nguoidung.sinhvien.chuyennganh', 
+            
+            'nhomtruong',
+            'chuyennganh',
+            'khoabomon',
+            'phancongDetaiNhom.detai.nguoiDexuat.nguoidung', 
+            'phancongDetaiNhom.gvhd.nguoidung' 
+        ]);
+
+        // 3. Tải các thông tin phụ (trạng thái đề tài, ngày phân công)
+        $assignment = $nhom->phancongDetaiNhom;
+        if ($assignment) {
+            $nhom->TRANGTHAI_PHANCONG = $assignment->TRANGTHAI;
+            $nhom->NGAY_PHANCONG = $assignment->NGAY_PHANCONG;
+        }
+        
+        // Loại bỏ các trường không cần thiết trước khi trả về
+        // [SỬA LỖI] KHÔNG UNSET PHANCONG_DETAI_NHOM
+        // unset($nhom->phancongDetaiNhom); // <--- DÒNG NÀY ĐÃ GÂY LỖI FRONTEND
+
+        return response()->json($nhom);
+    }
     /**
      * Lấy chi tiết nhóm theo ID
      */
     public function getGroupById($id)
     {
-        $nhom = Nhom::with([
-            'thanhviens.nguoidung',
-            'nhomtruong',
-            'chuyennganh',
-            'khoabomon',
-            'phancongDetaiNhom.detai.nguoiDexuat.nguoidung',
-            'phancongDetaiNhom.detai.nguoiDuyet',
-            'phancongDetaiNhom.detai.chuyennganh',
-            'phancongDetaiNhom.gvhd.nguoidung'
-        ])->findOrFail($id);
-
-        $assignment = $nhom->phancongDetaiNhom;
-        if ($assignment) {
-            $nhom->detai = $assignment->detai;
-            $nhom->gvhd = $assignment->gvhd;
-            $nhom->ngay_phan_cong = $assignment->NGAY_PHANCONG;
-            $nhom->trang_thai = $assignment->TRANGTHAI;
-        }
-
-        return response()->json($nhom);
+        // Hàm này sẽ không còn tồn tại sau khi sửa
+        return response()->json(['message' => 'Endpoint đã được di chuyển.']);
     }
         
     /**

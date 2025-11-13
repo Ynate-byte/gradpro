@@ -38,7 +38,7 @@ class LichHopController extends Controller
      * Lấy tất cả lịch họp (sắp tới và đã qua) của một nhóm.
      * [SỬA ĐỔI]: Eager-load thêm thông tin Nhóm, Đề tài, và Vai trò của Người tạo.
      */
-    public function getMeetingsForGroup(Nhom $nhom)
+    public function getMeetingsForGroup(Nhom $nhom, Request $request) // <--- ĐÃ SỬA
     {
         if (!$this->checkGroupAccess($nhom)) {
             return response()->json(['message' => 'Bạn không có quyền xem lịch họp của nhóm này.'], 403);
@@ -54,11 +54,22 @@ class LichHopController extends Controller
             'nhomtruong',
         ]);
 
+        $startDate = $request->query('start_date'); // <-- Truy cập biến $request đã được định nghĩa
+        $endDate = $request->query('end_date');     // <-- Truy cập biến $request đã được định nghĩa
+
         // Lấy lịch họp
         $meetings = $nhom->lichHops()
-                         ->with('nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN,ID_VAITRO', 'nguoiTao.vaitro:ID_VAITRO,TEN_VAITRO')
-                         ->orderBy('THOIGIAN_BATDAU', 'desc')
-                         ->get();
+            ->with('nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN,ID_VAITRO', 'nguoiTao.vaitro:ID_VAITRO,TEN_VAITRO');
+            
+        if ($startDate && $endDate) {
+            // Sửa lỗi Ambiguous Column bằng cách chỉ định rõ tên bảng
+            $meetings->whereBetween('LICHHOP.THOIGIAN_BATDAU', [
+                $startDate . ' 00:00:00',
+                $endDate . ' 23:59:59'
+            ]);
+        }
+            
+        $meetings = $meetings->orderBy('THOIGIAN_BATDAU', 'desc')->get();
         
         // Trả về dữ liệu gốc (KHÔNG CÓ tasksCount)
         return response()->json([

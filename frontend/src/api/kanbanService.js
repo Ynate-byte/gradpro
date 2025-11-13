@@ -1,10 +1,12 @@
 import axiosClient from './axiosConfig';
 
 /**
- * Lấy toàn bộ dữ liệu (cột và công việc) cho một nhóm.
+ * Lấy toàn bộ dữ liệu (cột và công việc) cho một nhóm, có thể lọc theo tuần.
+ * @param {number} nhomId - ID của nhóm.
+ * @param {object} params - {start_date, end_date}
  */
-export const getBoardData = (nhomId) => {
-    return axiosClient.get(`/kanban/board/${nhomId}`).then(res => res.data);
+export const getBoardData = (nhomId, params = {}) => {
+    return axiosClient.get(`/kanban/board/${nhomId}`, { params }).then(res => res.data);
 };
 
 /**
@@ -22,7 +24,7 @@ export const moveTask = (taskId, data) => {
 };
 
 // ===============================================
-// === CÁC HÀM CRUD (ĐÃ CẬP NHẬT) ===
+// === CÁC HÀM CRUD (GIỮ NGUYÊN) ===
 // ===============================================
 
 /**

@@ -152,3 +152,8 @@ export const inviteMultipleMembers = async (groupId, userIds, message) => {
   });
   return data;
 }
+
+export const getGroupDetailsById = async (groupId) => {
+    const response = await axiosClient.get(`/groups/${groupId}/details`); 
+    return response.data;
+};

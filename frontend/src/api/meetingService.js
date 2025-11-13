@@ -3,10 +3,11 @@ import axiosClient from './axiosConfig';
 /**
  * Lấy danh sách lịch họp của một nhóm (sắp tới, đã qua, đã hủy).
  * @param {number} nhomId - ID của nhóm.
+ * @param {object} params - {start_date, end_date}
  * @returns {Promise<Array>} Danh sách các lịch họp.
  */
-export const getMeetingsForGroup = (nhomId) => {
-    return axiosClient.get(`/lichhop/nhom/${nhomId}`).then(res => res.data);
+export const getMeetingsForGroup = (nhomId, params = {}) => { 
+    return axiosClient.get(`/lichhop/nhom/${nhomId}`, { params }).then(res => res.data);
 };
 
 /**

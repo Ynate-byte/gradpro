@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { DndContext, DragOverlay, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove } from '@dnd-kit/sortable';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -7,10 +7,12 @@ import { KanbanColumn } from './KanbanColumn';
 import { KanbanTask } from './KanbanTask';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-// import { createPortal } from 'react-dom'; // <-- [SỬA LỖI] Gỡ bỏ createPortal
 import { TaskDialog } from './TaskDialog';
+import { cn } from '@/lib/utils';
+import '../kanban/Kanban.css'
 
-export function KanbanBoard({ nhomId }) {
+// [MODIFIED] Chấp nhận start_date và end_date props
+export function KanbanBoard({ nhomId, start_date, end_date }) { 
     const queryClient = useQueryClient();
     const [columns, setColumns] = useState([]);
     const [tasks, setTasks] = useState({});
@@ -23,8 +25,13 @@ export function KanbanBoard({ nhomId }) {
     });
 
     const { data, isLoading } = useQuery({
-        queryKey: ['kanbanBoard', nhomId],
-        queryFn: () => getBoardData(nhomId),
+        // [MODIFIED] Thêm date vào queryKey để tự động refresh khi đổi tuần
+        queryKey: ['kanbanBoard', nhomId, start_date, end_date], 
+        // [MODIFIED] Truyền date vào API để lọc tasks theo deadline
+        queryFn: () => getBoardData(
+            nhomId, 
+            { start_date, end_date } 
+        ),
         onError: () => { 
             toast.error("Không thể tải dữ liệu bảng công việc.");
         }
@@ -48,9 +55,11 @@ export function KanbanBoard({ nhomId }) {
         },
         onError: (err, variables) => {
             toast.error("Di chuyển thất bại. Đang hoàn tác.");
-            queryClient.setQueryData(['kanbanBoard', nhomId], variables.previousBoardData);
+            // [MODIFIED] Sử dụng start_date/end_date trong queryKey cho việc hoàn tác
+            queryClient.setQueryData(['kanbanBoard', nhomId, start_date, end_date], variables.previousBoardData); 
         },
         onSettled: () => {
+            // Invalidate cả 2 query (board và stats)
             queryClient.invalidateQueries({ queryKey: ['kanbanBoard', nhomId] });
             queryClient.invalidateQueries({ queryKey: ['taskStats', nhomId] });
         }
@@ -64,13 +73,15 @@ export function KanbanBoard({ nhomId }) {
         })
     );
 
-    function handleDragStart(event) {
+    // [FIXED] ĐỊNH NGHĨA HÀM handleDragStart
+    const handleDragStart = useCallback((event) => {
         if (event.active.data.current?.type === 'Task') {
             setActiveTask(event.active.data.current.task);
         }
-    }
+    }, []);
 
-    function handleDragEnd(event) {
+    // [FIXED] ĐỊNH NGHĨA HÀM handleDragEnd
+    const handleDragEnd = useCallback((event) => {
         setActiveTask(null);
         const { active, over } = event;
         if (!over || active.id === over.id) return;
@@ -87,7 +98,9 @@ export function KanbanBoard({ nhomId }) {
             return;
         }
         
-        const previousBoardData = queryClient.getQueryData(['kanbanBoard', nhomId]);
+        // Lấy dữ liệu board hiện tại trước khi thay đổi (cho undo)
+        // [MODIFIED] Sử dụng start_date/end_date trong queryKey
+        const previousBoardData = queryClient.getQueryData(['kanbanBoard', nhomId, start_date, end_date]);
 
         setTasks(prevTasks => {
             const sourceTasks = [...(prevTasks[sourceColumnId] || [])];
@@ -127,7 +140,7 @@ export function KanbanBoard({ nhomId }) {
                 [destColumnId]: destTasks,
             };
         });
-    }
+    }, [nhomId, start_date, end_date, moveTaskMutation, queryClient]); // [MODIFIED] Thêm dependencies
 
     if (isLoading) {
         return (
@@ -140,12 +153,12 @@ export function KanbanBoard({ nhomId }) {
 
     return (
         <>
-            <DndContext 
+            <DndContext  
                 sensors={sensors} 
                 onDragStart={handleDragStart} 
                 onDragEnd={handleDragEnd}
             >
-                <div className="kanban-board-container">
+                <div className={cn("kanban-board-container", "flex flex-nowrap")}>
                     <SortableContext items={columns.map(c => c.ID_COT)}>
                         {columns.map(col => (
                             <KanbanColumn
@@ -163,12 +176,9 @@ export function KanbanBoard({ nhomId }) {
                     </SortableContext>
                 </div>
                 
-                {/* ===== [SỬA LỖI TẠI ĐÂY] ===== */}
-                {/* Gỡ bỏ createPortal và thêm lại className 'is-overlay' */}
                 <DragOverlay>
                     {activeTask && <KanbanTask task={activeTask} className="is-overlay" />}
                 </DragOverlay>
-                {/* ============================= */}
 
             </DndContext>
 

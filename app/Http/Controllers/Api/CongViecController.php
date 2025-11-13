@@ -66,41 +66,60 @@ class CongViecController extends Controller
         }
     }
 
-    public function getBoardData(Nhom $nhom)
+    public function getBoardData(Nhom $nhom, Request $request) 
     {
-        try {
-            $auth = $this->getAuthInfo($nhom);
-            if (!$auth['canView']) {
-                return response()->json(['message' => 'Không có quyền truy cập.'], 403);
-            }
-
-            $columns = CotCongViec::orderBy('THUTU_HIENTHI', 'asc')->get();
-
-            $tasks = $nhom->congViecs()
-                ->with([
-                    'nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN',
-                    'nguoiDuocPhanCong:ID_NGUOIDUNG,HODEM_VA_TEN',
-                    'checklistItems',
-                ])
-                ->withCount('allComments') // Đếm tất cả bình luận (gốc + replies)
-                ->orderBy('THUTU_HIENTHI', 'asc')
-                ->get();
-            
-            $tasks->each(function ($task) {
-                $task->binh_luans_count = $task->all_comments_count; 
-            });
-
-            $members = $nhom->thanhviens()->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH')->get();
-
-            return response()->json([
-                'columns' => $columns,
-                'tasks' => $tasks->groupBy('ID_COT'),
-                'members' => $members,
-            ]);
-        } catch (\Exception $e) {
-            Log::error("Lỗi getBoardData cho Nhom ID {$nhom->ID_NHOM}: " . $e->getMessage());
-            return response()->json(['message' => 'Lỗi máy chủ khi lấy dữ liệu bảng Kanban.'], 500);
+        $auth = $this->getAuthInfo($nhom);
+        // Sử dụng canView vì cả GVHD và thành viên đều có thể xem Kanban
+        if (!$auth['canView']) {
+            return response()->json(['message' => 'Không có quyền truy cập.'], 403);
         }
+
+        // 1. Lấy tham số lọc ngày từ request
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        // Lấy danh sách các cột
+        $columns = CotCongViec::orderBy('THUTU_HIENTHI', 'asc')->get();
+
+        // Khởi tạo query lấy các công việc của nhóm
+        $tasksQuery = $nhom->congViecs()
+            ->whereNotIn('TRANGTHAI', ['Đã hủy']) // Chỉ hiển thị các task chưa bị hủy
+            ->with([
+                'nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN',
+                'nguoiDuocPhanCong:ID_NGUOIDUNG,HODEM_VA_TEN',
+                'checklistItems',
+            ])
+            ->withCount('allComments')
+            ->orderBy('THUTU_HIENTHI', 'asc');
+
+        // 2. Áp dụng bộ lọc tuần nếu có tham số ngày
+        if ($startDate && $endDate) {
+            // [ĐÃ SỬA] Bao gồm cả các task có deadline trong tuần VÀ task không có deadline (NULL)
+            $tasksQuery->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('NGAY_HETHAN', [
+                    $startDate . ' 00:00:00',
+                    $endDate . ' 23:59:59'
+                ])
+                // THÊM: Hoặc những công việc không có thời gian cụ thể (deadline IS NULL)
+                ->orWhereNull('NGAY_HETHAN');
+            });
+        }
+        
+        $tasks = $tasksQuery->get();
+        
+        // Đảm bảo count comments được thêm vào task object
+        $tasks->each(function ($task) {
+            $task->binh_luans_count = $task->all_comments_count;
+        });
+
+        // Lấy danh sách thành viên (cho dropdown gán việc)
+        $members = $nhom->thanhviens()->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH')->get();
+
+        return response()->json([
+            'columns' => $columns,
+            'tasks' => $tasks->groupBy('ID_COT'),
+            'members' => $members,
+        ]);
     }
 
     public function createTask(Request $request, Nhom $nhom)

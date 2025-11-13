@@ -26,6 +26,7 @@ use App\Http\Controllers\Api\DepartmentHead\QuotaController as DepartmentHeadQuo
 use App\Http\Controllers\Api\PhanhoiGoiyController;
 use App\Http\Controllers\Api\LichHopController; 
 use App\Http\Controllers\Api\CongViecController;
+use App\Http\Controllers\Api\LecturerDashboardController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -69,7 +70,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/student/my-active-plans', [NhomController::class, 'getActivePlansForStudent']);
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);
-    Route::get('/groups/{id}', [NhomController::class, 'getGroupById']);
+    Route::get('/groups/{nhom}/details', [NhomController::class, 'getGroupDetailsById']);
 
     // ---------------- LỜI MỜI & THÔNG BÁO ----------------
     Route::get('/invitations', [InvitationController::class, 'getPendingInvitations']);
@@ -256,6 +257,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('giangvien')->group(function () {
+        Route::get('/dashboard-stats', [LecturerDashboardController::class, 'getDashboardStats']); // <-- [THÊM MỚI]
         Route::get('/my-hoidong', [HoiDongController::class, 'getHoiDongByGiangVien']);
 
         // --Phân công quota đề tài cho giảng viên trong bộ môn ---

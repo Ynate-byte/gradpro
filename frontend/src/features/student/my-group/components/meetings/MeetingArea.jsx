@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { getMeetingsForGroup } from '@/api/meetingService';
 import { MeetingDialog } from './MeetingDialog';
-import { MeetingList } from '../MeetingList';
+import { MeetingList } from './MeetingList';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
