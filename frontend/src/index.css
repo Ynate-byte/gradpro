@@ -89,6 +89,19 @@
         @apply border-border;
     }
 
+    .bg-blue-activity {
+    background-color: #e0f2fe;
+    }
+    .text-blue-activity {
+        color: #2563eb;
+    }
+    .bg-orange-activity {
+        background-color: #fff7ed;
+    }
+    .text-orange-activity {
+        color: #ea580c;
+    }
+
     body {
         @apply bg-background text-foreground;
     }
