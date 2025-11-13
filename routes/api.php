@@ -24,6 +24,7 @@ use App\Http\Controllers\Api\Lecturer\QuotaController as LecturerQuotaController
 use App\Http\Controllers\Api\Admin\QuotaController;
 use App\Http\Controllers\Api\DepartmentHead\QuotaController as DepartmentHeadQuotaController;
 use App\Http\Controllers\Api\PhanhoiGoiyController;
+use App\Http\Controllers\Api\LichHopController; // <--- ĐÃ THÊM DÒNG NÀY
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -65,14 +66,9 @@ Route::middleware('auth:sanctum')->group(function () {
     });
     Route::post('/requests/{yeucau}/cancel', [NhomController::class, 'cancelJoinRequest']);
     Route::get('/student/my-active-plans', [NhomController::class, 'getActivePlansForStudent']);
-    // ----- [THAY ĐỔI] Bổ sung comment và di chuyển route getGroupById -----
-    // Route kiểm tra trưởng nhóm
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);
-    
-    // Route lấy chi tiết nhóm
     Route::get('/groups/{id}', [NhomController::class, 'getGroupById']);
-    // ----- [KẾT THÚC THAY ĐỔI] -----
 
     // ---------------- LỜI MỜI & THÔNG BÁO ----------------
     Route::get('/invitations', [InvitationController::class, 'getPendingInvitations']);
@@ -80,6 +76,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/mark-as-read', [NotificationController::class, 'markAsRead']);
+
+    // ---------------- Lịch họp ----------------
+    Route::prefix('lichhop')->group(function () {
+        Route::get('/nhom/{nhom}', [LichHopController::class, 'getMeetingsForGroup']);
+        Route::post('/nhom/{nhom}', [LichHopController::class, 'storeMeetingForGroup']);
+        Route::put('/{lichhop}', [LichHopController::class, 'updateMeeting']);
+        Route::delete('/{lichhop}', [LichHopController::class, 'cancelMeeting']);
+    });
 
     // ---------------- TIN TỨC (Chung) ----------------
     Route::get('/news', [\App\Http\Controllers\Api\NewsController::class, 'index']);
@@ -97,15 +101,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('detai')->group(function () {
         Route::get('/', [DetaiController::class, 'index']);
         Route::post('/', [DetaiController::class, 'store']);
-
-        // ----- [SỬA LỖI 404] Các route tĩnh (static) PHẢI được định nghĩa TRƯỚC các route động (dynamic) -----
         Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
         Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); // GV xem nhóm đăng ký đề tài của mình
         Route::get('/supervised', [DetaiController::class, 'getSupervisedTopics']);
         Route::get('/my-registered-topic', [DetaiController::class, 'getMyRegisteredTopic']);
         Route::get('/giangvien/groups', [DetaiController::class, 'getGroupsForLecturer']); // GV xem các nhóm mình HƯỚNG DẪN
-        // ----- [KẾT THÚC SỬA LỖI 404] -----
-
         Route::get('/{id}', [DetaiController::class, 'show']); // Route động (phải nằm sau)
         Route::put('/{id}', [DetaiController::class, 'update']);
         Route::delete('/{id}', [DetaiController::class, 'destroy']);
@@ -115,14 +115,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/goiy/{goiy}/reply', [PhanhoiGoiyController::class, 'store']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
     });
-    // ----- [THAY ĐỔI] Bổ sung comment và di chuyển route getGroupById -----
-    // Route kiểm tra trưởng nhóm
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);
-    
-    // Route lấy chi tiết nhóm
     Route::get('/groups/{id}', [NhomController::class, 'getGroupById']);
-    // ----- [KẾT THÚC THAY ĐỔI] -----
 
     Route::prefix('admin')->group(function () {
 
@@ -163,15 +158,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/inactive-students', [GroupAdminController::class, 'getInactiveStudents']);
             Route::get('/search-ungrouped-students', [GroupAdminController::class, 'searchUngroupedStudents']);
             Route::post('/create-with-members', [GroupAdminController::class, 'createWithMembers']);
-            
-            // ----- [SỬA LỖI 405] -----
-            // 1. Thay thế route 'remove-students' (vô hiệu hóa)
-            // 2. Bằng route 'remove-inactive-students' (xóa khỏi kế hoạch/nhóm)
             Route::post('/remove-inactive-students', [GroupAdminController::class, 'removeInactiveStudentsFromPlan']);
-            // Dòng cũ (gây lỗi 405 vì tên route sai):
-            // Route::post('/remove-students', [GroupAdminController::class, 'removeStudents']);
-            // ----- [KẾT THÚC SỬA LỖI] -----
-
             Route::post('/auto-group', [GroupAdminController::class, 'autoGroupStudents']);
             Route::get('/export', [GroupAdminController::class, 'exportGroups']);
             Route::get('/ungrouped-students', [GroupAdminController::class, 'getUngroupedStudents']);
@@ -203,7 +190,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/{assignment}/status', [QuotaController::class, 'updateAssignmentStatus']);
             Route::delete('/{assignment}', [QuotaController::class, 'removeAssignment']);
         });
-        // ----- [KẾT THÚC THAY ĐỔI] -----
         
         Route::prefix('submissions')->group(function () {
             Route::get('/', [AdminSubmissionController::class, 'index']); // Lấy danh sách chờ duyệt
@@ -226,24 +212,17 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/chuyennganh-options', [HoiDongController::class, 'getChuyenNganhOptions']);
             Route::get('/{idKeHoach}/nhoms', [HoiDongController::class, 'getNhomTheoKeHoach']);
             Route::post('/phanbo-nhom', [HoiDongController::class, 'phanBoNhom']);
-
-            // Route gốc
             Route::get('/', [HoiDongController::class, 'index']);
-            Route::post('/', [HoiDongController::class, 'create']); // Tạo (thủ công hoặc tự động)
-            
-            // Route động (phải đặt sau)
+            Route::post('/', [HoiDongController::class, 'create']);
             Route::get('/{id}', [HoiDongController::class, 'show']);
             Route::put('/{id}', [HoiDongController::class, 'update']);
             Route::delete('/{id}', [HoiDongController::class, 'destroy']);
-            
-            // [THÊM MỚI] Route cho inline edit
             Route::patch('/{id}/update-phong', [HoiDongController::class, 'updatePhong']);
             Route::delete('/{idHoiDong}/nhom/{idNhom}', [HoiDongController::class, 'xoaPhanBoNhom']);
         });
 
     });
 
-    // ----- [THAY ĐỔI] Thêm routes cho Trưởng bộ môn -----
     Route::prefix('department-head')->group(function () {
         // --Phân công quota đề tài cho giảng viên trong bộ môn ---
         Route::prefix('quotas')->group(function () {
@@ -274,10 +253,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         });
     });
-    // ----- [KẾT THÚC THAY ĐỔI] -----
 
-
-    // ----- [THAY ĐỔI] Bổ sung routes cho Giảng viên -----
     Route::prefix('giangvien')->group(function () {
         Route::get('/my-hoidong', [HoiDongController::class, 'getHoiDongByGiangVien']);
 
@@ -300,7 +276,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/auto-assign-reviewers', [LecturerTopicController::class, 'autoAssignReviewers']);
         });
     });
-    // ----- [KẾT THÚC THAY ĐỔI] -----
 
     Route::prefix('chamdiem')->group(function () {
         Route::get('/my-tasks', [ChamDiemController::class, 'getMyGradingTasks']);

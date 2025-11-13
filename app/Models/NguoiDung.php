@@ -76,4 +76,8 @@ class Nguoidung extends Authenticatable
     {
         return $this->hasMany(NopSanpham::class, 'ID_NGUOI_XACNHAN', 'ID_NGUOIDUNG');
     }
+    public function lichHopsDaTao(): HasMany
+    {
+        return $this->hasMany(LichHop::class, 'ID_NGUOITAO', 'ID_NGUOIDUNG');
+    }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Nhom extends Model
 {
@@ -78,13 +79,12 @@ class Nhom extends Model
     {
         return $this->belongsToMany(
             Hoidong::class,
-            'HOIDONG_NHOM', // Tên bảng pivot
+            'HOIDONG_NHOM',
             'ID_NHOM',
             'ID_HOIDONG'
         )
         ->withTimestamps('created_at', 'updated_at');
     }
-
 
     public function diemTongKet()
     {
@@ -104,5 +104,10 @@ class Nhom extends Model
     public function diemHoiDong()
     {
         return $this->hasMany(DiemHoiDong::class, 'ID_NHOM', 'ID_NHOM');
+    }
+
+    public function lichHops(): HasMany
+    {
+        return $this->hasMany(LichHop::class, 'ID_NHOM', 'ID_NHOM');
     }
 }
