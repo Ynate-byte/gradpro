@@ -13,7 +13,6 @@ class LichHop extends Model
     protected $table = 'LICHHOP';
     protected $primaryKey = 'ID_LICHHOP';
 
-    // Định nghĩa tên cột timestamp
     const CREATED_AT = 'NGAYTAO';
     const UPDATED_AT = 'CAPNHAT_LANCUOI';
 
@@ -28,6 +27,7 @@ class LichHop extends Model
         'LINK_TRUCTUYEN',
         'GHICHU',
         'TRANGTHAI',
+        'NOIDUNG_HOP',
     ];
 
     protected $casts = [

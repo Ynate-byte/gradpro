@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('LICHHOP', function (Blueprint $table) {
-            $table->id('ID_LICHHOP'); // Tương đương BIGINT UNSIGNED AUTO_INCREMENT PRIMARY
+            $table->id('ID_LICHHOP');
             
             $table->unsignedBigInteger('ID_NHOM');
             $table->unsignedBigInteger('ID_NGUOITAO')->comment('ID Nguoidung (có thể là GVHD hoặc Nhóm trưởng)');
@@ -26,9 +26,13 @@ return new class extends Migration
             $table->string('LINK_TRUCTUYEN', 500)->nullable()->comment('Dùng khi HINHTHUC_HOP = Trực tuyến');
             
             $table->text('GHICHU')->nullable();
+            
+            // ===== [THÊM MỚI] =====
+            $table->text('NOIDUNG_HOP')->nullable()->comment('Nội dung, kết luận, hoặc biên bản họp');
+            // ======================
+            
             $table->enum('TRANGTHAI', ['Đã lên lịch', 'Đã diễn ra', 'Đã hủy'])->default('Đã lên lịch');
 
-            // Sử dụng tên cột timestamp theo chuẩn của dự án (thay vì created_at/updated_at)
             $table->timestamp('NGAYTAO')->nullable()->useCurrent();
             $table->timestamp('CAPNHAT_LANCUOI')->nullable()->useCurrentOnUpdate();
 

@@ -131,6 +131,7 @@ export function AppSidebar() {
         // ===== KẾT THÚC THAY ĐỔI 3 =====
         { title: "Đề tài Khóa luận", href: "/admin/thesis-topics", icon: FileText },
         { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
+        { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
       ],
     },
   ];

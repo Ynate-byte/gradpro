@@ -10,35 +10,33 @@ import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+// ===== [SỬA LỖI TẠI ĐÂY] =====
+import { 
+  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage 
+} from "@/components/ui/form"; // <-- ĐÃ THÊM FormDescription
+// =============================
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Loader2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { Separator } from '@/components/ui/separator';
 
-// ===== [SỬA LỖI VALIDATION] =====
+// (Schema validation giữ nguyên)
 const meetingSchema = z.object({
     TIEUDE_LICHHOP: z.string().min(5, { message: "Tiêu đề phải có ít nhất 5 ký tự." }).max(255),
     THOIGIAN_BATDAU: z.string().min(1, "Thời gian bắt đầu là bắt buộc."), 
     THOIGIAN_KETTHUC: z.string().optional().nullable(),
     HINHTHUC_HOP: z.enum(['Trực tiếp', 'Trực tuyến']),
-    
-    // Chỉ cần là string, logic bắt buộc sẽ ở .refine
     DIADIEM: z.string().optional().nullable(), 
-    
-    // --- ĐÃ SỬA LỖI ---
-    // Phải chấp nhận một URL HỢP LỆ, hoặc một CHUỖI RỖNG ("")
     LINK_TRUCTUYEN: z.string()
         .url("Link phải là một URL hợp lệ.")
-        .or(z.literal('')) // <-- DÒNG NÀY SỬA LỖI
+        .or(z.literal('')) 
         .optional()
         .nullable(),
-    // --- KẾT THÚC SỬA LỖI ---
-
     GHICHU: z.string().max(1000, "Ghi chú quá dài.").optional().nullable(),
+    NOIDUNG_HOP: z.string().optional().nullable(),
 }).refine(data => {
-    // Nếu là 'Trực tiếp', DIADIEM là bắt buộc
     if (data.HINHTHUC_HOP === 'Trực tiếp') {
         return !!data.DIADIEM && data.DIADIEM.length > 0;
     }
@@ -47,7 +45,6 @@ const meetingSchema = z.object({
     message: "Địa điểm là bắt buộc khi họp trực tiếp.",
     path: ["DIADIEM"],
 }).refine(data => {
-    // Nếu là 'Trực tuyến', LINK_TRUCTUYEN là bắt buộc
     if (data.HINHTHUC_HOP === 'Trực tuyến') {
         return !!data.LINK_TRUCTUYEN && data.LINK_TRUCTUYEN.length > 0;
     }
@@ -56,7 +53,6 @@ const meetingSchema = z.object({
     message: "Link trực tuyến là bắt buộc khi họp trực tuyến.",
     path: ["LINK_TRUCTUYEN"],
 }).refine(data => {
-    // Nếu có thời gian kết thúc, phải sau thời gian bắt đầu
     if (data.THOIGIAN_KETTHUC && data.THOIGIAN_BATDAU) {
         return new Date(data.THOIGIAN_KETTHUC) > new Date(data.THOIGIAN_BATDAU);
     }
@@ -65,9 +61,8 @@ const meetingSchema = z.object({
     message: "Thời gian kết thúc phải sau thời gian bắt đầu.",
     path: ["THOIGIAN_KETTHUC"],
 });
-// ===== [KẾT THÚC SỬA LỖI] =====
 
-// Hàm helper để format ngày giờ cho input datetime-local
+// (Hàm formatDateTimeLocal giữ nguyên)
 const formatDateTimeLocal = (dateString) => {
     if (!dateString) return "";
     try {
@@ -91,12 +86,13 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
             DIADIEM: '',
             LINK_TRUCTUYEN: '',
             GHICHU: '',
+            NOIDUNG_HOP: '',
         }
     });
 
     const hinhThucHop = form.watch('HINHTHUC_HOP');
 
-    // Load dữ liệu vào form khi ở chế độ Edit
+    // (useEffect, mutation, onSubmit, onInvalid giữ nguyên)
     useEffect(() => {
         if (isEditMode && meeting) {
             form.reset({
@@ -107,9 +103,9 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                 DIADIEM: meeting.DIADIEM || '',
                 LINK_TRUCTUYEN: meeting.LINK_TRUCTUYEN || '',
                 GHICHU: meeting.GHICHU || '',
+                NOIDUNG_HOP: meeting.NOIDUNG_HOP || '',
             });
         } else {
-            // Khi tạo mới, đặt thời gian bắt đầu mặc định là 5 phút nữa để tránh lỗi
             const defaultStartTime = format(new Date(Date.now() + 5 * 60000), "yyyy-MM-dd'T'HH:mm");
             form.reset({
                 TIEUDE_LICHHOP: '',
@@ -119,14 +115,13 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                 DIADIEM: '',
                 LINK_TRUCTUYEN: '',
                 GHICHU: '',
+                NOIDUNG_HOP: '',
             });
         }
     }, [isOpen, isEditMode, meeting, form]);
 
-    // Mutation cho việc tạo/cập nhật
     const mutation = useMutation({
         mutationFn: (data) => {
-            // Dọn dẹp dữ liệu trước khi gửi đi
             const payload = { ...data };
             if (payload.HINHTHUC_HOP === 'Trực tiếp') {
                 payload.LINK_TRUCTUYEN = null;
@@ -137,7 +132,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
             if (isEditMode) {
                 return updateMeeting(meeting.ID_LICHHOP, payload);
             }
-            return createMeeting(nhomId, payload);
+            return createMeeting(nhomId, data);
         },
         onSuccess: () => {
             toast.success(isEditMode ? "Cập nhật lịch họp thành công!" : "Tạo lịch họp thành công!");
@@ -146,7 +141,6 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
             setIsOpen(false);
         },
         onError: (error) => {
-            // Hiển thị lỗi validation từ backend (nếu có)
             if (error.response?.status === 422) {
                 const errors = error.response.data.errors;
                 if (errors.THOIGIAN_BATDAU) {
@@ -164,18 +158,12 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
         mutation.mutate(data);
     };
 
-    /**
-     * Bắt lỗi validation từ Zod/react-hook-form và hiển thị toast
-     */
     const onInvalid = (errors) => {
-        // Lấy lỗi đầu tiên từ object errors
         const firstErrorKey = Object.keys(errors)[0];
         if (!firstErrorKey) {
             toast.error("Dữ liệu không hợp lệ", { description: "Vui lòng kiểm tra lại các trường đã nhập." });
             return;
         }
-
-        // Map tên kỹ thuật sang tên thân thiện
         const errorFieldMap = {
             'TIEUDE_LICHHOP': 'Tiêu đề',
             'THOIGIAN_BATDAU': 'Thời gian bắt đầu',
@@ -183,10 +171,8 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
             'DIADIEM': 'Địa điểm',
             'LINK_TRUCTUYEN': 'Link trực tuyến',
         };
-        
         const fieldName = errorFieldMap[firstErrorKey] || 'Một trường';
         const message = errors[firstErrorKey]?.message;
-
         toast.error(`Lỗi: ${fieldName}`, {
             description: message || "Dữ liệu nhập không đúng."
         });
@@ -202,17 +188,16 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
-                    {/* ===== [CẬP NHẬT] Thêm onInvalid ===== */}
                     <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 py-4">
+                        
+                        {/* (Các trường FormField TIEUDE, THOIGIAN, HINHTHUC, DIADIEM, LINK_TRUCTUYEN, GHICHU giữ nguyên) */}
                         <FormField
                             control={form.control}
                             name="TIEUDE_LICHHOP"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Tiêu đề *</FormLabel>
-                                    <FormControl>
-                                        <Input placeholder="Ví dụ: Họp báo cáo tiến độ tuần 5" {...field} />
-                                    </FormControl>
+                                    <FormControl><Input placeholder="Ví dụ: Họp báo cáo tiến độ tuần 5" {...field} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
@@ -224,9 +209,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Thời gian bắt đầu *</FormLabel>
-                                        <FormControl>
-                                            <Input type="datetime-local" {...field} />
-                                        </FormControl>
+                                        <FormControl><Input type="datetime-local" {...field} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -237,9 +220,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Thời gian kết thúc (Tùy chọn)</FormLabel>
-                                        <FormControl>
-                                            <Input type="datetime-local" {...field} value={field.value || ''} />
-                                        </FormControl>
+                                        <FormControl><Input type="datetime-local" {...field} value={field.value || ''} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}
@@ -253,9 +234,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                     <FormLabel>Hình thức *</FormLabel>
                                     <Select onValueChange={field.onChange} value={field.value}>
                                         <FormControl>
-                                            <SelectTrigger>
-                                                <SelectValue placeholder="Chọn hình thức họp" />
-                                            </SelectTrigger>
+                                            <SelectTrigger><SelectValue placeholder="Chọn hình thức họp" /></SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
                                             <SelectItem value="Trực tiếp">Trực tiếp</SelectItem>
@@ -265,7 +244,6 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                 </FormItem>
                             )}
                         />
-
                         {hinhThucHop === 'Trực tiếp' && (
                             <FormField
                                 control={form.control}
@@ -273,15 +251,12 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Địa điểm *</FormLabel>
-                                        <FormControl>
-                                            <Input placeholder="Ví dụ: Phòng H.301" {...field} value={field.value || ''} />
-                                        </FormControl>
+                                        <FormControl><Input placeholder="Ví dụ: Phòng H.301" {...field} value={field.value || ''} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}
                             />
                         )}
-
                         {hinhThucHop === 'Trực tuyến' && (
                             <FormField
                                 control={form.control}
@@ -289,28 +264,53 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Link trực tuyến *</FormLabel>
-                                        <FormControl>
-                                            <Input type="url" placeholder="https://meet.google.com/..." {...field} value={field.value || ''} />
-                                        </FormControl>
+                                        <FormControl><Input type="url" placeholder="https://meet.google.com/..." {...field} value={field.value || ''} /></FormControl>
                                         <FormMessage />
                                     </FormItem>
                                 )}
                             />
                         )}
-
                         <FormField
                             control={form.control}
                             name="GHICHU"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Ghi chú (Tùy chọn)</FormLabel>
-                                    <FormControl>
-                                        <Textarea placeholder="Nội dung cần chuẩn bị cho cuộc họp..." {...field} value={field.value || ''} />
-                                    </FormControl>
+                                    <FormControl><Textarea placeholder="Nội dung cần chuẩn bị cho cuộc họp..." {...field} value={field.value || ''} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}
                         />
+                        
+                        {/* Hiển thị Biên bản họp KHI EDIT */}
+                        {isEditMode && (
+                            <>
+                                <Separator />
+                                <FormField
+                                    control={form.control}
+                                    name="NOIDUNG_HOP"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel>Biên bản / Nội dung họp</FormLabel>
+                                            {/* Dòng <FormDescription> đã gây lỗi */}
+                                            <FormDescription>
+                                                Cập nhật nội dung, kết luận, hoặc nhiệm vụ sau khi cuộc họp diễn ra.
+                                            </FormDescription>
+                                            <FormControl>
+                                                <Textarea 
+                                                    placeholder="Ghi lại nội dung cuộc họp..." 
+                                                    {...field} 
+                                                    value={field.value || ''}
+                                                    rows={6} 
+                                                />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                            </>
+                        )}
+
 
                         <DialogFooter>
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Hủy</Button>

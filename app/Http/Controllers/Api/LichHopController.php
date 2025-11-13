@@ -125,12 +125,14 @@ class LichHopController extends Controller
             'THOIGIAN_BATDAU' => 'sometimes|required|date',
             'THOIGIAN_KETTHUC' => 'nullable|date|after:THOIGIAN_BATDAU',
             'HINHTHUC_HOP' => ['sometimes', 'required', Rule::in(['Trực tiếp', 'Trực tuyến'])],
-            'DIADIEM' => 'nullable|string|max:255|required_if:HINHTHUC_HOP,Trực tiếp',
-            'LINK_TRUCTUYEN' => 'nullable|url|max:500|required_if:HINHTHUC_HOP,Trực tuyến',
+            'DIADIEM' => 'nullable|string|max:255',
+            'LINK_TRUCTUYEN' => 'nullable|url|max:500',
             'GHICHU' => 'nullable|string',
             'TRANGTHAI' => ['sometimes', Rule::in(['Đã lên lịch', 'Đã diễn ra', 'Đã hủy'])],
+            'NOIDUNG_HOP' => 'nullable|string', // <-- [THÊM MỚI]
         ]);
 
+        // Cập nhật logic: Nếu họp trực tiếp, xóa link. Nếu trực tuyến, xóa địa điểm.
         if (isset($validated['HINHTHUC_HOP'])) {
             if ($validated['HINHTHUC_HOP'] === 'Trực tiếp') {
                 $validated['LINK_TRUCTUYEN'] = null;

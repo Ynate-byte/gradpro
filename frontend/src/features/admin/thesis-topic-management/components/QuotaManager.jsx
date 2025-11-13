@@ -276,12 +276,13 @@ const QuotaManager = () => {
           />
           <StatCard
             icon={AlertTriangle}
-            title="Quota còn lại"
-            value={isLoadingData ? 'loading' : remainingQuota}
-            description="Chưa phân bổ cho Khoa/BM"
-            iconBgClass={cn(remainingQuota > 0 ? "bg-orange-100 dark:bg-orange-900/30" : "bg-green-100 dark:bg-green-900/30")}
-            iconColorClass={cn(remainingQuota > 0 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400")}
+            title="Tổng quota đã phân công"
+            value={isLoadingData ? 'loading' : totalAssigned}
+            description="Tổng số quota đã giao cho các Khoa/Bộ môn"
+            iconBgClass="bg-green-100 dark:bg-green-900/30"
+            iconColorClass="text-green-600 dark:text-green-400"
           />
+
         </motion.div>
 
         <Card>
