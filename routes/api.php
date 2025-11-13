@@ -24,7 +24,8 @@ use App\Http\Controllers\Api\Lecturer\QuotaController as LecturerQuotaController
 use App\Http\Controllers\Api\Admin\QuotaController;
 use App\Http\Controllers\Api\DepartmentHead\QuotaController as DepartmentHeadQuotaController;
 use App\Http\Controllers\Api\PhanhoiGoiyController;
-use App\Http\Controllers\Api\LichHopController; // <--- ĐÃ THÊM DÒNG NÀY
+use App\Http\Controllers\Api\LichHopController; 
+use App\Http\Controllers\Api\CongViecController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -288,8 +289,28 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/combined/{nhom}', [ChamDiemController::class, 'saveCombined']);
         Route::get('/tongket/{id}', [ChamDiemController::class, 'getTong']);
     });
-    
 
+    // === [THÊM MỚI] TUYẾN ĐƯỜNG CHO KANBAN (CÔNG VIỆC) ===
+    Route::prefix('kanban')->group(function () {
+        Route::get('/board/{nhom}', [CongViecController::class, 'getBoardData']);
+        Route::get('/stats/{nhom}', [CongViecController::class, 'getTaskStats']);
+        
+        // Route cho Task
+        Route::post('/task/nhom/{nhom}', [CongViecController::class, 'createTask']);
+        Route::get('/task/{congviec}/details', [CongViecController::class, 'getTaskDetails']); // <-- [THÊM MỚI]
+        Route::put('/task/{congviec}', [CongViecController::class, 'updateTask']);
+        Route::put('/task/{congviec}/move', [CongViecController::class, 'moveTask']);
+        Route::delete('/task/{congviec}', [CongViecController::class, 'deleteTask']);
+        Route::post('/task/{congviec}/assign', [CongViecController::class, 'assignTask']);
+        
+        // Route cho Checklist
+        Route::post('/task/{congviec}/checklist', [CongViecController::class, 'addChecklistItem']); // <-- [THÊM MỚI]
+        Route::put('/checklist/{item}', [CongViecController::class, 'updateChecklistItem']);
+        Route::delete('/checklist/{item}', [CongViecController::class, 'deleteChecklistItem']); // <-- [THÊM MỚI]
+
+        // Route cho Bình luận
+        Route::post('/task/{congviec}/comment', [CongViecController::class, 'addComment']);
+    });
 });
 
 Route::fallback(function () {

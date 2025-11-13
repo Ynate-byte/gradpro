@@ -44,25 +44,23 @@ class LichHopController extends Controller
             return response()->json(['message' => 'Bạn không có quyền xem lịch họp của nhóm này.'], 403);
         }
 
-        // Tải đầy đủ thông tin nhóm, bao gồm cả thành viên
+        // Tải thông tin nhóm (giữ nguyên như lần sửa trước)
         $nhom->loadMissing([
-            'phancongDetaiNhom.detai.nguoiDexuat.nguoidung', // Tải đề tài
-            'phancongDetaiNhom.gvhd.nguoidung', // Tải GVHD
-            'thanhviens.nguoidung' => function ($query) { // Tải thành viên
+            'phancongDetaiNhom.detai.nguoiDexuat.nguoidung',
+            'phancongDetaiNhom.gvhd.nguoidung',
+            'thanhviens.nguoidung' => function ($query) {
                 $query->with(['vaitro', 'sinhvien.chuyennganh']); 
             },
-            'nhomtruong', // Tải nhóm trưởng
+            'nhomtruong',
         ]);
 
+        // Lấy lịch họp
         $meetings = $nhom->lichHops()
-                         // ===== [SỬA ĐỔI TẠI ĐÂY] =====
-                         // Tải thêm 'vaitro' của người tạo
                          ->with('nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN,ID_VAITRO', 'nguoiTao.vaitro:ID_VAITRO,TEN_VAITRO')
-                         // ===== [KẾT THÚC SỬA ĐỔI] =====
                          ->orderBy('THOIGIAN_BATDAU', 'desc')
                          ->get();
         
-        // Gói dữ liệu trả về
+        // Trả về dữ liệu gốc (KHÔNG CÓ tasksCount)
         return response()->json([
             'groupInfo' => $nhom,
             'meetings' => $meetings,

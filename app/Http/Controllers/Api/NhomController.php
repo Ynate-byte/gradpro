@@ -64,16 +64,25 @@ class NhomController extends Controller
         try {
             $user = $request->user();
             $planId = $request->input('plan_id');
+            $forceGroupId = $request->input('force_group_id'); // <-- [THÊM MỚI]
 
-            $thanhvienQuery = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
+            $thanhvienQuery = ThanhvienNhom::query();
 
-            if ($planId) {
-                $thanhvienQuery->whereHas('nhom', function ($query) use ($planId) {
-                    $query->where('ID_KEHOACH', $planId);
-                });
+            if ($forceGroupId) {
+                // Ưu tiên tìm bằng ID nhóm (cho KanbanPage)
+                $thanhvien = $thanhvienQuery->where('ID_NHOM', $forceGroupId)
+                                            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG) // Vẫn phải kiểm tra user
+                                            ->first();
+            } else {
+                // Logic cũ (cho MyGroupPage)
+                $thanhvienQuery->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
+                if ($planId) {
+                    $thanhvienQuery->whereHas('nhom', function ($query) use ($planId) {
+                        $query->where('ID_KEHOACH', $planId);
+                    });
+                }
+                $thanhvien = $thanhvienQuery->first();
             }
-
-            $thanhvien = $thanhvienQuery->first();
 
             if (!$thanhvien) {
                 return response()->json(['has_group' => false]);

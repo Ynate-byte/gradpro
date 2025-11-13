@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Nguoidung extends Authenticatable
 {
@@ -79,5 +80,20 @@ class Nguoidung extends Authenticatable
     public function lichHopsDaTao(): HasMany
     {
         return $this->hasMany(LichHop::class, 'ID_NGUOITAO', 'ID_NGUOIDUNG');
+    }
+
+    public function congViecDuocGiao(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            CongViec::class,
+            'PHANCONG_CONGVIEC',
+            'ID_NGUOIDUNG',
+            'ID_CONGVIEC'
+        );
+    }
+
+    public function binhLuanCongViecs(): HasMany
+    {
+        return $this->hasMany(BinhLuanCongViec::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');
     }
 }

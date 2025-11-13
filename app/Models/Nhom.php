@@ -110,4 +110,9 @@ class Nhom extends Model
     {
         return $this->hasMany(LichHop::class, 'ID_NHOM', 'ID_NHOM');
     }
+
+    public function congViecs(): HasMany
+    {
+        return $this->hasMany(CongViec::class, 'ID_NHOM', 'ID_NHOM');
+    }
 }

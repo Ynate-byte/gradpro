@@ -15,6 +15,7 @@ class DatabaseSeeder extends Seeder
             ChuyennganhSeeder::class,             
             KhoaBomonSeeder::class,               
             NguoidungSeeder::class, // (Đã bao gồm Admin, GV, SV)
+            CotCongViecSeeder::class,
             
             // 2. Dữ liệu nghiệp vụ
             KehoachKhoaluanSeeder::class,      // (Cần Nguoidung)
