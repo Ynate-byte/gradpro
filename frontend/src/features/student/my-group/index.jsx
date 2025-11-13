@@ -2,15 +2,17 @@ import React, { useState, useEffect, useMemo, useId } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getMyGroup, getPendingInvitations, getMyActivePlans, transferGroupLeadership } from '@/api/groupService';
 import { getMeetingsForGroup } from '@/api/meetingService';
+import { getTaskStats } from '@/api/kanbanService';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     BookCopy, Users, CheckCircle, AlertTriangle, Crown, Phone, Mail,
-    AlertCircle, RefreshCw, Loader2, CalendarCheck, UploadCloud
+    AlertCircle, RefreshCw, Loader2, CalendarCheck, UploadCloud,
+    LayoutDashboard
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NoGroupView } from './components/NoGroupView';
-import { GroupManagementView } from './components/GroupManagementView';
+import { GroupManagementView } from './components/management/GroupManagementView';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Separator } from '@/components/ui/separator';
@@ -27,17 +29,17 @@ import {
     AlertDialogHeader,
     AlertDialogTitle as AlertDialogTitleComponent
 } from "@/components/ui/alert-dialog";
-import { TopicDetailsDialog } from './components/TopicDetailsDialog';
+import { TopicDetailsDialog } from './components/topic/TopicDetailsDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'; // Không cần nếu không dùng card
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ActivityCard } from './components/ActivityCard';
 import { format, isFuture, startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
-import { SubmissionDialog } from './components/SubmissionDialog';
-import { MeetingArea } from './components/MeetingArea';
+import { SubmissionDialog } from './components/submission/SubmissionDialog';
+// import { MeetingArea } from './components/MeetingArea'; // Đã gỡ bỏ
 
-
+// (Component LoadingSkeleton giữ nguyên)
 const LoadingSkeleton = () => (
     <div className="p-4 md:p-8 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -56,6 +58,7 @@ const LoadingSkeleton = () => (
     </div>
 );
 
+// (Component getInitials giữ nguyên)
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -64,7 +67,48 @@ const getInitials = (name) => {
         : name.substring(0, 2).toUpperCase();
 };
 
-// ===== [ĐÃ GỠ BỎ] Component TopicInfoCard và MemberListCard =====
+// (Component TopicInfoCard giữ nguyên)
+const TopicInfoCard = ({ phancong, onDetailsClick }) => {
+    const project = phancong?.detai;
+    const gvhd = phancong?.gvhd;
+    return (
+        <Card className="lg:col-span-1 h-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                    <BookCopy className="h-5 w-5 text-green-600" /> Đề tài
+                </CardTitle>
+                {project && (
+                    <Badge variant={project.TRANGTHAI === 'Đã duyệt' ? 'default' : 'secondary'}>
+                        {project.TRANGTHAI}
+                    </Badge>
+                )}
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col justify-between">
+                {project ? (
+                    <div className="space-y-2">
+                        <p 
+                            className="text-lg font-medium text-primary cursor-pointer hover:underline"
+                            onClick={onDetailsClick}
+                        >
+                            {project.TEN_DETAI}
+                        </p>
+                        <p className="text-sm text-muted-foreground">Mã ĐT: {project.MA_DETAI || 'N/A'}</p>
+                        <p className="text-sm">GVHD: {gvhd?.nguoidung?.HODEM_VA_TEN || 'Chưa rõ'}</p>
+                    </div>
+                ) : (
+                    <p className="text-muted-foreground mt-2">Nhóm chưa đăng ký đề tài.</p>
+                )}
+                {project && (
+                    <Button variant="link" size="sm" className="p-0 h-auto text-xs mt-2" onClick={onDetailsClick}>
+                        Xem chi tiết đề tài...
+                    </Button>
+                )}
+            </CardContent>
+        </Card>
+    );
+};
+
+// (Gỡ bỏ MemberListCard)
 
 export default function MyGroupPage() {
     const { user } = useAuth();
@@ -77,7 +121,7 @@ export default function MyGroupPage() {
     const navigate = useNavigate();
     const [isSubmissionOpen, setIsSubmissionOpen] = useState(false);
 
-    // ===== [KHÔI PHỤC LOGIC GỐC] Các biến được định nghĩa ở đây =====
+    // (useQuery 'activePlans' giữ nguyên)
     const {
         data: activePlans,
         isLoading: isLoadingPlans,
@@ -88,6 +132,7 @@ export default function MyGroupPage() {
         onError: () => toast.error('Lỗi khi tải danh sách kế hoạch.'),
     });
 
+    // (useQuery 'groupDetails' giữ nguyên)
     const {
         data: groupDetails,
         isLoading: isLoadingGroup,
@@ -99,17 +144,27 @@ export default function MyGroupPage() {
             const groupRes = await getMyGroup(params);
             
             let meetingsData = { meetings: [], groupInfo: null };
+            let tasksCount = 0; // Tách riêng
+            
             if (groupRes.has_group) {
                 try {
                     meetingsData = await getMeetingsForGroup(groupRes.group_data.ID_NHOM);
                 } catch (e) {
                     console.error("Failed to fetch meetings in parallel", e);
                 }
+                try {
+                    const stats = await getTaskStats(groupRes.group_data.ID_NHOM);
+                    tasksCount = stats.tasks_ton_dong || 0;
+                } catch(e) {
+                    console.error("Failed to fetch task stats", e);
+                }
+
                 return { 
                     groupData: meetingsData.groupInfo || groupRes.group_data, 
                     invitations: [], 
                     plan, 
-                    meetings: meetingsData.meetings || [] 
+                    meetings: meetingsData.meetings || [],
+                    tasksCount: tasksCount
                 };
             } else {
                 const invitationsRes = await getPendingInvitations(params);
@@ -117,7 +172,8 @@ export default function MyGroupPage() {
                     groupData: null, 
                     invitations: invitationsRes, 
                     plan, 
-                    meetings: [] 
+                    meetings: [],
+                    tasksCount: 0
                 };
             }
         },
@@ -125,6 +181,7 @@ export default function MyGroupPage() {
         onError: () => toast.error('Lỗi tải dữ liệu nhóm.'),
     });
 
+    // (useEffect và useMutation giữ nguyên)
     useEffect(() => {
         if (activePlans && activePlans.length > 0 && !selectedPlanIdForDisplay) {
             setSelectedPlanIdForDisplay(String(activePlans[0].ID_KEHOACH));
@@ -146,18 +203,16 @@ export default function MyGroupPage() {
         transferMutation.mutate(transferAlertInfo.member.ID_NGUOIDUNG);
     };
 
-    const { upcomingMeetingsCount, upcomingExamsCount } = useMemo(() => {
+    // (useMemo 'upcomingMeetingsCount' giữ nguyên)
+    const { upcomingMeetingsCount, upcomingTasksCount } = useMemo(() => {
         const meetings = groupDetails?.meetings || [];
-        if (!meetings) {
-            return { upcomingMeetingsCount: 0, upcomingExamsCount: 0 };
-        }
+        const tasksCount = groupDetails?.tasksCount || 0;
 
         const now = new Date();
         const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
         const endOfThisWeek = endOfWeek(now, { weekStartsOn: 1 });
 
         let meetingsInWeek = 0;
-        let examsInWeek = 0; 
 
         meetings.forEach(meeting => {
             if (!meeting.THOIGIAN_BATDAU) return;
@@ -174,8 +229,8 @@ export default function MyGroupPage() {
             }
         });
         
-        return { upcomingMeetingsCount: meetingsInWeek, upcomingExamsCount: examsInWeek };
-    }, [groupDetails?.meetings]);
+        return { upcomingMeetingsCount: meetingsInWeek, upcomingTasksCount: tasksCount }; 
+    }, [groupDetails?.meetings, groupDetails?.tasksCount]);
 
 
     if (isLoadingPlans) return <div className="p-4 md:p-8"><LoadingSkeleton /></div>;
@@ -188,8 +243,7 @@ export default function MyGroupPage() {
         );
     }
 
-    // ===== [KHÔI PHỤC LOGIC GỐC] =====
-    // Định nghĩa các biến này ở scope ngoài cùng
+    // (Định nghĩa biến giữ nguyên)
     const isLoadingData = isLoadingGroup;
     const isEligible = groupDetails?.plan?.sinhvien_thamgias?.[0]?.DU_DIEUKIEN ?? true;
     const hasGroup = !!groupDetails?.groupData;
@@ -197,7 +251,7 @@ export default function MyGroupPage() {
     const phancong = groupData?.phancong_detai_nhom;
     const hasTopic = !!phancong?.detai;
     const isLeader = user?.ID_NGUOIDUNG === groupData?.ID_NHOMTRUONG;
-    // ===================================
+
 
     if (isLoadingData) {
         return <div className="p-4 md:p-8"><LoadingSkeleton /></div>;
@@ -270,11 +324,11 @@ export default function MyGroupPage() {
                             onClick={() => navigate(`/projects/my-group/schedule/${groupData.ID_NHOM}`)}
                         />
                         <ActivityCard 
-                            title="Lịch thi trong tuần" 
-                            count={upcomingExamsCount}
-                            icon={CalendarCheck} 
+                            title="Công việc tồn đọng" 
+                            count={upcomingTasksCount}
+                            icon={LayoutDashboard} 
                             colorClass="orange"
-                            onClick={() => toast.info("Chức năng xem chi tiết lịch thi sẽ được thêm.")}
+                            onClick={() => navigate(`/projects/my-group/kanban/${groupData.ID_NHOM}`)}
                         />
                     </div>
 
@@ -320,6 +374,7 @@ export default function MyGroupPage() {
                                                 </div>
                                             </div>
                                             <Separator />
+                                            {/* ===== [SỬA LỖI TẠI ĐÂY] ===== */}
                                             <div className="space-y-2">
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                     <Mail className="h-3 w-3" />
@@ -331,7 +386,9 @@ export default function MyGroupPage() {
                                                         <span>{nguoidung.SO_DIENTHOAI}</span>
                                                     </div>
                                                 )}
-                                            </div>
+                                            </div> {/* <-- Sửa Vov> thành </div> */}
+                                            {/* ===== [KẾT THÚC SỬA LỖI] ===== */}
+                                            
                                             {isLeader && !isSelf && !hasTopic && (
                                                 <div className="pt-3 border-t mt-3">
                                                     <Button
@@ -352,7 +409,7 @@ export default function MyGroupPage() {
                     </div>
                 </div>
             ) : (
-                // Nếu không có nhóm, chỉ hiển thị chọn Kế hoạch (Giữ nguyên)
+                // Nếu không có nhóm (Giữ nguyên)
                 <div>
                     <label className="text-sm font-medium">Kế hoạch</label>
                     <Select value={selectedPlanIdForDisplay} onValueChange={setSelectedPlanIdForDisplay}>

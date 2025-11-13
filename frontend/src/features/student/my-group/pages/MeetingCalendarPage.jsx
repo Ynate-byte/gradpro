@@ -5,16 +5,16 @@ import { getMeetingsForGroup, cancelMeeting } from '@/api/meetingService'; // Th
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Loader2, CalendarDays, ArrowLeft, Plus, RefreshCw, List } from 'lucide-react'; // Thêm icon
-import { MeetingCalendar } from '../components/MeetingCalendar';
-import { MeetingDialog } from '../components/MeetingDialog';
-import { MeetingList } from '../components/MeetingList'; // <-- [THÊM MỚI] Import MeetingList
+import { MeetingCalendar } from '../components/meetings/MeetingCalendar';
+import { MeetingDialog } from '../components/meetings/MeetingDialog';
+import { MeetingList } from '../components/meetings/MeetingList'; // <-- [THÊM MỚI] Import MeetingList
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // <-- [THÊM MỚI] Import Tabs
 import { useAuth } from '@/contexts/AuthContext'; // <-- [THÊM MỚI] Import useAuth
 import { cn } from '@/lib/utils'; // <-- [THÊM MỚI] Import cn
 
 // CSS cho lịch
-import '../components/Calendar.css';
+import '../components//meetings/Calendar.css';
 
 export default function MeetingCalendarPage() {
     const { nhomId } = useParams();

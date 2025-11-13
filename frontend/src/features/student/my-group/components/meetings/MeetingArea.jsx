@@ -1,20 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Plus, RefreshCw, CalendarDays, List } from 'lucide-react'; // Bỏ List
+import { Loader2, Plus, RefreshCw, CalendarDays, List } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { getMeetingsForGroup } from '@/api/meetingService';
 import { MeetingDialog } from './MeetingDialog';
-import { MeetingList } from './MeetingList';
+import { MeetingList } from '../MeetingList';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
-// ===== [XÓA BỎ] =====
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-// import { MeetingCalendar } from './MeetingCalendar';
-import './Calendar.css'; 
-// ====================
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { MeetingCalendar } from './MeetingCalendar';
+import './Calendar.css';
 
 export function MeetingArea({ groupData, planId }) {
     const { user } = useAuth();
@@ -31,14 +29,15 @@ export function MeetingArea({ groupData, planId }) {
         return { canManageMeetings: isLeader || isGvhd };
     }, [user, groupData, phancong]);
 
-    // Lấy dữ liệu lịch họp
+    // ===== [SỬA LỖI 1] =====
+    // 1. Đổi tên alias `data: meetings` thành `data`
     const {
-        data, // Sửa alias
+        data, // <-- Sửa ở đây
         isLoading,
         isRefetching,
         refetch
     } = useQuery({
-        queryKey: ['meetings', nhomId], 
+        queryKey: ['meetings', nhomId], // Key vẫn giữ nguyên
         queryFn: () => getMeetingsForGroup(nhomId),
         enabled: !!nhomId,
         onError: () => {
@@ -46,8 +45,10 @@ export function MeetingArea({ groupData, planId }) {
         }
     });
 
-    // Tách dữ liệu
-    const meetings = data?.meetings || [];
+    // 2. Tách dữ liệu từ `data` (là object { groupInfo, meetings })
+    const meetings = data?.meetings || [];      // Đây là MẢNG
+    const groupInfo = data?.groupInfo || groupData; // Đây là OBJECT thông tin nhóm
+    // ===== [KẾT THÚC SỬA LỖI 1] =====
 
     const handleCreateClick = () => {
         setEditingMeeting(null);
@@ -65,8 +66,7 @@ export function MeetingArea({ groupData, planId }) {
                 <CardHeader className="flex flex-col sm:flex-row justify-between sm:items-center">
                     <div>
                         <CardTitle className="flex items-center gap-2">
-                            {/* [SỬA ĐỔI] Đổi Icon về List */}
-                            <List className="h-6 w-6" /> Danh sách Lịch họp
+                            <CalendarDays className="h-6 w-6" /> Lịch họp Nhóm
                         </CardTitle>
                         <CardDescription>
                             Theo dõi các cuộc họp sắp tới và đã diễn ra của nhóm.
@@ -84,23 +84,41 @@ export function MeetingArea({ groupData, planId }) {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    
-                    {/* ===== [SỬA ĐỔI] Gỡ bỏ Tabs ===== */}
-                    {isLoading ? (
-                        <div className="text-center p-10">
-                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-                            <p className="mt-2 text-muted-foreground">Đang tải lịch họp...</p>
-                        </div>
-                    ) : (
-                        <MeetingList 
-                            meetings={meetings}
-                            onEdit={handleEditClick}
-                            planId={planId}
-                            nhomId={nhomId}
-                        />
-                    )}
-                    {/* ===== [KẾT THÚC SỬA ĐỔI] ===== */}
-
+                    <Tabs defaultValue="list" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2 max-w-sm">
+                            <TabsTrigger value="list"><List className="mr-2 h-4 w-4" /> Danh sách</TabsTrigger>
+                            <TabsTrigger value="calendar"><CalendarDays className="mr-2 h-4 w-4" /> Lịch tuần</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="list" className="mt-4">
+                            {isLoading ? (
+                                <div className="text-center p-10">
+                                    <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
+                                    <p className="mt-2 text-muted-foreground">Đang tải lịch họp...</p>
+                                </div>
+                            ) : (
+                                <MeetingList 
+                                    meetings={meetings} // <-- meetings BÂY GIỜ LÀ MẢNG (ĐÃ SỬA)
+                                    onEdit={handleEditClick}
+                                    planId={planId}
+                                    nhomId={nhomId}
+                                />
+                            )}
+                        </TabsContent>
+                        
+                        <TabsContent value="calendar" className="mt-4">
+                            {/* ===== [SỬA LỖI 2] ===== */}
+                            {/* Truyền `meetings` và `groupInfo` xuống Calendar,
+                                không để nó tự fetch lại */}
+                            <MeetingCalendar 
+                                meetings={meetings} // <-- Truyền mảng
+                                groupInfo={groupInfo} // <-- Truyền object
+                                isLoading={isLoading} // <-- Truyền trạng thái loading
+                                onSelectEvent={(eventResource) => handleEditClick(eventResource)}
+                            />
+                            {/* ===== [KẾT THÚC SỬA LỖI 2] ===== */}
+                        </TabsContent>
+                    </Tabs>
                 </CardContent>
             </Card>
 

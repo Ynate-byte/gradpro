@@ -1,28 +1,30 @@
 import React, { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { getMeetingsForGroup } from '@/api/meetingService';
+// Bỏ import useQuery, getMeetingsForGroup, toast
 import { Loader2 } from 'lucide-react';
-import { toast } from 'sonner';
-import { format, startOfWeek, addDays, getHours, parseISO } from 'date-fns'; // Thêm parseISO
+import { format, startOfWeek, addDays, getHours, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import { cn } from '@/lib/utils'; // Import cn
+import { cn } from '@/lib/utils';
 
 // Component con để hiển thị sự kiện trên lịch
 const CalendarEvent = ({ event, onSelectEvent }) => {
     const meeting = event.resource; // Dữ liệu LICHHOP
     const group = event.groupData;  // Dữ liệu NHOM & DETAI
 
-    // ===== [THÊM MỚI] Logic trạng thái =====
-    const status = meeting.TRANGTHAI; // 'Đã lên lịch', 'Đã diễn ra', 'Đã hủy'
+    const status = meeting.TRANGTHAI; 
+    const creatorRole = meeting.nguoi_tao?.vaitro?.TEN_VAITRO; 
+    
+    const isLecturerCreated = ['Giảng viên', 'Trưởng khoa', 'Giáo vụ', 'Admin'].includes(creatorRole);
 
-    // Ánh xạ trạng thái sang CSS class
-    const statusClasses = {
-        'Đã lên lịch': 'event-scheduled', // Mặc định là màu xanh (primary)
-        'Đã diễn ra': 'event-completed',  // Sẽ là màu xanh lá
-        'Đã hủy': 'event-cancelled',    // Sẽ là màu xám
-    };
-    const statusClass = statusClasses[status] || 'event-scheduled';
-    // ===== [KẾT THÚC THÊM MỚI] =====
+    let statusClass = '';
+    if (status === 'Đã hủy') {
+        statusClass = 'event-cancelled';
+    } else if (status === 'Đã diễn ra') {
+        statusClass = 'event-completed';
+    } else if (isLecturerCreated) {
+        statusClass = 'event-lecturer';
+    } else {
+        statusClass = 'event-scheduled';
+    }
 
     const title = event.title;
     const groupName = group?.TEN_NHOM || 'N/A'; 
@@ -40,17 +42,14 @@ const CalendarEvent = ({ event, onSelectEvent }) => {
 
     return (
         <div
-            // ===== [SỬA ĐỔI] Thêm class trạng thái vào đây =====
             className={cn("calendar-event-item", statusClass)}
             onClick={() => onSelectEvent(meeting)} 
         >
-            {/* ===== [THÊM MỚI] Watermark "Đã Hủy" ===== */}
             {status === 'Đã hủy' && (
                 <div className="event-watermark">
                     Đã hủy
                 </div>
             )}
-            {/* ===== [KẾT THÚC THÊM MỚI] ===== */}
 
             <p className="calendar-event-title">{title}</p>
             
@@ -65,40 +64,47 @@ const CalendarEvent = ({ event, onSelectEvent }) => {
     );
 };
 
+// ===== [SỬA LỖI] Nhận props thay vì tự fetch =====
 export function MeetingCalendar({ meetings = [], groupInfo = {}, isLoading, onSelectEvent }) {
     
-    // (Logic tạo ngày/ca học giữ nguyên)
+    // 1. BỎ HOOK useQuery
+    // 2. Dữ liệu meetings và groupInfo được truyền trực tiếp từ props
+
+    // 3. Tạo 7 ngày trong tuần
     const daysOfWeek = useMemo(() => {
         const start = startOfWeek(new Date(), { weekStartsOn: 1 }); // 1 = Thứ 2
         return Array.from({ length: 7 }).map((_, i) => addDays(start, i));
     }, []); 
 
+    // 4. Định nghĩa các ca học
     const sessions = useMemo(() => [
         { name: 'Sáng', startHour: 7, endHour: 12 },
         { name: 'Chiều', startHour: 12, endHour: 18 },
         { name: 'Tối', startHour: 18, endHour: 23 },
     ], []);
 
-    // ===== [SỬA ĐỔI] Gỡ bỏ filter 'Đã hủy' =====
+    // 5. Chuyển đổi dữ liệu (thêm groupInfo vào event)
     const events = useMemo(() => {
         return meetings
-            // .filter(meet => meet.TRANGTHAI !== 'Đã hủy') // <--- GỠ BỎ DÒNG NÀY
+            .filter(meet => meet.TRANGTHAI !== 'Đã hủy') // <-- Gỡ bỏ bộ lọc này
             .map(meet => ({
                 id: meet.ID_LICHHOP,
                 title: meet.TIEUDE_LICHHOP,
                 start: new Date(meet.THOIGIAN_BATDAU),
                 end: meet.THOIGIAN_KETTHUC ? new Date(meet.THOIGIAN_KETTHUC) : null,
                 resource: meet, 
-                groupData: groupInfo,
+                groupData: groupInfo, // <-- Dùng prop groupInfo
             }));
-    }, [meetings, groupInfo]);
-    // ===== [KẾT THÚC SỬA ĐỔI] =====
+    }, [meetings, groupInfo]); // <-- Dùng props
 
+    /**
+     * Lọc các sự kiện thuộc về một ngày và một ca cụ thể
+     */
     const getEventsForCell = (day, session) => {
         const dayString = format(day, 'yyyy-MM-dd');
         
         return events.filter(event => {
-            if (!event.start || !event.start.toISOString()) return false; // Thêm kiểm tra an toàn
+            if (!event.start || !event.start.toISOString()) return false; 
             
             const eventDayString = format(event.start, 'yyyy-MM-dd');
             if (eventDayString !== dayString) return false;
@@ -108,6 +114,7 @@ export function MeetingCalendar({ meetings = [], groupInfo = {}, isLoading, onSe
         });
     };
 
+    // 6. Sử dụng prop `isLoading`
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-96">
@@ -132,7 +139,6 @@ export function MeetingCalendar({ meetings = [], groupInfo = {}, isLoading, onSe
                 {/* --- CÁC HÀNG CA HỌC --- */}
                 {sessions.map(session => (
                     <React.Fragment key={session.name}>
-                        {/* Cột đầu tiên (Sáng, Chiều, Tối) */}
                         <div className="calendar-session-cell">
                             {session.name}
                         </div>

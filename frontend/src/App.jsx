@@ -17,6 +17,7 @@ const FindGroupPage = lazy(() => import('./features/student/find-group/index.jsx
 const MyPlansPage = lazy(() => import('./features/student/my-plans/index.jsx'));
 const StudentThesisTopicsPage = lazy(() => import('./features/student/thesis-topics/index.jsx'));
 const MeetingCalendarPage = lazy(() => import('./features/student/my-group/pages/MeetingCalendarPage.jsx'));
+const KanbanPage = lazy(() => import('./features/student/my-group/pages/KanbanPage.jsx')); // <-- [THÊM MỚI]
 
 // --- Import các components Giảng viên ---
 const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
@@ -152,6 +153,7 @@ function App() {
               <Route path="projects/my-plans" element={<MyPlansPage />} />
               <Route path="projects/my-group" element={<MyGroupPage />} />
               <Route path="projects/my-group/schedule/:nhomId" element={<MeetingCalendarPage />} />
+              <Route path="projects/my-group/kanban/:nhomId" element={<KanbanPage />} />
               <Route path="projects/find-group" element={<FindGroupPage />} />
             </>
           )}
