@@ -14,6 +14,7 @@ const getStatusBadge = (status) => {
   const statusConfig = {
     'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700" },
     'Chờ duyệt': { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700" },
+    'Đang chỉnh sửa': { label: "Đang chỉnh sửa", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" },
     'Yêu cầu chỉnh sửa': { label: "Yêu cầu chỉnh sửa", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
     'Đã duyệt': { label: "Đã duyệt", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700" },
     'Đã đầy': { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
@@ -49,98 +50,121 @@ export const getColumns = ({
   onViewDetails,
   onAddSuggestion,
   onViewRegisteredGroups,
+  isReviewTab = false,
 }) => [
-  {
-    accessorKey: "TEN_DETAI",
-    header: ({ column }) => (
-      <Button
-        variant="ghost"
-        onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        className="h-8 px-0 font-medium"
-      >
-        Tên đề tài
-        <SortIndicator column={column} />
-      </Button>
-    ),
-    cell: ({ row }) => (
-      <button
-        onClick={() => onViewDetails(row.original.ID_DETAI)}
-        className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none focus:underline"
-        title={row.original.TEN_DETAI}
-      >
-        {row.original.TEN_DETAI}
-      </button>
-    ),
-  },
-  {
-    accessorKey: "ten_giang_vien",
-    header: "GV Đề xuất",
-    cell: ({ row }) => {
-      const isOwner = row.original.ID_NGUOI_DEXUAT === currentUserId;
-      return (
-        <div
-          className={cn(
-            "text-sm max-w-[150px] truncate",
-            isOwner
-              ? "font-semibold text-indigo-600 dark:text-indigo-400"
-              : "text-muted-foreground"
-          )}
-          title={isOwner ? "Bạn là người đề xuất" : row.original.ten_giang_vien}
+    {
+      accessorKey: "TEN_DETAI",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="h-8 px-0 font-medium"
         >
-          {isOwner ? "Của tôi" : row.original.ten_giang_vien}
-        </div>
-      );
+          Tên đề tài
+          <SortIndicator column={column} />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <button
+          onClick={() => onViewDetails(row.original.ID_DETAI)}
+          className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none focus:underline"
+          title={row.original.TEN_DETAI}
+        >
+          {row.original.TEN_DETAI}
+        </button>
+      ),
     },
-  },
-  {
-    accessorKey: "TRANGTHAI",
-    header: "Trạng thái",
-    cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
-    filterFn: (row, id, value) => value.includes(row.getValue(id)),
-  },
-  {
-    accessorKey: "chuyennganh.TEN_CHUYENNGANH",
-    header: "Chuyên ngành",
-    cell: ({ row }) => (
-      <div className="text-xs text-muted-foreground">
-        {row.original.chuyennganh?.TEN_CHUYENNGANH || "N/A"}
-      </div>
-    ),
-  },
-  {
-    id: "chuyen_nganh_id",
-    accessorFn: (row) => String(row.chuyennganh?.ID_CHUYENNGANH || ""),
-  },
-  {
-    accessorKey: "SO_NHOM_HIENTAI",
-    header: "Đã ĐK",
-    cell: ({ row }) => {
-      const current = row.original.SO_NHOM_HIENTAI || 0;
-      const max = row.original.SO_NHOM_TOIDA || 0;
-      const isFull = current >= max;
-      return (
-        <div className="text-center font-medium">
-          <span className={cn(isFull ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
-            {current}
-          </span>
-          <span className="text-muted-foreground"> / {max}</span>
-        </div>
-      );
+    {
+      accessorKey: "ten_giang_vien",
+      header: "GV Đề xuất",
+      cell: ({ row }) => {
+        const isOwner = row.original.ID_NGUOI_DEXUAT === currentUserId;
+        return (
+          <div
+            className={cn(
+              "text-sm max-w-[150px] truncate",
+              isOwner
+                ? "font-semibold text-indigo-600 dark:text-indigo-400"
+                : "text-muted-foreground"
+            )}
+            title={isOwner ? "Bạn là người đề xuất" : row.original.ten_giang_vien}
+          >
+            {isOwner ? "Của tôi" : row.original.ten_giang_vien}
+          </div>
+        );
+      },
     },
-  },
-  {
-    id: "actions",
-    cell: ({ row }) => (
-      <DataTableRowActions
-        row={row}
-        currentUserId={currentUserId}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onSubmit={onSubmit}
-        onViewDetails={onViewDetails}
-        onAddSuggestion={onAddSuggestion}
-        onViewRegisteredGroups={onViewRegisteredGroups}
-      />
-    ),
-  },
-];
+    {
+      accessorKey: "TRANGTHAI",
+      header: "Trạng thái",
+      cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
+      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+    },
+    {
+      accessorKey: "chuyennganh.TEN_CHUYENNGANH",
+      header: "Chuyên ngành",
+      cell: ({ row }) => (
+        <div className="text-xs text-muted-foreground">
+          {row.original.chuyennganh?.TEN_CHUYENNGANH || "N/A"}
+        </div>
+      ),
+    },
+    {
+      id: "chuyen_nganh_id",
+      accessorFn: (row) => String(row.chuyennganh?.ID_CHUYENNGANH || ""),
+    },
+    {
+      accessorKey: "SO_NHOM_HIENTAI",
+      header: "Đã ĐK",
+      cell: ({ row }) => {
+        const current = row.original.SO_NHOM_HIENTAI || 0;
+        const max = row.original.SO_NHOM_TOIDA || 0;
+        const isFull = current >= max;
+        return (
+          <div className="text-center font-medium">
+            <span className={cn(isFull ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+              {current}
+            </span>
+            <span className="text-muted-foreground"> / {max}</span>
+          </div>
+        );
+      },
+    },
+    ...(isReviewTab ? [{
+      id: "contribution_status",
+      header: "Trạng thái góp ý",
+      cell: ({ row }) => {
+        const topic = row.original;
+        const hasContributed = topic.goiy_detai?.some(g => g.ID_GIANGVIEN === currentUserId);
+
+        return (
+          <Badge
+            variant="outline"
+            className={cn(
+              "px-2 py-0.5 text-xs",
+              hasContributed
+                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700"
+                : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700"
+            )}
+          >
+            {hasContributed ? "Đã góp ý" : "Chưa góp ý"}
+          </Badge>
+        );
+      },
+    }] : []),
+    {
+      id: "actions",
+      cell: ({ row }) => (
+        <DataTableRowActions
+          row={row}
+          currentUserId={currentUserId}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onSubmit={onSubmit}
+          onViewDetails={onViewDetails}
+          onAddSuggestion={onAddSuggestion}
+          onViewRegisteredGroups={onViewRegisteredGroups}
+        />
+      ),
+    },
+  ];

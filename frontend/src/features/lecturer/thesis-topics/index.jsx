@@ -118,6 +118,7 @@ const ThesisTopicsPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const [columnFilters, setColumnFilters] = useState([]);
+  const [contributionFilter, setContributionFilter] = useState('all');
 
   const [selectedPlan, setSelectedPlan] = useState('');
   const [plans, setPlans] = useState([]);
@@ -334,6 +335,17 @@ const ThesisTopicsPage = () => {
 
     if (filtered.length === 0) return { pagedData: [], pageCount: 0 };
 
+    // Filter by contribution status
+    if (contributionFilter === 'contributed') {
+      filtered = filtered.filter(t =>
+        t.goiy_detai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
+      );
+    } else if (contributionFilter === 'not_contributed') {
+      filtered = filtered.filter(t =>
+        !t.goiy_detai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
+      );
+    }
+
     filtered = filtered.filter(t =>
       t.TEN_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
       t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
@@ -388,7 +400,7 @@ const ThesisTopicsPage = () => {
 
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
-  }, [activeTab, columnFilters, debouncedSearchTerm]);
+  }, [activeTab, columnFilters, debouncedSearchTerm, contributionFilter]);
 
   useEffect(() => {
     if (activeTab === 'review') {
@@ -404,7 +416,8 @@ const ThesisTopicsPage = () => {
     onViewDetails: handleViewTopicDetails,
     onAddSuggestion: handleAddSuggestion,
     onViewRegisteredGroups: handleViewRegisteredGroups,
-  }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic]);
+    isReviewTab: activeTab === 'review',
+  }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic, activeTab]);
 
   return (
     <motion.div
@@ -571,6 +584,21 @@ const ThesisTopicsPage = () => {
               </TabsContent>
 
               <TabsContent value="review" className="mt-0 outline-none ring-0">
+                <div className="flex items-center gap-4 mb-4">
+                  <Select
+                    value={contributionFilter}
+                    onValueChange={setContributionFilter}
+                  >
+                    <SelectTrigger className="w-[200px]">
+                      <SelectValue placeholder="Lọc theo góp ý" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả</SelectItem>
+                      <SelectItem value="contributed">Đã góp ý</SelectItem>
+                      <SelectItem value="not_contributed">Chưa góp ý</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
                 <DataTable
                   columns={columns}
                   data={processedReviewData.pagedData}

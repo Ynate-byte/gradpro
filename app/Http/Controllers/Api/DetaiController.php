@@ -187,6 +187,13 @@ class DetaiController extends Controller
            return response()->json(['message' => 'Cannot update approved topic'], 403);
        }
 
+       // Allow editing if status is "Đang chỉnh sửa" (new editable status)
+       if ($topic->TRANGTHAI === 'Đang chỉnh sửa' && !$isAdmin) {
+           if (!$isProposer) {
+               return response()->json(['message' => 'Cannot update topic that is being edited by another user'], 403);
+           }
+       }
+
        $validator = Validator::make($request->all(), [
            'TEN_DETAI' => 'sometimes|required|string|max:255',
            'MOTA' => 'sometimes|required|string',
@@ -210,6 +217,16 @@ class DetaiController extends Controller
            $topic->update(['TRANGTHAI' => 'Nháp']);
        }
 
+       // If updated by proposer and status is "Chờ duyệt", change to "Đang chỉnh sửa"
+       if ($isProposer && $topic->TRANGTHAI === 'Chờ duyệt') {
+           $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
+       }
+
+       // If updated by proposer and status is "Đang chỉnh sửa", change back to "Chờ duyệt"
+       if ($isProposer && $topic->TRANGTHAI === 'Đang chỉnh sửa') {
+           $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
+       }
+
        return response()->json($topic->load(['nguoiDexuat.nguoidung', 'chuyennganh']));
    }
 
@@ -231,8 +248,9 @@ class DetaiController extends Controller
            return response()->json(['message' => 'Unauthorized'], 403);
        }
 
-       if ($topic->TRANGTHAI !== 'Nháp') {
-           return response()->json(['message' => 'Topic is not in draft status'], 400);
+       // Allow submitting from "Nháp" or "Đang chỉnh sửa" status
+       if (!in_array($topic->TRANGTHAI, ['Nháp', 'Đang chỉnh sửa'])) {
+           return response()->json(['message' => 'Topic must be in draft or being edited status to submit for approval'], 400);
        }
 
        $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
@@ -338,6 +356,11 @@ class DetaiController extends Controller
            'NOIDUNG_GOIY' => $request->NOIDUNG_GOIY,
            'NGAYTAO' => now(),
        ]);
+
+       // If topic is in "Chờ duyệt" status and this is the first suggestion, change status to "Đang chỉnh sửa"
+       if ($topic->TRANGTHAI === 'Chờ duyệt') {
+           $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
+       }
 
        // Load relationships for response
        $suggestion->load(['giangvien.nguoidung']); // [SỬA] Đổi 'nguoiGoiy' thành 'giangvien' cho nhất quán

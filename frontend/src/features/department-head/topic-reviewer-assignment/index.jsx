@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Users, BookOpen, UserCheck, AlertTriangle, Edit } from 'lucide-react';
+import { Loader2, Users, BookOpen, UserCheck, AlertTriangle, Edit, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from '@/api/axiosConfig';
 import { cn } from '@/lib/utils';
@@ -48,8 +48,12 @@ const TopicReviewerAssignmentPage = () => {
 
     // Dialog states
     const [showAssignDialog, setShowAssignDialog] = useState(false);
+    const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+    const [showLecturerTopicsDialog, setShowLecturerTopicsDialog] = useState(false);
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [selectedReviewers, setSelectedReviewers] = useState([]);
+    const [lecturerDetails, setLecturerDetails] = useState([]);
+    const [selectedLecturer, setSelectedLecturer] = useState(null);
 
     useEffect(() => {
         loadPlans();
@@ -163,6 +167,56 @@ const TopicReviewerAssignmentPage = () => {
         }
     };
 
+    const handleViewDetails = () => {
+        if (!selectedPlan) {
+            toast.error('Vui lòng chọn kế hoạch');
+            return;
+        }
+
+        // Calculate lecturer details from existing data
+        const lecturerMap = new Map();
+
+        // Initialize all lecturers with 0 assignments
+        lecturers.forEach(lecturer => {
+            lecturerMap.set(lecturer.ID_GIANGVIEN, {
+                ID_GIANGVIEN: lecturer.ID_GIANGVIEN,
+                TEN_GIANGVIEN: lecturer.TEN_GIANGVIEN,
+                HOCVI: lecturer.HOCVI,
+                topic_count: 0,
+                topic_names: []
+            });
+        });
+
+        // Count assignments from topics data
+        topics.forEach(topic => {
+            if (topic.phancong_nguoi_gop_y) {
+                topic.phancong_nguoi_gop_y.forEach(assignment => {
+                    const lecturerId = assignment.ID_GIANGVIEN;
+                    if (lecturerMap.has(lecturerId)) {
+                        const lecturer = lecturerMap.get(lecturerId);
+                        lecturer.topic_count += 1;
+                        lecturer.topic_names.push(topic.TEN_DETAI);
+                    }
+                });
+            }
+        });
+
+        // Convert map to array and format topic names
+        const details = Array.from(lecturerMap.values()).map(lecturer => ({
+            ...lecturer,
+            topic_names: lecturer.topic_names.length > 0 ? lecturer.topic_names.join(', ') : 'Chưa có đề tài',
+            topics_list: lecturer.topic_names // Keep original array for detailed view
+        }));
+
+        setLecturerDetails(details);
+        setShowDetailsDialog(true);
+    };
+
+    const handleViewLecturerTopics = (lecturer) => {
+        setSelectedLecturer(lecturer);
+        setShowLecturerTopicsDialog(true);
+    };
+
     const processedData = useMemo(() => {
         const assignedTopics = topics.filter(topic => topic.reviewer_count > 0).length;
         const unassignedTopics = topics.filter(topic => topic.reviewer_count === 0).length;
@@ -223,33 +277,57 @@ const TopicReviewerAssignmentPage = () => {
                     />
                 </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Tự động Phân công Người Góp ý</CardTitle>
-                        <CardDescription>
-                            Phân công ngẫu nhiên người góp ý cho tất cả đề tài trạng thái Nháp và Chờ duyệt chưa có người góp ý.
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex justify-between items-center">
-                        <p className="text-sm text-muted-foreground">
-                            Sẽ phân công 1-2 người góp ý cho mỗi đề tài, đảm bảo không trùng với người đề xuất đề tài.
-                        </p>
-                        <Button
-                            onClick={handleAutoAssign}
-                            disabled={isSubmitting}
-                            variant="default"
-                        >
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Tự động phân công
-                        </Button>
-                    </CardContent>
-                </Card>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Tự động Phân công Người Góp ý</CardTitle>
+                            <CardDescription>
+                                Phân công ngẫu nhiên người góp ý cho tất cả đề tài trạng thái Chờ duyệt chưa có người góp ý.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex justify-between items-center">
+                            <p className="text-sm text-muted-foreground">
+                                Sẽ phân công 1-2 người góp ý cho mỗi đề tài, đảm bảo không trùng với người đề xuất đề tài.
+                            </p>
+                            <Button
+                                onClick={handleAutoAssign}
+                                disabled={isSubmitting}
+                                variant="default"
+                            >
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Tự động phân công
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Chi tiết Phân công</CardTitle>
+                            <CardDescription>
+                                Xem danh sách giảng viên và số lượng đề tài được giao góp ý.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex justify-between items-center">
+                            <p className="text-sm text-muted-foreground">
+                                Hiển thị chi tiết phân công cho từng giảng viên trong bộ môn.
+                            </p>
+                            <Button
+                                onClick={handleViewDetails}
+                                disabled={isLoading}
+                                variant="outline"
+                            >
+                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
+                                Xem chi tiết
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
 
                 <Card>
                     <CardHeader>
                         <CardTitle>Danh sách Đề tài Phân công Người Góp ý</CardTitle>
                         <CardDescription>
-                            Danh sách các đề tài trạng thái Nháp/Chờ duyệt trong bộ môn. Có thể phân công thủ công hoặc chỉnh sửa người góp ý đã phân công.
+                            Danh sách các đề tài trạng thái Chờ duyệt trong bộ môn. Có thể phân công thủ công hoặc chỉnh sửa người góp ý đã phân công.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -421,6 +499,108 @@ const TopicReviewerAssignmentPage = () => {
                         >
                             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                             Xác nhận phân công
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Lecturer Details Dialog */}
+            <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+                <DialogContent className="sm:max-w-[800px]">
+                    <DialogHeader>
+                        <DialogTitle>Chi tiết Phân công Người Góp ý</DialogTitle>
+                        <DialogDescription>
+                            Danh sách giảng viên trong bộ môn và số lượng đề tài được giao góp ý.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {lecturerDetails.length === 0 ? (
+                            <div className="py-4 text-center text-muted-foreground">
+                                Không có dữ liệu chi tiết.
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Tên giảng viên</TableHead>
+                                        <TableHead>Học vị</TableHead>
+                                        <TableHead className="text-center">Số đề tài góp ý</TableHead>
+                                        <TableHead className="text-center">Danh sách đề tài</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {lecturerDetails.map(lecturer => (
+                                        <TableRow key={lecturer.ID_GIANGVIEN} className="hover:bg-muted/50">
+                                            <TableCell className="font-semibold">
+                                                {lecturer.TEN_GIANGVIEN}
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                {lecturer.HOCVI}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Badge variant={lecturer.topic_count > 0 ? 'default' : 'secondary'}>
+                                                    {lecturer.topic_count}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {lecturer.topic_count > 0 ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleViewLecturerTopics(lecturer)}
+                                                    >
+                                                        <Eye className="w-4 h-4 mr-1" />
+                                                        Xem chi tiết
+                                                    </Button>
+                                                ) : (
+                                                    <span className="text-sm text-muted-foreground">Chưa có đề tài</span>
+                                                )}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
+                            Đóng
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Lecturer Topics Dialog */}
+            <Dialog open={showLecturerTopicsDialog} onOpenChange={setShowLecturerTopicsDialog}>
+                <DialogContent className="sm:max-w-[600px]">
+                    <DialogHeader>
+                        <DialogTitle>Danh sách đề tài góp ý</DialogTitle>
+                        <DialogDescription>
+                            Các đề tài được giao cho giảng viên <strong>{selectedLecturer?.TEN_GIANGVIEN}</strong> góp ý.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {selectedLecturer?.topics_list && selectedLecturer.topics_list.length > 0 ? (
+                            <div className="space-y-2">
+                                {selectedLecturer.topics_list.map((topicName, index) => (
+                                    <div key={index} className="p-3 bg-muted/50 rounded-lg">
+                                        <div className="font-medium text-sm">{topicName}</div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-4 text-center text-muted-foreground">
+                                Không có đề tài nào được giao.
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowLecturerTopicsDialog(false)}>
+                            Đóng
                         </Button>
                     </DialogFooter>
                 </DialogContent>

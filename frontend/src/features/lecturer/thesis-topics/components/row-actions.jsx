@@ -37,8 +37,8 @@ export function DataTableRowActions({
 
   const topic = row.original;
   const isOwner = topic.ID_NGUOI_DEXUAT === currentUserId;
-  const canEdit = isOwner && ['Nháp', 'Yêu cầu chỉnh sửa'].includes(topic.TRANGTHAI);
-  const canSubmit = isOwner && (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Yêu cầu chỉnh sửa');
+  const canEdit = isOwner && ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI);
+  const canSubmit = isOwner && ['Nháp', 'Yêu cầu chỉnh sửa'].includes(topic.TRANGTHAI); // Remove 'Đang chỉnh sửa' from canSubmit
   const canDelete = isOwner && (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Yêu cầu chỉnh sửa') && topic.SO_NHOM_HIENTAI === 0;
   const canSuggest = !isOwner && ['Nháp', 'Chờ duyệt'].includes(topic.TRANGTHAI);
   const canViewGroups = isOwner && topic.SO_NHOM_HIENTAI > 0;

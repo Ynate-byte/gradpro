@@ -96,6 +96,18 @@ const QuotaManager = () => {
     }
   }, [selectedPlan]);
 
+  // Update quota amount when lecturer is selected
+  useEffect(() => {
+    if (selectedLecturerId && lecturers.length > 0) {
+      const selectedLecturer = lecturers.find(gv => gv.ID_GIANGVIEN === parseInt(selectedLecturerId));
+      if (selectedLecturer) {
+        setQuotaAmount(String(selectedLecturer.quota_assigned || 0));
+      }
+    } else {
+      setQuotaAmount('');
+    }
+  }, [selectedLecturerId, lecturers]);
+
   const loadPlans = async () => {
     setIsLoading(true);
     try {
@@ -380,7 +392,7 @@ const QuotaManager = () => {
                 disabled={!selectedLecturerId || quotaAmount === '' || !selectedPlan || isLoading || isSubmitting}
               >
                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Cập nhật
+                Cập nhật ({quotaAmount || 0})
               </Button>
             </div>
           </CardContent>
@@ -418,9 +430,18 @@ const QuotaManager = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              handleAdjustQuota(gv.ID_GIANGVIEN, Math.max(0, (gv.quota_assigned || 0) - 1))
-                            }
+                            onClick={() => {
+                              const newValue = Math.max(0, (gv.quota_assigned || 0) - 1);
+                              // Update local state immediately for real-time feedback
+                              setLecturers((prevLecturers) =>
+                                prevLecturers.map((lecturer) =>
+                                  lecturer.ID_GIANGVIEN === gv.ID_GIANGVIEN
+                                    ? { ...lecturer, quota_assigned: newValue }
+                                    : lecturer
+                                )
+                              );
+                              handleAdjustQuota(gv.ID_GIANGVIEN, newValue);
+                            }}
                             disabled={(gv.quota_assigned || 0) <= 0 || isSubmitting}
                             className="h-6 w-6 p-0"
                           >
@@ -431,15 +452,34 @@ const QuotaManager = () => {
                           <input
                             type="number"
                             min="0"
-                            defaultValue={gv.quota_assigned || 0}
+                            value={gv.quota_assigned || 0}
                             className="w-16 text-center border rounded-md h-7 focus:outline-none focus:ring-2 focus:ring-primary"
                             disabled={isSubmitting}
+                            onChange={(e) => {
+                              const value = parseInt(e.target.value, 10);
+                              if (!isNaN(value) && value >= 0) {
+                                // Update local state immediately for real-time feedback
+                                setLecturers((prevLecturers) =>
+                                  prevLecturers.map((lecturer) =>
+                                    lecturer.ID_GIANGVIEN === gv.ID_GIANGVIEN
+                                      ? { ...lecturer, quota_assigned: value }
+                                      : lecturer
+                                  )
+                                );
+                              }
+                            }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
                                 const value = parseInt(e.target.value, 10);
-                                if (!isNaN(value)) {
+                                if (!isNaN(value) && value >= 0) {
                                   handleAdjustQuota(gv.ID_GIANGVIEN, value);
                                 }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              const value = parseInt(e.target.value, 10);
+                              if (!isNaN(value) && value >= 0) {
+                                handleAdjustQuota(gv.ID_GIANGVIEN, value);
                               }
                             }}
                           />
@@ -448,9 +488,18 @@ const QuotaManager = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              handleAdjustQuota(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) + 1)
-                            }
+                            onClick={() => {
+                              const newValue = (gv.quota_assigned || 0) + 1;
+                              // Update local state immediately for real-time feedback
+                              setLecturers((prevLecturers) =>
+                                prevLecturers.map((lecturer) =>
+                                  lecturer.ID_GIANGVIEN === gv.ID_GIANGVIEN
+                                    ? { ...lecturer, quota_assigned: newValue }
+                                    : lecturer
+                                )
+                              );
+                              handleAdjustQuota(gv.ID_GIANGVIEN, newValue);
+                            }}
                             disabled={isSubmitting}
                             className="h-6 w-6 p-0"
                           >

@@ -11,7 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
   Send, MessageSquare, BookOpen, User,
-  Star, Target, Check, Layers, Users, Calendar, AlertTriangle
+  Star, Target, Check, Layers, Users, Calendar, AlertTriangle,
+  CheckCircle, Edit, XCircle, ArrowRight, ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { thesisTopicService } from '@/api/thesisTopicService';
@@ -67,7 +68,7 @@ const getStatusBadge = (status) => {
   return <Badge variant="outline" className={`px-2 py-0.5 text-xs ${config.className}`}>{config.label}</Badge>;
 };
 
-const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
+const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = false, onApprove, onReject, onRequestEdit, onNext, onPrevious }) => {
   const { user } = useAuth();
   const [topic, setTopic] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -127,7 +128,7 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent 
+        <DialogContent
           className="max-w-4xl w-full h-full max-h-[90vh] p-0 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500"
           style={{ maxHeight: '90vh' }}
         >
@@ -317,6 +318,57 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId }) => {
                     )}
                   </div>
                 </ScrollArea>
+
+                {showAdminActions && topic.TRANGTHAI === 'Chờ duyệt' && (
+                  <div className="flex-shrink-0 border-t border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-800 p-4">
+                    <div className="flex flex-wrap gap-3 justify-center">
+                      <Button
+                        onClick={onPrevious}
+                        variant="outline"
+                        className="border-gray-300 text-gray-600 hover:bg-gray-50"
+                        size="sm"
+                      >
+                        <ArrowLeft className="w-4 h-4 mr-1" />
+                        Quay lại
+                      </Button>
+                      <Button
+                        onClick={() => onApprove(topic.ID_DETAI)}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                        size="sm"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1" />
+                        Duyệt đề tài
+                      </Button>
+                      <Button
+                        onClick={() => onRequestEdit(topic)}
+                        variant="outline"
+                        className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                        size="sm"
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        Yêu cầu chỉnh sửa
+                      </Button>
+                      <Button
+                        onClick={() => onReject(topic)}
+                        variant="outline"
+                        className="border-red-300 text-red-600 hover:bg-red-50"
+                        size="sm"
+                      >
+                        <XCircle className="w-4 h-4 mr-1" />
+                        Từ chối
+                      </Button>
+                      <Button
+                        onClick={onNext}
+                        variant="outline"
+                        className="border-blue-300 text-blue-600 hover:bg-blue-50"
+                        size="sm"
+                      >
+                        <ArrowRight className="w-4 h-4 mr-1" />
+                        Tiếp theo
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>
