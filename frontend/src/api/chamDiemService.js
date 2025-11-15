@@ -13,7 +13,7 @@ import axiosClient from './axiosConfig';
  * @returns {Promise<{huongdan: Array, phanbien: Array, hoidong: Array}>}
  */
 export const getMyGradingTasks = () => {
-  return axiosClient.get('/chamdiem/my-tasks').then(res => res.data);
+    return axiosClient.get('/chamdiem/my-tasks').then(res => res.data);
 };
 
 /**
@@ -22,7 +22,7 @@ export const getMyGradingTasks = () => {
  * @param {{DIEM: number, NHANXET: string}} data
  */
 export const submitHuongDan = (nhomId, data) => {
-  return axiosClient.post(`/chamdiem/huongdan/${nhomId}`, data).then(res => res.data);
+    return axiosClient.post(`/chamdiem/huongdan/${nhomId}`, data).then(res => res.data);
 };
 
 /**
@@ -31,7 +31,16 @@ export const submitHuongDan = (nhomId, data) => {
  * @param {{DIEM: number, NHANXET: string}} data
  */
 export const submitPhanBien = (nhomId, data) => {
-  return axiosClient.post(`/chamdiem/phanbien/${nhomId}`, data).then(res => res.data);
+    return axiosClient.post(`/chamdiem/phanbien/${nhomId}`, data).then(res => res.data);
+};
+
+// [THÊM MỚI] Giảng viên Phản biện điền 0 điểm (Không chấp thuận)
+/**
+ * [GV Phản biện] Tự động điền 0 điểm và nhận xét là "Không chấp thuận".
+ * @param {number} nhomId
+ */
+export const submitZeroPhanBien = (nhomId) => {
+    return axiosClient.post(`/chamdiem/phanbien/${nhomId}/reject`).then(res => res.data);
 };
 
 /**
@@ -40,7 +49,7 @@ export const submitPhanBien = (nhomId, data) => {
  * @param {{DIEM: number, NHANXET: string}} data
  */
 export const submitHoiDong = (nhomId, data) => {
-  return axiosClient.post(`/chamdiem/hoidong/${nhomId}`, data).then(res => res.data);
+    return axiosClient.post(`/chamdiem/hoidong/${nhomId}`, data).then(res => res.data);
 };
 
 // ===========================================
@@ -52,7 +61,7 @@ export const submitHoiDong = (nhomId, data) => {
  * @param {number} nhomId
  */
 export const getNhomInfoForGrading = (nhomId) => {
-  return axiosClient.get(`/chamdiem/nhom/${nhomId}`).then(res => res.data);
+    return axiosClient.get(`/chamdiem/nhom/${nhomId}`).then(res => res.data);
 };
 
 /**

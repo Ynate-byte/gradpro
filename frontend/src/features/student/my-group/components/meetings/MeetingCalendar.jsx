@@ -128,7 +128,7 @@ export function MeetingCalendar({ meetings = [], groupInfo = {}, isLoading, onSe
             <div className="calendar-grid">
                 
                 {/* --- HÀNG TIÊU ĐỀ (HEADER) --- */}
-                <div className="calendar-header">Ca học</div>
+                <div className="calendar-header">Lịch họp</div>
                 {daysOfWeek.map(day => (
                     <div key={day.toISOString()} className="calendar-header">
                         <div>{format(day, 'EEEE', { locale: vi })}</div>

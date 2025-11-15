@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import axiosClient from "@/api/axiosConfig";
+import { getNhomInfoForGrading, getTyTrongDiem, getSavedScoresForGroup, saveCombinedScores } from "@/api/chamDiemService";
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,7 @@ import {
   CardContent,
   CardFooter,
   CardDescription
-} from "@/components/ui/card";
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -19,8 +19,8 @@ import {
   TableHeader,
   TableRow,
   TableFooter
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
+} from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -42,11 +42,6 @@ import {
   MessageSquare
 } from 'lucide-react';
 
-// --- Helper Functions for UI ---
-
-/**
- * Trả về variant của Badge dựa trên vai trò
- */
 const getRoleVariant = (role) => {
   if (!role) return 'default';
   const roleLower = role.toLowerCase();
@@ -56,16 +51,11 @@ const getRoleVariant = (role) => {
   return 'default';
 };
 
-/**
- * Định dạng lại tên vai trò cho dễ đọc
- */
 const formatRole = (role, loaiMacDinh) => {
   if (!role) return loaiMacDinh;
   const formatted = role.replace('HĐ', '').trim();
   return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 };
-
-// --- Component Bảng Điểm ---
 
 const DiemTable = ({ title, icon: Icon, list, loai, tinhDiemTB, handleDiemChange }) => (
   <Card className="shadow-sm">
@@ -89,17 +79,14 @@ const DiemTable = ({ title, icon: Icon, list, loai, tinhDiemTB, handleDiemChange
             <TableRow key={gv.ID_GIANGVIEN}>
               <TableCell className="font-medium">{gv.HOTEN}</TableCell>
               <TableCell>
-                <Badge
-                  variant={getRoleVariant(gv.VAITRO || loai)}
-                  className="capitalize"
-                >
+                <Badge variant={getRoleVariant(gv.VAITRO || loai)} className="capitalize">
                   {formatRole(gv.VAITRO, loai)}
                 </Badge>
               </TableCell>
               <TableCell>
                 <Input
                   type="number"
-                  step="0.1"
+                  step="0.01"
                   min="0"
                   max="10"
                   value={gv.DIEM}
@@ -116,7 +103,7 @@ const DiemTable = ({ title, icon: Icon, list, loai, tinhDiemTB, handleDiemChange
               Điểm trung bình
             </TableCell>
             <TableCell className="text-center font-bold text-lg text-primary">
-              {tinhDiemTB(loai).toFixed(2)}
+              {tinhDiemTB(loai) !== null ? tinhDiemTB(loai).toFixed(2) : 'N/A'}
             </TableCell>
           </TableRow>
         </TableFooter>
@@ -125,13 +112,11 @@ const DiemTable = ({ title, icon: Icon, list, loai, tinhDiemTB, handleDiemChange
   </Card>
 );
 
-// --- Component Chính ---
-
 const ChamDiemChiTiet = () => {
   const { idNhom } = useParams();
   const navigate = useNavigate();
   const [nhom, setNhom] = useState(null);
-  const [tytrong, setTytrong] = useState({ HUONGDAN: 0.4, PHANBIEN: 0.3, HOIDONG: 0.3 });
+  const [tytrong, setTytrong] = useState(null);
   const [diem, setDiem] = useState({
     huongdan: [],
     phanbien: [],
@@ -139,54 +124,89 @@ const ChamDiemChiTiet = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [diemTongKetTuBackend, setDiemTongKetTuBackend] = useState(null);
 
-  // Tải dữ liệu (Logic giữ nguyên)
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [nhomRes, tytrongRes, tongketRes] = await Promise.all([
-        axiosClient.get(`/chamdiem/nhom/${idNhom}`),
-        axiosClient.get('/chamdiem/tytrong'),
-        axiosClient.get(`/chamdiem/tongket/${idNhom}`),
+        getNhomInfoForGrading(idNhom),
+        getTyTrongDiem(),
+        getSavedScoresForGroup(idNhom),
       ]);
 
-      const nhomData = nhomRes.data.nhom;
-      const tongketData = tongketRes.data;
+      const nhomData = nhomRes.nhom;
+      const tongketData = tongketRes;
 
       setNhom(nhomData);
-      setTytrong(tytrongRes.data);
+      setTytrong(tytrongRes);
 
-      const gvHD = nhomData.GIANGVIEN.filter(gv => gv.VAITRO === 'Hướng dẫn');
-      const gvPB = nhomData.GIANGVIEN.filter(gv => gv.VAITRO === 'Phản biện');
-      const gvHDONG = nhomData.GIANGVIEN.filter(gv =>
-        gv.VAITRO.includes('HĐ') || ['chutich', 'thuky', 'thanhvien'].includes(gv.VAITRO)
-      );
+      const finalScore = tongketData.DIEM_TONG !== null && tongketData.DIEM_TONG !== undefined
+        ? parseFloat(tongketData.DIEM_TONG)
+        : null;
+      setDiemTongKetTuBackend(finalScore);
 
-      const diemHDMap = new Map(tongketData?.diem_huong_dan?.map(d => [d.ID_GIANGVIEN, d.DIEM]));
-      const diemPBMap = new Map(tongketData?.diem_phan_bien?.map(d => [d.ID_GIANGVIEN, d.DIEM]));
-      const diemHDONGMap = new Map(tongketData?.diem_hoi_dong?.map(d => [d.ID_GIANGVIEN, d.DIEM]));
+      const gvHDMap = new Map();
+      const gvPBMap = new Map();
+      const gvHDONGMap = new Map();
+      const allGvFromNhomData = new Map();
 
-      const getScore = (map, id) => map.get(id) ?? 0;
-
-      setDiem({
-        huongdan: gvHD.map(gv => ({
-          ID_GIANGVIEN: gv.ID_GIANGVIEN,
-          HOTEN: gv.HOTEN,
-          DIEM: getScore(diemHDMap, gv.ID_GIANGVIEN)
-        })),
-        phanbien: gvPB.map(gv => ({
-          ID_GIANGVIEN: gv.ID_GIANGVIEN,
-          HOTEN: gv.HOTEN,
-          DIEM: getScore(diemPBMap, gv.ID_GIANGVIEN)
-        })),
-        hoidong: gvHDONG.map(gv => ({
+      (nhomData.GIANGVIEN || []).forEach(gv => {
+        const baseInfo = {
           ID_GIANGVIEN: gv.ID_GIANGVIEN,
           HOTEN: gv.HOTEN,
           VAITRO: gv.VAITRO,
-          DIEM: getScore(diemHDONGMap, gv.ID_GIANGVIEN)
-        })),
+          DIEM: 0
+        };
+
+        allGvFromNhomData.set(gv.ID_GIANGVIEN, gv.HOTEN);
+
+        if (gv.VAITRO === 'Hướng dẫn') {
+          gvHDMap.set(gv.ID_GIANGVIEN, baseInfo);
+        } else if (gv.VAITRO === 'Phản biện') {
+          gvPBMap.set(gv.ID_GIANGVIEN, baseInfo);
+        } else if (gv.VAITRO && (gv.VAITRO.includes('HĐ') || ['chutich', 'thuky', 'thanhvien'].includes(gv.VAITRO.toLowerCase()))) {
+          gvHDONGMap.set(gv.ID_GIANGVIEN, { ...baseInfo, VAITRO: gv.VAITRO });
+        }
       });
 
+      (tongketData.diem_huong_dan || []).forEach(diemRow => {
+        const gvId = diemRow.ID_GIANGVIEN;
+        const score = parseFloat(diemRow.DIEM ?? 0);
+        if (gvHDMap.has(gvId)) {
+          gvHDMap.get(gvId).DIEM = score;
+        }
+      });
+
+      (tongketData.diem_phan_bien || []).forEach(diemRow => {
+        const gvId = diemRow.ID_GIANGVIEN;
+        const score = parseFloat(diemRow.DIEM ?? 0);
+        if (gvPBMap.has(gvId)) {
+          gvPBMap.get(gvId).DIEM = score;
+        } else {
+          const tenGV = allGvFromNhomData.get(gvId);
+          gvPBMap.set(gvId, {
+            ID_GIANGVIEN: gvId,
+            HOTEN: tenGV || `GV (ID: ${gvId})`,
+            VAITRO: 'Phản biện',
+            DIEM: score
+          });
+        }
+      });
+
+      (tongketData.diem_hoi_dong || []).forEach(diemRow => {
+        const gvId = diemRow.ID_GIANGVIEN;
+        const score = parseFloat(diemRow.DIEM ?? 0);
+        if (gvHDONGMap.has(gvId)) {
+          gvHDONGMap.get(gvId).DIEM = score;
+        }
+      });
+
+      setDiem({
+        huongdan: Array.from(gvHDMap.values()),
+        phanbien: Array.from(gvPBMap.values()),
+        hoidong: Array.from(gvHDONGMap.values()),
+      });
     } catch (err) {
       console.error("Lỗi tải dữ liệu chấm điểm:", err);
       toast.error(err.response?.data?.error || "Lỗi tải dữ liệu chấm điểm!");
@@ -199,131 +219,104 @@ const ChamDiemChiTiet = () => {
     fetchData();
   }, [fetchData]);
 
-  // Xử lý thay đổi điểm (Logic giữ nguyên)
   const handleDiemChange = (loai, id_giangvien, value) => {
-    const diemValue = Math.max(0, Math.min(10, Number(value) || 0));
+    const numericValue = parseFloat(value);
+    const diemValue = isNaN(numericValue) ? 0 : Math.max(0, Math.min(10, numericValue));
     setDiem(prev => ({
       ...prev,
       [loai]: prev[loai].map(gv =>
         gv.ID_GIANGVIEN === id_giangvien ? { ...gv, DIEM: diemValue } : gv
       ),
     }));
+    setDiemTongKetTuBackend(null);
   };
 
-  // Tính điểm trung bình (Logic giữ nguyên)
   const tinhDiemTB = useCallback((loai) => {
     const list = diem[loai];
-    if (!list || list.length === 0) return 0;
-    const total = list.reduce((sum, gv) => sum + (Number(gv.DIEM) || 0), 0);
-    return total / list.length;
+    if (!list || list.length === 0) return null;
+    const validScores = list.filter(gv => typeof gv.DIEM === 'number' && !isNaN(gv.DIEM));
+    if (validScores.length === 0) return null;
+    const total = validScores.reduce((sum, gv) => sum + gv.DIEM, 0);
+    return total / validScores.length;
   }, [diem]);
 
   const diemTB_HD = useMemo(() => tinhDiemTB('huongdan'), [tinhDiemTB]);
   const diemTB_PB = useMemo(() => tinhDiemTB('phanbien'), [tinhDiemTB]);
   const diemTB_HDONG = useMemo(() => tinhDiemTB('hoidong'), [tinhDiemTB]);
 
-  // Tính toán điểm tổng và tỷ trọng hiển thị (Logic giữ nguyên)
-  const { diemTong, tyTrongHienThi } = useMemo(() => {
-    const hasHuongDan = diem.huongdan.length > 0;
-    const hasPhanBien = diem.phanbien.length > 0;
-    const hasHoiDong = diem.hoidong.length > 0;
-
-    const wHD = parseFloat(tytrong.HUONGDAN ?? 0);
-    const wPB = parseFloat(tytrong.PHANBIEN ?? 0);
-    const wHDONG = parseFloat(tytrong.HOIDONG ?? 0);
-
-    let final_wHD = 0, final_wPB = 0, final_wHDONG = 0;
-    let finalScore = 0;
-
-    if (hasHuongDan && hasPhanBien && hasHoiDong) {
-      final_wHD = wHD;
-      final_wPB = wPB;
-      final_wHDONG = wHDONG;
-      finalScore = (diemTB_HD * final_wHD) + (diemTB_PB * final_wPB) + (diemTB_HDONG * final_wHDONG);
-    }
-    else if (hasHuongDan && hasHoiDong) {
-      final_wHD = wHD;
-      final_wPB = 0;
-      final_wHDONG = wPB + wHDONG;
-      finalScore = (diemTB_HD * final_wHD) + (diemTB_HDONG * final_wHDONG);
-    }
-    else if (hasHuongDan && hasPhanBien) {
-      final_wHD = wHD;
-      final_wPB = wPB + wHDONG;
-      final_wHDONG = 0;
-      finalScore = (diemTB_HD * final_wHD) + (diemTB_PB * final_wPB);
-    }
-    else if (hasHuongDan) {
-      final_wHD = 1.0;
-      final_wPB = 0;
-      final_wHDONG = 0;
-      finalScore = diemTB_HD;
-    }
-
-    const totalWeight = final_wHD + final_wPB + final_wHDONG;
-    if (totalWeight > 0 && Math.abs(1.0 - totalWeight) > 0.001) {
-       finalScore = finalScore / totalWeight;
-    }
-
+  const { tyTrongHienThi } = useMemo(() => {
+    const currentTyTrong = tytrong || { HUONGDAN: 0.4, PHANBIEN: 0.3, HOIDONG: 0.3 };
     return {
-      diemTong: finalScore.toFixed(2),
       tyTrongHienThi: {
-        HD: final_wHD,
-        PB: final_wPB,
-        HDONG: final_wHDONG
+        HD: parseFloat(currentTyTrong.HUONGDAN ?? 0),
+        PB: parseFloat(currentTyTrong.PHANBIEN ?? 0),
+        HDONG: parseFloat(currentTyTrong.HOIDONG ?? 0)
       }
     };
-  }, [diem, diemTB_HD, diemTB_PB, diemTB_HDONG, tytrong]);
+  }, [tytrong]);
 
-  // Lưu điểm (Logic giữ nguyên)
+  const diemTongDuKien = useMemo(() => {
+    const wHD = tyTrongHienThi.HD;
+    const wPB = tyTrongHienThi.PB;
+    const wHDONG = tyTrongHienThi.HDONG;
+    const scoreHD = diemTB_HD ?? 0;
+    const scorePB = diemTB_PB ?? 0;
+    const scoreHDONG = diemTB_HDONG ?? 0;
+    const totalScore = (scoreHD * wHD) + (scorePB * wPB) + (scoreHDONG * wHDONG);
+    if (diemTB_HD !== null || diemTB_PB !== null || diemTB_HDONG !== null) {
+      return totalScore.toFixed(2);
+    }
+    return 'N/A';
+  }, [diemTB_HD, diemTB_PB, diemTB_HDONG, tyTrongHienThi]);
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const payload = {
         diem_huongdan: diem.huongdan.map(d => ({ ID_GIANGVIEN: d.ID_GIANGVIEN, DIEM: d.DIEM })),
         diem_phanbien: diem.phanbien.map(d => ({ ID_GIANGVIEN: d.ID_GIANGVIEN, DIEM: d.DIEM })),
-        diem_hoidong: diem.hoidong.map(d => ({ ID_GIANGVIEN: d.ID_GIANGVIEN, DIEM: d.DIEM })),
+        diem_hoidong: diem.hoidong.map(d => ({ ID_GIANGVIEN: d.ID_GIANGVIEN, DIEM: d.DIEM, VAITRO: d.VAITRO })),
       };
-      const res = await axiosClient.post(`/chamdiem/combined/${idNhom}`, payload);
-      toast.success(res.data.message || "Lưu điểm thành công!");
+      const res = await saveCombinedScores(idNhom, payload);
+      toast.success(res.message || "Lưu điểm thành công!");
       fetchData();
     } catch (err) {
       console.error("Lỗi khi lưu điểm:", err);
-      toast.error(err.response?.data?.error || "Lưu điểm thất bại!");
+      toast.error(err.response?.data?.error || "Lưu điểm thất bại.");
     } finally {
       setSaving(false);
     }
   };
 
-  // --- Render (Giao diện đã nâng cấp) ---
-
   if (loading) {
     return <div className="p-8 text-center"><Loader2 className="h-10 w-10 animate-spin mx-auto text-primary" /></div>;
   }
 
-  if (!nhom) {
+  if (!nhom || !tytrong) {
     return (
       <div className="p-8 max-w-lg mx-auto">
         <Alert variant="destructive">
           <Info className="h-4 w-4" />
           <AlertTitle>Lỗi</AlertTitle>
           <AlertDescription>
-            Không tìm thấy thông tin nhóm. Vui lòng kiểm tra lại đường dẫn.
+            Không tìm thấy thông tin nhóm hoặc tỷ trọng điểm.
           </AlertDescription>
         </Alert>
         <Button variant="outline" onClick={() => navigate(-1)} className="mt-4">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
+          <ArrowLeft className="h-4 w-4" /> Quay lại
         </Button>
       </div>
     );
   }
 
   const hasNoTeachers = diem.huongdan.length === 0 && diem.phanbien.length === 0 && diem.hoidong.length === 0;
+  const displayFinalScore = diemTongKetTuBackend !== null
+    ? diemTongKetTuBackend.toFixed(2)
+    : diemTongDuKien;
 
   return (
     <TooltipProvider>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-        {/* 1. Header: Tiêu đề và Nút hành động */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
             <GraduationCap className="h-8 w-8 text-primary" />
@@ -345,7 +338,6 @@ const ChamDiemChiTiet = () => {
           </div>
         </div>
 
-        {/* 2. Thông tin nhóm */}
         <Card className="shadow-lg border-l-4 border-primary">
           <CardHeader>
             <CardTitle className="text-xl mb-2">Thông tin Đồ án/Khóa luận</CardTitle>
@@ -367,7 +359,7 @@ const ChamDiemChiTiet = () => {
                 <span className="font-semibold text-gray-800">Sinh viên thực hiện:</span>
                 <div className="flex flex-col text-muted-foreground">
                   {nhom.SINHVIEN.map(sv => (
-                    <span key={sv.MA_DINHDANH}>{sv.HOTEN} ({sv.MA_DINHDANH})</span>
+                    <span key={sv.MA_DINHDANH}>{sv.HODEM_VA_TEN} ({sv.MA_DINHDANH})</span>
                   ))}
                 </div>
               </div>
@@ -375,7 +367,6 @@ const ChamDiemChiTiet = () => {
           </CardContent>
         </Card>
 
-        {/* 3. Khu vực chấm điểm */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             {hasNoTeachers && (
@@ -383,8 +374,7 @@ const ChamDiemChiTiet = () => {
                 <Info className="h-4 w-4" />
                 <AlertTitle>Chưa có giảng viên</AlertTitle>
                 <AlertDescription>
-                  Nhóm này chưa được gán giảng viên hướng dẫn, phản biện, hoặc hội đồng.
-                  Không thể thực hiện chấm điểm.
+                  Nhóm này chưa được gán giảng viên chấm điểm.
                 </AlertDescription>
               </Alert>
             )}
@@ -417,46 +407,44 @@ const ChamDiemChiTiet = () => {
               />}
           </div>
 
-          {/* 4. Cột tổng kết */}
           <div className="lg:col-span-1 space-y-6">
             <Card className="sticky top-20 shadow-md">
               <CardHeader>
                 <CardTitle className="text-xl">Tổng kết điểm</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                {/* Điểm tổng nổi bật */}
                 <div className="text-center p-6 bg-primary/10 rounded-lg border border-primary/20">
                   <span className="text-sm font-medium text-primary uppercase tracking-wider">
-                    Điểm tổng kết (Dự kiến)
+                    {diemTongKetTuBackend !== null ? "Điểm Tổng Kết" : "Điểm Tổng (Dự kiến)"}
                   </span>
-                  <div className="text-6xl font-bold text-primary mt-1">{diemTong}</div>
+                  <div className="text-6xl font-bold text-primary mt-1">
+                    {displayFinalScore}
+                  </div>
                 </div>
 
-                {/* Chi tiết điểm TB */}
                 <div className="space-y-3 pt-2">
                   <h4 className="font-semibold">Chi tiết điểm thành phần:</h4>
                   {tyTrongHienThi.HD > 0 && (
                     <div className="flex justify-between items-center text-md">
                       <span className="text-muted-foreground">Điểm TB Hướng Dẫn</span>
-                      <span className="font-semibold">{diemTB_HD.toFixed(2)}</span>
+                      <span className="font-semibold">{diemTB_HD !== null ? diemTB_HD.toFixed(2) : '-'}</span>
                     </div>
                   )}
                   {tyTrongHienThi.PB > 0 && (
                     <div className="flex justify-between items-center text-md">
                       <span className="text-muted-foreground">Điểm TB Phản Biện</span>
-                      <span className="font-semibold">{diemTB_PB.toFixed(2)}</span>
+                      <span className="font-semibold">{diemTB_PB !== null ? diemTB_PB.toFixed(2) : '-'}</span>
                     </div>
                   )}
                   {tyTrongHienThi.HDONG > 0 && (
                     <div className="flex justify-between items-center text-md">
                       <span className="text-muted-foreground">Điểm TB Hội Đồng</span>
-                      <span className="font-semibold">{diemTB_HDONG.toFixed(2)}</span>
+                      <span className="font-semibold">{diemTB_HDONG !== null ? diemTB_HDONG.toFixed(2) : '-'}</span>
                     </div>
                   )}
                 </div>
               </CardContent>
-              
-              {/* Tỷ trọng */}
+
               <CardFooter className="flex flex-col gap-2 border-t pt-4">
                 <h4 className="font-semibold text-left w-full flex items-center gap-2">
                   <Percent className="h-4 w-4 text-muted-foreground" />
@@ -477,7 +465,7 @@ const ChamDiemChiTiet = () => {
                   )}
                   {tyTrongHienThi.HDONG > 0 && (
                     <div className="flex justify-between w-full text-sm text-muted-foreground">
-                      <span>Hội đồng:</span>
+                      <span className="text-muted-foreground">Hội đồng:</span>
                       <span className="font-medium">{Math.round(tyTrongHienThi.HDONG * 100)}%</span>
                     </div>
                   )}

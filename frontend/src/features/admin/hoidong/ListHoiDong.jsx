@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import axiosClient from "@/api/axiosConfig";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -38,18 +38,22 @@ import {
   BookOpen,
   GraduationCap,
   Shield,
+  Shuffle,
+  ArrowUp,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-
 import * as hoiDongService from "@/api/adminHoiDongService";
-// [THÊM MỚI] Import dialog tạo hội đồng
-import { CreateHoiDongDialog } from "./CreateHoiDong"; // Giả sử tên file vẫn là CreateHoiDong.jsx
+import { CreateHoiDongDialog } from "./CreateHoiDong";
+import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
 
-// [Component StatCard] (Không đổi)
+const QUERY_KEY_HOIDONG = "adminHoiDong";
+const QUERY_KEY_STATS = "hoiDongStats";
+const QUERY_KEY_FILTERS = "hoidongFilterOptions";
+
 const StatCard = ({
   icon: Icon,
   title,
@@ -77,22 +81,27 @@ const StatCard = ({
   </Card>
 );
 
-// [Component EditableCell] (Không đổi)
-const EditableCell = ({ getValue, row, column, table }) => {
+const EditableTextCell = ({ getValue, row, colId }) => {
   const initialValue = getValue() || "";
   const [value, setValue] = useState(initialValue);
   const [isEditing, setIsEditing] = useState(false);
   const queryClient = useQueryClient();
-
   const { mutate, isPending } = useMutation({
-    mutationFn: (newPhong) =>
-      hoiDongService.updateHoiDongPhong(row.original.ID_HOIDONG, newPhong),
+    mutationFn: (newValue) => {
+      if (colId === "TEN_HOIDONG") {
+        return hoiDongService.updateHoiDongName(row.original.ID_HOIDONG, newValue);
+      } else if (colId === "PHONG") {
+        return hoiDongService.updateHoiDongPhong(row.original.ID_HOIDONG, newValue);
+      }
+      return Promise.reject(new Error("Unknown column"));
+    },
     onSuccess: (data) => {
       toast.success(data.message);
-      queryClient.invalidateQueries(["adminHoiDong"]);
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
     },
     onError: (err) => {
-      toast.error(err.response?.data?.error || "Cập nhật thất bại!");
+      const errorMsg = err.response?.data?.errors?.TEN_HOIDONG?.[0] || err.response?.data?.error || "Cập nhật thất bại!";
+      toast.error(errorMsg);
       setValue(initialValue);
     },
     onSettled: () => {
@@ -101,8 +110,15 @@ const EditableCell = ({ getValue, row, column, table }) => {
   });
 
   const onBlur = () => {
-    if (value !== initialValue) {
-      mutate(value);
+    const trimmedValue = String(value).trim();
+    if (colId === "TEN_HOIDONG" && !trimmedValue) {
+      toast.error("Tên Hội đồng không được để trống.");
+      setValue(initialValue);
+      setIsEditing(false);
+      return;
+    }
+    if (trimmedValue !== initialValue) {
+      mutate(trimmedValue);
     } else {
       setIsEditing(false);
     }
@@ -110,10 +126,10 @@ const EditableCell = ({ getValue, row, column, table }) => {
 
   const onKeyDown = (e) => {
     if (e.key === "Enter") {
-      onBlur();
+      e.currentTarget.blur();
     } else if (e.key === "Escape") {
       setValue(initialValue);
-      setIsEditing(false);
+      e.currentTarget.blur();
     }
   };
 
@@ -123,40 +139,44 @@ const EditableCell = ({ getValue, row, column, table }) => {
 
   if (isPending) {
     return (
-      <div className="flex items-center justify-center h-8">
+      <div className={cn("flex items-center justify-center h-8", colId === "TEN_HOIDONG" ? "justify-start" : "text-center")}>
         <Loader2 className="h-4 w-4 animate-spin" />
       </div>
     );
   }
 
-  return isEditing ? (
-    <Input
-      autoFocus
-      value={value}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={onBlur}
-      onKeyDown={onKeyDown}
-      className="h-8 w-16"
-    />
-  ) : (
+  const displayValue = initialValue || <span className="text-muted-foreground italic">Trống</span>;
+
+  if (isEditing) {
+    return (
+      <Input
+        autoFocus
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={onBlur}
+        onKeyDown={onKeyDown}
+        className={cn("h-8 min-w-[50px] p-2", colId === "TEN_HOIDONG" ? "w-full" : "w-16 text-center")}
+      />
+    );
+  }
+
+  return (
     <div
       className={cn(
         "w-full min-h-[32px] px-3 py-2 text-sm rounded-md cursor-pointer",
-        "border border-transparent",
-        "hover:bg-muted"
+        "border border-transparent hover:bg-muted",
+        colId === "TEN_HOIDONG" ? "font-medium text-primary" : "text-center"
       )}
       onClick={() => setIsEditing(true)}
     >
-      {value || <span className="text-muted-foreground italic">Trống</span>}
+      {displayValue}
     </div>
   );
 };
 
-// --- Component Chính ---
 const ListHoiDong = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
@@ -166,13 +186,11 @@ const ListHoiDong = () => {
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
-  
-  // [THÊM MỚI] State cho dialog
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isAutoAssignOpen, setIsAutoAssignOpen] = useState(false);
 
-  // --- Data Fetching (Không đổi) ---
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
-    queryKey: ["hoidongFilterOptions"],
+    queryKey: [QUERY_KEY_FILTERS],
     queryFn: async () => {
       const [khRes, cnRes] = await Promise.all([
         hoiDongService.getKeHoachOptions(),
@@ -182,6 +200,7 @@ const ListHoiDong = () => {
         kehoach: (khRes || []).map((kh) => ({
           label: kh.TEN_DOT,
           value: kh.ID_KEHOACH.toString(),
+          ...kh,
         })),
         chuyennganh: (cnRes || []).map((cn) => ({
           label: cn.TEN_CHUYENNGANH,
@@ -197,42 +216,42 @@ const ListHoiDong = () => {
   });
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
-    queryKey: ["hoiDongStats", selectedPlanId],
+    queryKey: [QUERY_KEY_STATS, selectedPlanId],
     queryFn: () => hoiDongService.getHoiDongStatistics(selectedPlanId || null),
     enabled: !isLoadingFilters,
   });
 
   const queryKey = [
-    "adminHoiDong",
+    QUERY_KEY_HOIDONG,
     pagination,
     columnFilters,
     sorting,
     debouncedSearch,
     selectedPlanId,
   ];
+
   const { data, isLoading: isLoadingData } = useQuery({
     queryKey,
     queryFn: () =>
       hoiDongService.getHoiDongPaginated({
-        pagination,
-        sorting,
-        columnFilters,
-        debouncedSearch,
-        selectedPlanId,
+        page: pagination.pageIndex + 1,
+        per_page: pagination.pageSize,
+        sort: sorting.length > 0 ? `${sorting[0].id},${sorting[0].desc ? "desc" : "asc"}` : undefined,
+        search: debouncedSearch,
+        kehoach: selectedPlanId,
+        chuyennganh: columnFilters.find((f) => f.id === "chuyennganh")?.value,
       }),
     placeholderData: (prev) => prev,
     enabled: !isLoadingFilters,
   });
 
-  // --- Mutation (Delete) (Không đổi) ---
   const deleteMutation = useMutation({
-    mutationFn: (ids) => Promise.all(ids.map(id => hoiDongService.deleteHoiDong(id))),
+    mutationFn: (ids) => Promise.all(ids.map((id) => hoiDongService.deleteHoiDong(id))),
     onSuccess: () => {
-      const count =
-        deleteTarget === "bulk" ? Object.keys(rowSelection).length : 1;
+      const count = deleteTarget === "bulk" ? Object.keys(rowSelection).length : 1;
       toast.success(`Đã xóa ${count} hội đồng thành công!`);
-      queryClient.invalidateQueries({ queryKey: ["adminHoiDong"] });
-      queryClient.invalidateQueries({ queryKey: ["hoiDongStats"] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_STATS] });
       setRowSelection({});
       setDeleteTarget(null);
       setIsAlertOpen(false);
@@ -242,20 +261,26 @@ const ListHoiDong = () => {
     },
   });
 
-  // --- Cột (Columns) (Không đổi) ---
+  const handleUpgrade = async (id, tenHoiDong) => {
+    if (!window.confirm(`Xác nhận nâng cấp Hội đồng Phản biện "${tenHoiDong}" lên Hội đồng Bảo vệ (3 thành viên)?\n\nQuy trình này sẽ giữ lại 1 GV Phản biện làm Thành viên và yêu cầu bạn bổ sung 2 GV (Chủ tịch, Thư ký).`)) return;
+    try {
+      const res = await hoiDongService.upgradePhanBienToHoiDong(id);
+      toast.success(res.message);
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_STATS] });
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Nâng cấp thất bại!");
+    }
+  };
+
   const columns = useMemo(
     () => [
       {
         id: "select",
         header: ({ table }) => (
           <Checkbox
-            checked={
-              table.getIsAllPageRowsSelected() ||
-              (table.getIsSomePageRowsSelected() && "indeterminate")
-            }
-            onCheckedChange={(value) =>
-              table.toggleAllPageRowsSelected(!!value)
-            }
+            checked={table.getIsAllPageRowsSelected() || (table.getIsSomePageRowsSelected() && "indeterminate")}
+            onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
             aria-label="Select all"
           />
         ),
@@ -273,13 +298,8 @@ const ListHoiDong = () => {
       {
         accessorKey: "TEN_HOIDONG",
         header: "Tên hội đồng",
-        cell: ({ row }) => (
-          <Link
-            to={`/admin/hoidong/detail/${row.original.ID_HOIDONG}`}
-            className="font-medium text-primary hover:underline"
-          >
-            {row.original.TEN_HOIDONG}
-          </Link>
+        cell: ({ row, getValue }) => (
+          <EditableTextCell getValue={getValue} row={row} colId="TEN_HOIDONG" />
         ),
         size: 250,
       },
@@ -288,9 +308,7 @@ const ListHoiDong = () => {
         header: "Loại",
         cell: ({ row }) => (
           <Badge
-            variant={
-              row.original.LOAI === "phanbien" ? "secondary" : "default"
-            }
+            variant={row.original.LOAI === "phanbien" ? "secondary" : "default"}
             className="capitalize"
           >
             {row.original.LOAI === "phanbien" ? "Phản biện" : "Hội đồng"}
@@ -308,7 +326,9 @@ const ListHoiDong = () => {
       {
         accessorKey: "PHONG",
         header: "Phòng",
-        cell: EditableCell,
+        cell: ({ row, getValue }) => (
+          <EditableTextCell getValue={getValue} row={row} colId="PHONG" />
+        ),
         size: 80,
       },
       {
@@ -317,8 +337,8 @@ const ListHoiDong = () => {
         cell: ({ row }) => {
           const date = row.original.NGAY_BAOCAO;
           try {
-            return date ? format(parseISO(date), 'dd/MM/yyyy', { locale: vi }) : "-";
-          } catch (e) {
+            return date ? format(parseISO(date), "dd/MM/yyyy", { locale: vi }) : "-";
+          } catch {
             return date;
           }
         },
@@ -328,53 +348,61 @@ const ListHoiDong = () => {
         accessorKey: "GIO_BAOCAO",
         header: "Giờ Báo Cáo",
         cell: ({ row }) => {
-            const time = row.original.GIO_BAOCAO;
-            return time ? time.substring(0, 5) : "-";
+          const time = row.original.GIO_BAOCAO;
+          return time ? time.substring(0, 5) : "-";
         },
         size: 100,
       },
       {
         accessorKey: "so_thanh_vien",
         header: () => <div className="text-center">Thành viên</div>,
-        cell: ({ row }) => (
-          <div className="text-center">{row.original.so_thanh_vien || 0}</div>
-        ),
+        cell: ({ row }) => <div className="text-center">{row.original.so_thanh_vien || 0}</div>,
         size: 100,
       },
       {
         accessorKey: "so_nhom",
         header: () => <div className="text-center">Nhóm P/B</div>,
-        cell: ({ row }) => (
-          <div className="text-center">{row.original.so_nhom || 0}</div>
-        ),
+        cell: ({ row }) => <div className="text-center">{row.original.so_nhom || 0}</div>,
         size: 100,
       },
       {
         id: "actions",
         header: () => <div className="text-right">Thao tác</div>,
-        cell: ({ row }) => (
-          <div className="text-right space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                navigate(`/admin/hoidong/detail/${row.original.ID_HOIDONG}`)
-              }
-            >
-              <Pen className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => {
-                setDeleteTarget(row.original.ID_HOIDONG);
-                setIsAlertOpen(true);
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const hoidong = row.original;
+          const isPhanBien = hoidong.LOAI === "phanbien";
+          return (
+            <div className="text-right space-x-2 flex justify-end">
+              {isPhanBien && (
+                <Button
+                  variant="secondary"
+                  size="icon"
+                  onClick={() => handleUpgrade(hoidong.ID_HOIDONG, hoidong.TEN_HOIDONG)}
+                  title="Nâng cấp lên Hội đồng Bảo vệ (3 thành viên)"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate(`/admin/hoidong/detail/${hoidong.ID_HOIDONG}`)}
+              >
+                <Pen className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="destructive"
+                size="icon"
+                onClick={() => {
+                  setDeleteTarget(hoidong.ID_HOIDONG);
+                  setIsAlertOpen(true);
+                }}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          );
+        },
         size: 100,
       },
     ],
@@ -383,73 +411,38 @@ const ListHoiDong = () => {
 
   const isLoading = isLoadingFilters || isLoadingData;
   const pageCount = data?.meta?.last_page ?? 0;
-  const selectedIds = Object.keys(rowSelection)
-    .map((key) => data?.data[key]?.ID_HOIDONG)
-    .filter(Boolean);
+  const selectedIds = useMemo(
+    () => Object.keys(rowSelection).map((key) => data?.data[key]?.ID_HOIDONG).filter(Boolean),
+    [rowSelection, data?.data]
+  );
 
-  // [THÊM MỚI] Hàm xử lý khi tạo thành công
   const handleCreateSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ["adminHoiDong"] });
-    queryClient.invalidateQueries({ queryKey: ["hoiDongStats"] });
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEY_STATS] });
+    queryClient.invalidateQueries({ queryKey: [QUERY_KEY_FILTERS] });
   };
 
   return (
     <>
       <div className="p-4 md:p-8 space-y-4 h-full flex flex-col">
-        
-        {/* Thẻ Thống Kê */}
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 flex-shrink-0">
-          <StatCard
-            icon={Users}
-            title="Tổng số Hội đồng"
-            value={stats?.totalHoiDong}
-            isLoading={isLoadingStats}
-            iconBgClass="bg-blue-100"
-            iconColorClass="text-blue-600"
-          />
-          <StatCard
-            icon={Shield}
-            title="HĐ Bảo Vệ"
-            value={stats?.totalBaoVe}
-            isLoading={isLoadingStats}
-            iconBgClass="bg-green-100"
-            iconColorClass="text-green-600"
-          />
-          <StatCard
-            icon={BookOpen}
-            title="HĐ Phản Biện"
-            value={stats?.totalPhanBien}
-            isLoading={isLoadingStats}
-            iconBgClass="bg-yellow-100"
-            iconColorClass="text-yellow-600"
-          />
-          <StatCard
-            icon={GraduationCap}
-            title="Tổng Thành viên"
-            value={stats?.totalThanhVien}
-            isLoading={isLoadingStats}
-            iconBgClass="bg-indigo-100"
-            iconColorClass="text-indigo-600"
-          />
-          <StatCard
-            icon={Users2}
-            title="Nhóm đã phân bổ"
-            value={stats?.nhomDaPhanBo}
-            isLoading={isLoadingStats}
-            iconBgClass="bg-orange-100"
-            iconColorClass="text-orange-600"
-          />
+          <StatCard icon={Users} title="Tổng số Hội đồng" value={stats?.totalHoiDong} isLoading={isLoadingStats} iconBgClass="bg-blue-100" iconColorClass="text-blue-600" />
+          <StatCard icon={Shield} title="HĐ Bảo Vệ" value={stats?.totalBaoVe} isLoading={isLoadingStats} iconBgClass="bg-green-100" iconColorClass="text-green-600" />
+          <StatCard icon={BookOpen} title="HĐ Phản Biện" value={stats?.totalPhanBien} isLoading={isLoadingStats} iconBgClass="bg-yellow-100" iconColorClass="text-yellow-600" />
+          <StatCard icon={GraduationCap} title="Tổng Thành viên" value={stats?.totalThanhVien} isLoading={isLoadingStats} iconBgClass="bg-indigo-100" iconColorClass="text-indigo-600" />
+          <StatCard icon={Users2} title="Nhóm đã phân bổ" value={stats?.nhomDaPhanBo} isLoading={isLoadingStats} iconBgClass="bg-orange-100" iconColorClass="text-orange-600" />
         </div>
 
-        {/* Header và Nút hành động */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
           <div className="flex items-center gap-2">
+            <Button variant="default" onClick={() => setIsAutoAssignOpen(true)} disabled={!selectedPlanId}>
+              <Shuffle className="mr-2 h-4 w-4" /> Phân công thành viên tự động
+            </Button>
             <Button asChild variant="outline">
               <Link to="/admin/hoidong/phanbo">
                 <Users2 className="mr-2 h-4 w-4" /> Phân bổ nhóm
               </Link>
             </Button>
-            {/* [SỬA] Thay đổi onClick */}
             <Button onClick={() => setIsCreateOpen(true)}>
               <PlusCircle className="mr-2 h-4 w-4" /> Thêm hội đồng
             </Button>
@@ -483,13 +476,10 @@ const ListHoiDong = () => {
           </div>
         </div>
 
-        {/* Thanh Bulk Action */}
         {selectedIds.length > 0 && (
           <Card className="flex-shrink-0">
             <CardContent className="p-3 flex items-center justify-between">
-              <div className="text-sm font-medium">
-                Đã chọn {selectedIds.length} hội đồng.
-              </div>
+              <div className="text-sm font-medium">Đã chọn {selectedIds.length} hội đồng.</div>
               <Button
                 variant="destructive"
                 size="sm"
@@ -506,7 +496,6 @@ const ListHoiDong = () => {
           </Card>
         )}
 
-        {/* Bảng Dữ liệu */}
         <DataTable
           columns={columns}
           data={data?.data ?? []}
@@ -519,25 +508,17 @@ const ListHoiDong = () => {
           sorting={sorting}
           setSorting={setSorting}
           onRowSelectionChange={setRowSelection}
-          state={{
-            pagination,
-            sorting,
-            columnFilters,
-            rowSelection,
-          }}
+          state={{ pagination, sorting, columnFilters, rowSelection }}
           searchColumnId="search"
           searchPlaceholder="Tìm tên hội đồng..."
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
-          
           chuyenNganhFilterColumnId="chuyennganh"
           chuyenNganhFilterOptions={filterOptions?.chuyennganh}
-          
           flexLayout={true}
           className="flex-grow min-h-0"
         />
 
-        {/* Dialog Xác nhận Xóa */}
         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -554,34 +535,34 @@ const ListHoiDong = () => {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteMutation.isPending}>
-                Hủy
-              </AlertDialogCancel>
+              <AlertDialogCancel disabled={deleteMutation.isPending}>Hủy</AlertDialogCancel>
               <AlertDialogAction
                 className="bg-destructive hover:bg-destructive/90"
                 disabled={deleteMutation.isPending}
                 onClick={() => {
-                  const ids =
-                    deleteTarget === "bulk"
-                      ? selectedIds
-                      : [deleteTarget];
+                  const ids = deleteTarget === "bulk" ? selectedIds : [deleteTarget];
                   deleteMutation.mutate(ids);
                 }}
               >
-                {deleteMutation.isPending && (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                )}
+                {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Xác nhận Xóa
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </div>
-      
-      {/* [THÊM MỚI] Render Dialog */}
+
       <CreateHoiDongDialog
         isOpen={isCreateOpen}
         setIsOpen={setIsCreateOpen}
+        onSuccess={handleCreateSuccess}
+      />
+
+      <AutoAssignMemberDialog
+        isOpen={isAutoAssignOpen}
+        setIsOpen={setIsAutoAssignOpen}
+        selectedPlanId={selectedPlanId}
+        planOptions={filterOptions?.kehoach}
         onSuccess={handleCreateSuccess}
       />
     </>
@@ -589,3 +570,4 @@ const ListHoiDong = () => {
 };
 
 export default ListHoiDong;
+

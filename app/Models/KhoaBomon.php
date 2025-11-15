@@ -30,4 +30,9 @@ class KhoaBomon extends Model
     {
         return $this->hasMany(Nhom::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
     }
+
+    public function chuyennganhs()
+    {
+        return $this->hasMany(Chuyennganh::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
+    }
 }

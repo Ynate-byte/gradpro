@@ -24,7 +24,7 @@ use App\Http\Controllers\Api\Lecturer\QuotaController as LecturerQuotaController
 use App\Http\Controllers\Api\Admin\QuotaController;
 use App\Http\Controllers\Api\DepartmentHead\QuotaController as DepartmentHeadQuotaController;
 use App\Http\Controllers\Api\PhanhoiGoiyController;
-use App\Http\Controllers\Api\LichHopController; 
+use App\Http\Controllers\Api\LichHopController;
 use App\Http\Controllers\Api\CongViecController;
 use App\Http\Controllers\Api\LecturerDashboardController;
 
@@ -147,7 +147,7 @@ Route::middleware('auth:sanctum')->group(function () {
         });
         Route::get('thesis-plans/{plan}/search-students', [ThesisPlanController::class, 'searchStudentsForPlan']);
 
-        // ----- [CẬP NHẬT] API IMPORT SINH VIÊN VÀO KẾ HOẠCH (WIZARD) -----
+        // ----- API IMPORT SINH VIÊN VÀO KẾ HOẠCH (WIZARD) -----
         Route::post('thesis-plans/{plan}/import-analyze', [ThesisPlanController::class, 'importAnalyze']);
         Route::post('thesis-plans/{plan}/import-preview', [ThesisPlanController::class, 'importPreview']); // Giai đoạn 2 & 3
         Route::post('thesis-plans/{plan}/import-process', [ThesisPlanController::class, 'importProcess']); // Giai đoạn 4
@@ -182,7 +182,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/{id}/approve-reject', [DetaiAdminController::class, 'approveOrReject']);
         });
         
-        // ----- [THAY ĐỔI] Thêm route Quản lý Quota (Admin) -----
+        // ----- QUẢN LÝ QUOTA (ADMIN) -----
         Route::prefix('quotas')->group(function () {
             Route::get('/departments', [QuotaController::class, 'getDepartments']);
             Route::get('/assignments', [QuotaController::class, 'getAssignments']);
@@ -193,6 +193,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/{assignment}', [QuotaController::class, 'removeAssignment']);
         });
         
+        // ----- DUYỆT NỘP BÀI -----
         Route::prefix('submissions')->group(function () {
             Route::get('/', [AdminSubmissionController::class, 'index']); // Lấy danh sách chờ duyệt
             Route::get('/{submission}', [AdminSubmissionController::class, 'show']); // Lấy chi tiết 1 lần nộp
@@ -203,12 +204,10 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::prefix('giangvien')->group(function () {
             Route::get('/', [GiangVienController::class, 'index']);
-            // Route::get('/{id}', [GiangVienController::class, 'show']); // (Tạm thời chưa dùng)
         });
 
+        // ----- QUẢN LÝ HỘI ĐỒNG (ADMIN) -----
         Route::prefix('hoidong')->group(function () {
-            // [THÊM MỚI] 2 ROUTE GÂY LỖI 404
-            // Phải đặt route tĩnh TRƯỚC route động
             Route::get('/statistics', [HoiDongController::class, 'getStatistics']);
             Route::get('/kehoach-options', [HoiDongController::class, 'getKeHoachOptions']);
             Route::get('/chuyennganh-options', [HoiDongController::class, 'getChuyenNganhOptions']);
@@ -219,10 +218,25 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/{id}', [HoiDongController::class, 'show']);
             Route::put('/{id}', [HoiDongController::class, 'update']);
             Route::delete('/{id}', [HoiDongController::class, 'destroy']);
+            // Routes cập nhật inline (sử dụng PATCH)
             Route::patch('/{id}/update-phong', [HoiDongController::class, 'updatePhong']);
+            Route::patch('/{id}/update-name', [HoiDongController::class, 'updateTenHoiDong']); 
+            // Route phân công thành viên tự động
+            Route::post('/auto-assign-members', [HoiDongController::class, 'autoAssignMembers']);
+            Route::post('/{id}/upgrade-to-hoidong', [HoiDongController::class, 'upgradePhanBienToHoiDong']);
             Route::delete('/{idHoiDong}/nhom/{idNhom}', [HoiDongController::class, 'xoaPhanBoNhom']);
         });
-
+        
+        // ----- PHÂN CÔNG ĐỀ TÀI (ADMIN) -----
+        Route::prefix('topic-assignments')->group(function () {
+            Route::get('/lecturers', [TopicAssignmentController::class, 'getLecturers']);
+            Route::post('/assign-topic-quota', [TopicAssignmentController::class, 'assignTopicQuota']);
+            Route::post('/auto-assign-quotas', [TopicAssignmentController::class, 'autoAssignQuotas']);
+            Route::post('/assign-topic-supervisor', [TopicAssignmentController::class, 'assignTopicToLecturer']);
+            Route::get('/assignments', [TopicAssignmentController::class, 'getAssignments']);
+            Route::put('/{assignmentId}/status', [TopicAssignmentController::class, 'updateAssignmentStatus']);
+            Route::delete('/{assignmentId}', [TopicAssignmentController::class, 'removeAssignment']);
+        });
     });
 
     Route::prefix('department-head')->group(function () {
@@ -257,7 +271,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('giangvien')->group(function () {
-        Route::get('/dashboard-stats', [LecturerDashboardController::class, 'getDashboardStats']); // <-- [THÊM MỚI]
+        Route::get('/dashboard-stats', [LecturerDashboardController::class, 'getDashboardStats']); 
         Route::get('/my-hoidong', [HoiDongController::class, 'getHoiDongByGiangVien']);
 
         // --Phân công quota đề tài cho giảng viên trong bộ môn ---
@@ -290,25 +304,26 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/hoidong/{nhom}', [ChamDiemController::class, 'saveDiemHoiDong']);
         Route::post('/combined/{nhom}', [ChamDiemController::class, 'saveCombined']);
         Route::get('/tongket/{id}', [ChamDiemController::class, 'getTong']);
+        Route::post('/phanbien/{nhom}/reject', [ChamDiemController::class, 'submitZeroPhanBien']);
     });
 
-    // === [THÊM MỚI] TUYẾN ĐƯỜNG CHO KANBAN (CÔNG VIỆC) ===
+    // === TUYẾN ĐƯỜNG CHO KANBAN (CÔNG VIỆC) ===
     Route::prefix('kanban')->group(function () {
         Route::get('/board/{nhom}', [CongViecController::class, 'getBoardData']);
         Route::get('/stats/{nhom}', [CongViecController::class, 'getTaskStats']);
         
         // Route cho Task
         Route::post('/task/nhom/{nhom}', [CongViecController::class, 'createTask']);
-        Route::get('/task/{congviec}/details', [CongViecController::class, 'getTaskDetails']); // <-- [THÊM MỚI]
+        Route::get('/task/{congviec}/details', [CongViecController::class, 'getTaskDetails']); 
         Route::put('/task/{congviec}', [CongViecController::class, 'updateTask']);
         Route::put('/task/{congviec}/move', [CongViecController::class, 'moveTask']);
         Route::delete('/task/{congviec}', [CongViecController::class, 'deleteTask']);
         Route::post('/task/{congviec}/assign', [CongViecController::class, 'assignTask']);
         
         // Route cho Checklist
-        Route::post('/task/{congviec}/checklist', [CongViecController::class, 'addChecklistItem']); // <-- [THÊM MỚI]
+        Route::post('/task/{congviec}/checklist', [CongViecController::class, 'addChecklistItem']); 
         Route::put('/checklist/{item}', [CongViecController::class, 'updateChecklistItem']);
-        Route::delete('/checklist/{item}', [CongViecController::class, 'deleteChecklistItem']); // <-- [THÊM MỚI]
+        Route::delete('/checklist/{item}', [CongViecController::class, 'deleteChecklistItem']); 
 
         // Route cho Bình luận
         Route::post('/task/{congviec}/comment', [CongViecController::class, 'addComment']);

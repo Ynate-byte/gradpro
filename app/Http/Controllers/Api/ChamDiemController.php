@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use App\Models\Nhom;
 use App\Models\TyTrongDiem;
 use App\Models\DiemHuongDan;
@@ -190,6 +191,21 @@ class ChamDiemController extends Controller
         }
         $giangvienId = $giangvien->ID_GIANGVIEN;
 
+        // --- Helper để thêm điểm hiện tại ---
+        $addCurrentScore = function ($nhomCollection, $scoreModel) use ($giangvienId) {
+            return $nhomCollection->map(function ($nhom) use ($giangvienId, $scoreModel) {
+                // Tải điểm riêng của GV này cho nhóm này
+                $score = $scoreModel::where('ID_NHOM', $nhom->ID_NHOM)
+                                     ->where('ID_GIANGVIEN', $giangvienId)
+                                     ->first();
+                
+                // Gắn điểm vào thuộc tính mới (diem_phanbien_hientai, diem_huongdan_hientai, etc.)
+                $attributeName = 'diem_' . strtolower(str_replace('App\Models\Diem', '', $scoreModel)) . '_hientai';
+                $nhom->{$attributeName} = $score ? $score->DIEM : null;
+                return $nhom;
+            });
+        };
+
         // 1. Lấy nhóm Hướng dẫn
         $nhomHuongDan = Nhom::whereHas('phancongDetaiNhom', function ($query) use ($giangvienId) {
             $query->where('ID_GVHD', $giangvienId);
@@ -200,7 +216,7 @@ class ChamDiemController extends Controller
         // 2. Lấy nhóm Phản biện
         $nhomPhanBien = Nhom::whereHas('hoidongs', function ($query) use ($giangvienId) {
             $query->where('LOAI', 'phanbien')
-                  ->whereHas('giangviens', fn($q) => $q->where('GIANGVIEN.ID_GIANGVIEN', $giangvienId));
+                ->whereHas('giangviens', fn($q) => $q->where('HOIDONG_GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
         ->with(['phancongDetaiNhom.detai'])
         ->get();
@@ -208,15 +224,21 @@ class ChamDiemController extends Controller
         // 3. Lấy nhóm Hội đồng
         $nhomHoiDong = Nhom::whereHas('hoidongs', function ($query) use ($giangvienId) {
             $query->where('LOAI', 'hoidong')
-                  ->whereHas('giangviens', fn($q) => $q->where('GIANGVIEN.ID_GIANGVIEN', $giangvienId));
+                ->whereHas('giangviens', fn($q) => $q->where('HOIDONG_GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
         ->with(['phancongDetaiNhom.detai'])
         ->get();
+        
+        // 4. Gắn điểm hiện tại vào từng Collection
+        $huongdanData = $addCurrentScore($nhomHuongDan, DiemHuongDan::class);
+        $phanbienData = $addCurrentScore($nhomPhanBien, DiemPhanBien::class);
+        $hoidongData = $addCurrentScore($nhomHoiDong, DiemHoiDong::class);
+
 
         return response()->json([
-            'huongdan' => $nhomHuongDan,
-            'phanbien' => $nhomPhanBien,
-            'hoidong' => $nhomHoiDong,
+            'huongdan' => $huongdanData,
+            'phanbien' => $phanbienData,
+            'hoidong' => $hoidongData,
         ]);
     }
 
@@ -282,79 +304,69 @@ class ChamDiemController extends Controller
     {
         $idNhom = $nhom->ID_NHOM;
         
-        // 1. Tải kế hoạch của nhóm để lấy tỷ trọng riêng (nếu có)
+        // 1. Tải kế hoạch của nhóm để lấy tỷ trọng riêng
         $nhom->load('kehoach');
         $plan = $nhom->kehoach;
 
         // 2. Xác định tỷ trọng (Ưu tiên Plan -> Fallback sang Global Setting)
-        $globalSetting = TyTrongDiem::getCurrent() ?? (object)['HUONGDAN' => 0.4, 'PHANBIEN' => 0.3, 'HOIDONG' => 0.3];
+        $globalSetting = TyTrongDiem::getCurrent() ?? (object)[
+            'HUONGDAN' => 0.4,
+            'PHANBIEN' => 0.3,
+            'HOIDONG'  => 0.3
+        ];
         
-        $wHD = (float)($plan->TYTRONG_DIEM_QUATRINH ?? $globalSetting->HUONGDAN);
-        $wPB = (float)($plan->TYTRONG_DIEM_PHANBIEN ?? $globalSetting->PHANBIEN);
+        // Trọng số chính
+        $wHD    = (float)($plan->TYTRONG_DIEM_QUATRINH ?? $globalSetting->HUONGDAN);
+        $wPB    = (float)($plan->TYTRONG_DIEM_PHANBIEN ?? $globalSetting->PHANBIEN);
         $wHDONG = (float)($plan->TYTRONG_DIEM_HOIDONG ?? $globalSetting->HOIDONG);
 
         // 3. Tính điểm trung bình thành phần
-        $diemHD = DiemHuongDan::where('ID_NHOM', $idNhom)->avg('DIEM');
-        $diemPB = DiemPhanBien::where('ID_NHOM', $idNhom)->avg('DIEM');
+        $diemHD    = DiemHuongDan::where('ID_NHOM', $idNhom)->avg('DIEM');
+        $diemPB    = DiemPhanBien::where('ID_NHOM', $idNhom)->avg('DIEM');
         $diemHDONG = DiemHoiDong::where('ID_NHOM', $idNhom)->avg('DIEM');
 
-        // 4. Kiểm tra loại hình đánh giá thực tế của nhóm
-        $hasHoiDong = $nhom->hoidongs()->where('LOAI', 'hoidong')->exists();
-        $hasPhanBien = $nhom->hoidongs()->where('LOAI', 'phanbien')->exists();
+        // 4. LOGIC TÍNH ĐIỂM TỔNG KẾT ĐỘC LẬP (ĐÃ SỬA - BỎ CHUẨN HÓA)
+        $tong = 0;
+        $hasAnyScore = false; // Biến kiểm tra xem có điểm nào được chấm chưa
 
-        $tong = null;
-        $final_wHD = 0;
-        $final_wPB = 0;
-        $final_wHDONG = 0;
-
-        // 5. Logic phân bổ trọng số
-        // Kịch bản 1: Có Hội đồng (ưu tiên) -> Bỏ qua Phản biện
-        if ($hasHoiDong && $diemHDONG !== null) {
-            $final_wHD = $wHD;
-            $final_wPB = 0;
-            $final_wHDONG = $wPB + $wHDONG; // Cộng dồn trọng số PB vào HĐ
-            
-            if ($diemHD !== null) {
-                 $tong = ($diemHD * $final_wHD) + ($diemHDONG * $final_wHDONG);
-            }
-        } 
-        // Kịch bản 2: Chỉ có Phản biện -> Bỏ qua Hội đồng
-        else if ($hasPhanBien && $diemPB !== null) {
-            $final_wHD = $wHD;
-            $final_wPB = $wPB + $wHDONG; // Cộng dồn trọng số HĐ vào PB
-            $final_wHDONG = 0;
-
-            if ($diemHD !== null) {
-                $tong = ($diemHD * $final_wHD) + ($diemPB * $final_wPB);
-            }
-        }
-        // Kịch bản 3: Chỉ có Hướng dẫn
-        else if ($diemHD !== null) {
-            $tong = $diemHD;
+        // Tính điểm Hướng dẫn
+        if ($diemHD !== null) {
+            $tong += $diemHD * $wHD;
+            $hasAnyScore = true;
         }
 
-        // 6. Chuẩn hóa và làm tròn
+        // Tính điểm Phản biện
+        if ($diemPB !== null && $wPB > 0) { // Vẫn kiểm tra wPB > 0 phòng trường hợp kế hoạch không có PB
+            $tong += $diemPB * $wPB;
+            $hasAnyScore = true;
+        }
+
+        // Tính điểm Hội đồng
+        if ($diemHDONG !== null && $wHDONG > 0) { // Vẫn kiểm tra wHDONG > 0
+            $tong += $diemHDONG * $wHDONG;
+            $hasAnyScore = true;
+        }
+
         $finalTong = null;
-        if ($tong !== null) {
-            $totalWeight = $final_wHD + $final_wPB + $final_wHDONG;
-            // Chuẩn hóa nếu tổng trọng số khác 1 (do cộng dồn)
-            if ($totalWeight > 0 && abs($totalWeight - 1.0) > 0.001) {
-                $tong = $tong / $totalWeight;
-            }
+
+        // 5. Làm tròn
+        // Chỉ gán điểm tổng nếu có ít nhất 1 điểm thành phần đã được chấm
+        if ($hasAnyScore) {
             $finalTong = round($tong, 2);
         }
 
-        // 7. Lưu vào CSDL
+        // 6. Lưu vào CSDL (Giữ nguyên)
         DiemTongKet::updateOrCreate(
             ['ID_NHOM' => $idNhom],
             [
-                'DIEM_HD'     => $diemHD !== null ? round($diemHD, 2) : null,
-                'DIEM_PB'     => $diemPB !== null ? round($diemPB, 2) : null,
+                'DIEM_HD'     => $diemHD    !== null ? round($diemHD, 2) : null,
+                'DIEM_PB'     => $diemPB    !== null ? round($diemPB, 2) : null,
                 'DIEM_HDONG'  => $diemHDONG !== null ? round($diemHDONG, 2) : null,
                 'DIEM_TONG'   => $finalTong,
             ]
         );
     }
+
 
     /**
      * Lấy điểm tổng kết nhóm
@@ -368,5 +380,47 @@ class ChamDiemController extends Controller
         ])->where('ID_NHOM', $id)->first();
         
         return response()->json($tongket);
+    }
+
+    public function submitZeroPhanBien(Request $request, Nhom $nhom)
+    {
+        $giangvien = Auth::user()->giangvien;
+        
+        if (!$giangvien) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $giangvienId = $giangvien->ID_GIANGVIEN;
+        $idNhom = $nhom->ID_NHOM;
+
+        // 1. Kiểm tra GV có phải là người phản biện của nhóm này không (sử dụng Gate)
+        if (!Gate::allows('grade-phanbien', $nhom)) {
+             return response()->json(['error' => 'Bạn không phải là người phản biện cho nhóm này.'], 403);
+        }
+        
+        try {
+            DB::beginTransaction();
+            
+            // 2. Lưu 0 điểm và nhận xét
+            DiemPhanBien::updateOrCreate(
+                ['ID_NHOM' => $idNhom, 'ID_GIANGVIEN' => $giangvienId],
+                [
+                    'DIEM' => 0.0,
+                    'NHANXET' => 'Không chấp thuận đề tài/kết quả thực hiện của nhóm.'
+                ]
+            );
+            
+            // 3. Cập nhật điểm tổng (nếu đủ điều kiện)
+            $this->capNhatTong($nhom);
+            
+            DB::commit();
+
+            return response()->json(['message' => "Đã ghi nhận 0 điểm Phản biện thành công."]);
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error("Lỗi điền 0 điểm Phản biện: " . $e->getMessage());
+            return response()->json(['error' => 'Lỗi xử lý điểm.'], 500);
+        }
     }
 }
