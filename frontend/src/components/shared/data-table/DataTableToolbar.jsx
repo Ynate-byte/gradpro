@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Cross2Icon } from "@radix-ui/react-icons";
 import { SlidersHorizontal, PlusCircle, Upload, Trash2, KeyRound } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -22,10 +22,11 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
+import { Badge } from "@/components/ui/badge";
 
 export function DataTableToolbar({
   table,
-  onAddUser, // <-- Dùng prop này làm cờ (flag)
+  onAddUser,
   onImportUser,
   onSuccess,
   searchColumnId,
@@ -107,7 +108,6 @@ export function DataTableToolbar({
     (khoahocFilterOptions) || (namhocFilterOptions) ||
     (hockyFilterOptions) || (hedaotaoFilterOptions);
 
-  // Xây dựng mảng các bộ lọc
   const filterGroups = [
     (chuyenNganhFilterOptions) ? (
         <DataTableFacetedFilterGroup
@@ -186,13 +186,48 @@ export function DataTableToolbar({
     ) : null,
   ].filter(Boolean);
 
+  const allOptionsMap = useMemo(() => {
+    const options = [
+      ...(chuyenNganhFilterOptions || []),
+      ...(khoaBomonFilterOptions || []),
+      ...(statusOptions || []),
+      ...(typeFilterOptions || []),
+      ...(khoahocFilterOptions || []),
+      ...(namhocFilterOptions || []),
+      ...(hockyFilterOptions || []),
+      ...(hedaotaoFilterOptions || []),
+    ];
+    return new Map(options.map(opt => [String(opt.value), opt.label]));
+  }, [
+    chuyenNganhFilterOptions, khoaBomonFilterOptions, statusOptions,
+    typeFilterOptions, khoahocFilterOptions, namhocFilterOptions,
+    hockyFilterOptions, hedaotaoFilterOptions
+  ]);
+
+  const selectedFilterLabels = useMemo(() => {
+    const filters = table.getState().columnFilters;
+    const labels = [];
+    
+    for (const filter of filters) {
+      if (filter.id === searchColumnId) continue;
+
+      const filterValues = Array.isArray(filter.value) ? filter.value : [filter.value];
+      
+      for (const value of filterValues) {
+        const label = allOptionsMap.get(String(value));
+        if (label) {
+          labels.push(label);
+        }
+      }
+    }
+    return labels;
+  }, [table.getState().columnFilters, allOptionsMap, searchColumnId]);
+
   return (
     <>
       <div className="flex items-center justify-between">
         <div className="flex flex-1 items-center flex-wrap gap-2">
 
-          {/* ----- SỬA ĐỔI CHÍNH Ở ĐÂY ----- */}
-          {/* Chỉ hiển thị nút bulk actions nếu CÓ HÀNG ĐƯỢC CHỌN và LÀ TRANG ADMIN (có prop onAddUser) */}
           {selectedRows.length > 0 && onAddUser ? (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('reset_password')}>
@@ -210,7 +245,6 @@ export function DataTableToolbar({
               </Button>
             </div>
           ) : (
-            /* Nếu không, hiển thị thanh tìm kiếm và bộ lọc */
             <>
               {searchColumnId && (
                 <Input
@@ -227,15 +261,37 @@ export function DataTableToolbar({
                     <Button variant="outline" size="sm" className="h-8 border-dashed">
                       <SlidersHorizontal className="mr-2 h-4 w-4" />
                       Bộ lọc
-                      {isFiltered && (
-                        <span className={cn(
-                          "ml-2 rounded-full px-2 py-0.5 text-xs",
-                          activeFilterCount > 0
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground"
-                        )}>
-                          {activeFilterCount}
-                        </span>
+                      {selectedFilterLabels.length > 0 && (
+                        <>
+                          <Separator orientation="vertical" className="mx-2 h-4" />
+                          <Badge
+                            variant="secondary"
+                            className="rounded-sm px-1 font-normal lg:hidden"
+                          >
+                            {selectedFilterLabels.length}
+                          </Badge>
+                          <div className="hidden space-x-1 lg:flex">
+                            {/* ----- [SỬA LỖI LOGIC] ----- */}
+                            {selectedFilterLabels.length > 5 ? ( 
+                              <Badge
+                                variant="secondary"
+                                className="rounded-sm px-1 font-normal"
+                              >
+                                {selectedFilterLabels.length} đã chọn
+                              </Badge>
+                            ) : (
+                              selectedFilterLabels.map((label) => (
+                                <Badge
+                                  variant="secondary"
+                                  key={label}
+                                  className="rounded-sm px-1 font-normal"
+                                >
+                                  {label}
+                                </Badge>
+                              ))
+                            )}
+                          </div>
+                        </>
                       )}
                     </Button>
                   </PopoverTrigger>
@@ -279,11 +335,9 @@ export function DataTableToolbar({
               )}
             </>
           )}
-          {/* ----- KẾT THÚC SỬA ĐỔI ----- */}
         </div>
 
         <div className="flex items-center space-x-2">
-          {/* Logic này vẫn đúng, vì `onAddUser` chỉ có ở trang Admin */}
           {selectedRows.length === 0 && onAddUser && (
             <>
               {onImportUser && (

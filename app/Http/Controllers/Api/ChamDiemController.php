@@ -31,6 +31,7 @@ class ChamDiemController extends Controller
                 'phancongDetaiNhom.detai',
                 'phancongDetaiNhom.gvhd.nguoidung',
                 'hoidongs.giangviens.nguoidung',
+                'kehoach',
             ])->find($id);
 
             if (!$nhom) {
@@ -88,7 +89,7 @@ class ChamDiemController extends Controller
                     'TEN_NHOM'    => $nhom->TEN_NHOM,
                     'DETAI'       => $nhom->phancongDetaiNhom?->detai?->TEN_DETAI ?? '-',
                     'SINHVIEN'    => $sinhviens,
-                    'GIANGVIEN'   => $giangviens
+                    'GIANGVIEN'   => $giangviens,
                 ]
             ]);
 

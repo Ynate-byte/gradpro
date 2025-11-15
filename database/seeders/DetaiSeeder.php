@@ -25,8 +25,8 @@ class DetaiSeeder extends Seeder
         }
 
         // Lấy giảng viên và admin
-        $gv1 = Giangvien::whereHas('nguoidung', fn($q) => $q->where('EMAIL', 'vinhvv@huit.edu.vn'))->first(); // Vũ Văn Vinh
-        $gv2 = Giangvien::whereHas('nguoidung', fn($q) => $q->where('EMAIL', 'thinhvd@huit.edu.vn'))->first(); // Vũ Đức Thịnh
+        $gv1 = Giangvien::whereHas('nguoidung', fn($q) => $q->where('EMAIL', 'vinhvv@huit.edu.vn'))->first();
+        $gv2 = Giangvien::whereHas('nguoidung', fn($q) => $q->where('EMAIL', 'thinhvd@huit.edu.vn'))->first();
         $admin = Nguoidung::where('EMAIL', 'admin@gradpro.test')->first();
         
         // Lấy chuyên ngành

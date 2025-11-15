@@ -642,86 +642,106 @@ class HoiDongController extends Controller
         $councilType = $validated['LOAI'];
         $replaceExisting = $validated['replaceExisting'] ?? false;
         
-        // 1. Lấy tất cả Hội đồng thuộc loại và kế hoạch này
         $councils = Hoidong::where('ID_KEHOACH', $planId)
             ->where('LOAI', $councilType)
-            // Tải thêm thông tin cần thiết cho việc lọc
-            ->with(['giangviens', 'nhoms.phancongDetaiNhom', 'chuyennganh.khoabomon']) 
+            ->with(['nhoms.phancongDetaiNhom', 'chuyennganh.khoabomon']) // Không cần load giangviens ở đây
             ->get();
 
         if ($councils->isEmpty()) {
             return response()->json(['message' => 'Không có Hội đồng nào để phân công.'], 400);
         }
 
-        // 2. Lấy Pool Giảng viên và Tải hiện tại
         $allLecturers = Giangvien::with('nguoidung', 'khoabomon')->get(); 
         
-        // Lấy tải hiện tại của mỗi GV (tổng số HĐ đã tham gia)
+        // Tải hiện tại của mỗi GV (tổng số HĐ đã tham gia TRONG KẾ HOẠCH)
         $currentLoads = DB::table('HOIDONG_GIANGVIEN')
             ->join('HOIDONG', 'HOIDONG_GIANGVIEN.ID_HOIDONG', '=', 'HOIDONG.ID_HOIDONG')
             ->where('HOIDONG.ID_KEHOACH', $planId)
+            // [SỬA] Chỉ đếm tải cho loại hội đồng đang phân công
+            ->where('HOIDONG.LOAI', $councilType) 
             ->groupBy('ID_GIANGVIEN')
             ->select('ID_GIANGVIEN', DB::raw('COUNT(HOIDONG_GIANGVIEN.ID_HOIDONG) as load_count'))
             ->pluck('load_count', 'ID_GIANGVIEN');
 
-        // Số thành viên cần thiết cho Hội đồng Bảo vệ
-        $requiredMemberCount = $councilType === 'hoidong' ? 3 : 1; 
+        // Tải tất cả thành viên hiện tại của các hội đồng đang xét
+        $allCouncilIdsInPlan = $councils->pluck('ID_HOIDONG');
+        $currentCouncilMembers = DB::table('HOIDONG_GIANGVIEN')
+                                ->whereIn('ID_HOIDONG', $allCouncilIdsInPlan)
+                                ->get()
+                                ->groupBy('ID_HOIDONG')
+                                ->map(fn($group) => $group->pluck('ID_GIANGVIEN'));
 
-        $totalAssignments = 0;
+        $requiredMemberCount = $councilType === 'hoidong' ? 3 : 1; 
+        $totalAssignmentsMade = 0; // Đếm số lần gán mới
 
         DB::beginTransaction();
         try {
             foreach ($councils as $council) {
-                // Nếu không yêu cầu ghi đè VÀ HĐ đã đủ thành viên, bỏ qua
-                if (!$replaceExisting && $council->giangviens->count() >= $requiredMemberCount) {
-                    continue;
-                }
                 
-                // 3. Lọc Giảng viên: Xung đột
                 $conflictLecturers = $this->getConflictLecturers($council);
                 $availableLecturers = $allLecturers->filter(function($gv) use ($conflictLecturers) {
                     return !$conflictLecturers->contains($gv->ID_GIANGVIEN);
                 });
                 
-                // 4. Lọc cứng theo Khoa/Bộ môn (Lọc chuyên môn)
                 $filteredLecturers = $this->filterLecturersByMajor($council, $availableLecturers);
                 
-                // Chuẩn bị HĐ để gán lại
-                if ($replaceExisting) {
-                    $council->giangviens()->detach();
+                // Lấy ID thành viên cũ của hội đồng NÀY
+                $existingMemberIds = collect();
+                if (!$replaceExisting) {
+                    $existingMemberIds = $currentCouncilMembers->get($council->ID_HOIDONG, collect());
                 }
 
-                // 5. Bắt đầu quá trình gán
-                $assignedMembers = $this->runGreedyAssignment(
+                $finalAssignmentsMap = $this->runGreedyAssignment(
                     $council, 
                     $filteredLecturers, 
                     $currentLoads, 
-                    $requiredMemberCount
+                    $requiredMemberCount,
+                    $existingMemberIds // Truyền ID người cũ (hoặc rỗng nếu ghi đè)
                 );
-
-                // 6. Đồng bộ hóa phân công
-                if (!empty($assignedMembers)) {
+        
+                if (!empty($finalAssignmentsMap)) {
                     $syncData = [];
-                    foreach ($assignedMembers as $member) {
+                    $newlyAssignedIds = collect(); 
+                    
+                    foreach ($finalAssignmentsMap as $member) {
                         $syncData[$member['id']] = ['VAITRO' => $member['role']];
-                        $totalAssignments++;
-                        // Cập nhật tải sau khi gán
-                        $currentLoads[$member['id']] = ($currentLoads[$member['id']] ?? 0) + 1;
+                        $newlyAssignedIds->push($member['id']);
                     }
-                    // Sử dụng syncWithoutDetaching vì chúng ta đã detach (nếu cần) và chỉ muốn thêm/cập nhật những người trong syncData
-                    $council->giangviens()->syncWithoutDetaching($syncData); 
+
+                    // Lấy ID cũ (từ $currentCouncilMembers, không phải $council->giangviens)
+                    $oldIds = $currentCouncilMembers->get($council->ID_HOIDONG, collect());
+
+                    $removedIds = $oldIds->diff($newlyAssignedIds);
+                    $addedIds = $newlyAssignedIds->diff($oldIds);
+
+                    // Cập nhật tải (load)
+                    foreach ($removedIds as $id) {
+                        if ($currentLoads->has($id) && $currentLoads[$id] > 0) {
+                            $currentLoads[$id]--;
+                        }
+                    }
+                    foreach ($addedIds as $id) {
+                        $currentLoads[$id] = ($currentLoads[$id] ?? 0) + 1;
+                        $totalAssignmentsMade++;
+                    }
+                    
+                    // Cập nhật lại $currentCouncilMembers để vòng lặp sau dùng (nếu 1 GV bị xóa ở HĐ này và gán ở HĐ khác)
+                    $currentCouncilMembers[$council->ID_HOIDONG] = $newlyAssignedIds;
+
+                    // Ghi đè (sync) thành viên cho hội đồng này
+                    $council->giangviens()->sync($syncData); 
                 }
             }
 
             DB::commit();
             return response()->json([
-                'message' => "Phân công tự động hoàn tất. Đã gán tổng cộng $totalAssignments vai trò cho $councilType.",
-                'total_assigned' => $totalAssignments
+                'message' => "Phân công tự động hoàn tất. Đã gán $totalAssignmentsMade vai trò mới.",
+                'total_assigned' => $totalAssignmentsMade
             ]);
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error("Lỗi phân công Hội đồng tự động: " . $e->getMessage());
+            Log::error("Lỗi phân công Hội đồng tự động: " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['error' => 'Lỗi server khi phân công tự động: ' . $e->getMessage()], 500);
         }
     }
@@ -774,68 +794,121 @@ class HoiDongController extends Controller
     /**
      * Helper: Thuật toán Greedy để gán thành viên cho 1 Hội đồng
      */
-    private function runGreedyAssignment(Hoidong $council, Collection $availableLecturers, Collection $currentLoads, int $requiredMemberCount): array
+    private function runGreedyAssignment(Hoidong $council, Collection $availableLecturers, Collection $currentLoads, int $requiredMemberCount, Collection $existingMemberIds): array
     {
-        $assigned = [];
-        $tempLoads = $currentLoads;
-        
-        if ($availableLecturers->isEmpty()) {
-            return [];
-        }
-        
-        // 1. Xác định thứ tự vai trò cần gán
-        $rolesOrder = [];
-        if ($council->LOAI === 'hoidong' && $requiredMemberCount >= 3) {
-            $rolesOrder = ['chutich', 'thuky'];
-            $membersNeeded = $requiredMemberCount - 2;
-            for ($i = 0; $i < $membersNeeded; $i++) {
-                $rolesOrder[] = 'thanhvien';
-            }
-        } elseif ($council->LOAI === 'phanbien') {
-            $rolesOrder = ['phanbien'];
-        } else {
-             for ($i = 0; $i < $requiredMemberCount; $i++) {
-                $rolesOrder[] = 'thanhvien';
-            }
-        }
-        
-        // 2. Gán các vai trò
-        foreach ($rolesOrder as $role) {
-            
-            $potentialMembers = $availableLecturers
-                ->filter(fn($gv) => !isset($assigned[$gv->ID_GIANGVIEN]));
+        // 1. Lấy thông tin chi tiết thành viên hiện có (nếu có)
+        $finalAssignments = collect();
+        if ($existingMemberIds->isNotEmpty()) {
+            $existingLecturers = Giangvien::with('nguoidung')
+                                ->whereIn('ID_GIANGVIEN', $existingMemberIds)
+                                ->get()
+                                ->keyBy('ID_GIANGVIEN');
 
-            // Gán ưu tiên Rank cao nhất cho Chủ tịch/Thư ký, còn lại là tải thấp nhất
-            if ($role === 'chutich' || $role === 'thuky') {
-                 $potentialMembers = $potentialMembers->sortByDesc(fn($gv) => $this->getLecturerRank($gv));
-            } else { // 'thanhvien' hoặc 'phanbien'
-                 $potentialMembers = $potentialMembers->sortBy(fn($gv) => $tempLoads[$gv->ID_GIANGVIEN] ?? 0);
+            // Lấy vai trò hiện tại của họ
+            $existingRoles = DB::table('HOIDONG_GIANGVIEN')
+                                ->where('ID_HOIDONG', $council->ID_HOIDONG)
+                                ->whereIn('ID_GIANGVIEN', $existingMemberIds)
+                                ->pluck('VAITRO', 'ID_GIANGVIEN');
+
+            foreach ($existingMemberIds as $id) {
+                if (isset($existingLecturers[$id])) {
+                    $gv = $existingLecturers[$id];
+                    // Gán vai trò cũ (nếu là 'chutich'/'thuky') hoặc 'thanhvien' (nếu là HĐPB nâng cấp)
+                    $role = $existingRoles->get($id) ?? 'thanhvien';
+                    $finalAssignments->push([
+                        'id' => $id,
+                        'role' => $role,
+                        'lecturer' => $gv,
+                        'rank' => $this->getLecturerRank($gv),
+                        'load' => $currentLoads->get($id, 0),
+                    ]);
+                }
+            }
+        }
+        
+        // Lọc ra các ứng viên mới (chưa có trong hội đồng)
+        $newCandidates = $availableLecturers
+            ->whereNotIn('ID_GIANGVIEN', $existingMemberIds)
+            ->map(fn($gv) => [
+                'id' => $gv->ID_GIANGVIEN,
+                'lecturer' => $gv,
+                'rank' => $this->getLecturerRank($gv),
+                'load' => $currentLoads->get($gv->ID_GIANGVIEN, 0),
+            ]);
+
+        // 2. Xử lý logic cho HỘI ĐỒNG BẢO VỆ (3 người)
+        if ($council->LOAI === 'hoidong' && $requiredMemberCount === 3) {
+            
+            // Pool ứng viên để lấp chỗ trống (bao gồm người cũ chưa có vai trò và người mới)
+            $candidatesPool = $finalAssignments
+                                ->whereNotIn('role', ['chutich', 'thuky'])
+                                ->merge($newCandidates);
+
+            // 2a. Đảm bảo có Chủ tịch
+            $chutich = $finalAssignments->firstWhere('role', 'chutich');
+            if (!$chutich) {
+                $bestCandidate = $candidatesPool->sortByDesc('rank')->first();
+                if ($bestCandidate) {
+                    $chutich = ['role' => 'chutich'] + $bestCandidate;
+                    $finalAssignments = $finalAssignments->where('id', '!=', $chutich['id']); // Xóa người cũ (nếu có)
+                    $finalAssignments->push($chutich);
+                    // Xóa khỏi pool ứng viên
+                    $candidatesPool = $candidatesPool->where('id', '!=', $chutich['id']);
+                }
             }
             
-            $member = $potentialMembers->first();
-            
-            if ($member) {
-                $assigned[$member->ID_GIANGVIEN] = ['id' => $member->ID_GIANGVIEN, 'role' => $role];
-                $tempLoads[$member->ID_GIANGVIEN] = ($tempLoads[$member->ID_GIANGVIEN] ?? 0) + 1;
-            } else {
-                 if ($role !== 'thanhvien') { // Nếu thiếu Chủ tịch, Thư ký, hoặc Phản biện
-                     return [];
-                 }
-                break;
+            // 2b. Đảm bảo có Thư ký
+            $thuky = $finalAssignments->firstWhere('role', 'thuky');
+            if (!$thuky) {
+                $bestCandidate = $candidatesPool->sortByDesc('rank')->first();
+                if ($bestCandidate) {
+                    $thuky = ['role' => 'thuky'] + $bestCandidate;
+                    $finalAssignments = $finalAssignments->where('id', '!=', $thuky['id']);
+                    $finalAssignments->push($thuky);
+                    $candidatesPool = $candidatesPool->where('id', '!=', $thuky['id']);
+                }
+            }
+
+            // 2c. Gán lại vai trò 'thanhvien' cho những người cũ còn lại (nếu họ không được chọn)
+            $finalAssignments = $finalAssignments->map(function($item) {
+                if (!in_array($item['role'], ['chutich', 'thuky'])) {
+                    $item['role'] = 'thanhvien';
+                }
+                return $item;
+            });
+
+            // 2d. Lấp đầy các vị trí 'thanhvien' còn thiếu
+            $membersNeeded = $requiredMemberCount - $finalAssignments->count();
+            if ($membersNeeded > 0) {
+                $lowestLoadCandidates = $candidatesPool->sortBy('load')->take($membersNeeded);
+                foreach ($lowestLoadCandidates as $candidate) {
+                    $finalAssignments->push(['role' => 'thanhvien'] + $candidate);
+                }
+            }
+
+            // Chỉ trả về mảng id/role, đảm bảo đúng 3 người
+            return $finalAssignments->map(fn($item) => ['id' => $item['id'], 'role' => $item['role']])
+                        ->unique('id') // Đảm bảo không trùng lặp
+                        ->take($requiredMemberCount)
+                        ->values()
+                        ->all();
+
+        } 
+        // 3. Xử lý logic cho HỘI ĐỒNG PHẢN BIỆN (1 người)
+        elseif ($council->LOAI === 'phanbien' && $requiredMemberCount === 1) {
+            // Ưu tiên người cũ
+            $candidate = $finalAssignments->first();
+            if (!$candidate) {
+                // Nếu không có, lấy người mới tải thấp nhất
+                $candidate = $newCandidates->sortBy('load')->first();
+            }
+
+            if ($candidate) {
+                return [['id' => $candidate['id'], 'role' => 'phanbien']];
             }
         }
 
-        // 3. Kiểm tra tính toàn vẹn (đủ Chủ tịch/Thư ký)
-        if ($council->LOAI === 'hoidong' && $requiredMemberCount >= 3) {
-             $hasChutich = collect($assigned)->contains(fn($a) => $a['role'] === 'chutich');
-             $hasThuky = collect($assigned)->contains(fn($a) => $a['role'] === 'thuky');
-             
-             if (!$hasChutich || !$hasThuky) {
-                 return [];
-             }
-        }
-        
-        return array_values($assigned);
+        return []; // Rỗng nếu không xử lý được
     }
     
     /**

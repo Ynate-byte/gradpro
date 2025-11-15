@@ -6,7 +6,7 @@ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 use App\Models\CotCongViec;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema; // <-- [THÊM MỚI] Import Schema
+use Illuminate\Support\Facades\Schema;
 
 class CotCongViecSeeder extends Seeder
 {
@@ -15,13 +15,11 @@ class CotCongViecSeeder extends Seeder
      */
     public function run(): void
     {
-        // ===== [SỬA LỖI TẠI ĐÂY] =====
-        Schema::disableForeignKeyConstraints(); // Tạm thời vô hiệu hóa kiểm tra khóa ngoại
+        Schema::disableForeignKeyConstraints();
         
-        DB::table('COT_CONGVIEC')->truncate(); // Bây giờ lệnh này sẽ chạy được
+        DB::table('COT_CONGVIEC')->truncate();
         
-        Schema::enableForeignKeyConstraints(); // Bật lại kiểm tra
-        // ============================
+        Schema::enableForeignKeyConstraints();
         
         CotCongViec::create([
             'TEN_COT' => 'Cần làm',

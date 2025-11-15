@@ -1,124 +1,110 @@
 import * as React from "react"
-import { CheckIcon, PlusCircledIcon } from "@radix-ui/react-icons"
-
+import { CheckIcon } from "@radix-ui/react-icons"
 import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import {
-  Command,
-  CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
-  CommandList,
   CommandSeparator,
 } from "@/components/ui/command"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
-import { Separator } from "@/components/ui/separator"
 
-export function DataTableFacetedFilter({ column, title, options }) {
-  const facets = column?.getFacetedUniqueValues()
-  const selectedValues = new Set(column?.getFilterValue())
+/**
+ * Hiển thị một nhóm các tùy chọn lọc (checkbox) bên trong CommandList.
+ * Component này không tự chứa Popover hay Command.
+ */
+export function DataTableFacetedFilterGroup({ column, title, options, className }) {
+  // Lấy các giá trị đang được lọc (lọc đa giá trị)
+  // Lưu ý: column?.getFilterValue() có thể trả về một mảng (nếu là multi-select) hoặc một giá trị đơn.
+  const filterValue = column?.getFilterValue() || [];
+  const selectedValues = new Set(Array.isArray(filterValue) ? filterValue : [filterValue]);
+  
+  // [THÊM MỚI] Biến kiểm tra: Đúng nếu tất cả các tùy chọn đều có trong selectedValues
+  const areAllSelected = options.length > 0 && selectedValues.size === options.length;
+
+  if (!column) return null;
 
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 border-dashed">
-          <PlusCircledIcon className="mr-2 h-4 w-4" />
-          {title}
-          {selectedValues?.size > 0 && (
-            <>
-              <Separator orientation="vertical" className="mx-2 h-4" />
-              <Badge
-                variant="secondary"
-                className="rounded-sm px-1 font-normal lg:hidden"
-              >
-                {selectedValues.size}
-              </Badge>
-              <div className="hidden space-x-1 lg:flex">
-                {selectedValues.size > 2 ? (
-                  <Badge
-                    variant="secondary"
-                    className="rounded-sm px-1 font-normal"
-                  >
-                    {selectedValues.size} đã chọn
-                  </Badge>
-                ) : (
-                  options
-                    .filter((option) => selectedValues.has(option.value))
-                    .map((option) => (
-                      <Badge
-                        variant="secondary"
-                        key={option.value}
-                        className="rounded-sm px-1 font-normal"
-                      >
-                        {option.label}
-                      </Badge>
-                    ))
-                )}
-              </div>
-            </>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[200px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder={title} />
-          <CommandList>
-            <CommandEmpty>Không tìm thấy kết quả.</CommandEmpty>
-            <CommandGroup>
-              {options.map((option) => {
-                const isSelected = selectedValues.has(option.value)
-                return (
-                  <CommandItem
-                    key={option.value}
-                    onSelect={() => {
-                      if (isSelected) {
-                        selectedValues.delete(option.value)
-                      } else {
-                        selectedValues.add(option.value)
-                      }
-                      const filterValues = Array.from(selectedValues)
-                      column?.setFilterValue(
-                        filterValues.length ? filterValues : undefined
-                      )
-                    }}
-                  >
-                    <div
-                      className={cn(
-                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                        isSelected
-                          ? "bg-primary text-primary-foreground"
-                          : "opacity-50 [&_svg]:invisible"
-                      )}
-                    >
-                      <CheckIcon className={cn("h-4 w-4")} />
-                    </div>
-                    <span>{option.label}</span>
-                  </CommandItem>
-                )
-              })}
-            </CommandGroup>
-            {selectedValues.size > 0 && (
-              <>
-                <CommandSeparator />
-                <CommandGroup>
-                  <CommandItem
-                    onSelect={() => column?.setFilterValue(undefined)}
-                    className="justify-center text-center"
-                  >
-                    Xóa bộ lọc
-                  </CommandItem>
-                </CommandGroup>
-              </>
-            )}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <CommandGroup heading={title} className={cn("p-1", className)}>
+      {/* ----- [THÊM MỚI "CHỌN TẤT CẢ"] ----- */}
+      {options.length > 0 && ( // Chỉ hiển thị nếu có tùy chọn
+        <>
+          <CommandItem
+            onSelect={() => {
+              if (areAllSelected) {
+                // Nếu đã chọn tất cả, hủy lọc (set undefined)
+                column?.setFilterValue(undefined);
+              } else {
+                // Nếu chưa chọn tất cả, chọn tất cả giá trị
+                column?.setFilterValue(options.map((o) => o.value));
+              }
+            }}
+          >
+            <div
+              className={cn(
+                "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                areAllSelected
+                  ? "bg-primary text-primary-foreground"
+                  : "opacity-50 [&_svg]:invisible"
+              )}
+            >
+              <CheckIcon className={cn("h-4 w-4")} />
+            </div>
+            <span>Tất cả</span>
+          </CommandItem>
+          <CommandSeparator />
+        </>
+      )}
+      {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
+      
+      {options.map((option) => {
+        const isSelected = selectedValues.has(option.value)
+        return (
+          <CommandItem
+            key={option.value}
+            onSelect={() => {
+              // Xử lý logic chọn/bỏ chọn từng mục
+              let newSelectedValues = new Set(selectedValues);
+
+              if (isSelected) {
+                newSelectedValues.delete(option.value)
+              } else {
+                newSelectedValues.add(option.value)
+              }
+
+              const filterValues = Array.from(newSelectedValues)
+
+              // Cập nhật giá trị lọc: nếu có giá trị đã chọn thì dùng mảng, không thì dùng undefined để xóa lọc
+              column?.setFilterValue(
+                filterValues.length ? filterValues : undefined
+              )
+            }}
+          >
+            <div
+              className={cn(
+                "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                isSelected
+                  ? "bg-primary text-primary-foreground"
+                  : "opacity-50 [&_svg]:invisible"
+              )}
+            >
+              <CheckIcon className={cn("h-4 w-4")} />
+            </div>
+            <span>{option.label}</span>
+          </CommandItem>
+        )
+      })}
+      
+      {/* Nút Xóa bộ lọc */}
+      {selectedValues.size > 0 && (
+        <>
+          <CommandSeparator />
+          <CommandItem
+            onSelect={() => column?.setFilterValue(undefined)}
+            className="justify-center text-center text-xs text-muted-foreground opacity-80"
+          >
+            Xóa bộ lọc {title}
+          </CommandItem>
+        </>
+      )}
+    </CommandGroup>
   )
 }

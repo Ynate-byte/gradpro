@@ -245,15 +245,22 @@ const ChamDiemChiTiet = () => {
   const diemTB_HDONG = useMemo(() => tinhDiemTB('hoidong'), [tinhDiemTB]);
 
   const { tyTrongHienThi } = useMemo(() => {
-    const currentTyTrong = tytrong || { HUONGDAN: 0.4, PHANBIEN: 0.3, HOIDONG: 0.3 };
-    return {
-      tyTrongHienThi: {
-        HD: parseFloat(currentTyTrong.HUONGDAN ?? 0),
-        PB: parseFloat(currentTyTrong.PHANBIEN ?? 0),
-        HDONG: parseFloat(currentTyTrong.HOIDONG ?? 0)
-      }
-    };
-  }, [tytrong]);
+    const globalWeights = tytrong || { HUONGDAN: 0.4, PHANBIEN: 0.3, HOIDONG: 0.3 };
+
+    const planWeights = nhom?.kehoach;
+
+    const wHD = parseFloat(planWeights?.TYTRONG_DIEM_QUATRINH ?? globalWeights.HUONGDAN);
+    const wPB = parseFloat(planWeights?.TYTRONG_DIEM_PHANBIEN ?? globalWeights.PHANBIEN);
+    const wHDONG = parseFloat(planWeights?.TYTRONG_DIEM_HOIDONG ?? globalWeights.HOIDONG);
+
+    return {
+      tyTrongHienThi: {
+        HD: wHD,
+        PB: wPB,
+        HDONG: wHDONG
+      }
+    };
+  }, [nhom, tytrong]);
 
   const diemTongDuKien = useMemo(() => {
     const wHD = tyTrongHienThi.HD;
