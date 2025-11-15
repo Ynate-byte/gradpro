@@ -68,9 +68,10 @@ class TopicAssignmentController extends BaseTopicAssignmentController
             return response()->json(['message' => 'Department not found for user'], 400);
         }
 
-        // Get all draft/pending topics from the department (both assigned and unassigned)
+        // Get all pending topics from the department (both assigned and unassigned)
+        // Include both "Chờ duyệt" and "Đang chỉnh sửa" statuses, exclude "Nháp"
         $topics = Detai::where('ID_KEHOACH', $planId)
-            ->whereIn('TRANGTHAI', ['Nháp', 'Chờ duyệt'])
+            ->whereIn('TRANGTHAI', ['Chờ duyệt', 'Đang chỉnh sửa'])
             ->whereHas('nguoiDexuat', function($query) use ($departmentId) {
                 $query->where('ID_KHOA_BOMON', $departmentId);
             })
@@ -203,9 +204,10 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        // Get all draft/pending topics in the plan from this department
+        // Get all pending topics in the plan from this department
+        // Include both "Chờ duyệt" and "Đang chỉnh sửa" statuses, exclude "Nháp"
         $topics = Detai::where('ID_KEHOACH', $request->ID_KEHOACH)
-            ->whereIn('TRANGTHAI', ['Nháp', 'Chờ duyệt'])
+            ->whereIn('TRANGTHAI', ['Chờ duyệt', 'Đang chỉnh sửa'])
             ->whereHas('nguoiDexuat', function($query) use ($departmentId) {
                 $query->where('ID_KHOA_BOMON', $departmentId);
             })
@@ -227,48 +229,83 @@ class TopicAssignmentController extends BaseTopicAssignmentController
         }
 
         DB::transaction(function () use ($topics, $lecturers, $request, $currentUser) {
-            foreach ($topics as $topic) {
-                // Get available reviewers (exclude the proposer)
-                $availableReviewers = $lecturers->filter(function($lecturer) use ($topic) {
-                    return $lecturer->ID_GIANGVIEN !== $topic->ID_NGUOI_DEXUAT;
+            // Calculate balanced assignment to ensure fair distribution
+            $totalTopics = $topics->count();
+            $totalLecturers = $lecturers->count();
+
+            if ($totalLecturers == 0) {
+                throw new \Exception("Không có giảng viên nào trong bộ môn");
+            }
+
+            // Calculate base assignments per lecturer and remainder
+            $baseAssignments = intdiv($totalTopics, $totalLecturers);
+            $extraAssignments = $totalTopics % $totalLecturers;
+
+            // Initialize assignment counts for each lecturer
+            $assignmentCounts = [];
+            foreach ($lecturers as $lecturer) {
+                $assignmentCounts[$lecturer->ID_GIANGVIEN] = [
+                    'count' => 0,
+                    'lecturer' => $lecturer,
+                    'max_allowed' => $baseAssignments + ($extraAssignments > 0 ? 1 : 0)
+                ];
+                $extraAssignments--;
+            }
+
+            // Shuffle topics for random assignment
+            $shuffledTopics = $topics->shuffle();
+
+            foreach ($shuffledTopics as $topic) {
+                // Get available reviewers (exclude the proposer and ensure balanced load)
+                $availableReviewers = $lecturers->filter(function($lecturer) use ($topic, $assignmentCounts) {
+                    return $lecturer->ID_GIANGVIEN !== $topic->ID_NGUOI_DEXUAT &&
+                           $assignmentCounts[$lecturer->ID_GIANGVIEN]['count'] < $assignmentCounts[$lecturer->ID_GIANGVIEN]['max_allowed'];
                 });
+
+                if ($availableReviewers->isEmpty()) {
+                    // If no reviewers available with balanced load, allow slight imbalance (max +1)
+                    $availableReviewers = $lecturers->filter(function($lecturer) use ($topic, $assignmentCounts) {
+                        return $lecturer->ID_GIANGVIEN !== $topic->ID_NGUOI_DEXUAT &&
+                               $assignmentCounts[$lecturer->ID_GIANGVIEN]['count'] < $assignmentCounts[$lecturer->ID_GIANGVIEN]['max_allowed'] + 1;
+                    });
+                }
 
                 if ($availableReviewers->isEmpty()) {
                     throw new \Exception("Không đủ giảng viên để phân công cho đề tài: {$topic->TEN_DETAI}");
                 }
 
-                // Randomly select 1-2 reviewers
-                $reviewersCount = rand(1, min(2, $availableReviewers->count()));
-                $selectedReviewers = $availableReviewers->random($reviewersCount);
+                // Select 1 reviewer (balanced approach uses 1 reviewer per topic to ensure fairness)
+                $selectedReviewer = $availableReviewers->random(1)->first();
 
-                foreach ($selectedReviewers as $reviewer) {
-                    // Check if already assigned
-                    $existingAssignment = PhancongNguoiGopY::where('ID_DETAI', $topic->ID_DETAI)
-                        ->where('ID_GIANGVIEN', $reviewer->ID_GIANGVIEN)
-                        ->first();
+                // Check if already assigned
+                $existingAssignment = PhancongNguoiGopY::where('ID_DETAI', $topic->ID_DETAI)
+                    ->where('ID_GIANGVIEN', $selectedReviewer->ID_GIANGVIEN)
+                    ->first();
 
-                    if (!$existingAssignment) {
-                        // Create reviewer assignment
-                        PhancongNguoiGopY::create([
-                            'ID_DETAI' => $topic->ID_DETAI,
-                            'ID_GIANGVIEN' => $reviewer->ID_GIANGVIEN,
-                            'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
-                            'GHICHU' => 'Tự động phân công',
-                            'TRANGTHAI' => 'Đang phân công',
+                if (!$existingAssignment) {
+                    // Create reviewer assignment
+                    PhancongNguoiGopY::create([
+                        'ID_DETAI' => $topic->ID_DETAI,
+                        'ID_GIANGVIEN' => $selectedReviewer->ID_GIANGVIEN,
+                        'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                        'GHICHU' => 'Tự động phân công (cân bằng)',
+                        'TRANGTHAI' => 'Đang phân công',
+                    ]);
+
+                    // Update assignment count
+                    $assignmentCounts[$selectedReviewer->ID_GIANGVIEN]['count']++;
+
+                    // Send notification to reviewer
+                    if ($selectedReviewer->nguoidung) {
+                        \App\Models\Notification::create([
+                            'user_id' => $selectedReviewer->nguoidung->ID_NGUOIDUNG,
+                            'type' => 'reviewer_assigned',
+                            'data' => [
+                                'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                                'topic_name' => $topic->TEN_DETAI,
+                                'topic_id' => $topic->ID_DETAI,
+                            ],
                         ]);
-
-                        // Send notification to reviewer
-                        if ($reviewer->nguoidung) {
-                            \App\Models\Notification::create([
-                                'user_id' => $reviewer->nguoidung->ID_NGUOIDUNG,
-                                'type' => 'reviewer_assigned',
-                                'data' => [
-                                    'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
-                                    'topic_name' => $topic->TEN_DETAI,
-                                    'topic_id' => $topic->ID_DETAI,
-                                ],
-                            ]);
-                        }
                     }
                 }
             }
