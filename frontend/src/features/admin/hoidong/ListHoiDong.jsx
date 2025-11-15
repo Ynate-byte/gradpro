@@ -54,6 +54,19 @@ const QUERY_KEY_HOIDONG = "adminHoiDong";
 const QUERY_KEY_STATS = "hoiDongStats";
 const QUERY_KEY_FILTERS = "hoidongFilterOptions";
 
+// [MỚI] Options cho bộ lọc
+const loaiOptions = [
+  { label: "Hội đồng", value: "hoidong" },
+  { label: "Phản biện", value: "phanbien" },
+];
+
+const chamDiemOptions = [
+  { label: "Đã chấm điểm", value: "da_cham_diem" },
+  { label: "Chưa chấm điểm", value: "chua_cham_diem" },
+  { label: "Chưa phân bổ nhóm", value: "chua_phan_bo" },
+];
+// [HẾT MỚI]
+
 const StatCard = ({
   icon: Icon,
   title,
@@ -188,6 +201,8 @@ const ListHoiDong = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAutoAssignOpen, setIsAutoAssignOpen] = useState(false);
+  // [MỚI] Thêm state cho dialog nâng cấp
+  const [isUpgradeAlertOpen, setIsUpgradeAlertOpen] = useState(false);
 
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
     queryKey: [QUERY_KEY_FILTERS],
@@ -240,6 +255,9 @@ const ListHoiDong = () => {
         search: debouncedSearch,
         kehoach: selectedPlanId,
         chuyennganh: columnFilters.find((f) => f.id === "chuyennganh")?.value,
+        // [MỚI] Gửi giá trị bộ lọc mới
+        loai: columnFilters.find((f) => f.id === "loai")?.value,
+        trang_thai_cham_diem: columnFilters.find((f) => f.id === "trang_thai_cham_diem")?.value,
       }),
     placeholderData: (prev) => prev,
     enabled: !isLoadingFilters,
@@ -258,6 +276,23 @@ const ListHoiDong = () => {
     },
     onError: (err) => {
       toast.error(err.response?.data?.error || "Xóa thất bại!");
+    },
+  });
+
+  // [MỚI] Mutation cho nâng cấp hàng loạt
+  const upgradeMutation = useMutation({
+    mutationFn: (ids) => hoiDongService.bulkUpgradeHoiDong(ids),
+    onSuccess: (data) => {
+      toast.success(data.message || "Nâng cấp hàng loạt thành công!");
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
+      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_STATS] });
+      setRowSelection({});
+    },
+    onError: (err) => {
+      toast.error(err.response?.data?.error || "Nâng cấp thất bại!");
+    },
+    onSettled: () => {
+      setIsUpgradeAlertOpen(false);
     },
   });
 
@@ -322,6 +357,22 @@ const ListHoiDong = () => {
         accessorFn: (row) => row.chuyennganh?.TEN_CHUYENNGANH,
         cell: ({ row }) => row.original.chuyennganh?.TEN_CHUYENNGANH || "-",
         size: 200,
+      },
+      // [MỚI] Cột trạng thái chấm
+      {
+        accessorKey: "trang_thai_cham_diem",
+        header: "Trạng thái chấm",
+        cell: ({ row }) => {
+          const status = row.original.trang_thai_cham_diem;
+          if (status === 'da_cham_diem') {
+            return <Badge variant="success">Đã chấm điểm</Badge>;
+          }
+          if (status === 'chua_cham_diem') {
+            return <Badge variant="warning">Chưa chấm điểm</Badge>;
+          }
+          return <Badge variant="secondary">Chưa phân bổ</Badge>;
+        },
+        size: 130,
       },
       {
         accessorKey: "PHONG",
@@ -478,20 +529,32 @@ const ListHoiDong = () => {
 
         {selectedIds.length > 0 && (
           <Card className="flex-shrink-0">
-            <CardContent className="p-3 flex items-center justify-between">
+            <CardContent className="p-3 flex items-center justify-between gap-2">
               <div className="text-sm font-medium">Đã chọn {selectedIds.length} hội đồng.</div>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={() => {
-                  setDeleteTarget("bulk");
-                  setIsAlertOpen(true);
-                }}
-                disabled={deleteMutation.isPending}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Xóa mục đã chọn
-              </Button>
+              {/* [SỬA ĐỔI] Thêm wrapper và nút Nâng cấp */}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsUpgradeAlertOpen(true)}
+                  disabled={upgradeMutation.isPending || deleteMutation.isPending}
+                >
+                  <ArrowUp className="mr-2 h-4 w-4" />
+                  Nâng cấp HĐ Phản Biện
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => {
+                    setDeleteTarget("bulk");
+                    setIsAlertOpen(true);
+                  }}
+                  disabled={deleteMutation.isPending}
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Xóa mục đã chọn
+                </Button>
+              </div> 
             </CardContent>
           </Card>
         )}
@@ -513,8 +576,15 @@ const ListHoiDong = () => {
           searchPlaceholder="Tìm tên hội đồng..."
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
-          chuyenNganhFilterColumnId="chuyennganh"
-          chuyenNganhFilterOptions={filterOptions?.chuyennganh}
+          DuyệtNganhFilterColumnId="chuyennganh"
+          DuyệtNganhFilterOptions={filterOptions?.chuyennganh}
+        
+          khoaBomonFilterColumnId="loai" 
+          khoaBomonFilterTitle="Loại Hội đồng"
+          khoaBomonFilterOptions={loaiOptions}
+          statusColumnId="trang_thai_cham_diem"
+          statusOptions={chamDiemOptions}
+
           flexLayout={true}
           className="flex-grow min-h-0"
         />
@@ -550,24 +620,52 @@ const ListHoiDong = () => {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* [MỚI] Dialog xác nhận Nâng cấp */}
+        <AlertDialog open={isUpgradeAlertOpen} onOpenChange={setIsUpgradeAlertOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <ArrowUp className="h-6 w-6 text-primary" />
+                Xác nhận Nâng cấp Hội đồng?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Bạn có chắc chắn muốn nâng cấp {selectedIds.length} HĐ Phản Biện đã chọn lên HĐ Bảo Vệ không?
+                <br />
+                Hệ thống sẽ chỉ nâng cấp các HĐ hợp lệ (loại "phản biện" và có 1 thành viên).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={upgradeMutation.isPending}>Hủy</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={upgradeMutation.isPending}
+                onClick={() => {
+                  upgradeMutation.mutate(selectedIds);
+                }}
+              >
+                {upgradeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Xác nhận Nâng cấp
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <CreateHoiDongDialog
+          isOpen={isCreateOpen}
+          setIsOpen={setIsCreateOpen}
+          onSuccess={handleCreateSuccess}
+        />
+
+        <AutoAssignMemberDialog
+          isOpen={isAutoAssignOpen}
+          setIsOpen={setIsAutoAssignOpen}
+          selectedPlanId={selectedPlanId}
+          planOptions={filterOptions?.kehoach}
+          onSuccess={handleCreateSuccess}
+        />
       </div>
-
-      <CreateHoiDongDialog
-        isOpen={isCreateOpen}
-        setIsOpen={setIsCreateOpen}
-        onSuccess={handleCreateSuccess}
-      />
-
-      <AutoAssignMemberDialog
-        isOpen={isAutoAssignOpen}
-        setIsOpen={setIsAutoAssignOpen}
-        selectedPlanId={selectedPlanId}
-        planOptions={filterOptions?.kehoach}
-        onSuccess={handleCreateSuccess}
-      />
     </>
   );
 };
 
 export default ListHoiDong;
-

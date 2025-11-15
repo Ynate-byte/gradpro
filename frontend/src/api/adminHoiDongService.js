@@ -71,6 +71,10 @@ export const upgradePhanBienToHoiDong = (id) => {
     return axiosClient.post(`/admin/hoidong/${id}/upgrade-to-hoidong`).then(res => res.data);
 };
 
+export const bulkUpgradeHoiDong = (ids) => {
+  return axiosClient.post('/admin/hoidong/bulk-upgrade', { ids }).then(res => res.data);
+};
+
 // [THÊM MỚI] Hàm service phân công tự động
 /**
  * Tự động phân công thành viên Hội đồng (Chủ tịch, Thư ký, TV).

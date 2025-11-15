@@ -223,6 +223,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::patch('/{id}/update-name', [HoiDongController::class, 'updateTenHoiDong']); 
             // Route phân công thành viên tự động
             Route::post('/auto-assign-members', [HoiDongController::class, 'autoAssignMembers']);
+            Route::post('/bulk-upgrade', [HoiDongController::class, 'bulkUpgrade']);
             Route::post('/{id}/upgrade-to-hoidong', [HoiDongController::class, 'upgradePhanBienToHoiDong']);
             Route::delete('/{idHoiDong}/nhom/{idNhom}', [HoiDongController::class, 'xoaPhanBoNhom']);
         });

@@ -40,9 +40,9 @@ class ChamDiemController extends Controller
 
             // === Xử lý sinh viên ===
             $sinhviens = $nhom->thanhviens->map(fn($tv) => [
-                'ID_SINHVIEN'   => $tv->nguoidung?->sinhvien?->ID_SINHVIEN,
-                'MA_DINHDANH'   => $tv->nguoidung?->MA_DINHDANH ?? 'N/A',
-                'HODEM_VA_TEN'  => $tv->nguoidung?->HODEM_VA_TEN ?? 'Không rõ'
+                'ID_SINHVIEN'  => $tv->nguoidung?->sinhvien?->ID_SINHVIEN,
+                'MA_DINHDANH'  => $tv->nguoidung?->MA_DINHDANH ?? 'N/A',
+                'HODEM_VA_TEN' => $tv->nguoidung?->HODEM_VA_TEN ?? 'Không rõ'
             ])->values();
 
             // === Xử lý GVHD ===
@@ -54,10 +54,10 @@ class ChamDiemController extends Controller
             ] : null;
 
             // === Tách hội đồng: Bảo vệ & Phản biện ===
-            $hoidongBaoVe   = $nhom->hoidongs->firstWhere('LOAI', 'hoidong');
+            $hoidongBaoVe    = $nhom->hoidongs->firstWhere('LOAI', 'hoidong');
             $hoidongPhanBien = $nhom->hoidongs->firstWhere('LOAI', 'phanbien');
 
-            $giangvienHoiDong = collect();
+            $giangvienHoiDong  = collect();
             $giangvienPhanBien = collect();
 
             if ($hoidongBaoVe) {
@@ -85,19 +85,25 @@ class ChamDiemController extends Controller
 
             return response()->json([
                 'nhom' => [
-                    'ID_NHOM'     => $nhom->ID_NHOM,
-                    'TEN_NHOM'    => $nhom->TEN_NHOM,
-                    'DETAI'       => $nhom->phancongDetaiNhom?->detai?->TEN_DETAI ?? '-',
-                    'SINHVIEN'    => $sinhviens,
-                    'GIANGVIEN'   => $giangviens,
+                    'ID_NHOM'   => $nhom->ID_NHOM,
+                    'TEN_NHOM'  => $nhom->TEN_NHOM,
+                    'DETAI'     => $nhom->phancongDetaiNhom?->detai?->TEN_DETAI ?? '-',
+                    'SINHVIEN'  => $sinhviens,
+                    'GIANGVIEN' => $giangviens,
+                    'kehoach'   => $nhom->kehoach,
                 ]
             ]);
 
         } catch (\Throwable $e) {
-            Log::error("Lỗi getNhom (ChamDiemController): " . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            Log::error(
+                "Lỗi getNhom (ChamDiemController): " . $e->getMessage(),
+                ['trace' => $e->getTraceAsString()]
+            );
+
             return response()->json(['error' => 'Lỗi máy chủ nội bộ'], 500);
         }
     }
+
 
     /**
      * Lấy tỷ trọng điểm hiện hành (Global)

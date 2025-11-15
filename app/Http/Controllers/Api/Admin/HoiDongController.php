@@ -23,7 +23,13 @@ class HoiDongController extends Controller
      */
     public function index(Request $request)
     {
-        $query = Hoidong::with(['giangviens', 'kehoach', 'chuyennganh', 'nhoms'])
+        $query = Hoidong::with(['kehoach', 'chuyennganh'])
+            // [SỬA ĐỔI] Thêm 'nhoms' (với score counts) và 'giangviens_count'
+            ->with(['nhoms' => function ($q) {
+                $q->withCount(['diemPhanBien', 'diemHoiDong']);
+            }])
+            ->withCount('giangviens')
+            // [HẾT SỬA ĐỔI]
             ->orderBy($request->input('sort', 'NGAY_BAOCAO'), $request->input('dir', 'desc'));
 
         // Lọc hội đồng theo trạng thái kế hoạch
@@ -40,28 +46,76 @@ class HoiDongController extends Controller
         }
 
         if ($request->filled('chuyennganh')) {
-            $query->where('ID_CHUYENNGANH', $request->input('chuyennganh'));
+            // [SỬA ĐỔI] Lọc mảng
+            $query->whereIn('ID_CHUYENNGANH', $request->input('chuyennganh'));
         }
 
+        // [MỚI] Lọc theo loại hội đồng
+        if ($request->filled('loai')) {
+            $query->whereIn('LOAI', $request->input('loai'));
+        }
+
+        // [MỚI] Hàm helper để tính trạng thái chấm
+        $calculateStatus = function ($hd) {
+            $hd->so_thanh_vien = $hd->giangviens_count; // Dùng count
+            $hd->so_nhom = $hd->nhoms->count();
+
+            if ($hd->so_nhom === 0) {
+                $hd->trang_thai_cham_diem = 'chua_phan_bo';
+            } else {
+                $allGraded = true;
+                $totalMembers = $hd->so_thanh_vien;
+                if ($totalMembers == 0) { // Tránh chia cho 0 nếu HĐ chưa có GV
+                     $hd->trang_thai_cham_diem = 'chua_cham_diem'; // Giả định là chưa chấm
+                     return $hd;
+                }
+
+                foreach ($hd->nhoms as $nhom) {
+                    if ($hd->LOAI === 'phanbien' && $nhom->diem_phan_bien_count < $totalMembers) {
+                        $allGraded = false;
+                        break;
+                    } elseif ($hd->LOAI === 'hoidong' && $nhom->diem_hoi_dong_count < $totalMembers) {
+                        $allGraded = false;
+                        break;
+                    }
+                }
+                $hd->trang_thai_cham_diem = $allGraded ? 'da_cham_diem' : 'chua_cham_diem';
+            }
+            return $hd;
+        };
+        
         // 1. Kiểm tra xem có yêu cầu 'all' (cho trang Phân Bổ) không
         if ($request->boolean('all')) {
             $hoidongs = $query->get();
-            $hoidongs->transform(function ($hd) {
-                $hd->so_thanh_vien = $hd->giangviens->count();
-                $hd->so_nhom = $hd->nhoms->count();
-                return $hd;
-            });
-            return response()->json($hoidongs);
+            $hoidongs->transform($calculateStatus); // Áp dụng hàm tính
+            
+            // [SỬA ĐỔI] Lọc trạng thái chấm (vì không thể lọc bằng SQL)
+            if ($request->filled('trang_thai_cham_diem')) {
+                $hoidongs = $hoidongs->whereIn('trang_thai_cham_diem', $request->input('trang_thai_cham_diem'));
+            }
+            return response()->json($hoidongs->values()); // Thêm values() để reset keys
         }
 
-        // 2. Mặc định là phân trang (cho trang List)
-        $hoidongs = $query->paginate($request->per_page ?? 10);
-        $hoidongs->getCollection()->transform(function ($hd) {
-            $hd->so_thanh_vien = $hd->giangviens->count();
-            $hd->so_nhom = $hd->nhoms->count();
-            return $hd;
-        });
+        $allMatchingHoidongs = $query->get();
+        $allMatchingHoidongs->transform($calculateStatus);
 
+        if ($request->filled('trang_thai_cham_diem')) {
+            $allMatchingHoidongs = $allMatchingHoidongs->whereIn('trang_thai_cham_diem', $request->input('trang_thai_cham_diem'));
+        }
+
+        // Phân trang thủ công
+        $perPage = $request->per_page ?? 10;
+        $page = $request->page ?? 1;
+        $paginatedItems = $allMatchingHoidongs->slice(($page - 1) * $perPage, $perPage)->values();
+        
+        $hoidongs = new \Illuminate\Pagination\LengthAwarePaginator(
+            $paginatedItems,
+            $allMatchingHoidongs->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
+        
         return response()->json($hoidongs);
     }
 
@@ -396,6 +450,72 @@ class HoiDongController extends Controller
             DB::rollBack();
             Log::error("Lỗi nâng cấp Hội đồng: " . $e->getMessage());
             return response()->json(['error' => 'Xảy ra lỗi trong quá trình nâng cấp.'], 500);
+        }
+    }
+
+    public function bulkUpgrade(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:HOIDONG,ID_HOIDONG',
+        ]);
+
+        $upgradedCount = 0;
+        $failedCount = 0;
+        $failedMessages = [];
+
+        DB::beginTransaction();
+        try {
+            foreach ($validated['ids'] as $id) {
+                $hoidong = Hoidong::with('giangviens')->find($id);
+
+                if (!$hoidong) {
+                    $failedCount++;
+                    $failedMessages[] = "ID $id: Không tìm thấy.";
+                    continue;
+                }
+
+                if ($hoidong->LOAI !== 'phanbien') {
+                    $failedCount++;
+                    $failedMessages[] = "ID $id ({$hoidong->TEN_HOIDONG}): Không phải HĐ Phản biện.";
+                    continue;
+                }
+
+                $currentReviewer = $hoidong->giangviens->first();
+                if (!$currentReviewer) {
+                    $failedCount++;
+                    $failedMessages[] = "ID $id ({$hoidong->TEN_HOIDONG}): HĐ Phản biện không có thành viên.";
+                    continue;
+                }
+                
+                // Logic nâng cấp
+                $hoidong->update(['LOAI' => 'hoidong']);
+                $hoidong->giangviens()->sync([
+                    $currentReviewer->ID_GIANGVIEN => ['VAITRO' => 'thanhvien']
+                ]);
+                
+                $upgradedCount++;
+            }
+
+            DB::commit();
+
+            $message = "Nâng cấp hoàn tất: $upgradedCount hội đồng thành công.";
+            if ($failedCount > 0) {
+                $message .= " $failedCount thất bại.";
+                // $message .= " $failedCount thất bại. Chi tiết: " . implode('; ', $failedMessages);
+                Log::warning('Bulk upgrade HĐ thất bại chi tiết: ' . implode('; ', $failedMessages));
+            }
+
+            return response()->json([
+                'message' => $message,
+                'upgraded' => $upgradedCount,
+                'failed' => $failedCount,
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Lỗi bulk upgrade Hội đồng: " . $e->getMessage());
+            return response()->json(['error' => 'Xảy ra lỗi server trong quá trình nâng cấp.'], 500);
         }
     }
 
