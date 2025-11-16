@@ -9,6 +9,7 @@ const getStatusBadge = (status) => {
     const statusConfig = {
         "Nháp": { label: "Nháp", className: "bg-gray-100 text-gray-700" },
         "Chờ duyệt": { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700" },
+        "Đang chỉnh sửa": { label: "Đang chỉnh sửa", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" },
         "Yêu cầu chỉnh sửa": { label: "Yêu cầu chỉnh sửa", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
         "Đã duyệt": { label: "Đã duyệt", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700" },
         "Đã đầy": { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
@@ -91,9 +92,9 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
         accessorKey: "chuyennganh.TEN_CHUYENNGANH",
         header: "Chuyên ngành",
         cell: ({ row }) => (
-          <div className="text-xs text-muted-foreground">
-            {row.original.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}
-          </div>
+            <div className="text-xs text-muted-foreground">
+                {row.original.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}
+            </div>
         )
     },
     { // Cột ẩn để lọc

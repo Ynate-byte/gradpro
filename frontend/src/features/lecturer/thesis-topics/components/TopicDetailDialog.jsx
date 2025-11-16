@@ -176,12 +176,7 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = fal
                     )}
 
                     <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                          <Layers className="h-5 w-5 text-blue-500" /> Thông tin cơ bản
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
+                      <CardContent className="space-y-4 pt-5">
                         <InfoItem icon={BookOpen} label="Mô tả">
                           {topic.MOTA}
                         </InfoItem>

@@ -133,6 +133,11 @@ const QuotaManager = () => {
     }
   };
 
+  const calculateRatio = (quota, lecturers) => {
+    if (lecturers === 0) return 'N/A';
+    return (quota / lecturers).toFixed(2);
+  };
+
   const handleAssignQuota = async () => {
     if (!selectedDepartmentId || quotaAmount === '' || !selectedPlan) {
       toast.error('Vui lòng chọn khoa/bộ môn và nhập số lượng đề tài');
@@ -383,9 +388,25 @@ const QuotaManager = () => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Bảng Chi tiết Quota Bộ môn</CardTitle>
-            <CardDescription>Tổng hợp quota đã được giao và tình trạng sử dụng đề tài của từng khoa/bộ môn.</CardDescription>
+          <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+            <div>
+              <CardTitle className="text-xl font-bold">Bảng Chi tiết Quota Bộ môn</CardTitle>
+              <CardDescription>Tổng hợp quota đã được giao và tình trạng sử dụng đề tài của từng khoa/bộ môn.</CardDescription>
+            </div>
+            <motion.div
+              className="flex items-center gap-2 px-3 py-1 border rounded-lg bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50" // Đổi màu nền và viền
+              initial={{ x: 20, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />  
+              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Đề tài đã giao:
+                <span className="text-lg font-bold text-blue-600 dark:text-blue-400 ml-1">  
+                  {totalAssigned}
+                </span>
+              </p>
+            </motion.div>
           </CardHeader>
           <CardContent>
             {departments.length === 0 ? (
@@ -399,6 +420,7 @@ const QuotaManager = () => {
                     <TableHead className="w-[30%]">Khoa/Bộ môn</TableHead>
                     <TableHead className="text-center">Số GV</TableHead>
                     <TableHead className="text-center font-bold text-primary">Được Giao</TableHead>
+                    <TableHead className="text-center">Tỷ lệ</TableHead>
                     <TableHead className="text-center">Đề tài Đã Tạo</TableHead>
                     <TableHead className="text-center">Trạng Thái</TableHead>
                   </TableRow>
@@ -469,6 +491,9 @@ const QuotaManager = () => {
                             +
                           </Button>
                         </div>
+                      </TableCell>
+                      <TableCell className="text-center font-medium text-orange-500 dark:text-orange-400">
+                        {calculateRatio(dept.quota_assigned || 0, dept.total_lecturers || 0)}
                       </TableCell>
                       <TableCell className="text-center">
                         {dept.actual_created || 0}

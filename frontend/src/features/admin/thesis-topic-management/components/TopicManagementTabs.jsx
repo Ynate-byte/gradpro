@@ -52,8 +52,8 @@ const itemVariants = {
 
 const tableVariants = {
   hidden: { opacity: 0, y: 30, scale: 0.98 },
-  visible: { 
-    opacity: 1, 
+  visible: {
+    opacity: 1,
     y: 0,
     scale: 1,
     transition: { type: "spring", stiffness: 80, damping: 18, duration: 0.5 }
@@ -85,6 +85,8 @@ const TopicManagementTabs = () => {
   const [selectedTopicId, setSelectedTopicId] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [actionType, setActionType] = useState("");
+  const [pendingTopics, setPendingTopics] = useState([]);
+  const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
 
   useEffect(() => {
     loadAllData();
@@ -101,9 +103,9 @@ const TopicManagementTabs = () => {
 
       setAllTopics(topicRes.data || []);
       setChuyenNganhOptions(
-        (cnRes || []).map(cn => ({ 
-          label: cn.TEN_CHUYENNGANH, 
-          value: String(cn.ID_CHUYENNGANH) 
+        (cnRes || []).map(cn => ({
+          label: cn.TEN_CHUYENNGANH,
+          value: String(cn.ID_CHUYENNGANH)
         }))
       );
     } catch (error) {
@@ -118,6 +120,12 @@ const TopicManagementTabs = () => {
   const handleViewTopicDetails = (topicId) => {
     setSelectedTopicId(topicId);
     setShowTopicDetailDialog(true);
+
+    // Set up pending topics for navigation
+    const pending = allTopics.filter(t => t.TRANGTHAI === 'Chờ duyệt');
+    setPendingTopics(pending);
+    const currentIndex = pending.findIndex(t => t.ID_DETAI === topicId);
+    setCurrentTopicIndex(currentIndex >= 0 ? currentIndex : 0);
   };
 
   const handleApprove = async (topicId) => {
@@ -125,6 +133,18 @@ const TopicManagementTabs = () => {
       await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
       toast.success("Đề tài đã được duyệt thành công!");
       loadAllData();
+
+      // Move to next pending topic if viewing details
+      if (showTopicDetailDialog && pendingTopics.length > 0) {
+        const nextIndex = (currentTopicIndex + 1) % pendingTopics.length;
+        if (nextIndex !== currentTopicIndex) {
+          setCurrentTopicIndex(nextIndex);
+          setSelectedTopicId(pendingTopics[nextIndex].ID_DETAI);
+        } else {
+          // No more pending topics, close the dialog
+          setShowTopicDetailDialog(false);
+        }
+      }
     } catch (error) {
       console.error("Error approving topic:", error);
       toast.error("Có lỗi xảy ra khi duyệt đề tài.");
@@ -157,6 +177,18 @@ const TopicManagementTabs = () => {
       toast.success(message);
       setShowRejectDialog(false);
       loadAllData();
+
+      // Move to next pending topic if viewing details
+      if (showTopicDetailDialog && pendingTopics.length > 0) {
+        const nextIndex = (currentTopicIndex + 1) % pendingTopics.length;
+        if (nextIndex !== currentTopicIndex) {
+          setCurrentTopicIndex(nextIndex);
+          setSelectedTopicId(pendingTopics[nextIndex].ID_DETAI);
+        } else {
+          // No more pending topics, close the dialog
+          setShowTopicDetailDialog(false);
+        }
+      }
     } catch (error) {
       console.error("Error processing topic:", error);
       toast.error("Có lỗi xảy ra khi xử lý yêu cầu.");
@@ -205,7 +237,7 @@ const TopicManagementTabs = () => {
       total: allTopics.length,
       pending: allTopics.filter(t => t.TRANGTHAI === 'Chờ duyệt').length,
       approved: allTopics.filter(t => t.TRANGTHAI === 'Đã duyệt').length,
-      editRequest: allTopics.filter(t => 
+      editRequest: allTopics.filter(t =>
         t.TRANGTHAI === 'Yêu cầu chỉnh sửa' || t.TRANGTHAI === 'Từ chối'
       ).length,
     };
@@ -287,6 +319,7 @@ const TopicManagementTabs = () => {
             <TabsList>
               <TabsTrigger value="Tất cả">Tất cả</TabsTrigger>
               <TabsTrigger value="Chờ duyệt">Chờ duyệt</TabsTrigger>
+              <TabsTrigger value="Đang chỉnh sửa">Đang chỉnh sửa</TabsTrigger>
               <TabsTrigger value="Đã duyệt">Đã duyệt</TabsTrigger>
               <TabsTrigger value="Yêu cầu chỉnh sửa">Yêu cầu chỉnh sửa</TabsTrigger>
               <TabsTrigger value="Từ chối">Từ chối</TabsTrigger>
@@ -314,7 +347,7 @@ const TopicManagementTabs = () => {
                   setColumnFilters={setColumnFilters}
                   sorting={sorting}
                   setSorting={setSorting}
-                  onAddUser={() => {}}
+                  onAddUser={() => { }}
                   addBtnText={null}
                   onImportUser={null}
                   onSuccess={loadAllData}
@@ -338,6 +371,29 @@ const TopicManagementTabs = () => {
         open={showTopicDetailDialog}
         onOpenChange={setShowTopicDetailDialog}
         topicId={selectedTopicId}
+        showAdminActions={true}
+        onApprove={handleApprove}
+        onReject={handleReject}
+        onRequestEdit={handleRequestEdit}
+        onNext={() => {
+          if (pendingTopics.length > 0) {
+            const nextIndex = (currentTopicIndex + 1) % pendingTopics.length;
+            if (nextIndex !== currentTopicIndex) {
+              setCurrentTopicIndex(nextIndex);
+              setSelectedTopicId(pendingTopics[nextIndex].ID_DETAI);
+            } else {
+              // No more pending topics, close the dialog
+              setShowTopicDetailDialog(false);
+            }
+          }
+        }}
+        onPrevious={() => {
+          if (pendingTopics.length > 0) {
+            const prevIndex = currentTopicIndex === 0 ? pendingTopics.length - 1 : currentTopicIndex - 1;
+            setCurrentTopicIndex(prevIndex);
+            setSelectedTopicId(pendingTopics[prevIndex].ID_DETAI);
+          }
+        }}
       />
 
       <RejectDialog
