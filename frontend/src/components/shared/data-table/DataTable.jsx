@@ -40,12 +40,14 @@ export function DataTable({
   chuyenNganhFilterOptions,
   khoaBomonFilterColumnId,
   khoaBomonFilterOptions,
+  khoaBomonFilterTitle,
   state,
   onRowSelectionChange,
   getRowProps = () => ({}),
   containerClassName,
-  flexLayout = false,
-  className, // <-- THÊM PROP MỚI
+  flexLayout = false, // Prop này không còn được sử dụng để kiểm soát layout
+  className,
+  bulkActions, // Prop mới được thêm vào
 }) {
   const table = useReactTable({
     data: data ?? [],
@@ -72,13 +74,11 @@ export function DataTable({
   const pageSize = table.getState().pagination.pageSize;
 
   return (
-    // ----- SỬA ĐỔI CHÍNH 1 -----
     <div className={cn(
       "space-y-4",
-      flexLayout && "flex h-full flex-col",
-      className // <-- ÁP DỤNG className TÙY CHỈNH TẠI ĐÂY
+      // Đã gỡ bỏ: flexLayout && "flex h-full flex-col",
+      className
     )}>
-    {/* ----- KẾT THÚC SỬA ĐỔI 1 ----- */}
 
       <DataTableToolbar
         table={table}
@@ -101,17 +101,20 @@ export function DataTable({
         chuyenNganhFilterColumnId={chuyenNganhFilterColumnId}
         chuyenNganhFilterOptions={chuyenNganhFilterOptions}
         khoaBomonFilterColumnId={khoaBomonFilterColumnId}
+        khoaBomonFilterTitle={khoaBomonFilterTitle}
         khoaBomonFilterOptions={khoaBomonFilterOptions}
+        bulkActions={bulkActions}
       />
       
       <div
         className={cn(
           "rounded-md border overflow-y-auto relative",
           containerClassName,
+          // Đã gỡ bỏ logic height/max-height cũ để cho phép co dãn tự động
           !containerClassName && (
             flexLayout
-              ? "flex-1 min-h-0" // Dùng flex-1 để co giãn
-              : "max-h-[calc(100vh-25rem)]" // Mặc định cho toàn trang
+              ? "flex-1 min-h-0" 
+              : "max-h-[calc(100vh-25rem)]"
           )
         )}
       >

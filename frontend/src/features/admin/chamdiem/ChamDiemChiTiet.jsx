@@ -20,7 +20,7 @@ import {
   TableRow,
   TableFooter
 } from '@/components/ui/table';
-import { Input } from '@/components/ui/input';
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -29,6 +29,12 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import {
   Loader2,
   Save,
@@ -39,7 +45,8 @@ import {
   Info,
   Percent,
   BookUser,
-  MessageSquare
+  MessageSquare,
+  CheckCircle
 } from 'lucide-react';
 
 const getRoleVariant = (role) => {
@@ -245,22 +252,22 @@ const ChamDiemChiTiet = () => {
   const diemTB_HDONG = useMemo(() => tinhDiemTB('hoidong'), [tinhDiemTB]);
 
   const { tyTrongHienThi } = useMemo(() => {
-    const globalWeights = tytrong || { HUONGDAN: 0.4, PHANBIEN: 0.3, HOIDONG: 0.3 };
+    const globalWeights = tytrong || { HUONGDAN: 0.4, PHANBIEN: 0.3, HOIDONG: 0.3 };
 
-    const planWeights = nhom?.kehoach;
+    const planWeights = nhom?.kehoach;
 
-    const wHD = parseFloat(planWeights?.TYTRONG_DIEM_QUATRINH ?? globalWeights.HUONGDAN);
-    const wPB = parseFloat(planWeights?.TYTRONG_DIEM_PHANBIEN ?? globalWeights.PHANBIEN);
-    const wHDONG = parseFloat(planWeights?.TYTRONG_DIEM_HOIDONG ?? globalWeights.HOIDONG);
+    const wHD = parseFloat(planWeights?.TYTRONG_DIEM_QUATRINH ?? globalWeights.HUONGDAN);
+    const wPB = parseFloat(planWeights?.TYTRONG_DIEM_PHANBIEN ?? globalWeights.PHANBIEN);
+    const wHDONG = parseFloat(planWeights?.TYTRONG_DIEM_HOIDONG ?? globalWeights.HOIDONG);
 
-    return {
-      tyTrongHienThi: {
-        HD: wHD,
-        PB: wPB,
-        HDONG: wHDONG
-      }
-    };
-  }, [nhom, tytrong]);
+    return {
+      tyTrongHienThi: {
+        HD: wHD,
+        PB: wPB,
+        HDONG: wHDONG
+      }
+    };
+  }, [nhom, tytrong]);
 
   const diemTongDuKien = useMemo(() => {
     const wHD = tyTrongHienThi.HD;
@@ -275,6 +282,10 @@ const ChamDiemChiTiet = () => {
     }
     return 'N/A';
   }, [diemTB_HD, diemTB_PB, diemTB_HDONG, tyTrongHienThi]);
+
+  const giangVienHuongDan = useMemo(() => {
+    return diem.huongdan.map(gv => gv.HOTEN).join(', ');
+  }, [diem.huongdan]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -294,6 +305,7 @@ const ChamDiemChiTiet = () => {
       setSaving(false);
     }
   };
+
 
   if (loading) {
     return <div className="p-8 text-center"><Loader2 className="h-10 w-10 animate-spin mx-auto text-primary" /></div>;
@@ -324,12 +336,63 @@ const ChamDiemChiTiet = () => {
   return (
     <TooltipProvider>
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-            <GraduationCap className="h-8 w-8 text-primary" />
-            Chấm điểm chi tiết
-          </h1>
-          <div className="flex gap-2">
+        
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button 
+                  variant="outline" 
+                  className="flex items-start p-3 rounded-lg border-green-300 bg-green-50 hover:bg-green-100 w-full w-full text-left h-auto space-x-3"
+                >
+                  <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-semibold text-green-900 leading-snug truncate">{nhom.DETAI}</span>
+                    {giangVienHuongDan && (
+                      <span className="text-sm text-green-700 mt-1 truncate">GVHD: {giangVienHuongDan}</span>
+                    )}
+                  </div>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-96 p-4">
+                <div className="grid gap-4">
+                  <div className="space-y-2">
+                    <h4 className="font-semibold leading-none text-base">
+                      Thông tin Đồ án/Khóa luận
+                    </h4>
+                    <Badge variant="secondary" className="text-sm font-medium w-fit">
+                      {nhom.TEN_NHOM}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                     <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                     <div className="grid gap-1.5">
+                       <span className="font-semibold text-gray-800">Đề tài:</span>
+                       <p className="text-sm text-muted-foreground">{nhom.DETAI}</p>
+                     </div>
+                  </div>
+                  
+                  <Separator /> 
+
+                  <div className="flex items-start gap-3">
+                    <Users className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
+                    <div className="grid gap-1.5"> 
+                      <span className="font-semibold text-gray-800">Sinh viên thực hiện:</span>
+                      <div className="flex flex-col text-muted-foreground text-sm">
+                        {nhom.SINHVIEN.map(sv => (
+                          <span key={sv.MA_DINHDANH}>{sv.HODEM_VA_TEN} ({sv.MA_DINHDANH})</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+          </div>
+
+          <div className="flex gap-2 flex-shrink-0">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="outline" size="icon" onClick={() => navigate(-1)}>
@@ -344,35 +407,6 @@ const ChamDiemChiTiet = () => {
             </Button>
           </div>
         </div>
-
-        <Card className="shadow-lg border-l-4 border-primary">
-          <CardHeader>
-            <CardTitle className="text-xl mb-2">Thông tin Đồ án/Khóa luận</CardTitle>
-            <Badge variant="secondary" className="text-base font-semibold w-fit">
-              {nhom.TEN_NHOM}
-            </Badge>
-          </CardHeader>
-          <CardContent className="pt-2 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            <div className="flex items-start gap-3">
-              <FileText className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
-              <div>
-                <span className="font-semibold text-gray-800">Đề tài:</span>
-                <p className="text-muted-foreground">{nhom.DETAI}</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-3">
-              <Users className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-1" />
-              <div>
-                <span className="font-semibold text-gray-800">Sinh viên thực hiện:</span>
-                <div className="flex flex-col text-muted-foreground">
-                  {nhom.SINHVIEN.map(sv => (
-                    <span key={sv.MA_DINHDANH}>{sv.HODEM_VA_TEN} ({sv.MA_DINHDANH})</span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

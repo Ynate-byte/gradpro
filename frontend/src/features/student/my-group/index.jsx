@@ -263,9 +263,21 @@ export default function MyGroupPage() {
             {hasGroup ? (
                 // --- Bố cục 3 cột khi ĐÃ CÓ NHÓM ---
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-                    
-                    {/* CỘT 1: Đề tài & Kế hoạch (Code gốc của bạn) */}
                     <div className="flex-1 space-y-4 lg:col-span-1">
+                        <div>
+                            <Select value={selectedPlanIdForDisplay} onValueChange={setSelectedPlanIdForDisplay}>
+                                <SelectTrigger className="w-full sm:w-full mt-1">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {activePlans.map(plan => (
+                                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                            {plan.TEN_DOT} ({plan.NAMHOC} - HK {plan.HOCKY})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         {hasTopic ? (
                             <Alert className="bg-green-50 border-green-200 text-green-900 dark:bg-green-900/30 dark:border-green-700 dark:text-green-100">
                                 <CheckCircle className="h-4 w-4 !text-green-700 dark:!text-green-300" />
@@ -288,25 +300,10 @@ export default function MyGroupPage() {
                                 </AlertDescription>
                             </Alert>
                         )}
-                        <div>
-                            <label className="text-sm font-medium">Kế hoạch</label>
-                            <Select value={selectedPlanIdForDisplay} onValueChange={setSelectedPlanIdForDisplay}>
-                                <SelectTrigger className="w-full sm:w-80 mt-1">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {activePlans.map(plan => (
-                                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                            {plan.TEN_DOT} ({plan.NAMHOC} - HK {plan.HOCKY})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
                         
                         {hasTopic && (
                             <Button 
-                                className="w-full sm:w-80"
+                                className="w-full sm:w-full"
                                 onClick={() => setIsSubmissionOpen(true)}
                             >
                                 <UploadCloud className="mr-2 h-4 w-4" /> Nộp sản phẩm

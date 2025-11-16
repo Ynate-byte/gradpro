@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import axiosClient from "@/api/axiosConfig";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,11 +51,13 @@ import * as hoiDongService from "@/api/adminHoiDongService";
 import { CreateHoiDongDialog } from "./CreateHoiDong";
 import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
 
+// [SỬA] Import StatCard mới
+import StatCard from "@/components/shared/StatCard";
+
 const QUERY_KEY_HOIDONG = "adminHoiDong";
 const QUERY_KEY_STATS = "hoiDongStats";
 const QUERY_KEY_FILTERS = "hoidongFilterOptions";
 
-// [MỚI] Options cho bộ lọc
 const loaiOptions = [
   { label: "Hội đồng", value: "hoidong" },
   { label: "Phản biện", value: "phanbien" },
@@ -65,34 +68,35 @@ const chamDiemOptions = [
   { label: "Chưa chấm điểm", value: "chua_cham_diem" },
   { label: "Chưa phân bổ nhóm", value: "chua_phan_bo" },
 ];
-// [HẾT MỚI]
 
-const StatCard = ({
-  icon: Icon,
-  title,
-  value,
-  isLoading,
-  iconBgClass = "bg-primary/10",
-  iconColorClass = "text-primary",
-}) => (
-  <Card>
-    <CardContent className="p-4 flex items-center gap-4">
-      <div className={cn("p-3 rounded-lg", iconBgClass)}>
-        <Icon className={cn("h-6 w-6", iconColorClass)} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-muted-foreground truncate">
-          {title}
-        </p>
-        {isLoading ? (
-          <Skeleton className="h-7 w-12 mt-1" />
-        ) : (
-          <p className="text-2xl font-bold">{value?.toLocaleString("vi-VN") ?? 0}</p>
-        )}
-      </div>
-    </CardContent>
-  </Card>
-);
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+      delayChildren: 0.05
+    }
+  }
+};
+
+const itemVariants = {
+  hidden: { 
+    y: 30, 
+    opacity: 0,
+    scale: 0.95
+  },
+  visible: { 
+    y: 0, 
+    opacity: 1,
+    scale: 1,
+    transition: {
+      type: "spring",
+      stiffness: 100,
+      damping: 15
+    }
+  }
+};
 
 const EditableTextCell = ({ getValue, row, colId }) => {
   const initialValue = getValue() || "";
@@ -201,8 +205,10 @@ const ListHoiDong = () => {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isAutoAssignOpen, setIsAutoAssignOpen] = useState(false);
-  // [MỚI] Thêm state cho dialog nâng cấp
   const [isUpgradeAlertOpen, setIsUpgradeAlertOpen] = useState(false);
+  const [isSingleUpgradeAlertOpen, setIsSingleUpgradeAlertOpen] = useState(false);
+  const [upgradeTarget, setUpgradeTarget] = useState(null);
+  const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
 
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
     queryKey: [QUERY_KEY_FILTERS],
@@ -223,17 +229,19 @@ const ListHoiDong = () => {
         })),
       };
     },
-    onSuccess: (data) => {
-      if (!selectedPlanId && data?.kehoach?.length > 0) {
-        setSelectedPlanId(data.kehoach[0].value);
-      }
-    },
   });
+
+  useEffect(() => {
+    if (!isInitialPlanSet && filterOptions?.kehoach?.length > 0) {
+      setSelectedPlanId(filterOptions.kehoach[0].value);
+      setIsInitialPlanSet(true);
+    }
+  }, [filterOptions, isInitialPlanSet]);
 
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: [QUERY_KEY_STATS, selectedPlanId],
     queryFn: () => hoiDongService.getHoiDongStatistics(selectedPlanId || null),
-    enabled: !isLoadingFilters,
+    enabled: !!isLoadingFilters,
   });
 
   const queryKey = [
@@ -255,7 +263,6 @@ const ListHoiDong = () => {
         search: debouncedSearch,
         kehoach: selectedPlanId,
         chuyennganh: columnFilters.find((f) => f.id === "chuyennganh")?.value,
-        // [MỚI] Gửi giá trị bộ lọc mới
         loai: columnFilters.find((f) => f.id === "loai")?.value,
         trang_thai_cham_diem: columnFilters.find((f) => f.id === "trang_thai_cham_diem")?.value,
       }),
@@ -279,7 +286,6 @@ const ListHoiDong = () => {
     },
   });
 
-  // [MỚI] Mutation cho nâng cấp hàng loạt
   const upgradeMutation = useMutation({
     mutationFn: (ids) => hoiDongService.bulkUpgradeHoiDong(ids),
     onSuccess: (data) => {
@@ -296,17 +302,21 @@ const ListHoiDong = () => {
     },
   });
 
-  const handleUpgrade = async (id, tenHoiDong) => {
-    if (!window.confirm(`Xác nhận nâng cấp Hội đồng Phản biện "${tenHoiDong}" lên Hội đồng Bảo vệ (3 thành viên)?\n\nQuy trình này sẽ giữ lại 1 GV Phản biện làm Thành viên và yêu cầu bạn bổ sung 2 GV (Chủ tịch, Thư ký).`)) return;
-    try {
-      const res = await hoiDongService.upgradePhanBienToHoiDong(id);
-      toast.success(res.message);
+  const singleUpgradeMutation = useMutation({
+    mutationFn: (id) => hoiDongService.upgradePhanBienToHoiDong(id),
+    onSuccess: (data) => {
+      toast.success(data.message || "Nâng cấp thành công!");
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY_STATS] });
-    } catch (err) {
+      setUpgradeTarget(null);
+    },
+    onError: (err) => {
       toast.error(err.response?.data?.error || "Nâng cấp thất bại!");
-    }
-  };
+    },
+    onSettled: () => {
+      setIsSingleUpgradeAlertOpen(false);
+    },
+  });
 
   const columns = useMemo(
     () => [
@@ -358,7 +368,6 @@ const ListHoiDong = () => {
         cell: ({ row }) => row.original.chuyennganh?.TEN_CHUYENNGANH || "-",
         size: 200,
       },
-      // [MỚI] Cột trạng thái chấm
       {
         accessorKey: "trang_thai_cham_diem",
         header: "Trạng thái chấm",
@@ -428,7 +437,10 @@ const ListHoiDong = () => {
                 <Button
                   variant="secondary"
                   size="icon"
-                  onClick={() => handleUpgrade(hoidong.ID_HOIDONG, hoidong.TEN_HOIDONG)}
+                  onClick={() => {
+                    setUpgradeTarget(hoidong);
+                    setIsSingleUpgradeAlertOpen(true);
+                  }}
                   title="Nâng cấp lên Hội đồng Bảo vệ (3 thành viên)"
                 >
                   <ArrowUp className="h-4 w-4" />
@@ -473,16 +485,113 @@ const ListHoiDong = () => {
     queryClient.invalidateQueries({ queryKey: [QUERY_KEY_FILTERS] });
   };
 
+  const bulkActions = (
+    <div className="flex gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => setIsUpgradeAlertOpen(true)}
+        disabled={upgradeMutation.isPending || deleteMutation.isPending}
+      >
+        <ArrowUp className="mr-2 h-4 w-4" />
+        Nâng cấp HĐ Phản Biện
+      </Button>
+      <Button
+        variant="destructive"
+        size="sm"
+        onClick={() => {
+          setDeleteTarget("bulk");
+          setIsAlertOpen(true);
+        }}
+        disabled={deleteMutation.isPending}
+      >
+        <Trash2 className="mr-2 h-4 w-4" />
+        Xóa mục đã chọn
+      </Button>
+    </div>
+  );
+
+  // [THÊM] Logic cho StatCard onClick
+  const handleStatCardClick = (filterId, value) => {
+    setPagination(prev => ({ ...prev, pageIndex: 0 })); // Reset về trang 1
+    
+    setColumnFilters(prevFilters => {
+      const otherFilters = prevFilters.filter(f => f.id !== filterId);
+      if (value === undefined) {
+        return otherFilters; // Xóa bộ lọc này
+      }
+      return [...otherFilters, { id: filterId, value: [value] }]; // Đặt bộ lọc này
+    });
+  };
+
+  const [tableHeight, setTableHeight] = useState('auto');
+  const tableRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (tableRef.current) {
+      const height = tableRef.current.getBoundingClientRect().height;
+      setTableHeight(height);
+    }
+  }, [data, isLoadingData, pagination]);
+
   return (
     <>
       <div className="p-4 md:p-8 space-y-4 h-full flex flex-col">
-        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 flex-shrink-0">
-          <StatCard icon={Users} title="Tổng số Hội đồng" value={stats?.totalHoiDong} isLoading={isLoadingStats} iconBgClass="bg-blue-100" iconColorClass="text-blue-600" />
-          <StatCard icon={Shield} title="HĐ Bảo Vệ" value={stats?.totalBaoVe} isLoading={isLoadingStats} iconBgClass="bg-green-100" iconColorClass="text-green-600" />
-          <StatCard icon={BookOpen} title="HĐ Phản Biện" value={stats?.totalPhanBien} isLoading={isLoadingStats} iconBgClass="bg-yellow-100" iconColorClass="text-yellow-600" />
-          <StatCard icon={GraduationCap} title="Tổng Thành viên" value={stats?.totalThanhVien} isLoading={isLoadingStats} iconBgClass="bg-indigo-100" iconColorClass="text-indigo-600" />
-          <StatCard icon={Users2} title="Nhóm đã phân bổ" value={stats?.nhomDaPhanBo} isLoading={isLoadingStats} iconBgClass="bg-orange-100" iconColorClass="text-orange-600" />
-        </div>
+        <motion.div 
+          className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 flex-shrink-0"
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+        >
+          <motion.div variants={itemVariants}>
+            <StatCard 
+              icon={Users} 
+              title="Tổng số Hội đồng" 
+              value={isLoadingStats ? 'loading' : stats?.totalHoiDong} 
+              iconBgClass="bg-blue-100" 
+              iconColorClass="text-blue-600"
+              onClick={() => handleStatCardClick('loai', undefined)}
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard 
+              icon={Shield} 
+              title="HĐ Bảo Vệ" 
+              value={isLoadingStats ? 'loading' : stats?.totalBaoVe} 
+              iconBgClass="bg-green-100" 
+              iconColorClass="text-green-600"
+              onClick={() => handleStatCardClick('loai', 'hoidong')}
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard 
+              icon={BookOpen} 
+              title="HĐ Phản Biện" 
+              value={isLoadingStats ? 'loading' : stats?.totalPhanBien} 
+              iconBgClass="bg-yellow-100" 
+              iconColorClass="text-yellow-600"
+              onClick={() => handleStatCardClick('loai', 'phanbien')}
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard 
+              icon={GraduationCap} 
+              title="Tổng Thành viên" 
+              value={isLoadingStats ? 'loading' : stats?.totalThanhVien} 
+              iconBgClass="bg-indigo-100" 
+              iconColorClass="text-indigo-600" 
+            />
+          </motion.div>
+          <motion.div variants={itemVariants}>
+            <StatCard 
+              icon={Users2} 
+              title="Nhóm đã phân bổ" 
+              value={isLoadingStats ? 'loading' : stats?.nhomDaPhanBo} 
+              iconBgClass="bg-orange-100" 
+              iconColorClass="text-orange-600" 
+            />
+          </motion.div>
+        </motion.div>
 
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
           <div className="flex items-center gap-2">
@@ -527,67 +636,45 @@ const ListHoiDong = () => {
           </div>
         </div>
 
-        {selectedIds.length > 0 && (
-          <Card className="flex-shrink-0">
-            <CardContent className="p-3 flex items-center justify-between gap-2">
-              <div className="text-sm font-medium">Đã chọn {selectedIds.length} hội đồng.</div>
-              {/* [SỬA ĐỔI] Thêm wrapper và nút Nâng cấp */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setIsUpgradeAlertOpen(true)}
-                  disabled={upgradeMutation.isPending || deleteMutation.isPending}
-                >
-                  <ArrowUp className="mr-2 h-4 w-4" />
-                  Nâng cấp HĐ Phản Biện
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => {
-                    setDeleteTarget("bulk");
-                    setIsAlertOpen(true);
-                  }}
-                  disabled={deleteMutation.isPending}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Xóa mục đã chọn
-                </Button>
-              </div> 
-            </CardContent>
-          </Card>
-        )}
-
-        <DataTable
-          columns={columns}
-          data={data?.data ?? []}
-          pageCount={pageCount}
-          loading={isLoading}
-          pagination={pagination}
-          setPagination={setPagination}
-          columnFilters={columnFilters}
-          setColumnFilters={setColumnFilters}
-          sorting={sorting}
-          setSorting={setSorting}
-          onRowSelectionChange={setRowSelection}
-          state={{ pagination, sorting, columnFilters, rowSelection }}
-          searchColumnId="search"
-          searchPlaceholder="Tìm tên hội đồng..."
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-          DuyệtNganhFilterColumnId="chuyennganh"
-          DuyệtNganhFilterOptions={filterOptions?.chuyennganh}
-        
-          khoaBomonFilterColumnId="loai" 
-          khoaBomonFilterTitle="Loại Hội đồng"
-          khoaBomonFilterOptions={loaiOptions}
-          statusColumnId="trang_thai_cham_diem"
-          statusOptions={chamDiemOptions}
-
-          flexLayout={true}
-          className="flex-grow min-h-0"
-        />
+        <motion.div
+          initial={false}
+          animate={{ height: tableHeight }}
+          transition={{
+              duration: 0.5,
+              ease: [0.4, 0, 0.2, 1]
+          }}
+          style={{ overflow: 'hidden' }}
+          className="flex-grow"
+        >
+          <div ref={tableRef}>
+            <DataTable
+              columns={columns}
+              data={data?.data ?? []}
+              pageCount={pageCount}
+              loading={isLoading}
+              pagination={pagination}
+              setPagination={setPagination}
+              columnFilters={columnFilters}
+              setColumnFilters={setColumnFilters}
+              sorting={sorting}
+              setSorting={setSorting}
+              onRowSelectionChange={setRowSelection}
+              state={{ pagination, sorting, columnFilters, rowSelection }}
+              searchColumnId="search"
+              searchPlaceholder="Tìm tên hội đồng..."
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
+              chuyenNganhFilterColumnId="chuyennganh"
+              chuyenNganhFilterOptions={filterOptions?.chuyennganh}
+              khoaBomonFilterColumnId="loai" 
+              khoaBomonFilterTitle="Loại Hội đồng"
+              khoaBomonFilterOptions={loaiOptions}
+              statusColumnId="trang_thai_cham_diem"
+              statusOptions={chamDiemOptions}
+              bulkActions={bulkActions}
+            />
+          </div>
+        </motion.div>
 
         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
           <AlertDialogContent>
@@ -621,7 +708,6 @@ const ListHoiDong = () => {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* [MỚI] Dialog xác nhận Nâng cấp */}
         <AlertDialog open={isUpgradeAlertOpen} onOpenChange={setIsUpgradeAlertOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -644,6 +730,36 @@ const ListHoiDong = () => {
                 }}
               >
                 {upgradeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Xác nhận Nâng cấp
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog open={isSingleUpgradeAlertOpen} onOpenChange={setIsSingleUpgradeAlertOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <ArrowUp className="h-6 w-6 text-primary" />
+                Xác nhận Nâng cấp Hội đồng?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Bạn có chắc chắn muốn nâng cấp HĐ Phản Biện "{upgradeTarget?.TEN_HOIDONG}" lên Hội đồng Bảo vệ (3 thành viên)?
+                <br /><br />
+                Quy trình này sẽ giữ lại 1 GV Phản biện làm Thành viên và yêu cầu bạn bổ sung 2 GV (Chủ tịch, Thư ký).
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={singleUpgradeMutation.isPending}>Hủy</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={singleUpgradeMutation.isPending}
+                onClick={() => {
+                  if (upgradeTarget) {
+                    singleUpgradeMutation.mutate(upgradeTarget.ID_HOIDONG);
+                  }
+                }}
+              >
+                {singleUpgradeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Xác nhận Nâng cấp
               </AlertDialogAction>
             </AlertDialogFooter>

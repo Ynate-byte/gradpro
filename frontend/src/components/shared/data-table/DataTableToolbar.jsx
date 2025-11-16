@@ -47,6 +47,7 @@ export function DataTableToolbar({
   khoaBomonFilterColumnId,
   khoaBomonFilterOptions,
   khoaBomonFilterTitle,
+  bulkActions,
 }) {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [bulkAction, setBulkAction] = useState(null);
@@ -228,22 +229,33 @@ export function DataTableToolbar({
       <div className="flex items-center justify-between">
         <div className="flex flex-1 items-center flex-wrap gap-2">
 
-          {selectedRows.length > 0 && onAddUser ? (
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('reset_password')}>
-                <KeyRound className="mr-2 h-4 w-4" /> Reset Mật khẩu ({selectedRows.length})
-              </Button>
-              <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('activate')}>
-                Kích hoạt ({selectedRows.length})
-              </Button>
-              <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('deactivate')}>
-                Vô hiệu hóa ({selectedRows.length})
-              </Button>
-              <Button variant="destructive" size="sm" className="h-8" onClick={() => confirmBulkAction('delete')}>
-                <Trash2 className="mr-2 h-4 w-4" />
-                Xóa ({selectedRows.length})
-              </Button>
-            </div>
+          {selectedRows.length > 0 ? (
+            <>
+              <div className="flex-1 text-sm font-medium">
+                Đã chọn {selectedRows.length} mục.
+              </div>
+              <div className="flex gap-2">
+                {bulkActions ? (
+                  bulkActions
+                ) : onAddUser ? (
+                  <>
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('reset_password')}>
+                      <KeyRound className="mr-2 h-4 w-4" /> Reset Mật khẩu ({selectedRows.length})
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('activate')}>
+                      Kích hoạt ({selectedRows.length})
+                    </Button>
+                    <Button variant="outline" size="sm" className="h-8" onClick={() => confirmBulkAction('deactivate')}>
+                      Vô hiệu hóa ({selectedRows.length})
+                    </Button>
+                    <Button variant="destructive" size="sm" className="h-8" onClick={() => confirmBulkAction('delete')}>
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      Xóa ({selectedRows.length})
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+            </>
           ) : (
             <>
               {searchColumnId && (
@@ -271,7 +283,6 @@ export function DataTableToolbar({
                             {selectedFilterLabels.length}
                           </Badge>
                           <div className="hidden space-x-1 lg:flex">
-                            {/* ----- [SỬA LỖI LOGIC] ----- */}
                             {selectedFilterLabels.length > 5 ? ( 
                               <Badge
                                 variant="secondary"
@@ -353,22 +364,21 @@ export function DataTableToolbar({
         </div>
       </div>
 
-      {/* AlertDialog (Không đổi) */}
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
-            <AlertDialogHeader>
-                <AlertDialogTitle>{dialogContent.title}</AlertDialogTitle>
-                <AlertDialogDescription>{dialogContent.description}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Hủy</AlertDialogCancel>
-                <AlertDialogAction
-                    onClick={handleBulkAction}
-                    className={bulkAction === 'delete' ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
-                >
-                    Xác nhận
-                </AlertDialogAction>
-            </AlertDialogFooter>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{dialogContent.title}</AlertDialogTitle>
+            <AlertDialogDescription>{dialogContent.description}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+                onClick={handleBulkAction}
+                className={bulkAction === 'delete' ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+            >
+                Xác nhận
+            </AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>

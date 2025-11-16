@@ -2,23 +2,22 @@ import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { User, BookText, Target, Award } from "lucide-react"; // <-- Thêm icons
+import { User, BookText, Target, Award } from "lucide-react";
 
 /**
  * Component con hiển thị từng mục chi tiết
  */
 const DetailSection = ({ icon, title, content }) => (
-  <div className="flex items-start gap-4">
-    <span className="mt-1 shrink-0 text-primary">
-      {/* Clone icon để thêm class */}
-      {React.cloneElement(icon, { className: "h-5 w-5" })}
-    </span>
-    <div>
-      <h4 className="text-sm font-medium uppercase text-muted-foreground">{title}</h4>
-      <p className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">
-        {content || '(Chưa có thông tin)'}
-      </p>
+  <div className="space-y-2">
+    <div className="flex items-center gap-3">
+      <span className="shrink-0 text-primary">
+        {React.cloneElement(icon, { className: "h-5 w-5" })}
+      </span>
+      <h4 className="text-lg font-semibold text-foreground">{title}</h4>
     </div>
+    <p className="text-sm text-muted-foreground ml-8 whitespace-pre-wrap">
+      {content || '(Chưa có thông tin)'}
+    </p>
   </div>
 );
 
@@ -27,7 +26,6 @@ const DetailSection = ({ icon, title, content }) => (
  * Dialog hiển thị thông tin chi tiết đề tài với giao diện mới.
  */
 export function TopicDetailsDialog({ phancong, isOpen, setIsOpen }) {
-  // Check an toàn, nếu không có phancong hoặc detai thì không render
   if (!phancong || !phancong.detai) return null; 
 
   const detai = phancong.detai;
@@ -42,7 +40,6 @@ export function TopicDetailsDialog({ phancong, isOpen, setIsOpen }) {
           </DialogDescription>
         </DialogHeader>
         
-        {/* --- BẮT ĐẦU NÂNG CẤP GIAO DIỆN --- */}
         <div className="space-y-6 pt-4">
           
           {/* 1. Thông tin chính */}
@@ -63,7 +60,7 @@ export function TopicDetailsDialog({ phancong, isOpen, setIsOpen }) {
           <Separator />
 
           {/* 2. Các mục chi tiết */}
-          <div className="grid gap-6 md:grid-cols-1">
+          <div className="space-y-6">
             <DetailSection 
               icon={<BookText />} 
               title="Mô tả" 
@@ -81,7 +78,6 @@ export function TopicDetailsDialog({ phancong, isOpen, setIsOpen }) {
             />
           </div>
         </div>
-        {/* --- KẾT THÚC NÂNG CẤP --- */}
         
       </DialogContent>
     </Dialog>
