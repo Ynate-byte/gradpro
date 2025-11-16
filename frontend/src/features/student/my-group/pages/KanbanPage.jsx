@@ -56,27 +56,16 @@ export default function KanbanPage() {
     });
 
     return (
-        <div className="p-4 md:p-8 space-y-6">
+        <div className="p-4 md:p-8 space-y-3">
             <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Quay lại Nhóm của tôi
             </Button>
 
             <Card>
-                <CardHeader className="flex flex-col sm:flex-row justify-between sm:items-center">
-                    <div>
-                        <CardTitle className="flex items-center gap-2">
-                            <LayoutDashboard className="h-6 w-6" />
-                            Bảng Công việc - {isLoadingGroup ? "Đang tải..." : (groupData?.TEN_NHOM || `Nhóm ${nhomId}`)}
-                        </CardTitle>
-                        <CardDescription>
-                            Kéo và thả các công việc giữa các cột để cập nhật tiến độ.
-                        </CardDescription>
-                    </div>
-                </CardHeader>
                 <CardContent>
                     {/* [NEW UI] Week Navigation Bar */}
-                    <div className="flex justify-between items-center mb-4 border-b pb-4">
+                    <div className="flex justify-between items-center mb-4 border-b pb-4 mt-5">
                         <Button variant="outline" size="sm" onClick={() => handleWeekChange(-1)}>
                             <ArrowLeft className="h-4 w-4 mr-1" /> Trở về
                         </Button>
