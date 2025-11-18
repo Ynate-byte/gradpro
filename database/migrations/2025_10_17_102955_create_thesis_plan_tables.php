@@ -33,6 +33,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NGUOITAO')->nullable();
             $table->unsignedBigInteger('ID_NGUOIPHEDUYET')->nullable()->comment('ID của Trưởng khoa đã phê duyệt');
             $table->text('BINHLUAN_PHEDUYET')->nullable();
+            $table->json('SETTINGS')->nullable();
             $table->decimal('TYTRONG_DIEM_QUATRINH', 5, 2)->nullable();
             $table->decimal('TYTRONG_DIEM_HOIDONG', 5, 2)->nullable();
             $table->timestamp('NGAYTAO')->nullable()->useCurrent();

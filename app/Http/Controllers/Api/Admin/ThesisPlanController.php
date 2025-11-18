@@ -101,20 +101,24 @@ class ThesisPlanController extends Controller
                 'ID_NGUOITAO' => $currentUser->ID_NGUOIDUNG,
                 'TRANGTHAI' => $trangThai,
                 'ID_NGUOIPHEDUYET' => $nguoiPheDuyet,
-                'NGAYTAO' => now(), // Đảm bảo NGAYTAO được set
-                'NGAYCAPNHAT' => now(), // Đảm bảo NGAYCAPNHAT được set
+                'NGAYTAO' => now(),
+                'NGAYCAPNHAT' => now(),
             ]));
 
-            // Tạo các mốc thời gian liên quan
-            foreach ($validated['mocThoigians'] as $moc) {
-                $plan->mocThoigians()->create([
-                    'TEN_SUKIEN' => $moc['TEN_SUKIEN'],
-                    'NGAY_BATDAU' => $moc['NGAY_BATDAU'],
-                    'NGAY_KETTHUC' => $moc['NGAY_KETTHUC'],
-                    'MOTA' => $moc['MOTA'],
-                    'VAITRO_THUCHIEN' => $moc['VAITRO_THUCHIEN'] ?? null,
-                ]);
+            if (!empty($validated['mocThoigians'])) {
+                foreach ($validated['mocThoigians'] as $moc) {
+                    $plan->mocThoigians()->create([
+                        'TEN_SUKIEN' => $moc['TEN_SUKIEN'],
+                        'NGAY_BATDAU' => $moc['NGAY_BATDAU'],
+                        'NGAY_KETTHUC' => $moc['NGAY_KETTHUC'],
+                        'MOTA' => $moc['MOTA'],
+                        'VAITRO_THUCHIEN' => $moc['VAITRO_THUCHIEN'] ?? null,
+                        'FEATURE_KEY' => $moc['FEATURE_KEY'] ?? null, 
+                    ]);
+                }
             }
+
+            $this->syncMilestonesToSettings($plan);
 
             DB::commit();
             
@@ -141,6 +145,7 @@ class ThesisPlanController extends Controller
      */
     public function update(UpdateThesisPlanRequest $request, KehoachKhoaluan $plan)
     {
+        // 1. Logic phân quyền (Giữ nguyên từ code gốc của bạn)
         $isCreator = $plan->ID_NGUOITAO == Auth::id();
         
         if ($this->isTruongKhoa()) {
@@ -155,10 +160,11 @@ class ThesisPlanController extends Controller
              }
         }
 
+        // 2. Validate Request
         $validated = $request->validated();
         
+        // 3. Logic khóa ngày bắt đầu (Giữ nguyên từ code gốc của bạn)
         $isPlanRunning = in_array($plan->TRANGTHAI, ['Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành']);
-        
         $formattedPlanDate = $plan->NGAY_BATDAU->format('Y-m-d'); 
 
         if ($isPlanRunning && isset($validated['NGAY_BATDAU']) && $validated['NGAY_BATDAU'] !== $formattedPlanDate) {
@@ -169,14 +175,17 @@ class ThesisPlanController extends Controller
             unset($validated['NGAY_BATDAU']);
         }
 
+        // 4. Bắt đầu Transaction
         try {
             DB::beginTransaction();
             
-            // Cập nhật kế hoạch (chỉ với các trường đã validate và được phép)
+            // 4a. Cập nhật Kế hoạch (Bao gồm cả cột SETTINGS nếu nó được gửi từ trang "Thiết lập chung")
             $plan->update(collect($validated)->except('mocThoigians')->all());
 
+            // 4b. Xử lý Mốc thời gian
             $incomingIds = collect($validated['mocThoigians'])->pluck('id')->filter();
             $plan->mocThoigians()->whereNotIn('ID', $incomingIds)->delete();
+            
             foreach ($validated['mocThoigians'] as $moc) {
                 MocThoigian::updateOrCreate(
                     ['ID' => $moc['id'] ?? null, 'ID_KEHOACH' => $plan->ID_KEHOACH],
@@ -186,10 +195,14 @@ class ThesisPlanController extends Controller
                         'NGAY_KETTHUC' => $moc['NGAY_KETTHUC'],
                         'MOTA' => $moc['MOTA'],
                         'VAITRO_THUCHIEN' => $moc['VAITRO_THUCHIEN'] ?? null,
+                        
+                        // [SỬA LỖI QUAN TRỌNG] Thêm dòng này để lưu liên kết
+                        'FEATURE_KEY' => $moc['FEATURE_KEY'] ?? null, 
                     ]
                 );
             }
             
+            // 4c. Logic cập nhật Trạng thái (Giữ nguyên từ code gốc của bạn)
             if (in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa'])) {
                 if (($this->isGiaoVu() || $this->isAdmin()) && ($isCreator || $this->isAdmin())) {
                     $plan->TRANGTHAI = 'Bản nháp';
@@ -218,11 +231,18 @@ class ThesisPlanController extends Controller
             
             $plan->save();
 
+            // 4d. [SỬA LỖI QUAN TRỌNG] Gọi hàm đồng bộ sau khi Mốc thời gian đã được lưu
+            $this->syncMilestonesToSettings($plan);
+
+            // 5. Commit và Trả về
             DB::commit();
             
             Cache::forget('plan_filter_options');
 
-            return response()->json($plan->load('mocThoigians'));
+            // Load lại các mốc thời gian (bao gồm cả các mốc vừa tạo)
+            $plan->load('mocThoigians'); 
+            return response()->json($plan);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Failed to update thesis plan: ' . $e->getMessage());
@@ -1013,6 +1033,9 @@ class ThesisPlanController extends Controller
                 'TYTRONG_DIEM_QUATRINH' => $plan->TYTRONG_DIEM_QUATRINH ?? $defaultTyTrong->HUONGDAN,
                 'TYTRONG_DIEM_PHANBIEN' => $plan->TYTRONG_DIEM_PHANBIEN ?? $defaultTyTrong->PHANBIEN,
                 'TYTRONG_DIEM_HOIDONG' => $plan->TYTRONG_DIEM_HOIDONG ?? $defaultTyTrong->HOIDONG,
+                
+                // --- THÊM DÒNG QUAN TRỌNG NÀY ---
+                'SETTINGS' => $plan->SETTINGS, 
             ]);
         } catch (\Exception $e) {
             Log::error('Lỗi getPlanSettings: ' . $e->getMessage());
@@ -1020,40 +1043,98 @@ class ThesisPlanController extends Controller
         }
     }
 
+    private function syncMilestonesToSettings(KehoachKhoaluan $plan)
+    {
+        // 1. Reload để lấy dữ liệu mốc thời gian mới nhất từ DB
+        $plan->load('mocThoigians');
+        
+        // 2. Refresh để lấy SETTINGS mới nhất (trong trường hợp vừa update ở trên)
+        $plan->refresh();
+
+        $milestones = $plan->mocThoigians;
+        $currentSettings = $plan->SETTINGS ?? []; 
+        $hasChanges = false;
+
+        foreach ($milestones as $moc) {
+            if (!empty($moc->FEATURE_KEY)) {
+                $key = $moc->FEATURE_KEY;
+
+                // Tạo cấu trúc nếu chưa có
+                if (!isset($currentSettings[$key])) {
+                    $currentSettings[$key] = [
+                        'manual_override' => null 
+                    ];
+                }
+
+                // Parse ngày an toàn
+                try {
+                    $newStart = $moc->NGAY_BATDAU ? Carbon::parse($moc->NGAY_BATDAU)->format('Y-m-d\TH:i:s') : null;
+                    $newEnd = $moc->NGAY_KETTHUC ? Carbon::parse($moc->NGAY_KETTHUC)->format('Y-m-d\TH:i:s') : null;
+                } catch (\Exception $e) {
+                    continue;
+                }
+
+                $oldStart = $currentSettings[$key]['start'] ?? null;
+                $oldEnd = $currentSettings[$key]['end'] ?? null;
+
+                // Nếu ngày thay đổi -> Cập nhật vào Settings
+                if ($oldStart !== $newStart || $oldEnd !== $newEnd) {
+                    $currentSettings[$key]['start'] = $newStart;
+                    $currentSettings[$key]['end'] = $newEnd;
+                    // Reset override về AUTO để lịch mới có hiệu lực
+                    $currentSettings[$key]['manual_override'] = null;
+                    
+                    $hasChanges = true;
+                }
+            }
+        }
+
+        if ($hasChanges) {
+            // Lưu trực tiếp JSON vào DB
+            $plan->SETTINGS = $currentSettings;
+            $plan->save(); // Save này chỉ update cột SETTINGS và timestamp
+            Log::info("Synced milestones to settings for Plan ID: {$plan->ID_KEHOACH}");
+        }
+    }
+
     /**
      * Cập nhật cài đặt chi tiết của một kế hoạch.
      */
     public function updatePlanSettings(Request $request, KehoachKhoaluan $plan)
-    {
-        $validated = $request->validate([
-            'SO_THANHVIEN_TOIDA' => 'required|integer|min:1|max:10',
-            'TYTRONG_DIEM_QUATRINH' => 'required|numeric|min:0|max:1',
-            'TYTRONG_DIEM_PHANBIEN' => 'required|numeric|min:0|max:1',
-            'TYTRONG_DIEM_HOIDONG' => 'required|numeric|min:0|max:1',
+{
+    $validated = $request->validate([
+        'SO_THANHVIEN_TOIDA' => 'required|integer|min:1|max:10',
+        'TYTRONG_DIEM_QUATRINH' => 'required|numeric|min:0|max:1',
+        'TYTRONG_DIEM_PHANBIEN' => 'required|numeric|min:0|max:1',
+        'TYTRONG_DIEM_HOIDONG' => 'required|numeric|min:0|max:1',
+        
+        // --- THÊM DÒNG NÀY ĐỂ NHẬN DỮ LIỆU SETTINGS ---
+        'SETTINGS' => 'nullable|array', 
+    ]);
+
+    $sum = (float)$validated['TYTRONG_DIEM_QUATRINH'] +
+           (float)$validated['TYTRONG_DIEM_PHANBIEN'] +
+           (float)$validated['TYTRONG_DIEM_HOIDONG'];
+
+    if (abs($sum - 1.0) > 0.001) {
+        throw ValidationException::withMessages([
+            'TYTRONG_DIEM_QUATRINH' => 'Tổng 3 tỷ lệ điểm phải bằng 1 (100%). Hiện tại là ' . ($sum * 100) . '%.'
         ]);
-
-        $sum = (float)$validated['TYTRONG_DIEM_QUATRINH'] +
-               (float)$validated['TYTRONG_DIEM_PHANBIEN'] +
-               (float)$validated['TYTRONG_DIEM_HOIDONG'];
-
-        // Dùng abs() để so sánh số thực, 0.001 là sai số chấp nhận được
-        if (abs($sum - 1.0) > 0.001) {
-            throw ValidationException::withMessages([
-                'TYTRONG_DIEM_QUATRINH' => 'Tổng 3 tỷ lệ điểm phải bằng 1 (100%). Hiện tại là ' . ($sum * 100) . '%.'
-            ]);
-        }
-
-        try {
-            $plan->update($validated);
-            return response()->json([
-                'message' => 'Cài đặt kế hoạch đã được cập nhật thành công.',
-                'settings' => $validated // Trả về cài đặt mới
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Lỗi updatePlanSettings: ' . $e->getMessage());
-            return response()->json(['message' => 'Cập nhật thất bại. Vui lòng thử lại.'], 500);
-        }
     }
+
+    try {
+        // Lúc này $validated đã chứa 'SETTINGS' nên nó sẽ được lưu vào DB
+        $plan->update($validated);
+        
+        return response()->json([
+            'message' => 'Cài đặt kế hoạch đã được cập nhật thành công.',
+            'settings' => $validated 
+        ]);
+    } catch (\Exception $e) {
+        Log::error('Lỗi updatePlanSettings: ' . $e->getMessage());
+        return response()->json(['message' => 'Cập nhật thất bại. Vui lòng thử lại.'], 500);
+    }
+}
     // [END THÊM MỚI]
 
     // === Helper function to generate email ===

@@ -437,7 +437,11 @@ export default function MyGroupPage() {
             {/* NỘI DUNG CHÍNH (Tabs) (Giữ nguyên) */}
             {groupDetails && isEligible ? (
                 hasGroup ? (
-                    <GroupManagementView groupData={groupData} planId={selectedPlanIdForDisplay} />
+                    <GroupManagementView
+                        groupData={groupData}
+                        planId={selectedPlanIdForDisplay}
+                        plan={groupDetails.plan}
+                    />
                 ) : (
                     <NoGroupView invitations={groupDetails.invitations} plan={groupDetails.plan} />
                 )
@@ -461,6 +465,7 @@ export default function MyGroupPage() {
                     setIsOpen={setIsSubmissionOpen}
                     phancong={phancong}
                     planId={selectedPlanIdForDisplay}
+                    plan={groupDetails.plan}
                 />
             )}
 

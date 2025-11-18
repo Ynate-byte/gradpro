@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Carbon\Carbon;
 
 class KehoachKhoaluan extends Model
 {
@@ -35,6 +36,15 @@ class KehoachKhoaluan extends Model
         'TYTRONG_DIEM_HOIDONG',
         'TYTRONG_DIEM_PHANBIEN',
         'ID_NGUOIPHEDUYET',
+        'SETTINGS',
+    ];
+
+    protected $casts = [
+        'NGAY_BATDAU' => 'datetime',
+        'NGAY_KETHUC' => 'datetime',
+        'NGAYTAO' => 'datetime',
+        'NGAYCAPNHAT' => 'datetime',
+        'SETTINGS' => 'array',
     ];
 
     public function mocThoigians()
@@ -65,5 +75,42 @@ class KehoachKhoaluan extends Model
     public function hoidongs()
     {
         return $this->hasMany(Hoidong::class, 'ID_KEHOACH', 'ID_KEHOACH');
+    }
+
+    public function isFeatureActive(string $featureKey): bool
+    {
+        // Lấy cài đặt từ cột SETTINGS (đã được cast thành array)
+        $featureConfig = $this->SETTINGS[$featureKey] ?? null;
+
+        // Nếu không có cấu hình -> Mặc định là TẮT
+        if (!$featureConfig) {
+            return false; 
+        }
+
+        // 1. Kiểm tra cờ tắt thủ công (Ưu tiên cao nhất)
+        if (isset($featureConfig['manual_override'])) {
+            if ($featureConfig['manual_override'] === 'DISABLED') {
+                return false; // Bắt buộc tắt
+            }
+            if ($featureConfig['manual_override'] === 'ENABLED') {
+                return true; // Bắt buộc mở (bỏ qua ngày tháng)
+            }
+        }
+
+        // 2. Nếu không có override (hoặc là AUTO/null), kiểm tra ngày tháng
+        try {
+            $start = !empty($featureConfig['start']) ? Carbon::parse($featureConfig['start']) : null;
+            $end = !empty($featureConfig['end']) ? Carbon::parse($featureConfig['end']) : null;
+        } catch (\Exception $e) {
+            return false; // Lỗi format ngày -> Tắt
+        }
+
+        // Nếu thiếu ngày -> Tắt
+        if (!$start || !$end) {
+            return false; 
+        }
+
+        // Kiểm tra thời gian thực tế
+        return now()->isBetween($start, $end);
     }
 }

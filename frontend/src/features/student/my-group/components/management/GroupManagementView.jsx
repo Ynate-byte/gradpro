@@ -13,12 +13,11 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
 
-
 /**
  * Component quản lý nhóm, được sử dụng cho cả Sinh viên và Giảng viên (Group Management View).
  * Chứa logic phân quyền hiển thị các Tab công việc, lịch họp, nộp bài.
  */
-export function GroupManagementView({ groupData, planId }) {
+export function GroupManagementView({ groupData, planId, plan }) {
     const { user } = useAuth();
     const [isInviteOpen, setIsInviteOpen] = useState(false);
     
@@ -120,7 +119,11 @@ export function GroupManagementView({ groupData, planId }) {
                 {/* TAB 4: NỘP SẢN PHẨM (Submission) - Chỉ cho Sinh viên */}
                 {tabs.some(t => t.value === 'submission') && (
                     <TabsContent value="submission" className="mt-6">
-                        <SubmissionArea phancong={phancong} planId={planId} />
+                        <SubmissionArea
+                            phancong={phancong}
+                            planId={planId}
+                            plan={plan}
+                        />
                     </TabsContent>
                 )}
             </Tabs>

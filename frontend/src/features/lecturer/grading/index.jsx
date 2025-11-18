@@ -24,6 +24,8 @@ import { GradingModal } from "./GradingModal";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner"; 
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { getThesisPlanById } from '@/api/thesisPlanService';
 
 const containerVariants = {
     hidden: { opacity: 0 },
@@ -184,12 +186,32 @@ const LecturerGradingPage = () => {
     const [selectedRole, setSelectedRole] = useState("");
     const queryClient = useQueryClient(); 
 
+    const [planCache, setPlanCache] = useState({});
+
     const { data, isLoading, isError } = useQuery({
         queryKey: ["myGradingTasks"],
         queryFn: getMyGradingTasks,
     });
 
-    const handleGradeClick = (nhom, role) => {
+    const handleGradeClick = async (nhom, role) => {
+        if (role === 'hoidong') {
+        } 
+
+        if (role !== 'hoidong') {
+             const planId = nhom.kehoach?.ID_KEHOACH;
+             if (planId) {
+                 let plan = planCache[planId];
+                 if (!plan) {
+                     try {
+                         plan = await getThesisPlanById(planId);
+                         setPlanCache(prev => ({...prev, [planId]: plan}));
+                     } catch (e) {
+                         console.error("Lỗi fetch plan", e);
+                     }
+                 }
+             }
+        }
+
         setSelectedGroup(nhom);
         setSelectedRole(role);
         setIsModalOpen(true);

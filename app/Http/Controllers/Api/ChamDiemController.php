@@ -146,44 +146,109 @@ class ChamDiemController extends Controller
 
     /**
      * (Chung) Lưu điểm cho một giảng viên cụ thể
+     * Hàm này xử lý logic kiểm tra thời gian, quyền hạn và tính toán lại điểm tổng.
      */
     private function saveDiem(Request $request, Nhom $nhom, string $loai)
     {
+        // 1. Validate dữ liệu đầu vào
         $validated = $request->validate([
             'DIEM' => 'required|numeric|min:0|max:10',
             'NHANXET' => 'nullable|string|max:1000'
+        ], [
+            'DIEM.required' => 'Vui lòng nhập điểm.',
+            'DIEM.numeric' => 'Điểm phải là số.',
+            'DIEM.min' => 'Điểm không được nhỏ hơn 0.',
+            'DIEM.max' => 'Điểm không được lớn hơn 10.',
         ]);
-        
-        $giangvienId = Auth::user()->giangvien->ID_GIANGVIEN;
+
+        $giangvien = Auth::user()->giangvien;
+        if (!$giangvien) {
+            return response()->json(['error' => 'Tài khoản không phải là giảng viên.'], 403);
+        }
+        $giangvienId = $giangvien->ID_GIANGVIEN;
         $idNhom = $nhom->ID_NHOM;
+
+        // 2. Tải kế hoạch để kiểm tra thời gian
+        $nhom->load('kehoach');
+        $plan = $nhom->kehoach;
+
+        if (!$plan) {
+            return response()->json(['error' => 'Nhóm chưa thuộc kế hoạch nào.'], 404);
+        }
+
+        // 3. LOGIC KIỂM TRA THỜI GIAN (Feature Flag & Date Check)
+        if ($loai === 'HOIDONG') {
+            // --- Đối với Hội đồng: Chỉ cho phép chấm đúng NGAY_BAOCAO ---
+            
+            // Tìm hội đồng bảo vệ của nhóm này
+            $hoidong = $nhom->hoidongs()->where('LOAI', 'hoidong')->first();
+            
+            if (!$hoidong || !$hoidong->NGAY_BAOCAO) {
+                 return response()->json(['error' => 'Nhóm chưa được xếp lịch hội đồng hoặc chưa có ngày báo cáo.'], 403);
+            }
+
+            $today = now()->format('Y-m-d');
+            $reportDate = \Carbon\Carbon::parse($hoidong->NGAY_BAOCAO)->format('Y-m-d');
+
+            // So sánh ngày hiện tại với ngày báo cáo
+            if ($today !== $reportDate) {
+                // Cho phép admin chấm bù (tùy chọn), nhưng mặc định chặn giảng viên
+                if (!$this->isAdmin()) {
+                    return response()->json([
+                        'error' => "Chức năng chấm hội đồng chỉ mở vào ngày báo cáo ($reportDate). Hôm nay là $today."
+                    ], 403);
+                }
+            }
+        } else {
+            // --- Đối với HD và PB: Theo cấu hình chung 'CHAM_DIEM' trong Settings ---
+            if (!$plan->isFeatureActive('CHAM_DIEM')) {
+                return response()->json(['error' => 'Thời gian chấm điểm (Hướng dẫn/Phản biện) hiện đang đóng.'], 403);
+            }
+        }
 
         try {
             DB::beginTransaction();
             
+            // 4. Xác định Model tương ứng
             $modelMap = [
                 'HUONGDAN' => DiemHuongDan::class,
                 'PHANBIEN' => DiemPhanBien::class,
                 'HOIDONG'  => DiemHoiDong::class,
             ];
+            
+            if (!isset($modelMap[$loai])) {
+                throw new \Exception("Loại điểm không hợp lệ: $loai");
+            }
+            
             $model = $modelMap[$loai];
 
+            // 5. Lưu điểm vào CSDL
             $model::updateOrCreate(
-                ['ID_NHOM' => $idNhom, 'ID_GIANGVIEN' => $giangvienId],
+                [
+                    'ID_NHOM' => $idNhom, 
+                    'ID_GIANGVIEN' => $giangvienId
+                ],
                 [
                     'DIEM' => $validated['DIEM'],
                     'NHANXET' => $validated['NHANXET'] ?? null
                 ]
             );
             
+            // 6. Cập nhật điểm tổng kết cho nhóm ngay lập tức
             $this->capNhatTong($nhom);
+            
             DB::commit();
 
             return response()->json(['message' => "Lưu điểm {$loai} thành công!"]);
 
         } catch (\Throwable $e) {
             DB::rollBack();
-            Log::error("Lỗi lưu điểm {$loai}: " . $e->getMessage(), ['id_nhom' => $idNhom, 'id_gv' => $giangvienId]);
-            return response()->json(['error' => 'Lỗi xử lý điểm'], 500);
+            Log::error("Lỗi lưu điểm {$loai}: " . $e->getMessage(), [
+                'id_nhom' => $idNhom, 
+                'id_gv' => $giangvienId,
+                'trace' => $e->getTraceAsString()
+            ]);
+            return response()->json(['error' => 'Lỗi máy chủ khi xử lý điểm.'], 500);
         }
     }
 

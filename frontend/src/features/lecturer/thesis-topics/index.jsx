@@ -12,6 +12,7 @@ import SuggestionDialog from './components/SuggestionDialog';
 import RegisteredGroupsDialog from './components/RegisteredGroupsDialog';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
+import { getThesisPlanById } from '@/api/thesisPlanService'; // [THÊM] API lấy chi tiết plan
 import axios from '@/api/axiosConfig';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,6 +22,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import { getChuyenNganhs } from '@/api/userService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag'; // [THÊM] Hook kiểm tra quyền
 
 const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColorClass }) => (
   <motion.div
@@ -121,6 +123,7 @@ const ThesisTopicsPage = () => {
   const [contributionFilter, setContributionFilter] = useState('all');
 
   const [selectedPlan, setSelectedPlan] = useState('');
+  const [currentPlanData, setCurrentPlanData] = useState(null); // [THÊM] State lưu full plan data
   const [plans, setPlans] = useState([]);
   const [specializations, setSpecializations] = useState([]);
   const [myQuota, setMyQuota] = useState(null);
@@ -128,6 +131,9 @@ const ThesisTopicsPage = () => {
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState([{ id: 'TEN_DETAI', desc: false }]);
   const [rowSelection, setRowSelection] = useState({});
+
+  // [THÊM] Tính toán quyền gửi duyệt dựa trên settings
+  const canSubmitApproval = useFeatureFlag(currentPlanData, 'GV_RA_DE');
 
   useEffect(() => {
     loadInitialData();
@@ -167,6 +173,7 @@ const ThesisTopicsPage = () => {
       setTopics([]);
       setSupervisedTopics([]);
       setMyQuota(null);
+      setCurrentPlanData(null);
       setLoading(false);
       setLoadingStats(false);
       return;
@@ -176,15 +183,18 @@ const ThesisTopicsPage = () => {
     setLoadingStats(true);
     try {
       const params = { plan_id: planId };
-      const [topicsRes, supervisedRes, quotaRes] = await Promise.all([
+      // [SỬA] Fetch thêm chi tiết plan để lấy SETTINGS
+      const [topicsRes, supervisedRes, quotaRes, planDetailRes] = await Promise.all([
         thesisTopicService.getTopics(params),
         thesisTopicService.getSupervisedTopics(params),
-        lecturerQuotaService.getMyQuota(params)
+        lecturerQuotaService.getMyQuota(params),
+        getThesisPlanById(planId) // [THÊM] API call lấy chi tiết plan
       ]);
 
       setTopics(topicsRes.data.data || []);
       setSupervisedTopics(supervisedRes.data.data || []);
       setMyQuota(quotaRes.data);
+      setCurrentPlanData(planDetailRes); // [THÊM] Lưu plan data
     } catch (error) {
       console.error('Error loading plan dependent data:', error);
       toast.error("Lỗi khi tải dữ liệu đề tài và quota.");
@@ -230,14 +240,14 @@ const ThesisTopicsPage = () => {
   };
 
   const handleSubmitForApproval = async (topicId) => {
-    // Note: Quota is now minimum requirement, lecturers can create unlimited topics
     try {
       await thesisTopicService.submitForApproval(topicId);
       toast.success("Gửi duyệt đề tài thành công!");
       loadPlanDependentData(selectedPlan);
     } catch (error) {
       console.error('Error submitting for approval:', error);
-      toast.error("Lỗi khi gửi duyệt.");
+      // [THÊM] Hiển thị lỗi chi tiết từ server nếu có (VD: 403 Forbidden)
+      toast.error(error.response?.data?.message || "Lỗi khi gửi duyệt.");
       throw error;
     }
   };
@@ -335,7 +345,6 @@ const ThesisTopicsPage = () => {
 
     if (filtered.length === 0) return { pagedData: [], pageCount: 0 };
 
-    // Filter by contribution status
     if (contributionFilter === 'contributed') {
       filtered = filtered.filter(t =>
         t.goiy_detai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
@@ -417,7 +426,8 @@ const ThesisTopicsPage = () => {
     onAddSuggestion: handleAddSuggestion,
     onViewRegisteredGroups: handleViewRegisteredGroups,
     isReviewTab: activeTab === 'review',
-  }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic, activeTab]);
+    canSubmitApproval: canSubmitApproval, // [THÊM] Truyền biến này vào getColumns
+  }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic, activeTab, canSubmitApproval]);
 
   return (
     <motion.div

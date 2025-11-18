@@ -253,9 +253,12 @@ class DetaiController extends Controller
            return response()->json(['message' => 'Topic must be in draft or being edited status to submit for approval'], 400);
        }
 
+       if (!$topic->kehoachKhoaluan->isFeatureActive('GV_RA_DE')) {
+            return response()->json(['message' => 'Chức năng gửi duyệt đề tài hiện đang đóng.'], 403);
+        }
+        
        $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
-
-       return response()->json(['message' => 'Topic submitted for approval']);
+       return response()->json(['message' => 'Đã gửi đề tài để phê duyệt.']);
    }
 
    /**
@@ -415,7 +418,12 @@ class DetaiController extends Controller
     */
    public function registerGroup(Request $request, $topicId)
    {
-       $currentUser = Auth::user();
+        $currentUser = Auth::user();
+        $topic = Detai::with('kehoachKhoaluan')->findOrFail($topicId);
+
+        if (!$topic->kehoachKhoaluan->isFeatureActive('SV_DANGKY_DE')) { 
+            return response()->json(['message' => 'Chức năng đăng ký đề tài hiện chưa mở hoặc đã kết thúc.'], 403);
+        }
 
        // Check if user is a student
        if ($currentUser->vaitro->TEN_VAITRO !== 'Sinh viên') {

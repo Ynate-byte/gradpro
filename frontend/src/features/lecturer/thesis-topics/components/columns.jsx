@@ -5,9 +5,10 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTableRowActions } from "./row-actions";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 // === Badge trạng thái (tái sử dụng) ===
 const getStatusBadge = (status) => {
@@ -51,6 +52,7 @@ export const getColumns = ({
   onAddSuggestion,
   onViewRegisteredGroups,
   isReviewTab = false,
+  canSubmitApproval = false, // [MỚI] Nhận biến quyền gửi duyệt
 }) => [
     {
       accessorKey: "TEN_DETAI",
@@ -154,17 +156,53 @@ export const getColumns = ({
     }] : []),
     {
       id: "actions",
-      cell: ({ row }) => (
-        <DataTableRowActions
-          row={row}
-          currentUserId={currentUserId}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          onSubmit={onSubmit}
-          onViewDetails={onViewDetails}
-          onAddSuggestion={onAddSuggestion}
-          onViewRegisteredGroups={onViewRegisteredGroups}
-        />
-      ),
+      cell: ({ row }) => {
+          const topic = row.original;
+          // Logic hiển thị nút Gửi duyệt:
+          // 1. Phải là Nháp hoặc Đang chỉnh sửa
+          // 2. Phải là người tạo (đã check trong component cha, ở đây check state)
+          const showSubmit = (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Đang chỉnh sửa');
+
+          return (
+            <div className="flex items-center gap-1">
+                {/* [MỚI] Nút gửi duyệt nhanh với Tooltip kiểm tra quyền */}
+                {showSubmit && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                {/* Dùng span để wrap button disabled để tooltip vẫn hiện */}
+                                <span tabIndex={0}> 
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className={cn("h-8 w-8", !canSubmitApproval ? "opacity-50 cursor-not-allowed" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50")}
+                                        onClick={() => canSubmitApproval && onSubmit(topic.ID_DETAI)}
+                                        disabled={!canSubmitApproval}
+                                    >
+                                        <Send className="h-4 w-4" />
+                                    </Button>
+                                </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{canSubmitApproval ? "Gửi duyệt đề tài" : "Hết thời gian gửi duyệt"}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+
+                <DataTableRowActions
+                  row={row}
+                  currentUserId={currentUserId}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onSubmit={onSubmit}
+                  onViewDetails={onViewDetails}
+                  onAddSuggestion={onAddSuggestion}
+                  onViewRegisteredGroups={onViewRegisteredGroups}
+                  canSubmitApproval={canSubmitApproval} // Truyền tiếp nếu cần dùng trong dropdown
+                />
+            </div>
+          );
+      },
     },
   ];

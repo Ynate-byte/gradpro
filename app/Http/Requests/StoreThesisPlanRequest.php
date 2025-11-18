@@ -36,6 +36,11 @@ class StoreThesisPlanRequest extends FormRequest
             'mocThoigians.*.NGAY_KETTHUC' => 'required|date|after_or_equal:mocThoigians.*.NGAY_BATDAU',
             'mocThoigians.*.MOTA' => 'nullable|string',
             'mocThoigians.*.VAITRO_THUCHIEN' => 'nullable|string|max:255',
+            'SETTINGS' => 'nullable|array',
+            'SETTINGS.*.start' => 'nullable|date', 
+            'SETTINGS.*.end' => 'nullable|date|after_or_equal:SETTINGS.*.start',
+            'SETTINGS.*.manual_override' => 'nullable|in:ENABLED,DISABLED',
+            'mocThoigians.*.FEATURE_KEY' => 'nullable|string|in:GV_RA_DE,SV_TAO_NHOM,SV_DANGKY_DE,SV_NOP_BAI,CHAM_DIEM,TAO_HOIDONG',
         ];
     }
 }

@@ -6,11 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getSubmissions, submitProduct } from '@/api/groupService';
 import { toast } from 'sonner';
-import { Loader2, UploadCloud, FileText, Link, Send, History, CheckCircle, XCircle, AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, UploadCloud, FileText, Link, Send, History, CheckCircle, XCircle, AlertCircle, RefreshCw, Lock } from 'lucide-react'; // [THÊM] Lock icon
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag'; // [THÊM] Hook
 
 const SubmissionFileItem = ({ file }) => {
   const isLink = file.LOAI_FILE === 'LinkDemo' || file.LOAI_FILE === 'LinkRepository';
@@ -87,7 +88,7 @@ const SubmissionAttempt = ({ attempt }) => {
   );
 };
 
-export function SubmissionArea({ phancong, planId }) {
+export function SubmissionArea({ phancong, planId, plan }) { // [THÊM] prop 'plan'
   const [files, setFiles] = useState({ BaoCaoPDF: null, SourceCodeZIP: null });
   const [links, setLinks] = useState({ LinkDemo: '', LinkRepository: '' });
 
@@ -146,12 +147,33 @@ export function SubmissionArea({ phancong, planId }) {
     submitMutation.mutate(formData);
   };
 
+  // [THÊM] Kiểm tra feature flag SV_NOP_BAI
+  const isSubmissionActive = useFeatureFlag(plan, 'SV_NOP_BAI');
+
   const latestSubmission = history[0];
+  
+  // [SỬA] Thêm điều kiện isSubmissionActive vào canSubmit
   const canSubmit = phancong.TRANGTHAI === 'Đang thực hiện' &&
-    (!latestSubmission || latestSubmission.TRANGTHAI === 'Yêu cầu nộp lại');
+    (!latestSubmission || latestSubmission.TRANGTHAI === 'Yêu cầu nộp lại') &&
+    isSubmissionActive;
 
   return (
     <div className="space-y-8">
+      
+      {/* [THÊM] Card thông báo nếu cổng nộp bài đóng */}
+      {!isSubmissionActive && (
+         <Card className="border-yellow-200 bg-yellow-50">
+            <CardHeader className="pb-3">
+                <CardTitle className="text-yellow-800 flex items-center gap-2 text-base">
+                    <Lock className="h-5 w-5" /> Cổng nộp bài đang đóng
+                </CardTitle>
+                <CardDescription className="text-yellow-700">
+                    Hiện tại không phải là thời gian nộp sản phẩm. Vui lòng kiểm tra lại kế hoạch hoặc liên hệ Giáo vụ.
+                </CardDescription>
+            </CardHeader>
+         </Card>
+      )}
+
       {canSubmit && (
         <Card className="border-primary shadow-lg">
           <CardHeader>

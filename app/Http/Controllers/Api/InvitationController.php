@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\LoimoiNhom;
 use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
+use App\Models\KehoachKhoaluan; // Thêm model
 
 class InvitationController extends Controller
 {
@@ -42,15 +43,24 @@ class InvitationController extends Controller
         
         $validated = $request->validate(['action' => 'required|in:accept,decline']);
 
-        // Trường hợp từ chối lời mời
+        // Trường hợp từ chối lời mời -> Không cần check phase, cho phép từ chối thoải mái
         if ($validated['action'] === 'decline') {
             $loimoi->update(['TRANGTHAI' => 'Từ chối', 'NGAY_PHANHOI' => now()]);
             return response()->json(['message' => 'Bạn đã từ chối lời mời.']);
         }
         
-        // Trường hợp chấp nhận lời mời (sử dụng transaction để đảm bảo toàn vẹn dữ liệu)
+        // Trường hợp chấp nhận lời mời (Tham gia nhóm) -> CẦN CHECK PHASE
         return DB::transaction(function () use ($loimoi, $user) {
             $nhom = Nhom::where('ID_NHOM', $loimoi->ID_NHOM)->lockForUpdate()->first();
+            
+            // [MỚI] Kiểm tra Feature Flag SV_TAO_NHOM
+            $plan = KehoachKhoaluan::find($nhom->ID_KEHOACH);
+            if ($plan && !$plan->isFeatureActive('SV_TAO_NHOM')) {
+                 // Chỉ cho phép Admin bypass (nhưng InvitationController thường do SV gọi)
+                 if (!$this->isAdmin() && !$this->isGiaoVu()) {
+                     return response()->json(['message' => 'Giai đoạn tham gia nhóm đã kết thúc.'], 403);
+                 }
+            }
             
             // Kiểm tra xem nhóm còn chỗ không
             if ($nhom->SO_THANHVIEN_HIENTAI >= 4) {

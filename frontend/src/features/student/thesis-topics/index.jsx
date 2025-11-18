@@ -17,12 +17,15 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { Loader2, Eye, UserPlus, Search, BookCopy } from 'lucide-react';
+import { Loader2, Eye, UserPlus, Search, BookCopy, Lock } from 'lucide-react'; // Thêm Lock
 import { toast } from 'sonner';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import { getChuyenNganhs } from '@/api/userService';
 import axios from '@/api/axiosConfig';
-
+import { useFeatureFlag } from '@/hooks/useFeatureFlag'; // Hook kiểm tra
+import { getThesisPlanById } from '@/api/thesisPlanService'; // API lấy chi tiết plan
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Alert component
+import { format, parseISO } from 'date-fns'; // Date utils
 
 const TopicDetailDialog = ({
     open,
@@ -32,6 +35,7 @@ const TopicDetailDialog = ({
     onRegisterGroup,
     hasRegisteredTopic,
     myRegisteredTopic,
+    canRegister, // [MỚI] Nhận quyền đăng ký
 }) => {
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -98,10 +102,16 @@ const TopicDetailDialog = ({
                         </CardContent>
                     </Card>
 
+                    {/* [MỚI] Kiểm tra quyền đăng ký ở đây */}
                     {isGroupLeader && !hasRegisteredTopic && (
                         <div className="flex justify-end">
-                            <Button onClick={() => onRegisterGroup(topic)}>
-                                <UserPlus className="w-4 h-4 mr-2" /> Đăng ký đề tài
+                            <Button 
+                                onClick={() => onRegisterGroup(topic)}
+                                disabled={!canRegister} // Disable nếu bị khóa
+                                className={!canRegister ? "opacity-50 cursor-not-allowed" : ""}
+                            >
+                                <UserPlus className="w-4 h-4 mr-2" /> 
+                                {canRegister ? "Đăng ký đề tài" : "Chưa mở đăng ký"}
                             </Button>
                         </div>
                     )}
@@ -183,6 +193,12 @@ const StudentThesisTopicsPage = () => {
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopic, setSelectedTopic] = useState(null);
 
+    // [MỚI] State để lưu chi tiết kế hoạch (bao gồm SETTINGS)
+    const [fullPlanData, setFullPlanData] = useState(null);
+    
+    // [MỚI] Kiểm tra quyền đăng ký
+    const canRegisterFlag = useFeatureFlag(fullPlanData, 'SV_DANGKY_DE');
+
     useEffect(() => {
         loadPlans();
         loadMajors();
@@ -190,11 +206,23 @@ const StudentThesisTopicsPage = () => {
         loadTopics();
     }, []);
 
-    // Tìm kiếm theo tên đề tài — realtime, không bị văng input
+    // Load chi tiết plan khi user chọn plan khác
+    useEffect(() => {
+        if (selectedPlan) {
+            getThesisPlanById(selectedPlan)
+                .then((res) => {
+                    setFullPlanData(res); // API này trả về trực tiếp object plan (hoặc res.data tùy cấu hình axios)
+                })
+                .catch((err) => console.error("Failed to load plan settings:", err));
+        } else {
+            setFullPlanData(null);
+        }
+    }, [selectedPlan]);
+
     useEffect(() => {
         const delaySearch = setTimeout(() => {
             loadTopics();
-        }, 500); // 0.4 giây sau khi người dùng dừng gõ
+        }, 500); // 0.5 giây sau khi người dùng dừng gõ
 
         return () => clearTimeout(delaySearch);
     }, [searchTerm, selectedMajor, selectedPlan]);
@@ -217,6 +245,7 @@ const StudentThesisTopicsPage = () => {
 
     const loadPlans = async () => {
         try {
+            // Chỉ lấy danh sách rút gọn để đổ vào dropdown
             const response = await axios.get('/admin/thesis-plans/list-all');
             const plansData = response.data || [];
             setPlans(plansData);
@@ -236,8 +265,6 @@ const StudentThesisTopicsPage = () => {
             console.error('Error loading majors:', error);
         }
     };
-
-
 
     const checkGroupStatus = async () => {
         try {
@@ -290,9 +317,21 @@ const StudentThesisTopicsPage = () => {
             <h1 className="text-2xl font-bold mb-2">Danh sách Đề tài</h1>
             <p className="text-sm text-gray-500 mb-4">Tất cả đề tài có sẵn và đang triển khai.</p>
 
+            {/* [MỚI] Hiển thị thông báo nếu chức năng đăng ký bị tắt */}
+            {!canRegisterFlag && fullPlanData && (
+                <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-6">
+                    <Lock className="h-4 w-4" />
+                    <AlertTitle className="ml-2">Chưa đến thời gian đăng ký</AlertTitle>
+                    <AlertDescription className="ml-2">
+                        Cổng đăng ký đề tài hiện đang đóng. 
+                        {fullPlanData.SETTINGS?.SV_DANGKY_DE?.start && 
+                         ` Thời gian mở: ${format(parseISO(fullPlanData.SETTINGS.SV_DANGKY_DE.start), 'dd/MM/yyyy')}`}
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {/* Bộ lọc tìm kiếm */}
             <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
-                {/* Ô tìm kiếm dài hơn */}
                 <div className="relative flex-[2] w-full">
                     <Input
                         placeholder="Tìm theo tên đề tài..."
@@ -303,7 +342,6 @@ const StudentThesisTopicsPage = () => {
                     <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
                 </div>
 
-                {/* Dropdown ngắn hơn */}
                 <div className="flex flex-row items-center gap-3 flex-[1] w-full md:w-auto">
                     <Select value={selectedPlan} onValueChange={setSelectedPlan}>
                         <SelectTrigger className="w-full md:w-48">
@@ -332,7 +370,6 @@ const StudentThesisTopicsPage = () => {
                         </SelectContent>
                     </Select>
 
-                    {/* ✅ Nút "Đề tài của tôi" chỉ hiển thị khi đã đăng ký */}
                     {hasRegisteredTopic && myRegisteredTopic && (
                         <Button
                             variant="secondary"
@@ -349,8 +386,6 @@ const StudentThesisTopicsPage = () => {
                 </div>
             </div>
 
-
-            {/* Bảng danh sách */}
             <div className="border rounded-lg overflow-hidden">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                     <thead className="bg-gray-50">
@@ -402,8 +437,11 @@ const StudentThesisTopicsPage = () => {
                                                 <Button
                                                     size="sm"
                                                     onClick={() => handleRegisterGroup(topic)}
+                                                    disabled={!canRegisterFlag} // [MỚI] Disable nếu bị khóa
+                                                    className={!canRegisterFlag ? "opacity-50 cursor-not-allowed" : ""}
                                                 >
-                                                    <UserPlus className="w-4 h-4 mr-1" /> Đăng ký
+                                                    <UserPlus className="w-4 h-4 mr-1" /> 
+                                                    {canRegisterFlag ? "Đăng ký" : "Đóng"}
                                                 </Button>
                                             )}
                                     </td>
@@ -414,7 +452,6 @@ const StudentThesisTopicsPage = () => {
                 </table>
             </div>
 
-            {/* Dialogs */}
             <TopicDetailDialog
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}
@@ -423,6 +460,7 @@ const StudentThesisTopicsPage = () => {
                 onRegisterGroup={handleRegisterGroup}
                 hasRegisteredTopic={hasRegisteredTopic}
                 myRegisteredTopic={myRegisteredTopic}
+                canRegister={canRegisterFlag} // [MỚI] Truyền prop
             />
 
             <RegisterGroupDialog

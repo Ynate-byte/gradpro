@@ -22,6 +22,28 @@ use Illuminate\Support\Facades\Log;
 
 class NhomController extends Controller
 {
+    // ==========================================
+    // [MỚI] HELPER: KIỂM TRA GIAI ĐOẠN NHÓM
+    // ==========================================
+    /**
+     * Kiểm tra xem có đang trong thời gian cho phép thay đổi nhóm không.
+     * Admin/Giáo vụ/Trưởng khoa được quyền bỏ qua giới hạn này.
+     */
+    private function isGroupPhaseActive($planId)
+    {
+        // 1. Cho phép Admin/Giáo vụ/Trưởng khoa thao tác bất kể thời gian
+        if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
+            return true;
+        }
+
+        // 2. Kiểm tra setting của kế hoạch
+        $plan = KehoachKhoaluan::find($planId);
+        if (!$plan) return false;
+
+        // Sử dụng key 'SV_TAO_NHOM' để đại diện cho cả giai đoạn sửa đổi nhóm
+        return $plan->isFeatureActive('SV_TAO_NHOM');
+    }
+
     // THÔNG TIN NHÓM VÀ KẾ HOẠCH
 
     /**
@@ -31,22 +53,19 @@ class NhomController extends Controller
     {
         $user = $request->user();
 
-        // Kiểm tra nếu người dùng không có bản ghi sinhvien (vd: là Admin/GV)
         if (!$user->sinhvien) {
-            return response()->json([]); // Trả về mảng rỗng
+            return response()->json([]); 
         }
 
-        // Giờ $user->sinhvien đã an toàn
         $sinhvienId = $user->sinhvien->ID_SINHVIEN;
 
         $plans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm'])
             ->whereHas('sinhvienThamgias', function ($query) use ($sinhvienId) {
-                $query->where('ID_SINHVIEN', $sinhvienId); // Sử dụng biến an toàn
+                $query->where('ID_SINHVIEN', $sinhvienId);
             })
             ->with(['mocThoigians' => function ($query) {
                 $query->orderBy('NGAY_BATDAU');
             },
-            // Thêm eager loading cho sinhvienThamgias để lấy DU_DIEUKIEN
             'sinhvienThamgias' => function ($query) use ($sinhvienId) {
                 $query->where('ID_SINHVIEN', $sinhvienId);
             }])
@@ -57,24 +76,21 @@ class NhomController extends Controller
 
     /**
      * Lấy thông tin nhóm hiện tại của người dùng.
-     * [NÂNG CẤP]: Lấy TẤT CẢ lời mời và yêu cầu, không chỉ 'Đang chờ'.
      */
     public function getMyGroup(Request $request)
     {
         try {
             $user = $request->user();
             $planId = $request->input('plan_id');
-            $forceGroupId = $request->input('force_group_id'); // <-- [THÊM MỚI]
+            $forceGroupId = $request->input('force_group_id'); 
 
             $thanhvienQuery = ThanhvienNhom::query();
 
             if ($forceGroupId) {
-                // Ưu tiên tìm bằng ID nhóm (cho KanbanPage)
                 $thanhvien = $thanhvienQuery->where('ID_NHOM', $forceGroupId)
-                                            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG) // Vẫn phải kiểm tra user
+                                            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
                                             ->first();
             } else {
-                // Logic cũ (cho MyGroupPage)
                 $thanhvienQuery->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
                 if ($planId) {
                     $thanhvienQuery->whereHas('nhom', function ($query) use ($planId) {
@@ -131,7 +147,15 @@ class NhomController extends Controller
     public function createGroup(Request $request)
     {
         $user = $request->user();
+        
+        // Validate sơ bộ để lấy ID_KEHOACH
+        $request->validate(['ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
         $planId = $request->input('ID_KEHOACH');
+        
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($planId)) {
+            return response()->json(['message' => 'Giai đoạn tạo nhóm đã kết thúc.'], 403);
+        }
 
         if (!$user->sinhvien) {
             return response()->json(['message' => 'Tài khoản của bạn không phải là sinh viên.'], 403);
@@ -146,9 +170,8 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn đã là thành viên của một nhóm trong kế hoạch này.'], 409);
         }
 
-
         $validated = $request->validate([
-            'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'ID_KEHOACH' => 'required',
             'TEN_NHOM' => ['required', 'string', 'max:100', \Illuminate\Validation\Rule::unique('NHOM')->where('ID_KEHOACH', $request->ID_KEHOACH)],
             'MOTA' => 'nullable|string|max:255',
             'ID_CHUYENNGANH' => 'nullable|exists:CHUYENNGANH,ID_CHUYENNGANH',
@@ -174,6 +197,7 @@ class NhomController extends Controller
                 'ID_CHUYENNGANH' => $validated['ID_CHUYENNGANH'],
                 'ID_KHOA_BOMON' => $validated['ID_KHOA_BOMON'],
                 'SO_THANHVIEN_HIENTAI' => 1,
+                'TRANGTHAI' => 'Đang mở',
             ]);
 
             ThanhvienNhom::create([
@@ -187,12 +211,14 @@ class NhomController extends Controller
     }
 
     /**
-     * Tìm kiếm các nhóm đang mở trong một kế hoạch cụ thể.
+     * Tìm kiếm các nhóm đang mở.
      */
     public function findGroups(Request $request)
     {
+        // Hàm này chỉ xem (GET), không thay đổi dữ liệu nên KHÔNG CẦN chặn.
+        // Sinh viên vẫn có thể xem danh sách nhóm sau khi đóng cổng.
+        
         $user = $request->user();
-
         $request->validate(['ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH']);
         $kehoachId = $request->ID_KEHOACH;
 
@@ -205,7 +231,6 @@ class NhomController extends Controller
         if (!$isParticipant) {
              return response()->json(['data' => []]);
         }
-
 
         $query = Nhom::query()
             ->where('ID_KEHOACH', $kehoachId)
@@ -243,16 +268,20 @@ class NhomController extends Controller
 
     /**
      * Gửi yêu cầu xin tham gia một nhóm.
-     * [NÂNG CẤP]: Giới hạn 8 yêu cầu "Đang chờ" cho mỗi nhóm.
      */
     public function requestToJoin(Request $request, Nhom $nhom)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
+            return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if (!$user->sinhvien) {
             return response()->json(['message' => 'Tài khoản của bạn không phải là sinh viên.'], 403);
         }
-
+        // ... (Giữ nguyên logic kiểm tra cũ) ...
         $existingMembership = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
             ->whereHas('nhom', function ($query) use ($nhom) {
                 $query->where('ID_KEHOACH', $nhom->ID_KEHOACH);
@@ -268,7 +297,6 @@ class NhomController extends Controller
         if (!$isParticipant) {
             return response()->json(['message' => 'Bạn không thuộc kế hoạch khóa luận của nhóm này.'], 403);
         }
-
 
         if ($nhom->TRANGTHAI !== 'Đang mở') {
             return response()->json(['message' => 'Không thể gửi yêu cầu. Nhóm này không còn mở để nhận thành viên.'], 400);
@@ -303,21 +331,25 @@ class NhomController extends Controller
             ]
         ]);
 
-
         return response()->json(['message' => 'Đã gửi yêu cầu gia nhập thành công.']);
     }
 
     /**
      * Mời một thành viên khác vào nhóm (chỉ nhóm trưởng).
-     * [NÂNG CẤP]: Giới hạn 8 lời mời "Đang chờ" cho mỗi nhóm.
      */
     public function inviteMember(Request $request, Nhom $nhom)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
+            return response()->json(['message' => 'Giai đoạn mời thành viên đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
             return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
         }
+        // ... (Giữ nguyên logic cũ) ...
 
         if ($nhom->SO_THANHVIEN_HIENTAI >= 4) {
             return response()->json(['message' => 'Nhóm đã đủ số lượng thành viên tối đa.'], 400);
@@ -359,9 +391,9 @@ class NhomController extends Controller
         }
 
         $existingInvite = LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                                      ->where('ID_NGUOI_DUOCMOI', $memberToInvite->ID_NGUOIDUNG)
-                                      ->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)
-                                      ->exists();
+                                    ->where('ID_NGUOI_DUOCMOI', $memberToInvite->ID_NGUOIDUNG)
+                                    ->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)
+                                    ->exists();
         if ($existingInvite) {
              return response()->json(['message' => 'Bạn đã gửi lời mời tới sinh viên này rồi.'], 409);
         }
@@ -396,6 +428,11 @@ class NhomController extends Controller
      */
     public function handleJoinRequest(Request $request, Nhom $nhom, YeucauVaoNhom $yeucau)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
+            return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG || $yeucau->ID_NHOM !== $nhom->ID_NHOM) {
@@ -470,6 +507,11 @@ class NhomController extends Controller
      */
     public function cancelInvitation(Request $request, Nhom $nhom, LoimoiNhom $loimoi)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
+             return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
@@ -490,6 +532,13 @@ class NhomController extends Controller
      */
     public function cancelJoinRequest(Request $request, YeucauVaoNhom $yeucau)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        // Cần lấy ID_KEHOACH từ $yeucau -> $nhom
+        $yeucau->load('nhom');
+        if (!$this->isGroupPhaseActive($yeucau->nhom->ID_KEHOACH)) {
+             return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if ($yeucau->ID_NGUOIDUNG !== $user->ID_NGUOIDUNG) {
@@ -513,6 +562,11 @@ class NhomController extends Controller
         $planId = $request->input('plan_id');
         if (!$planId) {
              return response()->json(['message' => 'Thiếu ID kế hoạch.'], 400);
+        }
+
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($planId)) {
+             return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc. Bạn không thể rời nhóm lúc này.'], 403);
         }
 
         $thanhvienQuery = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
@@ -557,6 +611,11 @@ class NhomController extends Controller
      */
     public function transferLeadership(Request $request, Nhom $nhom, $newLeaderId)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
+             return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
@@ -568,8 +627,8 @@ class NhomController extends Controller
         }
 
         $newLeaderIsMember = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                                        ->where('ID_NGUOIDUNG', $newLeaderId)
-                                        ->exists();
+                                            ->where('ID_NGUOIDUNG', $newLeaderId)
+                                            ->exists();
 
         if (!$newLeaderIsMember) {
             return response()->json(['message' => 'Người được chọn không phải là thành viên của nhóm.'], 400);
@@ -584,11 +643,10 @@ class NhomController extends Controller
         ]);
     }
 
+    // ... (Các hàm getGroupDetailsById, getSubmissions giữ nguyên - không cần chặn) ...
     public function getGroupDetailsById(Request $request, Nhom $nhom)
     {
         $user = $request->user();
-
-        // 1. Kiểm tra quyền truy cập (Admin, GVHD, hoặc Thành viên)
         $isGvhd = $user->giangvien?->ID_GIANGVIEN === $nhom->phancongDetaiNhom?->ID_GVHD;
         $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
         $isAdmin = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
@@ -597,13 +655,10 @@ class NhomController extends Controller
             return response()->json(['message' => 'Không có quyền truy cập nhóm này.'], 403);
         }
         
-        // 2. Tải các quan hệ cần thiết
         $nhom->load([
-            'phancongDetaiNhom', // <-- Đảm bảo tải ở root
-            
+            'phancongDetaiNhom',
             'thanhviens.nguoidung.vaitro', 
             'thanhviens.nguoidung.sinhvien.chuyennganh', 
-            
             'nhomtruong',
             'chuyennganh',
             'khoabomon',
@@ -611,31 +666,20 @@ class NhomController extends Controller
             'phancongDetaiNhom.gvhd.nguoidung' 
         ]);
 
-        // 3. Tải các thông tin phụ (trạng thái đề tài, ngày phân công)
         $assignment = $nhom->phancongDetaiNhom;
         if ($assignment) {
             $nhom->TRANGTHAI_PHANCONG = $assignment->TRANGTHAI;
             $nhom->NGAY_PHANCONG = $assignment->NGAY_PHANCONG;
         }
         
-        // Loại bỏ các trường không cần thiết trước khi trả về
-        // [SỬA LỖI] KHÔNG UNSET PHANCONG_DETAI_NHOM
-        // unset($nhom->phancongDetaiNhom); // <--- DÒNG NÀY ĐÃ GÂY LỖI FRONTEND
-
         return response()->json($nhom);
     }
-    /**
-     * Lấy chi tiết nhóm theo ID
-     */
+
     public function getGroupById($id)
     {
-        // Hàm này sẽ không còn tồn tại sau khi sửa
         return response()->json(['message' => 'Endpoint đã được di chuyển.']);
     }
         
-    /**
-     * Lấy lịch sử các lần nộp của nhóm cho một phân công cụ thể. (Dành cho Sinh viên HOẶC ADMIN)
-     */
     public function getSubmissions(Request $request, PhancongDetaiNhom $phancong)
     {
         $user = $request->user();
@@ -673,6 +717,15 @@ class NhomController extends Controller
 
         if ($phancong->TRANGTHAI !== 'Đang thực hiện') {
             return response()->json(['message' => 'Không thể nộp. Đề tài không ở trạng thái "Đang thực hiện".'], 400);
+        }
+
+        // [MỚI] Kiểm tra thời gian nộp bài (SV_NOP_BAI)
+        // Admin/Giáo vụ được phép nộp hộ (nếu logic frontend cho phép, ở đây backend cứ mở cổng bypass)
+        if (!$this->isAdmin() && !$this->isGiaoVu()) {
+             $phancong->load('nhom.kehoach');
+             if (!$phancong->nhom->kehoach->isFeatureActive('SV_NOP_BAI')) {
+                  return response()->json(['message' => 'Cổng nộp bài hiện chưa mở hoặc đã đóng.'], 403);
+             }
         }
 
         $isPending = NopSanpham::where('ID_PHANCONG', $phancong->ID_PHANCONG)
@@ -763,6 +816,12 @@ class NhomController extends Controller
     {
         $user = $request->user();
 
+        // [MỚI] Kiểm tra giai đoạn nhóm (Nếu đóng thì không cho tìm để mời)
+        if (!$this->isGroupPhaseActive($planId)) {
+            // Trả về mảng rỗng để UI không lỗi, hoặc 403 nếu muốn strict
+            return response()->json(['data' => []]);
+        }
+
         $validated = $request->validate([
             'search' => 'nullable|string|max:100',
             'chuyen_nganh_ids' => 'nullable|array',
@@ -809,10 +868,14 @@ class NhomController extends Controller
 
     /**
      * [MỚI] Mời nhiều thành viên vào nhóm (chỉ nhóm trưởng).
-     * [NÂNG CẤP]: Gỡ bỏ kiểm tra 4 thành viên, giữ lại 8 lời mời chờ.
      */
     public function inviteMultipleMembers(Request $request, Nhom $nhom)
     {
+        // [MỚI] Kiểm tra giai đoạn nhóm
+        if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
+            return response()->json(['message' => 'Giai đoạn mời thành viên đã kết thúc.'], 403);
+        }
+
         $user = $request->user();
 
         if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
@@ -828,18 +891,11 @@ class NhomController extends Controller
         $userIds = $validated['user_ids'];
         $count = count($userIds);
 
-        // --- NÂNG CẤP: Kiểm tra giới hạn 8 lời mời "Đang chờ" ---
+        // Kiểm tra giới hạn 8 lời mời "Đang chờ"
         $pendingCount = $nhom->loimois()->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)->count();
         if (($pendingCount + $count) > 8) {
             return response()->json(['message' => "Bạn chỉ có thể gửi tối đa 8 lời mời đang chờ. (Hiện tại: $pendingCount)"], 400);
         }
-        // --- KẾT THÚC NÂNG CẤP ---
-
-        // ----- ĐÃ GỠ BỎ LOGIC KIỂM TRA 4 THÀNH VIÊN -----
-        // if (($nhom->SO_THANHVIEN_HIENTAI + $count) > 4) {
-        //     return response()->json(['message' => 'Số lượng mời vượt quá số chỗ còn lại của nhóm.'], 400);
-        // }
-        // ----- KẾT THÚC GỠ BỎ -----
 
         $planId = $nhom->ID_KEHOACH;
         $now = now();
