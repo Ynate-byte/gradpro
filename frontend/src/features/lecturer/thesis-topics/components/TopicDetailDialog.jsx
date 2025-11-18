@@ -75,6 +75,8 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = fal
   const [showSuggestionDialog, setShowSuggestionDialog] = useState(false);
   const [showReplyDialog, setShowReplyDialog] = useState(false);
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+  const [showCommentInput, setShowCommentInput] = useState(false);
+  const [commentText, setCommentText] = useState('');
 
   useEffect(() => {
     if (open && topicId) {
@@ -98,9 +100,7 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = fal
     }
   };
 
-  const handleAddSuggestion = () => {
-    setShowSuggestionDialog(true);
-  };
+
 
   const handleSubmitSuggestion = async (suggestion) => {
     try {
@@ -123,6 +123,21 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = fal
 
   const handleReplySuccess = () => {
     loadTopicDetails();
+  };
+
+  const handleSubmitComment = async () => {
+    if (!commentText.trim()) return;
+    try {
+      await thesisTopicService.addSuggestion(topic.ID_DETAI, { NOIDUNG_GOIY: commentText });
+      toast.success('Góp ý đã được gửi thành công!');
+      setShowCommentInput(false);
+      setCommentText('');
+      loadTopicDetails();
+    } catch (error) {
+      console.error('Error adding suggestion:', error);
+      const errorMessage = error.response?.data?.message || 'Có lỗi xảy ra khi gửi góp ý.';
+      toast.error(errorMessage);
+    }
   };
 
   return (
@@ -176,16 +191,64 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = fal
                     )}
 
                     <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                      <CardContent className="space-y-4 pt-5">
-                        <InfoItem icon={BookOpen} label="Mô tả">
-                          {topic.MOTA}
-                        </InfoItem>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-4">
+                      <CardHeader>
+                        <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                          <Layers className="h-5 w-5 text-blue-500" /> Thông tin cơ bản
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4 gap-x-4">
                           <InfoItem icon={User} label="Giảng viên đề xuất" value={topic.ten_giang_vien} />
                           <InfoItem icon={Layers} label="Chuyên ngành" value={topic.chuyennganh?.TEN_CHUYENNGANH} />
                           <InfoItem icon={Users} label="Số nhóm tối đa" value={topic.SO_NHOM_TOIDA} />
                           <InfoItem icon={Users} label="Đã đăng ký" value={topic.SO_NHOM_HIENTAI} />
                           <InfoItem icon={Calendar} label="Ngày tạo" value={new Date(topic.NGAYTAO).toLocaleDateString('vi-VN')} />
+                        </div>
+                        <div className="flex items-start">
+                          <BookOpen className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
+                          <div className="ml-3 flex-1">
+                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Mô tả</p>
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words">
+                              <div className="flex flex-col space-y-4">
+                                <div className="flex-1">
+                                  <div className="max-h-40 overflow-y-auto border rounded p-2 bg-gray-50 dark:bg-gray-800">
+                                    {topic.MOTA}
+                                  </div>
+                                </div>
+                                {showCommentInput && (
+                                  <div>
+                                    <strong>Góp ý:</strong>
+                                    <textarea
+                                      className="mt-2 w-full border rounded p-2 resize-none"
+                                      rows="4"
+                                      placeholder="Nhập góp ý của bạn về đề tài này..."
+                                      value={commentText}
+                                      onChange={(e) => setCommentText(e.target.value)}
+                                    />
+                                    <div className="flex gap-2 mt-2">
+                                      <Button
+                                        size="sm"
+                                        onClick={handleSubmitComment}
+                                        disabled={!commentText.trim()}
+                                      >
+                                        Gửi góp ý
+                                      </Button>
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                          setShowCommentInput(false);
+                                          setCommentText('');
+                                        }}
+                                      >
+                                        Hủy
+                                      </Button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -216,7 +279,7 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = fal
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={handleAddSuggestion}
+                                onClick={() => setShowCommentInput(true)}
                                 className="border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
                               >
                                 <Send className="w-4 h-4 mr-1" />

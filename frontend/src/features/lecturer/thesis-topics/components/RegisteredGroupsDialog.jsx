@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { thesisTopicService } from '@/api/thesisTopicService';
-import { Users, Calendar, BookOpen, GraduationCap, Loader2, User } from 'lucide-react';
+import { Users, Calendar, GraduationCap, Loader2, User } from 'lucide-react';
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -49,7 +49,7 @@ const RegisteredGroupsDialog = ({ open, onOpenChange, topic }) => {
       const response = await thesisTopicService.getRegisteredGroups({
         topic_id: topic.ID_DETAI
       });
-      setGroups(response.data.data || []);
+      setGroups(response?.data?.data || []);
     } catch (error) {
       console.error('Error loading registered groups:', error);
     } finally {
@@ -59,7 +59,7 @@ const RegisteredGroupsDialog = ({ open, onOpenChange, topic }) => {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent 
+      <DialogContent
         className="max-w-3xl w-full h-full max-h-[90vh] p-0 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500"
         style={{ maxHeight: '90vh' }}
       >
@@ -88,52 +88,69 @@ const RegisteredGroupsDialog = ({ open, onOpenChange, topic }) => {
                   <p className="text-sm">Đề tài này chưa được nhóm nào đăng ký.</p>
                 </div>
               ) : (
-                groups.map((assignment) => (
-                  <Card key={assignment.ID_PHANCONG} className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                    <CardHeader>
-                      <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
-                        <div className="min-w-0 flex-1">
-                          <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                            {assignment.nhom?.TEN_NHOM}
-                          </CardTitle>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">
-                            Mã nhóm: {assignment.nhom?.MA_NHOM || 'N/A'}
-                          </p>
+                groups.map((assignment) => {
+                  // 🔥 THÊM LOG Ở ĐÂY
+                  console.log("NHOM DATA:", assignment.nhom);
+
+                  return (
+                    <Card
+                      key={assignment.ID_PHANCONG}
+                      className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800"
+                    >
+                      <CardHeader>
+                        <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                              {assignment.nhom?.TEN_NHOM}
+                            </CardTitle>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {getStatusBadge(assignment.TRANGTHAI)}
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
-                          {getStatusBadge(assignment.TRANGTHAI)}
+                      </CardHeader>
+
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-4">
+                          <InfoItem
+                            icon={User}
+                            label="Trưởng nhóm"
+                            value={assignment.nhom?.nhomtruong?.HODEM_VA_TEN}
+                          />
+                          <InfoItem
+                            icon={Calendar}
+                            label="Ngày phân công"
+                            value={format(new Date(assignment.NGAY_PHANCONG), 'dd/MM/yyyy', { locale: vi })}
+                          />
                         </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-4">
-                        <InfoItem
-                          icon={User}
-                          label="Trưởng nhóm"
-                          value={assignment.nhom?.nhomtruong?.HODEM_VA_TEN}
-                        />
-                        <InfoItem
-                          icon={Calendar}
-                          label="Ngày phân công"
-                          value={format(new Date(assignment.NGAY_PHANCONG), 'dd/MM/yyyy', { locale: vi })}
-                        />
-                      </div>
-                      <InfoItem icon={Users} label="Thành viên nhóm">
-                        <div className="flex flex-wrap gap-2">
-                          {assignment.nhom?.thanhvienNhom?.map((member, index) => (
-                            <Badge 
-                              key={index} 
-                              variant="outline" 
-                              className="border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
-                            >
-                              {member.nguoidung?.HODEM_VA_TEN}
-                            </Badge>
-                          )) || <span className="text-sm text-gray-500">Chưa có thành viên</span>}
-                        </div>
-                      </InfoItem>
-                    </CardContent>
-                  </Card>
-                ))
+
+                        <InfoItem icon={Users} label="Thành viên nhóm">
+                          <div className="flex flex-wrap gap-2">
+                            {assignment.nhom?.thanhvien_nhom
+                              ?.filter((member) => member.ID_NGUOIDUNG !== assignment.nhom?.nhomtruong?.ID_NGUOIDUNG)
+                              ?.length > 0 ? (
+
+                              assignment.nhom.thanhvien_nhom
+                                .filter((member) => member.ID_NGUOIDUNG !== assignment.nhom?.nhomtruong?.ID_NGUOIDUNG)
+                                .map((member, index) => (
+                                  <Badge
+                                    key={index}
+                                    variant="outline"
+                                    className="border-blue-200 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                                  >
+                                    {member.nguoidung?.HODEM_VA_TEN}
+                                  </Badge>
+                                ))
+
+                            ) : (
+                              <span className="text-sm text-gray-500">Chưa có thành viên khác</span>
+                            )}
+                          </div>
+                        </InfoItem>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           </ScrollArea>
