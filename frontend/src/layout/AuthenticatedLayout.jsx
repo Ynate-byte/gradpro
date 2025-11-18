@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Bell, Mail, UserPlus } from "lucide-react";
+import { Bell, Mail, UserPlus, CalendarDays } from "lucide-react"; // Thêm CalendarDays
 import { getUnreadCount, getUnreadNotifications, markAllAsRead } from '@/api/notificationService';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -42,6 +42,7 @@ const routeNameMap = {
     '/starred': 'Đã lưu',
     '/settings/account': 'Tài khoản',
     '/settings/appearance': 'Giao diện',
+    '/lecturer/calendar': 'Lịch làm việc', // Thêm tên route mới
 };
 
 // Component Skeleton cho header khi user chưa load
@@ -199,6 +200,9 @@ export default function AuthenticatedLayout() {
          return <div className="flex h-screen w-full items-center justify-center">Lỗi xác thực người dùng.</div>;
      }
 
+    // Kiểm tra quyền giảng viên/admin
+    const isLecturerOrHigher = ['Giảng viên', 'Trưởng khoa', 'Giáo vụ', 'Admin'].includes(user?.vaitro?.TEN_VAITRO);
+
     // Giao diện chính khi đã có user
     return (
         <SidebarProvider>
@@ -214,6 +218,19 @@ export default function AuthenticatedLayout() {
                             </Breadcrumb>
                         </div>
                         <div className="flex items-center gap-2">
+                            {/* [MỚI] Icon Lịch họp cho Giảng viên */}
+                            {isLecturerOrHigher && (
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="relative h-9 w-9 rounded-full text-blue-600 hover:bg-blue-50"
+                                    onClick={() => navigate('/lecturer/calendar')}
+                                    title="Lịch làm việc"
+                                >
+                                    <CalendarDays className="h-5 w-5" />
+                                </Button>
+                            )}
+
                             {/* Thông báo */}
                             <DropdownMenu onOpenChange={handleOpenNotificationChange}>
                                 <DropdownMenuTrigger asChild>

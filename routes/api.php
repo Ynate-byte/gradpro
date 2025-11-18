@@ -32,10 +32,10 @@ Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
     
-    // ---------------- AUTH ----------------
+    // ---------------- XÁC THỰC ----------------
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    // ---------------- USERS ----------------
+    // ---------------- NGƯỜI DÙNG ----------------
     Route::apiResource('users', UserController::class);
     Route::post('users/bulk-action', [UserController::class, 'bulkAction']);
     Route::post('users/bulk-delete', [UserController::class, 'bulkDelete']);
@@ -292,6 +292,16 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/assign-specific-topic', [LecturerTopicController::class, 'assignSpecificTopic']);
             Route::post('/assign-reviewers', [LecturerTopicController::class, 'assignReviewers']);
             Route::post('/auto-assign-reviewers', [LecturerTopicController::class, 'autoAssignReviewers']);
+        });
+    });
+
+    Route::prefix('lecturer')->group(function () {
+        // ... các route cũ
+        Route::prefix('calendar')->group(function () {
+            Route::get('/groups', [LichHopController::class, 'getLecturerGroups']);
+            Route::get('/events', [LichHopController::class, 'getLecturerSchedule']);
+            Route::post('/create-quick', [LichHopController::class, 'createQuickMeeting']);
+            Route::put('/rate/{id}', [LichHopController::class, 'rateMeeting']);
         });
     });
 

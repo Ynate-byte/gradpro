@@ -28,6 +28,7 @@ class LichHop extends Model
         'GHICHU',
         'TRANGTHAI',
         'NOIDUNG_HOP',
+        'DANHGIA'
     ];
 
     protected $casts = [

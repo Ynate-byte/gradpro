@@ -20,6 +20,8 @@ const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCou
 const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx'));
 const LecturerGroupDetailPage = lazy(() => import('./features/lecturer/groups-management/pages/LecturerGroupDetailPage.jsx'));
 const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
+// [MỚI] Import trang Calendar
+const LecturerCalendarPage = lazy(() => import('./features/lecturer/calendar/LecturerCalendarPage.jsx'));
 
 // --- Import các components Sinh viên ---
 const MyGroupPage = lazy(() => import('./features/student/my-group/index.jsx'));
@@ -131,7 +133,7 @@ function App() {
             element={
               canViewGiangVienRoutes && !isSinhVien 
                 ? <LecturerDashboard />  // Trang chủ của Giảng viên
-                : <HomePage />             // Trang chủ của Sinh viên (hoặc mặc định)
+                : <HomePage />           // Trang chủ của Sinh viên (hoặc mặc định)
             } 
           />
 
@@ -170,6 +172,8 @@ function App() {
               <Route path="lecturer/council" element={<GiangVienHoiDong />} />
               <Route path="lecturer/council/:id" element={<GiangVienChinhSua />} />
               <Route path="lecturer/grading" element={<LecturerGradingPage />} />
+              {/* [MỚI] Route Lịch làm việc */}
+              <Route path="lecturer/calendar" element={<LecturerCalendarPage />} />
             </>
           )}
 

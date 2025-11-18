@@ -7,22 +7,21 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { createMeeting, updateMeeting } from '@/api/meetingService';
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle
+    Dialog, DialogContent, DialogDescription, DialogFooter,
+    DialogHeader, DialogTitle
 } from "@/components/ui/dialog";
-// ===== [SỬA LỖI TẠI ĐÂY] =====
 import { 
-  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage 
-} from "@/components/ui/form"; // <-- ĐÃ THÊM FormDescription
-// =============================
+    Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage 
+} from "@/components/ui/form"; 
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2 } from 'lucide-react';
+import { Loader2, Calendar, Clock, Link as LinkIcon, MapPin, NotebookPen, MessageSquare } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
-// (Schema validation giữ nguyên)
+// Schema validation cho Form Lịch họp (GIỮ NGUYÊN LOGIC)
 const meetingSchema = z.object({
     TIEUDE_LICHHOP: z.string().min(5, { message: "Tiêu đề phải có ít nhất 5 ký tự." }).max(255),
     THOIGIAN_BATDAU: z.string().min(1, "Thời gian bắt đầu là bắt buộc."), 
@@ -37,6 +36,7 @@ const meetingSchema = z.object({
     GHICHU: z.string().max(1000, "Ghi chú quá dài.").optional().nullable(),
     NOIDUNG_HOP: z.string().optional().nullable(),
 }).refine(data => {
+    // Kiểm tra: Địa điểm là bắt buộc khi họp Trực tiếp
     if (data.HINHTHUC_HOP === 'Trực tiếp') {
         return !!data.DIADIEM && data.DIADIEM.length > 0;
     }
@@ -45,6 +45,7 @@ const meetingSchema = z.object({
     message: "Địa điểm là bắt buộc khi họp trực tiếp.",
     path: ["DIADIEM"],
 }).refine(data => {
+    // Kiểm tra: Link trực tuyến là bắt buộc khi họp Trực tuyến
     if (data.HINHTHUC_HOP === 'Trực tuyến') {
         return !!data.LINK_TRUCTUYEN && data.LINK_TRUCTUYEN.length > 0;
     }
@@ -53,6 +54,7 @@ const meetingSchema = z.object({
     message: "Link trực tuyến là bắt buộc khi họp trực tuyến.",
     path: ["LINK_TRUCTUYEN"],
 }).refine(data => {
+    // Kiểm tra: Thời gian kết thúc phải sau thời gian bắt đầu
     if (data.THOIGIAN_KETTHUC && data.THOIGIAN_BATDAU) {
         return new Date(data.THOIGIAN_KETTHUC) > new Date(data.THOIGIAN_BATDAU);
     }
@@ -62,7 +64,7 @@ const meetingSchema = z.object({
     path: ["THOIGIAN_KETTHUC"],
 });
 
-// (Hàm formatDateTimeLocal giữ nguyên)
+// Hàm xử lý thời gian (GIỮ NGUYÊN LOGIC)
 const formatDateTimeLocal = (dateString) => {
     if (!dateString) return "";
     try {
@@ -71,6 +73,13 @@ const formatDateTimeLocal = (dateString) => {
         return "";
     }
 };
+
+const toISOStringWithLocalTimezone = (localTimeString) => {
+    if (!localTimeString) return null;
+    const localDate = new Date(localTimeString);
+    return localDate.toISOString();
+};
+
 
 export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
     const queryClient = useQueryClient();
@@ -90,9 +99,10 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
         }
     });
 
+    // Theo dõi giá trị của trường HINHTHUC_HOP
     const hinhThucHop = form.watch('HINHTHUC_HOP');
 
-    // (useEffect, mutation, onSubmit, onInvalid giữ nguyên)
+    // Thiết lập giá trị mặc định khi mở dialog (GIỮ NGUYÊN LOGIC)
     useEffect(() => {
         if (isEditMode && meeting) {
             form.reset({
@@ -106,6 +116,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                 NOIDUNG_HOP: meeting.NOIDUNG_HOP || '',
             });
         } else {
+            // Thiết lập thời gian bắt đầu mặc định là 5 phút sau hiện tại (local time)
             const defaultStartTime = format(new Date(Date.now() + 5 * 60000), "yyyy-MM-dd'T'HH:mm");
             form.reset({
                 TIEUDE_LICHHOP: '',
@@ -120,9 +131,15 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
         }
     }, [isOpen, isEditMode, meeting, form]);
 
+    // Hook xử lý tạo/cập nhật lịch họp (GIỮ NGUYÊN LOGIC)
     const mutation = useMutation({
-        mutationFn: (data) => {
-            const payload = { ...data };
+        mutationFn: (formData) => {
+            const payload = {
+                ...formData,
+                THOIGIAN_BATDAU: toISOStringWithLocalTimezone(formData.THOIGIAN_BATDAU),
+                THOIGIAN_KETTHUC: toISOStringWithLocalTimezone(formData.THOIGIAN_KETTHUC)
+            };
+
             if (payload.HINHTHUC_HOP === 'Trực tiếp') {
                 payload.LINK_TRUCTUYEN = null;
             } else {
@@ -132,7 +149,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
             if (isEditMode) {
                 return updateMeeting(meeting.ID_LICHHOP, payload);
             }
-            return createMeeting(nhomId, data);
+            return createMeeting(nhomId, payload);
         },
         onSuccess: () => {
             toast.success(isEditMode ? "Cập nhật lịch họp thành công!" : "Tạo lịch họp thành công!");
@@ -180,139 +197,166 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+            {/* THAY ĐỔI: Mở rộng chiều ngang Dialog */}
+            <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{isEditMode ? 'Chỉnh sửa Lịch họp' : 'Tạo Lịch họp mới'}</DialogTitle>
+                    <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+                        <Calendar className="h-5 w-5 text-primary" /> {isEditMode ? 'Chỉnh sửa Lịch họp' : 'Tạo Lịch họp mới'}
+                    </DialogTitle>
                     <DialogDescription>
-                        {isEditMode ? 'Cập nhật thông tin chi tiết cho cuộc họp.' : 'Điền thông tin để tạo lịch họp cho nhóm.'}
+                        {isEditMode 
+                            ? 'Cập nhật thông tin chi tiết hoặc biên bản cuộc họp.' 
+                            : 'Điền thông tin cần thiết để tạo lịch họp mới cho nhóm.'}
                     </DialogDescription>
                 </DialogHeader>
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 py-4">
                         
-                        {/* (Các trường FormField TIEUDE, THOIGIAN, HINHTHUC, DIADIEM, LINK_TRUCTUYEN, GHICHU giữ nguyên) */}
-                        <FormField
-                            control={form.control}
-                            name="TIEUDE_LICHHOP"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Tiêu đề *</FormLabel>
-                                    <FormControl><Input placeholder="Ví dụ: Họp báo cáo tiến độ tuần 5" {...field} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <FormField
-                                control={form.control}
-                                name="THOIGIAN_BATDAU"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Thời gian bắt đầu *</FormLabel>
-                                        <FormControl><Input type="datetime-local" {...field} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                            <FormField
-                                control={form.control}
-                                name="THOIGIAN_KETTHUC"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Thời gian kết thúc (Tùy chọn)</FormLabel>
-                                        <FormControl><Input type="datetime-local" {...field} value={field.value || ''} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        </div>
-                        <FormField
-                            control={form.control}
-                            name="HINHTHUC_HOP"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Hình thức *</FormLabel>
-                                    <Select onValueChange={field.onChange} value={field.value}>
-                                        <FormControl>
-                                            <SelectTrigger><SelectValue placeholder="Chọn hình thức họp" /></SelectTrigger>
-                                        </FormControl>
-                                        <SelectContent>
-                                            <SelectItem value="Trực tiếp">Trực tiếp</SelectItem>
-                                            <SelectItem value="Trực tuyến">Trực tuyến</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </FormItem>
-                            )}
-                        />
-                        {hinhThucHop === 'Trực tiếp' && (
-                            <FormField
-                                control={form.control}
-                                name="DIADIEM"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Địa điểm *</FormLabel>
-                                        <FormControl><Input placeholder="Ví dụ: Phòng H.301" {...field} value={field.value || ''} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        )}
-                        {hinhThucHop === 'Trực tuyến' && (
-                            <FormField
-                                control={form.control}
-                                name="LINK_TRUCTUYEN"
-                                render={({ field }) => (
-                                    <FormItem>
-                                        <FormLabel>Link trực tuyến *</FormLabel>
-                                        <FormControl><Input type="url" placeholder="https://meet.google.com/..." {...field} value={field.value || ''} /></FormControl>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}
-                            />
-                        )}
-                        <FormField
-                            control={form.control}
-                            name="GHICHU"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Ghi chú (Tùy chọn)</FormLabel>
-                                    <FormControl><Textarea placeholder="Nội dung cần chuẩn bị cho cuộc họp..." {...field} value={field.value || ''} /></FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}
-                        />
-                        
-                        {/* Hiển thị Biên bản họp KHI EDIT */}
-                        {isEditMode && (
-                            <>
-                                <Separator />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            
+                            {/* ===== CỘT TRÁI: TIÊU ĐỀ, THỜI GIAN, HÌNH THỨC & ĐỊA ĐIỂM (General Details) ===== */}
+                            <div className="space-y-6">
+                                {/* HÀNG 1: TIÊU ĐỀ */}
                                 <FormField
                                     control={form.control}
-                                    name="NOIDUNG_HOP"
+                                    name="TIEUDE_LICHHOP"
                                     render={({ field }) => (
                                         <FormItem>
-                                            <FormLabel>Biên bản / Nội dung họp</FormLabel>
-                                            {/* Dòng <FormDescription> đã gây lỗi */}
-                                            <FormDescription>
-                                                Cập nhật nội dung, kết luận, hoặc nhiệm vụ sau khi cuộc họp diễn ra.
-                                            </FormDescription>
-                                            <FormControl>
-                                                <Textarea 
-                                                    placeholder="Ghi lại nội dung cuộc họp..." 
-                                                    {...field} 
-                                                    value={field.value || ''}
-                                                    rows={6} 
-                                                />
-                                            </FormControl>
+                                            <FormLabel className="flex items-center gap-2"><NotebookPen className="h-4 w-4" /> Tiêu đề *</FormLabel>
+                                            <FormControl><Input placeholder="Ví dụ: Họp báo cáo tiến độ tuần 5" {...field} /></FormControl>
                                             <FormMessage />
                                         </FormItem>
                                     )}
                                 />
-                            </>
-                        )}
+                                
+                                {/* HÀNG 2: THỜI GIAN (2 CỘT) */}
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Bắt đầu */}
+                                    <FormField
+                                        control={form.control}
+                                        name="THOIGIAN_BATDAU"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-2"><Clock className="h-4 w-4" /> Bắt đầu *</FormLabel>
+                                                <FormControl><Input type="datetime-local" {...field} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    {/* Kết thúc */}
+                                    <FormField
+                                        control={form.control}
+                                        name="THOIGIAN_KETTHUC"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel className="flex items-center gap-2 opacity-70"><Clock className="h-4 w-4" /> Kết thúc (Tùy chọn)</FormLabel>
+                                                <FormControl><Input type="datetime-local" {...field} value={field.value || ''} /></FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                </div>
 
+                                {/* HÀNG 3: HÌNH THỨC & ĐỊA ĐIỂM (3 CỘT: 1/3 cho Hình thức, 2/3 cho Địa điểm/Link) */}
+                                <div className="grid grid-cols-3 gap-4">
+                                    {/* Hình thức */}
+                                    <FormField
+                                        control={form.control}
+                                        name="HINHTHUC_HOP"
+                                        render={({ field }) => (
+                                            <FormItem className="col-span-1">
+                                                <FormLabel className="flex items-center gap-2">Hình thức *</FormLabel>
+                                                <Select onValueChange={field.onChange} value={field.value}>
+                                                    <FormControl>
+                                                        <SelectTrigger><SelectValue placeholder="Chọn hình thức họp" /></SelectTrigger>
+                                                    </FormControl>
+                                                    <SelectContent>
+                                                        <SelectItem value="Trực tiếp">Trực tiếp</SelectItem>
+                                                        <SelectItem value="Trực tuyến">Trực tuyến</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    
+                                    {/* Địa điểm/Link (Chiếm 2/3 không gian, conditional) */}
+                                    <div className="col-span-2">
+                                        {hinhThucHop === 'Trực tiếp' && (
+                                            <FormField
+                                                control={form.control}
+                                                name="DIADIEM"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel className="flex items-center gap-2"><MapPin className="h-4 w-4 text-red-600" /> Địa điểm *</FormLabel>
+                                                        <FormControl><Input placeholder="Ví dụ: Phòng H.301" {...field} value={field.value || ''} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+                                        {hinhThucHop === 'Trực tuyến' && (
+                                            <FormField
+                                                control={form.control}
+                                                name="LINK_TRUCTUYEN"
+                                                render={({ field }) => (
+                                                    <FormItem>
+                                                        <FormLabel className="flex items-center gap-2"><LinkIcon className="h-4 w-4 text-indigo-600" /> Link trực tuyến *</FormLabel>
+                                                        <FormControl><Input type="url" placeholder="https://meet.google.com/..." {...field} value={field.value || ''} /></FormControl>
+                                                        <FormMessage />
+                                                    </FormItem>
+                                                )}
+                                            />
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
 
-                        <DialogFooter>
+                            {/* ===== CỘT PHẢI: GHI CHÚ & BIÊN BẢN (Extended Details) ===== */}
+                            <div className="space-y-6">
+                                {/* Trường Ghi chú */}
+                                <FormField
+                                    control={form.control}
+                                    name="GHICHU"
+                                    render={({ field }) => (
+                                        <FormItem>
+                                            <FormLabel className="flex items-center gap-2 opacity-70"><MessageSquare className="h-4 w-4" /> Ghi chú (Tùy chọn)</FormLabel>
+                                            <FormDescription>Nội dung cần chuẩn bị hoặc thông báo ngắn gọn trước cuộc họp.</FormDescription>
+                                            <FormControl><Textarea placeholder="Nội dung cần chuẩn bị cho cuộc họp..." {...field} value={field.value || ''} rows={4} /></FormControl>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )}
+                                />
+                                
+                                {isEditMode && (
+                                    <>
+                                        <Separator />
+                                        {/* Trường Biên bản họp */}
+                                        <FormField
+                                            control={form.control}
+                                            name="NOIDUNG_HOP"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel className="flex items-center gap-2"><NotebookPen className="h-4 w-4" /> Biên bản / Nội dung họp</FormLabel>
+                                                    <FormDescription>Cập nhật nội dung, kết luận, hoặc nhiệm vụ sau khi cuộc họp diễn ra.</FormDescription>
+                                                    <FormControl>
+                                                        <Textarea 
+                                                            placeholder="Ghi lại nội dung cuộc họp..." 
+                                                            {...field} 
+                                                            value={field.value || ''}
+                                                            rows={8} // Tăng rows để cân đối với cột bên cạnh
+                                                        />
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        <DialogFooter className="pt-4">
                             <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Hủy</Button>
                             <Button type="submit" disabled={mutation.isPending}>
                                 {mutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

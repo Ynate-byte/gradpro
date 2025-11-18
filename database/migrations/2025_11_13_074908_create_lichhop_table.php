@@ -26,12 +26,11 @@ return new class extends Migration
             $table->string('LINK_TRUCTUYEN', 500)->nullable()->comment('Dùng khi HINHTHUC_HOP = Trực tuyến');
             
             $table->text('GHICHU')->nullable();
-            
-            // ===== [THÊM MỚI] =====
             $table->text('NOIDUNG_HOP')->nullable()->comment('Nội dung, kết luận, hoặc biên bản họp');
-            // ======================
             
             $table->enum('TRANGTHAI', ['Đã lên lịch', 'Đã diễn ra', 'Đã hủy'])->default('Đã lên lịch');
+
+            $table->enum('DANHGIA', ['Tot', 'BinhThuong', 'KhongTot'])->nullable()->comment('Đánh giá chất lượng buổi họp');
 
             $table->timestamp('NGAYTAO')->nullable()->useCurrent();
             $table->timestamp('CAPNHAT_LANCUOI')->nullable()->useCurrentOnUpdate();
