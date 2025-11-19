@@ -121,7 +121,7 @@ class TopicAssignmentController extends Controller
                     'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
                     'ten_giang_vien' => $lecturer->nguoidung->HODEM_VA_TEN ?? 'N/A',
                     'hoc_vi' => $lecturer->HOCVI,
-                    'chuc_vu' => $lecturer->CHUCVU,
+                    // 'chuc_vu' => $lecturer->CHUCVU, // Cột này đã xóa, có thể load từ chucvus nếu cần hiển thị
                     'so_nhom_toida' => $lecturer->SO_NHOM_TOIDA,
                     'quota_assigned' => $quotaAssignment ? $quotaAssignment->SO_DETAI_PHANCONG : 0,
                     'actual_assigned' => $actualAssigned,
@@ -157,7 +157,9 @@ class TopicAssignmentController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        
+        // [UPDATE] Sử dụng helper isAdmin() thay vì check string
+        if (!$this->isAdmin()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -208,7 +210,9 @@ class TopicAssignmentController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        
+        // [UPDATE] Sử dụng helper isAdmin()
+        if (!$this->isAdmin()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -310,7 +314,9 @@ class TopicAssignmentController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        
+        // [UPDATE] Sử dụng helper isAdmin()
+        if (!$this->isAdmin()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -327,8 +333,8 @@ class TopicAssignmentController extends Controller
             
             // Check if the topic is already assigned (as a supervisor assignment)
             $existingAssignment = PhancongGvDetai::where('ID_DETAI', $request->ID_DETAI)
-                                                    ->whereNotNull('ID_DETAI') // Filter out Quota assignments
-                                                    ->first();
+                                                ->whereNotNull('ID_DETAI') // Filter out Quota assignments
+                                                ->first();
 
             if ($existingAssignment) {
                 // Update existing assignment if it exists (Reassigning the supervisor)
@@ -421,7 +427,9 @@ class TopicAssignmentController extends Controller
         }
 
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        
+        // [UPDATE] Sử dụng helper isAdmin()
+        if (!$this->isAdmin()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
@@ -437,7 +445,9 @@ class TopicAssignmentController extends Controller
     public function removeAssignment($assignmentId)
     {
         $currentUser = Auth::user();
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin') {
+        
+        // [UPDATE] Sử dụng helper isAdmin()
+        if (!$this->isAdmin()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

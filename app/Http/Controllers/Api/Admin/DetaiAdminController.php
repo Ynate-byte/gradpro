@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Validator;
 class DetaiAdminController extends Controller
 {
     /**
-     * Get all topics for admin review
+     * Lấy tất cả đề tài để admin/trưởng khoa duyệt
      */
     public function index(Request $request)
     {
@@ -23,17 +23,17 @@ class DetaiAdminController extends Controller
             'goiyDetai.nguoiGoiy.nguoidung'
         ]);
 
-        // Filter by status
+        // Lọc theo trạng thái
         if ($request->has('status')) {
             $query->where('TRANGTHAI', $request->status);
         }
 
-        // Filter by plan
+        // Lọc theo kế hoạch
         if ($request->has('plan_id')) {
             $query->where('ID_KEHOACH', $request->plan_id);
         }
 
-        // Search by title or lecturer
+        // Tìm kiếm theo tên đề tài hoặc tên giảng viên
         if ($request->has('search')) {
             $search = $request->search;
             $query->where(function ($q) use ($search) {
@@ -46,7 +46,7 @@ class DetaiAdminController extends Controller
 
         $topics = $query->orderBy('NGAYTAO', 'desc')->get();
 
-        // Add lecturer name for display
+        // Thêm tên giảng viên để hiển thị
         $topics->transform(function ($topic) {
             $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
             return $topic;
@@ -56,7 +56,7 @@ class DetaiAdminController extends Controller
     }
 
     /**
-     * Get topic details with suggestions for approval
+     * Lấy chi tiết đề tài cùng các gợi ý để duyệt
      */
     public function show($id)
     {
@@ -72,13 +72,15 @@ class DetaiAdminController extends Controller
     }
 
     /**
-     * Approve or reject topic with suggestions consideration
+     * Duyệt hoặc từ chối đề tài
      */
     public function approveOrReject(Request $request, $id)
     {
         $currentUser = Auth::user();
+        
+        // Sử dụng hàm helper từ BaseController (đã cập nhật logic N-N)
         if (!$this->isAdmin() && !$this->isTruongKhoa()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            return response()->json(['message' => 'Không có quyền thực hiện.'], 403);
         }
 
         $validator = Validator::make($request->all(), [
@@ -118,7 +120,7 @@ class DetaiAdminController extends Controller
     }
 
     /**
-     * Get topics pending approval with suggestions
+     * Lấy các đề tài đang chờ duyệt
      */
     public function getPendingTopics()
     {
@@ -131,7 +133,6 @@ class DetaiAdminController extends Controller
         ->orderBy('NGAYTAO', 'asc')
         ->get();
 
-        // Add lecturer name for display
         $topics->transform(function ($topic) {
             $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
             return $topic;
@@ -141,7 +142,7 @@ class DetaiAdminController extends Controller
     }
 
     /**
-     * Get topic statistics
+     * Lấy thống kê đề tài
      */
     public function getStatistics()
     {

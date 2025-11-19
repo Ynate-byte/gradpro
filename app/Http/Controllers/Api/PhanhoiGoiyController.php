@@ -30,29 +30,23 @@ class PhanhoiGoiyController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Get current authenticated user
         $currentUser = Auth::user();
 
-        // Check if user is a lecturer
-        $lecturer = Giangvien::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
+        $lecturer = $currentUser->giangvien;
+        
         if (!$lecturer) {
             return response()->json(['message' => 'Chỉ giảng viên mới có thể phản hồi góp ý'], 403);
         }
 
-        // Kiểm tra xem đề tài có còn ở trạng thái cho phép thảo luận không
         if (!in_array($goiy->detai->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa'])) {
             return response()->json(['message' => 'Không thể phản hồi góp ý cho đề tài đã duyệt'], 403);
         }
-        
-        // Bất kỳ giảng viên nào cũng có thể tham gia thảo luận (bao gồm người tạo đề tài và người góp ý)
-        // (Bạn có thể thêm logic siết chặt quyền ở đây nếu muốn)
-
+                
         $phanhoi = $goiy->phanhois()->create([
             'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
             'NOIDUNG' => $request->NOIDUNG,
         ]);
 
-        // Load lại thông tin giảng viên để hiển thị
         $phanhoi->load('giangvien.nguoidung');
 
         return response()->json([

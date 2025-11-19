@@ -11,6 +11,7 @@ use App\Models\Sinhvien;
 use App\Models\Giangvien;
 use App\Models\Nhom;
 use App\Models\SinhvienThamgia;
+use App\Models\ChucVu;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -34,16 +35,21 @@ class UserController extends Controller
      */
     public function index(Request $request)
     {
-        // Bắt đầu query với eager loading
-        $query = Nguoidung::with(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon']);
+        // Bắt đầu query với eager loading, bao gồm cả chức vụ
+        $query = Nguoidung::with([
+            'vaitro', 
+            'sinhvien.chuyennganh', 
+            'giangvien.khoabomon',
+            'giangvien.chucvus' // Load thêm quan hệ chức vụ
+        ]);
 
         // Xử lý tìm kiếm
         if ($request->filled('search')) {
             $searchTerm = $request->search;
             $query->where(function ($q) use ($searchTerm) {
-                $q->where('NGUOIDUNG.HODEM_VA_TEN', 'like', "%{$searchTerm}%") // Thêm tiền tố NGUOIDUNG
-                    ->orWhere('NGUOIDUNG.MA_DINHDANH', 'like', "%{$searchTerm}%") // Thêm tiền tố NGUOIDUNG
-                    ->orWhere('NGUOIDUNG.EMAIL', 'like', "%{$searchTerm}%"); // Thêm tiền tố NGUOIDUNG
+                $q->where('NGUOIDUNG.HODEM_VA_TEN', 'like', "%{$searchTerm}%")
+                    ->orWhere('NGUOIDUNG.MA_DINHDANH', 'like', "%{$searchTerm}%")
+                    ->orWhere('NGUOIDUNG.EMAIL', 'like', "%{$searchTerm}%");
             });
         }
 
@@ -57,7 +63,7 @@ class UserController extends Controller
         // Xử lý lọc theo trạng thái
         if ($request->filled('statuses')) {
             $statusesBool = collect($request->statuses)->map(fn($status) => filter_var($status, FILTER_VALIDATE_BOOLEAN))->all();
-            if (!empty($statusesBool)) { // Chỉ whereIn nếu mảng không rỗng
+            if (!empty($statusesBool)) {
                 $query->whereIn('NGUOIDUNG.TRANGTHAI_KICHHOAT', $statusesBool);
             }
         }
@@ -95,13 +101,11 @@ class UserController extends Controller
                       ->select('NGUOIDUNG.*')
                       ->groupBy('NGUOIDUNG.ID_NGUOIDUNG');
             } else {
-                // Chỉ sắp xếp nếu cột tồn tại trong bảng NGUOIDUNG
                 $userColumns = Schema::getColumnListing('NGUOIDUNG');
                 if (in_array($sortCol, $userColumns)) {
                     $sortColWithTable = 'NGUOIDUNG.' . $sortCol;
                     $query->orderBy($sortColWithTable, $sortDir);
                 } else {
-                    Log::warning("Attempted to sort by non-existent or potentially ambiguous user column: {$sortCol}");
                     $query->orderBy('NGUOIDUNG.NGAYTAO', 'desc');
                 }
             }
@@ -119,7 +123,7 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $vaitroSV = Vaitro::where('TEN_VAITRO', 'Sinh viên')->first()->ID_VAITRO;
-        $giangVienRoles = Vaitro::whereIn('TEN_VAITRO', ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'])->pluck('ID_VAITRO')->toArray();
+        $giangVienRoles = Vaitro::whereIn('TEN_VAITRO', ['Giảng viên'])->pluck('ID_VAITRO')->toArray(); // Admin cũng có thể có logic riêng
 
         // Validation data người dùng cơ bản
         $validatedData = $request->validate([
@@ -161,7 +165,9 @@ class UserController extends Controller
             $detailsValidator = Validator::make($request->input('giangvien_details', []), [
                 'ID_KHOA_BOMON' => 'required|integer|exists:KHOA_BOMON,ID_KHOA_BOMON',
                 'HOCVI' => 'required|string',
-                'CHUCVU' => ['nullable', 'string', Rule::in(['Trưởng khoa', 'Phó khoa', 'Giáo vụ', 'Trưởng bộ môn'])],
+                // Validate mảng chức vụ
+                'CHUCVU_IDS' => 'nullable|array',
+                'CHUCVU_IDS.*' => 'exists:CHUCVU,ID_CHUCVU',
             ], [
                 'ID_KHOA_BOMON.required' => 'Vui lòng chọn khoa/bộ môn.',
                 'ID_KHOA_BOMON.exists' => 'Khoa/Bộ môn được chọn không hợp lệ.',
@@ -192,12 +198,20 @@ class UserController extends Controller
                 $user->sinhvien()->create($svDetails);
             } elseif (in_array($selectedRoleId, $giangVienRoles) && $request->has('giangvien_details')) {
                 $gvDetails = $request->input('giangvien_details');
-                $gvDetails['ID_KHOA_BOMON'] = (int)$gvDetails['ID_KHOA_BOMON'];
-                $user->giangvien()->create($gvDetails);
+                
+                $gv = $user->giangvien()->create([
+                    'ID_KHOA_BOMON' => (int)$gvDetails['ID_KHOA_BOMON'],
+                    'HOCVI' => $gvDetails['HOCVI'],
+                ]);
+
+                // Sync các chức vụ
+                if (!empty($gvDetails['CHUCVU_IDS'])) {
+                    $gv->chucvus()->sync($gvDetails['CHUCVU_IDS']);
+                }
             }
         });
 
-        return response()->json($user->load(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon']), 201);
+        return response()->json($user->load(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon', 'giangvien.chucvus']), 201);
     }
 
     /**
@@ -208,6 +222,7 @@ class UserController extends Controller
         $user = Nguoidung::with([
             'vaitro',
             'giangvien.khoabomon',
+            'giangvien.chucvus', // Load chức vụ
             'sinhvien' => function ($query) {
                 $query->with([
                     'chuyennganh',
@@ -232,7 +247,7 @@ class UserController extends Controller
 
         $userRoleId = $user->ID_VAITRO;
         $vaitroSV = Vaitro::where('TEN_VAITRO', 'Sinh viên')->first()->ID_VAITRO;
-        $giangVienRoles = Vaitro::whereIn('TEN_VAITRO', ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'])->pluck('ID_VAITRO')->toArray();
+        $giangVienRoles = Vaitro::whereIn('TEN_VAITRO', ['Giảng viên'])->pluck('ID_VAITRO')->toArray();
 
         // Validate các trường có thể cập nhật
         $validatedData = $request->validate([
@@ -251,33 +266,21 @@ class UserController extends Controller
             'NGAYSINH.before_or_equal' => 'Ngày sinh không được ở tương lai.',
         ]);
 
-        $detailsValidator = null;
+        // Nested validation
         if ($userRoleId == $vaitroSV && $request->has('sinhvien_details')) {
-            $detailsValidator = Validator::make($request->input('sinhvien_details', []), [
-                'ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
-                'NIENKHOA' => 'required|string|max:10',
-                'HEDAOTAO' => 'required|string',
-                'TEN_LOP' => 'nullable|string|max:50',
-            ], [
-                'ID_CHUYENNGANH.required' => 'Vui lòng chọn chuyên ngành cho sinh viên.',
-                'ID_CHUYENNGANH.exists' => 'Chuyên ngành được chọn không hợp lệ.',
-                'NIENKHOA.required' => 'Vui lòng nhập niên khóa.',
-                'HEDAOTAO.required' => 'Vui lòng nhập hệ đào tạo.',
+            $request->validate([
+                'sinhvien_details.ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
+                'sinhvien_details.NIENKHOA' => 'required|string|max:10',
+                'sinhvien_details.HEDAOTAO' => 'required|string',
+                'sinhvien_details.TEN_LOP' => 'nullable|string|max:50',
             ]);
         } elseif (in_array($userRoleId, $giangVienRoles) && $request->has('giangvien_details')) {
-            $detailsValidator = Validator::make($request->input('giangvien_details', []), [
-                'ID_KHOA_BOMON' => 'required|integer|exists:KHOA_BOMON,ID_KHOA_BOMON',
-                'HOCVI' => 'required|string',
-                'CHUCVU' => ['nullable', 'string', Rule::in(['Trưởng khoa', 'Phó khoa', 'Giáo vụ', 'Trưởng bộ môn'])],
-            ], [
-                'ID_KHOA_BOMON.required' => 'Vui lòng chọn khoa/bộ môn.',
-                'ID_KHOA_BOMON.exists' => 'Khoa/Bộ môn được chọn không hợp lệ.',
-                'HOCVI.required' => 'Vui lòng chọn học vị.',
+            $request->validate([
+                'giangvien_details.ID_KHOA_BOMON' => 'required|integer|exists:KHOA_BOMON,ID_KHOA_BOMON',
+                'giangvien_details.HOCVI' => 'required|string',
+                'giangvien_details.CHUCVU_IDS' => 'nullable|array',
+                'giangvien_details.CHUCVU_IDS.*' => 'exists:CHUCVU,ID_CHUCVU',
             ]);
-        }
-
-        if ($detailsValidator && $detailsValidator->fails()) {
-            throw new ValidationException($detailsValidator);
         }
 
         DB::transaction(function () use ($user, $request, $validatedData, $userRoleId, $vaitroSV, $giangVienRoles) {
@@ -299,27 +302,34 @@ class UserController extends Controller
             }
 
             // Cập nhật bảng SINHVIEN
-            if ($userRoleId == $vaitroSV && $user->sinhvien && $request->has('sinhvien_details')) {
+            if ($user->ID_VAITRO == $vaitroSV && $user->sinhvien && $request->has('sinhvien_details')) {
                 $svDetails = $request->input('sinhvien_details');
                 $svDetails['ID_CHUYENNGANH'] = (int)$svDetails['ID_CHUYENNGANH'];
                 $user->sinhvien()->update($svDetails);
-            }
+            } 
             // Cập nhật bảng GIANGVIEN
-            elseif (in_array($userRoleId, $giangVienRoles) && $user->giangvien && $request->has('giangvien_details')) {
+            elseif (in_array($user->ID_VAITRO, $giangVienRoles) && $user->giangvien && $request->has('giangvien_details')) {
                 $gvDetails = $request->input('giangvien_details');
-                $gvDetails['ID_KHOA_BOMON'] = (int)$gvDetails['ID_KHOA_BOMON'];
-                $user->giangvien()->update($gvDetails);
+                
+                $user->giangvien()->update([
+                    'ID_KHOA_BOMON' => (int)$gvDetails['ID_KHOA_BOMON'],
+                    'HOCVI' => $gvDetails['HOCVI'],
+                ]);
+
+                // Cập nhật quan hệ nhiều-nhiều cho Chức vụ
+                if (isset($gvDetails['CHUCVU_IDS'])) {
+                    $user->giangvien->chucvus()->sync($gvDetails['CHUCVU_IDS']);
+                }
             }
         });
 
         // Tải lại dữ liệu sau khi cập nhật
-        $user->refresh()->load(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon']);
+        $user->refresh()->load(['vaitro', 'sinhvien.chuyennganh', 'giangvien.khoabomon', 'giangvien.chucvus']);
         return response()->json($user);
     }
 
     /**
      * Xóa một người dùng.
-     * Tự động xử lý logic trưởng nhóm.
      */
     public function destroy(Request $request, $id)
     {
@@ -381,9 +391,6 @@ class UserController extends Controller
 
     // XỬ LÝ HÀNG LOẠT (BULK ACTIONS)
 
-    /**
-     * Kích hoạt hoặc vô hiệu hóa hàng loạt người dùng.
-     */
     public function bulkAction(Request $request)
     {
         $validated = $request->validate([
@@ -398,9 +405,6 @@ class UserController extends Controller
         return response()->json(['message' => "Đã {$actionText} thành công {$count} người dùng."]);
     }
 
-    /**
-     * Xóa hàng loạt người dùng.
-     */
     public function bulkDelete(Request $request)
     {
         $validated = $request->validate([
@@ -432,7 +436,6 @@ class UserController extends Controller
         }
         
         DB::transaction(function () use ($filteredUserIds) {
-            // Tìm tất cả các nhóm (kể cả không nghiêm trọng) do những người này làm trưởng
             $ledGroups = Nhom::whereIn('ID_NHOMTRUONG', $filteredUserIds)->with('thanhviens')->get();
             
             foreach ($ledGroups as $nhom) {
@@ -446,16 +449,12 @@ class UserController extends Controller
                 }
             }
             
-            // Xóa tất cả người dùng
             Nguoidung::whereIn('ID_NGUOIDUNG', $filteredUserIds)->delete();
         });
 
         return response()->json(['message' => "Đã xóa thành công {$count} người dùng."]);
     }
 
-    /**
-     * Đặt lại mật khẩu hàng loạt cho người dùng.
-     */
     public function bulkResetPassword(Request $request)
     {
         $validated = $request->validate([
@@ -474,28 +473,19 @@ class UserController extends Controller
 
     // CÁC HÀM TIỆN ÍCH (HELPERS)
     
-    /**
-     * Lấy danh sách vai trò.
-     */
     public function getRoles() {
         return Vaitro::orderBy('TEN_VAITRO')->get();
     }
 
-    /**
-     * Lấy danh sách chuyên ngành đang hoạt động.
-     */
     public function getChuyenNganhs() { return Chuyennganh::where('TRANGTHAI_KICHHOAT', true)->orderBy('TEN_CHUYENNGANH')->get(); }
 
-    /**
-     * Lấy danh sách khoa/bộ môn đang hoạt động.
-     */
     public function getKhoaBomons() { return KhoaBomon::where('TRANGTHAI_KICHHOAT', true)->orderBy('TEN_KHOA_BOMON')->get(); }
+
+    // [MỚI] Helper lấy danh sách chức vụ
+    public function getPositions() { return ChucVu::orderBy('TEN_CHUCVU')->get(); }
 
     // IMPORT DỮ LIỆU TỪ FILE EXCEL
     
-    /**
-     * Tải về file mẫu để import người dùng.
-     */
     public function downloadImportTemplate()
     {
         $path = storage_path('app/templates/import_users_template.xlsx');
@@ -505,16 +495,12 @@ class UserController extends Controller
         return response()->download($path);
     }
 
-    /**
-     * Đọc và xác thực dữ liệu từ file Excel (chưa lưu vào DB).
-     */
     public function previewImport(Request $request)
     {
         $request->validate(['file' => 'required|mimes:xlsx,xls|max:5120']);
         $import = new UsersImport;
 
         try {
-            // Excel::import sẽ tự động gọi validation trong UsersImport
             Excel::import($import, $request->file('file'));
 
             return response()->json([
@@ -525,7 +511,6 @@ class UserController extends Controller
         } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
             $failures = $e->failures();
             $invalidRows = [];
-            // Duyệt qua từng lỗi để lấy thông tin dòng và lỗi
             foreach ($failures as $failure) {
                 $rowNumber = $failure->row();
                 $rowData = $failure->values();
@@ -541,13 +526,11 @@ class UserController extends Controller
                 }
 
                 if($existingRowIndex !== -1){
-                    // Nếu dòng đã tồn tại, thêm lỗi vào error_details
                     if (!isset($invalidRows[$existingRowIndex]['error_details'][$attribute])) {
                         $invalidRows[$existingRowIndex]['error_details'][$attribute] = [];
                     }
                     $invalidRows[$existingRowIndex]['error_details'][$attribute] = array_merge($invalidRows[$existingRowIndex]['error_details'][$attribute], $rowErrors);
                 } else {
-                    // Nếu dòng chưa tồn tại, tạo mới
                     $invalidRows[] = [
                         ...$rowData,
                         'error_row' => $rowNumber,
@@ -561,15 +544,11 @@ class UserController extends Controller
                 'invalidRows' => $invalidRows,
             ], 422);
         } catch (Throwable $th) {
-            // Bắt các lỗi khác (định dạng file sai, lỗi đọc file...)
             Log::error('Import Preview Failed: ' . $th->getMessage() . ' at ' . $th->getFile() . ':' . $th->getLine());
             return response()->json(['message' => 'Đã có lỗi xảy ra khi đọc file. Vui lòng kiểm tra lại định dạng file hoặc liên hệ quản trị viên.'], 500);
         }
     }
 
-    /**
-     * Lưu dữ liệu người dùng hợp lệ từ bước xem trước vào DB.
-     */
     public function processImport(Request $request)
     {
         $validated = $request->validate([
@@ -589,17 +568,17 @@ class UserController extends Controller
         ]);
 
         $vaitroSV = Vaitro::where('TEN_VAITRO', 'Sinh viên')->first()->ID_VAITRO;
-        $giangVienRoles = Vaitro::whereIn('TEN_VAITRO', ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'])->pluck('ID_VAITRO')->toArray();
+        $giangVienRoles = Vaitro::whereIn('TEN_VAITRO', ['Giảng viên'])->pluck('ID_VAITRO')->toArray();
         $importedCount = 0;
         $errors = [];
 
         $chuyenNganhMap = Chuyennganh::pluck('ID_CHUYENNGANH', 'TEN_CHUYENNGANH');
         $khoaBomonMap = KhoaBomon::pluck('ID_KHOA_BOMON', 'TEN_KHOA_BOMON');
+        $chucVuMap = ChucVu::pluck('ID_CHUCVU', 'TEN_CHUCVU'); // Map tên chức vụ -> ID
 
         DB::beginTransaction();
         try {
             foreach ($validated['validRows'] as $index => $row) {
-                // Kiểm tra unique trong DB trước khi tạo
                 if (Nguoidung::where('EMAIL', $row['email'])->exists()) {
                     $errors[] = "Dòng " . ($index + 1) . ": Email '{$row['email']}' đã tồn tại trong hệ thống.";
                     continue;
@@ -612,12 +591,10 @@ class UserController extends Controller
                 $ngaySinh = null;
                 if (!empty($row['ngay_sinh'])) {
                     try {
-                        // Carbon sẽ tự động thử parse các định dạng 'd/m/Y' hoặc 'Y-m-d'
-                        // str_replace để xử lý format d/m/Y
                         $ngaySinh = Carbon::parse(str_replace('/', '-', $row['ngay_sinh']))->format('Y-m-d');
                     } catch (\Exception $e) {
                         Log::warning("Import: Không thể parse ngày sinh '{$row['ngay_sinh']}' cho dòng ".($index + 1));
-                        $ngaySinh = null; // Bỏ qua nếu không parse được
+                        $ngaySinh = null;
                     }
                 }
 
@@ -629,6 +606,7 @@ class UserController extends Controller
                     'MATKHAU_BAM' => Hash::make('123456'),
                     'LA_DANGNHAP_LANDAU' => true,
                     'TRANGTHAI_KICHHOAT' => true,
+                    'NGAYSINH' => $ngaySinh,
                 ]);
 
                 if ($row['ID_VAITRO'] == $vaitroSV) {
@@ -658,11 +636,19 @@ class UserController extends Controller
                         Log::warning("Khoa/BM '{$row['ten_khoa_bomon']}' không tìm thấy cho dòng ".($index+1).". Sử dụng Khoa/BM fallback ID: {$khoaBoMonId}");
                     }
 
-                    $user->giangvien()->create([
+                    $gv = $user->giangvien()->create([
                         'ID_KHOA_BOMON' => $khoaBoMonId,
                         'HOCVI' => $row['hoc_vi'] ?? 'Thạc sĩ',
-                        'CHUCVU' => isset($row['chuc_vu']) && in_array($row['chuc_vu'], ['Trưởng khoa', 'Phó khoa', 'Giáo vụ', 'Trưởng bộ môn']) ? $row['chuc_vu'] : null,
                     ]);
+
+                    // Xử lý gán chức vụ nếu có trong file excel
+                    // Giả sử cột chuc_vu trong excel chứa tên chức vụ (VD: "Trưởng khoa")
+                    if (!empty($row['chuc_vu'])) {
+                        $chucVuId = $chucVuMap->get($row['chuc_vu']);
+                        if ($chucVuId) {
+                            $gv->chucvus()->attach($chucVuId);
+                        }
+                    }
                 }
                 $importedCount++;
             }

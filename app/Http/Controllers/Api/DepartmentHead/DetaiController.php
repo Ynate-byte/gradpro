@@ -14,8 +14,9 @@ class DetaiController extends DetaiAdminController
     {
         $currentUser = auth()->user();
 
-        // Check if user is department head
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head using N-N relation logic
+        // Cần đảm bảo user là giảng viên để lấy ID_KHOA_BOMON
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
@@ -70,8 +71,8 @@ class DetaiController extends DetaiAdminController
     {
         $currentUser = auth()->user();
 
-        // Check if user is department head
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
@@ -105,8 +106,8 @@ class DetaiController extends DetaiAdminController
     {
         $currentUser = auth()->user();
 
-        // Check if user is department head
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 

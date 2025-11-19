@@ -12,7 +12,7 @@ use App\Models\SinhvienThamgia;
 use App\Models\Nguoidung;
 use App\Models\Sinhvien;
 use App\Models\Nhom;
-use App\Models\TyTrongDiem; // [MỚI] Thêm model này để lấy tỷ trọng mặc định
+use App\Models\TyTrongDiem;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +47,7 @@ class ThesisPlanController extends Controller
         ]);
 
         $query = KehoachKhoaluan::with('nguoiTao')
-                                ->orderBy('KEHOACH_KHOALUAN.NGAYTAO', 'desc');
+            ->orderBy('KEHOACH_KHOALUAN.NGAYTAO', 'desc');
 
         if ($request->filled('search')) {
             $query->where('TEN_DOT', 'like', '%' . $request->search . '%');
@@ -80,6 +80,7 @@ class ThesisPlanController extends Controller
      */
     public function store(StoreThesisPlanRequest $request)
     {
+        // Hàm này đã được cập nhật logic trong Base Controller
         if (!$this->canCreatePlan()) {
             return response()->json(['message' => 'Bạn không có quyền tạo kế hoạch.'], 403);
         }
@@ -92,6 +93,7 @@ class ThesisPlanController extends Controller
             $planData = collect($validated)->except('mocThoigians')->all();
             
             $currentUser = $request->user();
+            // Hàm này đã được cập nhật logic trong Base Controller (check bảng GIANGVIEN_CHUCVU)
             $isTruongKhoa = $this->isTruongKhoa();
             
             $trangThai = $isTruongKhoa ? 'Đã phê duyệt' : 'Bản nháp';
@@ -145,7 +147,6 @@ class ThesisPlanController extends Controller
      */
     public function update(UpdateThesisPlanRequest $request, KehoachKhoaluan $plan)
     {
-        // 1. Logic phân quyền (Giữ nguyên từ code gốc của bạn)
         $isCreator = $plan->ID_NGUOITAO == Auth::id();
         
         if ($this->isTruongKhoa()) {
@@ -160,10 +161,8 @@ class ThesisPlanController extends Controller
              }
         }
 
-        // 2. Validate Request
         $validated = $request->validated();
         
-        // 3. Logic khóa ngày bắt đầu (Giữ nguyên từ code gốc của bạn)
         $isPlanRunning = in_array($plan->TRANGTHAI, ['Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành']);
         $formattedPlanDate = $plan->NGAY_BATDAU->format('Y-m-d'); 
 
@@ -175,14 +174,11 @@ class ThesisPlanController extends Controller
             unset($validated['NGAY_BATDAU']);
         }
 
-        // 4. Bắt đầu Transaction
         try {
             DB::beginTransaction();
             
-            // 4a. Cập nhật Kế hoạch (Bao gồm cả cột SETTINGS nếu nó được gửi từ trang "Thiết lập chung")
             $plan->update(collect($validated)->except('mocThoigians')->all());
 
-            // 4b. Xử lý Mốc thời gian
             $incomingIds = collect($validated['mocThoigians'])->pluck('id')->filter();
             $plan->mocThoigians()->whereNotIn('ID', $incomingIds)->delete();
             
@@ -195,14 +191,11 @@ class ThesisPlanController extends Controller
                         'NGAY_KETTHUC' => $moc['NGAY_KETTHUC'],
                         'MOTA' => $moc['MOTA'],
                         'VAITRO_THUCHIEN' => $moc['VAITRO_THUCHIEN'] ?? null,
-                        
-                        // [SỬA LỖI QUAN TRỌNG] Thêm dòng này để lưu liên kết
                         'FEATURE_KEY' => $moc['FEATURE_KEY'] ?? null, 
                     ]
                 );
             }
             
-            // 4c. Logic cập nhật Trạng thái (Giữ nguyên từ code gốc của bạn)
             if (in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa'])) {
                 if (($this->isGiaoVu() || $this->isAdmin()) && ($isCreator || $this->isAdmin())) {
                     $plan->TRANGTHAI = 'Bản nháp';
@@ -230,16 +223,12 @@ class ThesisPlanController extends Controller
             }
             
             $plan->save();
-
-            // 4d. [SỬA LỖI QUAN TRỌNG] Gọi hàm đồng bộ sau khi Mốc thời gian đã được lưu
             $this->syncMilestonesToSettings($plan);
 
-            // 5. Commit và Trả về
             DB::commit();
             
             Cache::forget('plan_filter_options');
 
-            // Load lại các mốc thời gian (bao gồm cả các mốc vừa tạo)
             $plan->load('mocThoigians'); 
             return response()->json($plan);
 
@@ -448,7 +437,6 @@ class ThesisPlanController extends Controller
      */
     public function getFilterOptions()
     {
-        // Cache kết quả trong 10 phút để tối ưu hiệu suất
         $options = Cache::remember('plan_filter_options', 60 * 10, function () {
             $khoahoc = KehoachKhoaluan::select('KHOAHOC')
                 ->whereNotNull('KHOAHOC')
@@ -490,7 +478,6 @@ class ThesisPlanController extends Controller
      */
     public function getParticipants(Request $request, KehoachKhoaluan $plan)
     {
-        // Validation cho bộ lọc chuyên ngành
         $request->validate([
             'search' => 'nullable|string|max:100',
             'eligible' => 'nullable|array',
@@ -501,7 +488,6 @@ class ThesisPlanController extends Controller
         $query = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)
             ->with(['sinhvien.nguoidung', 'sinhvien.chuyennganh']);
 
-        // Lọc theo từ khóa tìm kiếm
         if ($request->filled('search')) {
             $searchTerm = $request->search;
             $query->whereHas('sinhvien.nguoidung', function ($q) use ($searchTerm) {
@@ -511,7 +497,6 @@ class ThesisPlanController extends Controller
             });
         }
 
-        // Lọc theo điều kiện đủ điều kiện (DU_DIEUKIEN)
         if ($request->filled('eligible')) {
             $eligibleValues = collect($request->input('eligible'))->map(function ($value) {
                 return $value === 'true' ? 1 : ($value === 'false' ? 0 : null);
@@ -522,14 +507,12 @@ class ThesisPlanController extends Controller
             }
         }
 
-        // Logic lọc theo chuyên ngành
         if ($request->filled('chuyen_nganh_ids')) {
             $query->whereHas('sinhvien', function ($q) use ($request) {
                 $q->whereIn('ID_CHUYENNGANH', $request->chuyen_nganh_ids);
             });
         }
         
-        // Sắp xếp
         $nameSubQuery = Nguoidung::select('HODEM_VA_TEN')
             ->join('SINHVIEN', 'SINHVIEN.ID_NGUOIDUNG', '=', 'NGUOIDUNG.ID_NGUOIDUNG')
             ->whereColumn('SINHVIEN.ID_SINHVIEN', 'SINHVIEN_THAMGIA.ID_SINHVIEN')
@@ -544,7 +527,7 @@ class ThesisPlanController extends Controller
                 $query->orderBy($sortCol, $sortDir);
             }
         } else {
-            $query->orderBy($nameSubQuery, 'asc'); // Mặc định sắp xếp theo tên
+            $query->orderBy($nameSubQuery, 'asc'); 
         }
 
         $participants = $query->paginate($request->per_page ?? 15);
@@ -554,7 +537,6 @@ class ThesisPlanController extends Controller
 
     /**
      * Thêm một hoặc nhiều sinh viên vào kế hoạch.
-     * Kiểm tra trùng lặp sinh viên trong kế hoạch.
      */
     public function addParticipants(Request $request, KehoachKhoaluan $plan)
     {
@@ -564,7 +546,6 @@ class ThesisPlanController extends Controller
                 'required',
                 'integer',
                 'exists:SINHVIEN,ID_SINHVIEN',
-                // Đảm bảo sinh viên chưa có trong kế hoạch
                 Rule::unique('SINHVIEN_THAMGIA', 'ID_SINHVIEN')->where('ID_KEHOACH', $plan->ID_KEHOACH)
             ],
             'du_dieukien' => 'sometimes|boolean'
@@ -577,7 +558,6 @@ class ThesisPlanController extends Controller
         $now = now();
         $duDieuKien = $request->boolean('du_dieukien', true);
 
-        // Chuẩn bị dữ liệu để insert hàng loạt
         foreach ($validated['student_ids'] as $studentId) {
             $dataToInsert[] = [
                 'ID_KEHOACH' => $plan->ID_KEHOACH,
@@ -612,7 +592,6 @@ class ThesisPlanController extends Controller
 
     /**
      * Xóa sinh viên khỏi kế hoạch.
-     * [HOÀN TÁC] Logic an toàn: Chỉ xóa nếu không ở trong nhóm.
      */
     public function removeParticipant(KehoachKhoaluan $plan, SinhvienThamgia $sinhvienThamgia)
     {
@@ -626,7 +605,6 @@ class ThesisPlanController extends Controller
         } else {
             $studentUserId = $sinhvienThamgia->sinhvien->ID_NGUOIDUNG;
             if ($studentUserId) {
-                // Kiểm tra sinh viên có phải là thành viên của nhóm nào trong kế hoạch này không
                 $isInGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $studentUserId)
                     ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
                     ->exists();
@@ -647,7 +625,6 @@ class ThesisPlanController extends Controller
 
     /**
      * Xóa hàng loạt sinh viên khỏi kế hoạch.
-     * [HOÀN TÁC] Logic an toàn: Chỉ xóa nếu không ở trong nhóm.
      */
     public function bulkRemoveParticipants(Request $request, KehoachKhoaluan $plan)
     {
@@ -665,7 +642,6 @@ class ThesisPlanController extends Controller
         $participantIds = $validated['participant_ids'];
         $count = count($participantIds);
 
-        // Lấy thông tin sinh viên để kiểm tra trạng thái nhóm
         $participantsInfo = SinhvienThamgia::with('sinhvien.nguoidung')
                                             ->whereIn('ID_THAMGIA', $participantIds)
                                             ->get();
@@ -673,7 +649,6 @@ class ThesisPlanController extends Controller
         $studentNamesInGroups = [];
         foreach ($participantsInfo as $participant) {
             if ($participant->sinhvien?->ID_NGUOIDUNG) {
-                 // Kiểm tra sinh viên có thuộc nhóm nào trong kế hoạch này không
                  $isInGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $participant->sinhvien->ID_NGUOIDUNG)
                     ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $plan->ID_KEHOACH))
                     ->exists();
@@ -691,7 +666,6 @@ class ThesisPlanController extends Controller
 
         try {
             DB::beginTransaction();
-            // Tiến hành xóa hàng loạt
             SinhvienThamgia::whereIn('ID_THAMGIA', $participantIds)->delete();
             DB::commit();
             Log::info("Admin user ID {$request->user()->ID_NGUOIDUNG} bulk removed {$count} participants from plan ID {$plan->ID_KEHOACH}.");
@@ -759,27 +733,23 @@ class ThesisPlanController extends Controller
 
     /**
      * Giai đoạn 1: Phân tích file import và trả về header + 5 dòng preview.
-     * Đọc file dựa trên cấu trúc file mẫu (bỏ 9 dòng đầu).
      */
     public function importAnalyze(Request $request, KehoachKhoaluan $plan)
     {
         $request->validate([
-            'file' => 'required|mimes:xlsx,xls,csv|max:10240' // 10MB
+            'file' => 'required|mimes:xlsx,xls,csv|max:10240'
         ]);
 
         try {
-            // Sử dụng toArray để lấy dữ liệu thô
-            $rows = Excel::toArray(new stdClass, $request->file('file'))[0]; // Lấy sheet đầu tiên
+            $rows = Excel::toArray(new stdClass, $request->file('file'))[0]; 
             
-            // Giả định dựa trên file mẫu "KHÓA LUẬN CỬ NHÂN.xls":
-            $headerRowIndex = 9; // Dòng 10 trong file (index 9)
-            $dataRowStartIndex = 10; // Dòng 11 trong file (index 10)
+            $headerRowIndex = 9; 
+            $dataRowStartIndex = 10; 
 
             if (count($rows) < $dataRowStartIndex) {
                 return response()->json(['message' => 'File không có dữ liệu hoặc không đúng định dạng. Dữ liệu cần bắt đầu từ dòng 11.'], 422);
             }
 
-            // Lấy headers
             $rawHeaders = $rows[$headerRowIndex] ?? [];
             $detectedHeaders = [];
 
@@ -788,16 +758,12 @@ class ThesisPlanController extends Controller
             }
 
             foreach ($rawHeaders as $index => $header) {
-                // [ĐÃ SỬA] Quay lại logic (Cột {$index})
                 $headerName = $header ? trim($header) : "(Cột {$index})";
                 
-                // Đổi tên các cột _unnamed_ (thường do Maatwebsite tự thêm nếu header là số)
                 if (preg_match('/_unnamed_(\d+)/', $headerName, $matches)) {
-                    // [ĐÃ SỬA] Dùng $matches[1] (là index)
                     $headerName = "(Cột " . ($matches[1]) . ")";
                 }
                 
-                // Logic chống trùng lặp tên
                 $originalHeaderName = $headerName;
                 $count = 2;
                 while (in_array($headerName, $detectedHeaders)) {
@@ -807,16 +773,13 @@ class ThesisPlanController extends Controller
                 $detectedHeaders[] = $headerName;
             }
 
-            // Lấy 5 dòng preview
             $previewData = array_slice($rows, $dataRowStartIndex, 5);
 
-            // Chuẩn hóa preview data để có số cột bằng header
             $headerCount = count($detectedHeaders);
             $normalizedPreviewData = [];
 
             foreach ($previewData as $row) {
                 $normalizedRow = array_slice($row, 0, $headerCount);
-                // Pad mảng nếu hàng dữ liệu ngắn hơn header
                 if (count($normalizedRow) < $headerCount) {
                     $normalizedRow = array_pad($normalizedRow, $headerCount, null);
                 }
@@ -826,8 +789,8 @@ class ThesisPlanController extends Controller
             return response()->json([
                 'detectedHeaders' => $detectedHeaders,
                 'previewData' => $normalizedPreviewData,
-                'totalRows' => count($rows) - $dataRowStartIndex, // Tổng số dòng dữ liệu
-                'headerRowIndex' => $headerRowIndex, // Gửi về index header
+                'totalRows' => count($rows) - $dataRowStartIndex, 
+                'headerRowIndex' => $headerRowIndex, 
                 'dataRowStartIndex' => $dataRowStartIndex,
             ]);
         } catch (\Exception $e) {
@@ -850,10 +813,10 @@ class ThesisPlanController extends Controller
             'mapping.ngay_sinh' => 'nullable|string',
             'mapping.ten_lop' => 'nullable|string',
             'mapping.nien_khoa' => 'required|array',
-            'mapping.nien_khoa.source' => 'required|string', // 'ten_lop' hoặc 'default'
-            'mapping.nien_khoa.value' => 'required|string', // Tên cột (nếu source=ten_lop) hoặc giá trị (nếu source=default)
-            'mapping.nien_khoa.prefix' => 'nullable|string', // vd: 'K'
-            'mapping.nien_khoa.length' => 'nullable|integer', // vd: 2
+            'mapping.nien_khoa.source' => 'required|string',
+            'mapping.nien_khoa.value' => 'required|string',
+            'mapping.nien_khoa.prefix' => 'nullable|string',
+            'mapping.nien_khoa.length' => 'nullable|integer', 
             'defaults' => 'required|array',
             'defaults.ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
             'defaults.HEDAOTAO' => 'required|string',
@@ -901,7 +864,7 @@ class ThesisPlanController extends Controller
         $validated = $request->validate([
             'validRows' => 'required|array',
             'validRows.*.action' => 'required|in:link,create_and_link',
-            'validRows.*.data' => 'required|array', // BẮT BUỘC CÓ 'data'
+            'validRows.*.data' => 'required|array', 
             'defaults' => 'required|array',
             'defaults.ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
             'defaults.HEDAOTAO' => 'required|string',
@@ -916,7 +879,6 @@ class ThesisPlanController extends Controller
         DB::beginTransaction();
         try {
             foreach ($validRows as $index => $row) {
-                // === KIỂM TRA CẤU TRÚC ROW ===
                 if (!isset($row['action']) || !isset($row['data']) || !is_array($row['data'])) {
                     Log::warning("Invalid row structure at index {$index}", ['row' => $row]);
                     continue;
@@ -925,7 +887,6 @@ class ThesisPlanController extends Controller
                 $action = $row['action'];
                 $data = $row['data'];
     
-                // === XỬ LÝ LINK (sinh viên đã tồn tại) ===
                 if ($action === 'link') {
                     if (!isset($data['ID_SINHVIEN'])) {
                         Log::warning("Missing ID_SINHVIEN in link row", ['data' => $data]);
@@ -942,15 +903,12 @@ class ThesisPlanController extends Controller
                     continue;
                 }
     
-                // === XỬ LÝ TẠO MỚI + LINK ===
                 if ($action === 'create_and_link') {
-                    // Kiểm tra bắt buộc
                     if (empty($data['MA_DINHDANH']) || empty($data['HODEM_VA_TEN'])) {
                         Log::warning("Missing required fields in create_and_link", ['data' => $data]);
                         continue;
                     }
     
-                    // Tạo email nếu chưa có
                     $email = $data['EMAIL'] ?? null;
                     if (!$email) {
                         $email = $this->generateEmail($data['HODEM_VA_TEN'], $data['MA_DINHDANH']);
@@ -959,7 +917,6 @@ class ThesisPlanController extends Controller
                         }
                     }
     
-                    // 1. Tạo Nguoidung
                     $newUser = Nguoidung::create([
                         'MA_DINHDANH' => $data['MA_DINHDANH'],
                         'HODEM_VA_TEN' => $data['HODEM_VA_TEN'],
@@ -971,7 +928,6 @@ class ThesisPlanController extends Controller
                         'TRANGTHAI_KICHHOAT' => true,
                     ]);
     
-                    // 2. Tạo Sinhvien
                     $newSinhvien = $newUser->sinhvien()->create([
                         'ID_CHUYENNGANH' => $defaults['ID_CHUYENNGANH'],
                         'NIENKHOA' => $data['NIENKHOA'] ?? null,
@@ -979,7 +935,6 @@ class ThesisPlanController extends Controller
                         'TEN_LOP' => $data['TEN_LOP'] ?? null,
                     ]);
     
-                    // 3. Liên kết vào kế hoạch
                     SinhvienThamgia::create([
                         'ID_KEHOACH' => $plan->ID_KEHOACH,
                         'ID_SINHVIEN' => $newSinhvien->ID_SINHVIEN,
@@ -991,7 +946,6 @@ class ThesisPlanController extends Controller
                     continue;
                 }
     
-                // Action không hợp lệ
                 Log::warning("Unknown action in row", ['action' => $action]);
             }
     
@@ -1021,7 +975,6 @@ class ThesisPlanController extends Controller
     public function getPlanSettings(KehoachKhoaluan $plan)
     {
         try {
-            // Lấy cài đặt chung từ bảng TYTRONG_DIEM làm fallback
             $defaultTyTrong = TyTrongDiem::getCurrent() ?? (object)[
                 'HUONGDAN' => 0.4,
                 'PHANBIEN' => 0.3,
@@ -1034,7 +987,6 @@ class ThesisPlanController extends Controller
                 'TYTRONG_DIEM_PHANBIEN' => $plan->TYTRONG_DIEM_PHANBIEN ?? $defaultTyTrong->PHANBIEN,
                 'TYTRONG_DIEM_HOIDONG' => $plan->TYTRONG_DIEM_HOIDONG ?? $defaultTyTrong->HOIDONG,
                 
-                // --- THÊM DÒNG QUAN TRỌNG NÀY ---
                 'SETTINGS' => $plan->SETTINGS, 
             ]);
         } catch (\Exception $e) {
@@ -1045,10 +997,8 @@ class ThesisPlanController extends Controller
 
     private function syncMilestonesToSettings(KehoachKhoaluan $plan)
     {
-        // 1. Reload để lấy dữ liệu mốc thời gian mới nhất từ DB
         $plan->load('mocThoigians');
         
-        // 2. Refresh để lấy SETTINGS mới nhất (trong trường hợp vừa update ở trên)
         $plan->refresh();
 
         $milestones = $plan->mocThoigians;
@@ -1059,14 +1009,12 @@ class ThesisPlanController extends Controller
             if (!empty($moc->FEATURE_KEY)) {
                 $key = $moc->FEATURE_KEY;
 
-                // Tạo cấu trúc nếu chưa có
                 if (!isset($currentSettings[$key])) {
                     $currentSettings[$key] = [
                         'manual_override' => null 
                     ];
                 }
 
-                // Parse ngày an toàn
                 try {
                     $newStart = $moc->NGAY_BATDAU ? Carbon::parse($moc->NGAY_BATDAU)->format('Y-m-d\TH:i:s') : null;
                     $newEnd = $moc->NGAY_KETTHUC ? Carbon::parse($moc->NGAY_KETTHUC)->format('Y-m-d\TH:i:s') : null;
@@ -1077,11 +1025,9 @@ class ThesisPlanController extends Controller
                 $oldStart = $currentSettings[$key]['start'] ?? null;
                 $oldEnd = $currentSettings[$key]['end'] ?? null;
 
-                // Nếu ngày thay đổi -> Cập nhật vào Settings
                 if ($oldStart !== $newStart || $oldEnd !== $newEnd) {
                     $currentSettings[$key]['start'] = $newStart;
                     $currentSettings[$key]['end'] = $newEnd;
-                    // Reset override về AUTO để lịch mới có hiệu lực
                     $currentSettings[$key]['manual_override'] = null;
                     
                     $hasChanges = true;
@@ -1090,9 +1036,8 @@ class ThesisPlanController extends Controller
         }
 
         if ($hasChanges) {
-            // Lưu trực tiếp JSON vào DB
             $plan->SETTINGS = $currentSettings;
-            $plan->save(); // Save này chỉ update cột SETTINGS và timestamp
+            $plan->save(); 
             Log::info("Synced milestones to settings for Plan ID: {$plan->ID_KEHOACH}");
         }
     }
@@ -1108,7 +1053,6 @@ class ThesisPlanController extends Controller
         'TYTRONG_DIEM_PHANBIEN' => 'required|numeric|min:0|max:1',
         'TYTRONG_DIEM_HOIDONG' => 'required|numeric|min:0|max:1',
         
-        // --- THÊM DÒNG NÀY ĐỂ NHẬN DỮ LIỆU SETTINGS ---
         'SETTINGS' => 'nullable|array', 
     ]);
 
@@ -1123,7 +1067,6 @@ class ThesisPlanController extends Controller
     }
 
     try {
-        // Lúc này $validated đã chứa 'SETTINGS' nên nó sẽ được lưu vào DB
         $plan->update($validated);
         
         return response()->json([
@@ -1137,7 +1080,6 @@ class ThesisPlanController extends Controller
 }
     // [END THÊM MỚI]
 
-    // === Helper function to generate email ===
     private function generateEmail(string $hoTen, string $mssv, bool $addRandom = false): string
     {
         $parts = explode(' ', $hoTen);

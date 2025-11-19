@@ -8,6 +8,7 @@ use App\Models\Chuyennganh;
 use App\Models\KhoaBomon;
 use App\Models\Sinhvien;
 use App\Models\Giangvien;
+use App\Models\ChucVu;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 
@@ -35,14 +36,16 @@ class NguoidungFactory extends Factory
         return $this->state(function (array $attributes) {
             $sinhVienRole = Vaitro::where('TEN_VAITRO', 'Sinh viên')->first();
             return [
-                'ID_VAITRO' => $sinhVienRole->ID_VAITRO,
+                'ID_VAITRO' => $sinhVienRole->ID_VAITRO ?? 3,
                 'MA_DINHDANH' => '2001' . $this->faker->unique()->numberBetween(200000, 229999),
-                // Ngày sinh đã được đặt ở definition()
             ];
         })->afterCreating(function (Nguoidung $nguoidung) {
+            $chuyenNganhId = Chuyennganh::inRandomOrder()->value('ID_CHUYENNGANH') ?? 
+                             Chuyennganh::factory()->create()->ID_CHUYENNGANH;
+
             Sinhvien::create([
                 'ID_NGUOIDUNG' => $nguoidung->ID_NGUOIDUNG,
-                'ID_CHUYENNGANH' => Chuyennganh::query()->inRandomOrder()->first()->ID_CHUYENNGANH,
+                'ID_CHUYENNGANH' => $chuyenNganhId,
                 'TEN_LOP' => 'DH' . $this->faker->numberBetween(20, 22) . 'CNTT' . $this->faker->numberBetween(1, 5),
                 'NIENKHOA' => 'K' . $this->faker->numberBetween(12, 14),
                 'HEDAOTAO' => $this->faker->randomElement(['Cử nhân', 'Kỹ sư']),
@@ -58,16 +61,25 @@ class NguoidungFactory extends Factory
         return $this->state(function (array $attributes) {
             $giangVienRole = Vaitro::where('TEN_VAITRO', 'Giảng viên')->first();
             return [
-                'ID_VAITRO' => $giangVienRole->ID_VAITRO,
+                'ID_VAITRO' => $giangVienRole->ID_VAITRO ?? 2,
                 'MA_DINHDANH' => 'GV' . $this->faker->unique()->numberBetween(100, 999),
                 'NGAYSINH' => $this->faker->date('Y-m-d', '1995-12-31'),
             ];
         })->afterCreating(function (Nguoidung $nguoidung) {
-            Giangvien::create([
+            $khoaId = KhoaBomon::inRandomOrder()->value('ID_KHOA_BOMON') ?? 1;
+
+            $gv = Giangvien::create([
                 'ID_NGUOIDUNG' => $nguoidung->ID_NGUOIDUNG,
-                'ID_KHOA_BOMON' => KhoaBomon::query()->inRandomOrder()->first()->ID_KHOA_BOMON,
+                'ID_KHOA_BOMON' => $khoaId,
                 'HOCVI' => $this->faker->randomElement(['Thạc sĩ', 'Tiến sĩ']),
             ]);
+
+            if ($this->faker->boolean(10)) {
+                $chucVu = ChucVu::where('MA_CHUCVU', 'TRUONG_BOMON')->first();
+                if ($chucVu) {
+                    $gv->chucvus()->attach($chucVu->ID_CHUCVU);
+                }
+            }
         });
     }
 }

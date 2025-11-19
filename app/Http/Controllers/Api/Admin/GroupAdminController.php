@@ -709,8 +709,8 @@ class GroupAdminController extends Controller
                                 ->pluck('ID_SINHVIEN', 'ID_NGUOIDUNG');
 
         $existingStudentIdsInPlan = SinhvienThamgia::where('ID_KEHOACH', $planId)
-                                        ->whereIn('ID_SINHVIEN', $studentMap->values())
-                                        ->pluck('ID_SINHVIEN');
+                                    ->whereIn('ID_SINHVIEN', $studentMap->values())
+                                    ->pluck('ID_SINHVIEN');
 
         $missingStudentIds = $studentMap->values()->diff($existingStudentIdsInPlan);
 

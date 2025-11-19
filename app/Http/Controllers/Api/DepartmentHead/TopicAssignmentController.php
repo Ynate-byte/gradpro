@@ -19,8 +19,8 @@ class TopicAssignmentController extends BaseTopicAssignmentController
     {
         $currentUser = Auth::user();
 
-        // Check if user is department head
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
@@ -57,8 +57,8 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
         $currentUser = Auth::user();
 
-        // Check if user is department head (Trưởng bộ môn)
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head (Trưởng bộ môn)
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
@@ -119,8 +119,8 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
         $currentUser = Auth::user();
 
-        // Check if user is department head
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
@@ -197,8 +197,8 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
         $currentUser = Auth::user();
 
-        // Check if user is department head
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [UPDATE] Check if user is department head
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 

@@ -10,9 +10,16 @@ abstract class Controller
         return Auth::user()?->vaitro?->TEN_VAITRO;
     }
 
-    protected function getUserPositionName()
+    protected function getUserPositionCodes(): array
     {
-        return Auth::user()?->giangvien?->CHUCVU;
+        $user = Auth::user();
+        if ($user && $user->giangvien) {
+            if (!$user->giangvien->relationLoaded('chucvus')) {
+                $user->giangvien->load('chucvus');
+            }
+            return $user->giangvien->chucvus->pluck('MA_CHUCVU')->toArray();
+        }
+        return [];
     }
 
     protected function isAdmin()
@@ -22,27 +29,28 @@ abstract class Controller
 
     protected function isTruongKhoa()
     {
-        return $this->getUserRoleName() === 'Trưởng khoa' || $this->getUserPositionName() === 'Trưởng khoa';
+        return $this->isAdmin() || in_array('TRUONG_KHOA', $this->getUserPositionCodes());
     }
 
     protected function isGiaoVu()
     {
-        return $this->getUserRoleName() === 'Giáo vụ' || $this->getUserPositionName() === 'Giáo vụ';
+        return $this->isAdmin() || in_array('GIAO_VU', $this->getUserPositionCodes());
+    }
+    
+    protected function isTruongBoMon()
+    {
+        return $this->isAdmin() || in_array('TRUONG_BOMON', $this->getUserPositionCodes());
     }
 
     protected function canCreatePlan(): bool
     {
-        if (!Auth::check()) {
-            return false;
-        }
+        if (!Auth::check()) return false;
         return $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
     }
 
     protected function canApproveSubmissions(): bool
     {
-        if (!Auth::check()) {
-            return false;
-        }
+        if (!Auth::check()) return false;
         return $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
     }
 }

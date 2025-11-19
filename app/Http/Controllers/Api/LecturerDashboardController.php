@@ -21,12 +21,10 @@ class LecturerDashboardController extends Controller
         }
         $giangvienId = $user->giangvien->ID_GIANGVIEN;
 
-        // 1. Đếm số nhóm đang hướng dẫn (Đang thực hiện)
         $nhomHuongDanCount = PhancongDetaiNhom::where('ID_GVHD', $giangvienId)
             ->where('TRANGTHAI', 'Đang thực hiện')
             ->count();
 
-        // 2. Đếm số hội đồng tham gia (Chưa diễn ra)
         $hoiDongCount = $user->giangvien->hoidongs()
             ->where(function ($query) {
                 $query->where('NGAY_BAOCAO', '>', Carbon::today())
@@ -34,7 +32,6 @@ class LecturerDashboardController extends Controller
             })
             ->count();
 
-        // 3. Đếm lịch họp sắp tới (Trong 7 ngày tới)
         $lichHopCount = LichHop::where('THOIGIAN_BATDAU', '>=', Carbon::now())
             ->where('THOIGIAN_BATDAU', '<=', Carbon::now()->addDays(7))
             ->where('TRANGTHAI', 'Đã lên lịch')
@@ -43,7 +40,6 @@ class LecturerDashboardController extends Controller
             })
             ->count();
 
-        // 4. Đếm công việc cần review (Cột "Chờ Review")
         $taskReviewCount = CongViec::where('TRANGTHAI', 'Hoạt động')
             ->whereHas('cot', fn($q) => $q->where('TEN_COT', 'Chờ Review'))
             ->whereHas('nhom.phancongDetaiNhom', function ($q) use ($giangvienId) {

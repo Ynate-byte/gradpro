@@ -21,6 +21,7 @@ class SubmissionController extends Controller
         $user = Auth::user();
         
         // 1. Quyền quản trị cấp cao (duyệt tất cả)
+        // Các hàm này đã được cập nhật trong Base Controller để check bảng GIANGVIEN_CHUCVU
         if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
             return true;
         }
@@ -55,13 +56,8 @@ class SubmissionController extends Controller
                 'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN',
                 'phancong.nhom:ID_NHOM,TEN_NHOM',
                 'phancong.detai:ID_DETAI,TEN_DETAI',
-                
-                // [SỬA ĐỔI] Load thêm thông tin người dùng của GVHD để hiển thị tên
                 'phancong.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN' 
             ]);
-
-            // ... (Giữ nguyên phần logic lọc quyền, filter, sort) ...
-            // (Code bên dưới không thay đổi so với phiên bản trước)
 
             if (!($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa())) {
                 if ($user->giangvien) {
@@ -112,7 +108,6 @@ class SubmissionController extends Controller
      */
     public function show(NopSanpham $submission)
     {
-        // Kiểm tra quyền xem chi tiết
         if (!$this->checkApprovalPermission($submission)) {
              return response()->json(['message' => 'Bạn không có quyền xem phiếu nộp này.'], 403);
         }
@@ -140,7 +135,6 @@ class SubmissionController extends Controller
         }
 
         DB::transaction(function () use ($submission) {
-            // 1. Cập nhật phiếu nộp
             $submission->update([
                 'TRANGTHAI' => 'Đã xác nhận',
                 'ID_NGUOI_XACNHAN' => Auth::id(),
@@ -148,7 +142,6 @@ class SubmissionController extends Controller
                 'PHANHOI_ADMIN' => null,
             ]);
 
-            // 2. Cập nhật trạng thái phân công chính của nhóm
             $submission->phancong()->update(['TRANGTHAI' => 'Đã hoàn thành']);
         });
 
@@ -190,8 +183,6 @@ class SubmissionController extends Controller
      */
     public function getSubmissionsForPhancong(Request $request, PhancongDetaiNhom $phancong)
     {
-        // Giả lập một object submission ảo để dùng hàm checkApprovalPermission
-        // Vì hàm check cần relation phancong, ta truyền object có property phancong
         $dummySubmission = new NopSanpham();
         $dummySubmission->setRelation('phancong', $phancong);
 

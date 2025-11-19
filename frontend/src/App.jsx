@@ -80,20 +80,29 @@ function PublicRoute({ children }) {
 function App() {
   const { user } = useAuth();
 
-  // ----- Logic kiểm tra quyền -----
+  // ----- Logic kiểm tra quyền (Đã cập nhật cho N-N Relation) -----
   const role = user?.vaitro?.TEN_VAITRO;
-  const position = user?.giangvien?.CHUCVU;
+  
+  // Lấy danh sách mã chức vụ (nếu có)
+  // Backend trả về user.giangvien.chucvus = [{ MA_CHUCVU: 'TRUONG_KHOA', ... }, ...]
+  const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
 
   const isAdmin = role === 'Admin';
-  const isTruongKhoa = role === 'Trưởng khoa' || position === 'Trưởng khoa';
-  const isGiaoVu = role === 'Giáo vụ' || position === 'Giáo vụ';
+  
+  // Kiểm tra quyền dựa trên Role HOẶC Mã Chức vụ
+  const isTruongKhoa = isAdmin || role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
+  const isGiaoVu = isAdmin || role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
+  const isTruongBoMon = isAdmin || positionCodes.includes('TRUONG_BOMON');
+  
   const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role); // Giảng viên thường
   const isSinhVien = role === 'Sinh viên';
 
   // Quyền xem menu Admin (Admin, Trưởng khoa, Giáo vụ)
   const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu;
+  
   // Quyền xem các mục của Giảng viên (GV, TK, GVụ, Admin)
   const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
+  
   // Quyền chấm điểm (GV, TK, GVụ, Admin)
   const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
@@ -126,7 +135,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          {/* [ĐÃ SỬA] Route trang chủ động theo vai trò */}
+          {/* Route trang chủ động theo vai trò */}
           <Route 
             index 
             element={
@@ -179,7 +188,7 @@ function App() {
           )}
 
           {/* Routes dành cho Trưởng bộ môn */}
-          {position === 'Trưởng bộ môn' && (
+          {isTruongBoMon && (
             <>
               <Route path="department-head/topic-reviewer-assignment" element={<TopicReviewerAssignmentPage />} />
             </>

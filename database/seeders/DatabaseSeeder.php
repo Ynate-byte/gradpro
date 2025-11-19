@@ -9,7 +9,8 @@ class DatabaseSeeder extends Seeder
     {
         $this->call([
             BachelorThesisTemplateSeeder::class, 
-            VaitroSeeder::class,                  
+            VaitroSeeder::class,
+            ChucVuSeeder::class,       
             ChuyennganhSeeder::class,             
             KhoaBomonSeeder::class,               
             NguoidungSeeder::class,
@@ -17,9 +18,9 @@ class DatabaseSeeder extends Seeder
             
             // 2. Dữ liệu nghiệp vụ
             KehoachKhoaluanSeeder::class,
-            SinhvienThamgiaSeeder::class,     
-            DetaiSeeder::class,               
-            GroupSeeder::class,               
+            SinhvienThamgiaSeeder::class,      
+            DetaiSeeder::class,                
+            GroupSeeder::class,                
             
             // 3. Dữ liệu liên kết
             PhancongDetaiNhomSeeder::class, 

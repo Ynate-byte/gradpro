@@ -26,14 +26,20 @@ export function AppSidebar() {
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Lấy thông tin User ---
+    // --- Lấy thông tin User (Cập nhật) ---
     const role = user?.vaitro?.TEN_VAITRO;
-    const position = user?.giangvien?.CHUCVU;
+    
+    // Lấy mảng chức vụ từ quan hệ mới
+    const positions = user?.giangvien?.chucvus || [];
+    const positionCodes = positions.map(p => p.MA_CHUCVU);
+    const positionNames = positions.map(p => p.TEN_CHUCVU);
 
-    // --- Logic phân quyền ---
+    // --- Logic phân quyền (Cập nhật) ---
     const isAdmin = role === 'Admin';
-    const isTruongKhoa = role === 'Trưởng khoa' || position === 'Trưởng khoa';
-    const isGiaoVu = role === 'Giáo vụ' || position === 'Giáo vụ';
+    const isTruongKhoa = role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
+    const isGiaoVu = role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
+    const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
+    
     const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
     const isSinhVien = role === 'Sinh viên';
 
@@ -87,10 +93,12 @@ export function AppSidebar() {
                             { href: "/lecturer/submissions", title: "Duyệt nộp bài" },
                             {
                                 href: "/lecturer/quota-management",
-                                title: position === 'Trưởng bộ môn' ? "Phân công (GV)" : "Thông tin Quota",
+                                // Hiển thị tiêu đề linh hoạt hơn
+                                title: isTruongBoMon ? "Phân công (GV)" : "Thông tin Quota",
                                 hidden: isSinhVien || isAdmin
                             },
-                            ...(position === 'Trưởng bộ môn' ? [{
+                            // Sử dụng cờ isTruongBoMon đã tính toán
+                            ...(isTruongBoMon ? [{
                                 href: "/department-head/topic-reviewer-assignment",
                                 title: "Phân công Người Góp ý"
                             }] : []),
@@ -211,14 +219,14 @@ export function AppSidebar() {
         return null;
     };
 
-    // --- Logic hiển thị tiêu đề user ---
+    // --- Logic hiển thị tiêu đề user (Cập nhật) ---
     const getUserDisplayTitle = () => {
-        // Nếu vai trò là Giảng viên VÀ có chức vụ -> Hiển thị chức vụ (VD: Trưởng bộ môn)
-        if (role === 'Giảng viên' && position) {
-            return position;
+        // Nếu là Giảng viên và có chức vụ -> Hiển thị danh sách chức vụ
+        if (role === 'Giảng viên' && positionNames.length > 0) {
+            return positionNames.join(', '); // VD: "Trưởng bộ môn, Giáo vụ"
         }
-        // Các trường hợp còn lại (Admin, Sinh viên, GV không chức vụ) -> Hiển thị vai trò
-        return role || position || '...';
+        // Các trường hợp còn lại (Admin, Sinh viên, GV thường) -> Hiển thị vai trò
+        return role || '...';
     };
 
     return (

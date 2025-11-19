@@ -10,8 +10,6 @@ use App\Models\Nguoidung;
 
 class AuthController extends Controller
 {
-    // QUẢN LÝ XÁC THỰC (ĐĂNG NHẬP / ĐĂNG XUẤT)
-
     /**
      * Xử lý đăng nhập của người dùng.
      */
@@ -44,7 +42,7 @@ class AuthController extends Controller
             'message' => 'Đăng nhập thành công',
             'access_token' => $token,
             'token_type' => 'Bearer',
-            'user' => $user->load('vaitro', 'giangvien', 'sinhvien')
+            'user' => $user->load(['vaitro', 'giangvien.chucvus', 'sinhvien.chuyennganh'])
         ]);
     }
 

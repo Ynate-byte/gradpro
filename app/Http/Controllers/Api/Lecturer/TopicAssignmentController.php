@@ -19,39 +19,39 @@ use Illuminate\Support\Facades\Validator;
 class TopicAssignmentController extends Controller
 {
     /**
-     * Get lecturers in same department with topic assignment info
+     * Lấy danh sách giảng viên trong cùng bộ môn với thông tin phân công đề tài
      */
     public function getLecturers(Request $request)
     {
         $planId = $request->query('plan_id');
 
         if (!$planId) {
-            return response()->json(['message' => 'Plan ID is required'], 400);
+            return response()->json(['message' => 'Yêu cầu ID kế hoạch'], 400);
         }
 
         $currentUser = Auth::user();
 
-        // Check if user is department head (Trưởng bộ môn)
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [CẬP NHẬT] Kiểm tra quyền Trưởng bộ môn (Sử dụng logic N-N)
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
-        // Get lecturer's department
+        // Lấy bộ môn của giảng viên
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        // Get all lecturers in the same department
+        // Lấy tất cả giảng viên trong cùng bộ môn
         $lecturers = Giangvien::where('ID_KHOA_BOMON', $departmentId)
             ->with(['nguoidung'])
             ->get();
 
         $result = $lecturers->map(function($lecturer) use ($planId) {
-            // Get current topic quota assignment
+            // Lấy thông tin quota phân công đề tài hiện tại
             $quotaAssignment = PhancongGvDetai::where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
                 ->whereNull('ID_DETAI')
                 ->where('TRANGTHAI', 'Đang phân công')
                 ->first();
 
-            // Get actual assigned topics count for this plan
+            // Lấy số lượng đề tài thực tế đã được phân công cho kế hoạch này
             $actualAssigned = PhancongGvDetai::where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
                 ->whereNotNull('ID_DETAI')
                 ->where('TRANGTHAI', 'Đang phân công')
@@ -60,7 +60,7 @@ class TopicAssignmentController extends Controller
                 })
                 ->count();
 
-            // Get topics created by this lecturer for this plan (only count approved or pending, not draft)
+            // Lấy số lượng đề tài do giảng viên này tạo (chỉ đếm Đã duyệt hoặc Chờ duyệt)
             $topicsCreated = Detai::where('ID_KEHOACH', $planId)
                 ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
                 ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt'])
@@ -74,7 +74,7 @@ class TopicAssignmentController extends Controller
                 'TEN_GIANGVIEN' => $lecturer->nguoidung->HODEM_VA_TEN,
                 'EMAIL' => $lecturer->nguoidung->EMAIL,
                 'HOCVI' => $lecturer->HOCVI,
-                'CHUCVU' => $lecturer->CHUCVU,
+                // 'CHUCVU' => $lecturer->CHUCVU, // Cột này đã xóa
                 'SO_NHOM_TOIDA' => $lecturer->SO_NHOM_TOIDA,
                 'quota_assigned' => $quotaAssigned,
                 'actual_assigned' => $actualAssigned,
@@ -92,7 +92,7 @@ class TopicAssignmentController extends Controller
     }
 
     /**
-     * Assign topic quota to lecturer in same department
+     * Phân công quota đề tài cho giảng viên trong cùng bộ môn
      */
     public function assignTopicQuota(Request $request)
     {
@@ -108,32 +108,32 @@ class TopicAssignmentController extends Controller
 
         $currentUser = Auth::user();
 
-        // Check if user is department head (Trưởng bộ môn)
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [CẬP NHẬT] Kiểm tra quyền Trưởng bộ môn
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
-        // Get lecturer's department
+        // Lấy bộ môn của giảng viên hiện tại
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        // Check if target lecturer belongs to the same department
+        // Kiểm tra xem giảng viên được gán có thuộc cùng bộ môn không
         $lecturer = Giangvien::findOrFail($request->ID_GIANGVIEN);
         if ($lecturer->ID_KHOA_BOMON !== $departmentId) {
-            return response()->json(['message' => 'Lecturer does not belong to your department'], 403);
+            return response()->json(['message' => 'Giảng viên không thuộc bộ môn của bạn'], 403);
         }
 
         DB::transaction(function () use ($request, $currentUser) {
-            // Check if lecturer already has topic quota assigned
+            // Kiểm tra xem giảng viên đã có quota phân công chưa
             $existingQuota = PhancongGvDetai::where('ID_GIANGVIEN', $request->ID_GIANGVIEN)
                 ->whereNull('ID_DETAI')
                 ->first();
 
             if ($existingQuota) {
                 if ($request->SO_DETAI_PHANCONG == 0) {
-                    // Remove quota if set to 0
+                    // Xóa quota nếu đặt về 0
                     $existingQuota->delete();
                 } else {
-                    // Update existing quota
+                    // Cập nhật quota hiện có
                     $existingQuota->update([
                         'SO_DETAI_PHANCONG' => $request->SO_DETAI_PHANCONG,
                         'GHICHU' => $request->GHICHU,
@@ -141,7 +141,7 @@ class TopicAssignmentController extends Controller
                     ]);
                 }
             } else if ($request->SO_DETAI_PHANCONG > 0) {
-                // Create new quota assignment
+                // Tạo phân công quota mới
                 PhancongGvDetai::create([
                     'ID_GIANGVIEN' => $request->ID_GIANGVIEN,
                     'SO_DETAI_PHANCONG' => $request->SO_DETAI_PHANCONG,
@@ -150,7 +150,8 @@ class TopicAssignmentController extends Controller
                     'TRANGTHAI' => 'Đang phân công',
                 ]);
 
-                // Send notification to lecturer
+                // Gửi thông báo cho giảng viên
+                $lecturer = Giangvien::find($request->ID_GIANGVIEN);
                 if ($lecturer && $lecturer->nguoidung) {
                     Notification::create([
                         'user_id' => $lecturer->nguoidung->ID_NGUOIDUNG,
@@ -168,7 +169,7 @@ class TopicAssignmentController extends Controller
     }
 
     /**
-     * Auto assign topic quotas to lecturers in same department
+     * Tự động phân công quota đề tài cho giảng viên trong cùng bộ môn
      */
     public function autoAssignTopicQuotas(Request $request)
     {
@@ -182,25 +183,25 @@ class TopicAssignmentController extends Controller
 
         $currentUser = Auth::user();
 
-        // Check if user is department head (Trưởng bộ môn)
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
+        // [CẬP NHẬT] Kiểm tra quyền Trưởng bộ môn
+        if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
-        // Get lecturer's department
+        // Lấy bộ môn của giảng viên
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
         $planId = $request->ID_KEHOACH;
 
         try {
             DB::transaction(function () use ($planId, $departmentId, $currentUser) {
-                // Get all lecturers in the department
+                // Lấy danh sách giảng viên trong bộ môn
                 $lecturers = Giangvien::where('ID_KHOA_BOMON', $departmentId)->get();
 
                 if ($lecturers->isEmpty()) {
                     throw new \Exception('Không có giảng viên nào trong bộ môn');
                 }
 
-                // Get total groups in this department for this plan
+                // Lấy tổng số nhóm trong bộ môn cho kế hoạch này
                 $totalGroups = Nhom::where('ID_KEHOACH', $planId)
                     ->where('ID_KHOA_BOMON', $departmentId)
                     ->count();
@@ -209,17 +210,17 @@ class TopicAssignmentController extends Controller
                     throw new \Exception('Không có nhóm nào trong bộ môn cho kế hoạch này');
                 }
 
-                // Calculate topics needed (1.5 times groups)
+                // Tính số đề tài cần thiết (gấp 1.5 lần số nhóm)
                 $totalTopics = ceil($totalGroups * 1.5);
 
-                // Calculate topics per lecturer (equal distribution)
+                // Tính số đề tài mỗi giảng viên (chia đều)
                 $topicsPerLecturer = floor($totalTopics / $lecturers->count());
                 $remainingTopics = $totalTopics % $lecturers->count();
 
                 $assignments = [];
 
                 foreach ($lecturers as $index => $lecturer) {
-                    // Add remaining topics to first lecturers
+                    // Chia phần dư cho những người đầu danh sách
                     $lecturerTopics = $topicsPerLecturer + ($index < $remainingTopics ? 1 : 0);
 
                     $assignments[] = [
@@ -228,22 +229,22 @@ class TopicAssignmentController extends Controller
                     ];
                 }
 
-                // Apply assignments to lecturers
+                // Áp dụng phân công
                 foreach ($assignments as $assignment) {
-                    // Check if lecturer already has quota
+                    // Kiểm tra xem giảng viên đã có quota chưa
                     $existingQuota = PhancongGvDetai::where('ID_GIANGVIEN', $assignment['lecturer_id'])
                         ->whereNull('ID_DETAI')
                         ->first();
 
                     if ($existingQuota) {
-                        // Update existing quota
+                        // Cập nhật quota hiện có
                         $existingQuota->update([
                             'SO_DETAI_PHANCONG' => $assignment['quota'],
                             'GHICHU' => 'Tự động phân công từ giảng viên',
                             'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
                         ]);
                     } else {
-                        // Create new quota assignment
+                        // Tạo phân công quota mới
                         PhancongGvDetai::create([
                             'ID_GIANGVIEN' => $assignment['lecturer_id'],
                             'SO_DETAI_PHANCONG' => $assignment['quota'],
@@ -261,57 +262,7 @@ class TopicAssignmentController extends Controller
         }
     }
 
-    /**
-     * Get topics available for assignment in department
-     */
-    public function getAvailableTopics(Request $request)
-    {
-        $planId = $request->query('plan_id');
-
-        if (!$planId) {
-            return response()->json(['message' => 'Plan ID is required'], 400);
-        }
-
-        $currentUser = Auth::user();
-
-        // Check if user is department head (Trưởng bộ môn)
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
-            return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
-        }
-
-        // Get lecturer's department
-        $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
-
-        // Get approved topics from this department that are not yet assigned
-        $topics = Detai::where('ID_KEHOACH', $planId)
-            ->where('TRANGTHAI', 'Đã duyệt')
-            ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                $q->where('ID_KHOA_BOMON', $departmentId);
-            })
-            ->whereDoesntHave('phancongGvDetai', function($q) {
-                $q->where('TRANGTHAI', 'Đang phân công');
-            })
-            ->with(['nguoiDexuat.nguoidung', 'chuyennganh'])
-            ->get();
-
-        $result = $topics->map(function($topic) {
-            return [
-                'ID_DETAI' => $topic->ID_DETAI,
-                'TEN_DETAI' => $topic->TEN_DETAI,
-                'MO_TA' => $topic->MO_TA,
-                'NGUOI_DE_XUAT' => $topic->nguoiDexuat->nguoidung->HODEM_VA_TEN ?? 'N/A',
-                'CHUYEN_NGANH' => $topic->chuyennganh->TEN_CHUYEN_NGANH ?? 'N/A',
-                'NGAY_TAO' => $topic->NGAY_TAO,
-            ];
-        });
-
-        return response()->json($result);
-    }
-
-    /**
-     * Assign specific topic to lecturer in same department
-     */
-    public function assignSpecificTopic(Request $request)
+    public function assignTopicToLecturer(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'ID_DETAI' => 'required|exists:DETAI,ID_DETAI',
@@ -324,78 +275,151 @@ class TopicAssignmentController extends Controller
         }
 
         $currentUser = Auth::user();
-
-        // Check if user is department head (Trưởng bộ môn)
-        if (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng bộ môn') {
-            return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
+        
+        // [CẬP NHẬT] Sử dụng helper isAdmin() thay vì check chuỗi cứng
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        // Get lecturer's department
-        $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
-
-        // Check if target lecturer belongs to the same department
+        $topic = Detai::findOrFail($request->ID_DETAI);
         $lecturer = Giangvien::findOrFail($request->ID_GIANGVIEN);
-        if ($lecturer->ID_KHOA_BOMON !== $departmentId) {
-            return response()->json(['message' => 'Lecturer does not belong to your department'], 403);
+
+        // 1. Kiểm tra nếu giảng viên đã là người đề xuất (Tự hướng dẫn là bình thường)
+        if ($topic->ID_NGUOI_DEXUAT != $lecturer->ID_GIANGVIEN) {
+             // 2. Kiểm tra giới hạn quota (nếu cần thiết, hiện tại bỏ qua cho admin)
         }
 
-        // Check if topic belongs to this department
-        $topic = Detai::with('nguoiDexuat')->findOrFail($request->ID_DETAI);
-        if ($topic->nguoiDexuat->ID_KHOA_BOMON !== $departmentId) {
-            return response()->json(['message' => 'Topic does not belong to your department'], 403);
-        }
+        DB::transaction(function () use ($request, $currentUser, $topic) {
+            
+            // Kiểm tra xem đề tài đã được phân công chưa (phân công giám sát)
+            $existingAssignment = PhancongGvDetai::where('ID_DETAI', $request->ID_DETAI)
+                                                ->whereNotNull('ID_DETAI') // Lọc bỏ quota
+                                                ->first();
 
-        // Check if topic is already assigned
-        $existingAssignment = PhancongGvDetai::where('ID_DETAI', $request->ID_DETAI)
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->first();
-
-        if ($existingAssignment) {
-            return response()->json(['message' => 'Topic is already assigned'], 409);
-        }
-
-        // Check lecturer's remaining quota
-        $quotaAssignment = PhancongGvDetai::where('ID_GIANGVIEN', $request->ID_GIANGVIEN)
-            ->whereNull('ID_DETAI')
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->first();
-
-        $actualAssigned = PhancongGvDetai::where('ID_GIANGVIEN', $request->ID_GIANGVIEN)
-            ->whereNotNull('ID_DETAI')
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->count();
-
-        $remainingQuota = ($quotaAssignment ? $quotaAssignment->SO_DETAI_PHANCONG : 0) - $actualAssigned;
-
-        if ($remainingQuota <= 0) {
-            return response()->json(['message' => 'Lecturer has no remaining quota'], 400);
-        }
-
-        DB::transaction(function () use ($request, $currentUser, $lecturer, $topic) {
-            // Create topic assignment
-            PhancongGvDetai::create([
-                'ID_GIANGVIEN' => $request->ID_GIANGVIEN,
-                'ID_DETAI' => $request->ID_DETAI,
-                'SO_DETAI_PHANCONG' => 1, // Specific topic assignment
-                'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
-                'GHICHU' => $request->GHICHU,
-                'TRANGTHAI' => 'Đang phân công',
-            ]);
-
-            // Send notification to lecturer
-            if ($lecturer && $lecturer->nguoidung) {
-                Notification::create([
-                    'user_id' => $lecturer->nguoidung->ID_NGUOIDUNG,
-                    'type' => 'topic_assigned',
-                    'data' => [
-                        'message' => "Bạn đã được phân công hướng dẫn đề tài: {$topic->TEN_DETAI}",
-                        'topic_name' => $topic->TEN_DETAI,
-                        'topic_id' => $topic->ID_DETAI,
-                    ],
+            if ($existingAssignment) {
+                // Cập nhật phân công hiện có
+                $existingAssignment->update([
+                    'ID_GVHD' => $request->ID_GIANGVIEN,
+                    'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                    'GHICHU' => $request->GHICHU ?? 'Admin updated supervisor manually',
+                    'TRANGTHAI' => 'Đang phân công',
                 ]);
+            } else {
+                // Tạo phân công mới
+                PhancongGvDetai::create([
+                    'ID_DETAI' => $request->ID_DETAI,
+                    'ID_GVHD' => $request->ID_GIANGVIEN,
+                    'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                    'GHICHU' => $request->GHICHU,
+                    'SO_DETAI_PHANCONG' => 1, // Coi như 1 đề tài
+                    'TRANGTHAI' => 'Đang phân công',
+                ]);
+            }
+
+            // Đảm bảo trạng thái đề tài phản ánh khả năng được phân công
+            if ($topic->TRANGTHAI === 'Nháp') {
+                $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
             }
         });
 
-        return response()->json(['message' => 'Phân công đề tài thành công']);
+        return response()->json(['message' => "Đề tài '{$topic->TEN_DETAI}' đã được gán GVHD thành công."]);
+    }
+
+    /**
+     * Lấy tất cả các phân công đề tài
+     */
+    public function getAssignments(Request $request)
+    {
+        $query = PhancongGvDetai::with([
+            'detai.nguoiDexuat.nguoidung',
+            'detai.chuyennganh',
+            'detai.kehoachKhoaluan',
+            'giangvien.nguoidung',
+            'giangvien.khoabomon',
+            'nguoiPhancong'
+        ]);
+
+        // Lọc theo giảng viên
+        if ($request->has('lecturer_id')) {
+            $query->where('ID_GIANGVIEN', $request->lecturer_id);
+        }
+
+        // Lọc theo kế hoạch
+        if ($request->has('plan_id')) {
+            $query->whereHas('detai', function($q) use ($request) {
+                $q->where('ID_KEHOACH', $request->plan_id);
+            });
+        }
+
+        // Lọc theo trạng thái
+        if ($request->has('status')) {
+            $query->where('TRANGTHAI', $request->status);
+        }
+
+        // Tìm kiếm theo tên đề tài hoặc tên giảng viên
+        if ($request->has('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->whereHas('detai', function($subQ) use ($search) {
+                    $subQ->where('TEN_DETAI', 'like', '%' . $search . '%');
+                })->orWhereHas('giangvien.nguoidung', function($subQ) use ($search) {
+                    $subQ->where('HODEM_VA_TEN', 'like', '%' . $search . '%');
+                });
+            });
+        }
+
+        $assignments = $query->orderBy('NGAY_PHANCONG', 'desc')->paginate(10);
+
+        return response()->json($assignments);
+    }
+
+    /**
+     * Cập nhật trạng thái phân công
+     */
+    public function updateAssignmentStatus(Request $request, $assignmentId)
+    {
+        $validator = Validator::make($request->all(), [
+            'TRANGTHAI' => 'required|in:Đang phân công,Hoàn thành,Ngừng phân công',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $currentUser = Auth::user();
+        
+        // [CẬP NHẬT] Sử dụng helper isAdmin()
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $assignment = PhancongGvDetai::findOrFail($assignmentId);
+        $assignment->update(['TRANGTHAI' => $request->TRANGTHAI]);
+
+        return response()->json(['message' => 'Cập nhật trạng thái thành công']);
+    }
+
+    /**
+     * Xóa phân công
+     */
+    public function removeAssignment($assignmentId)
+    {
+        $currentUser = Auth::user();
+        
+        // [CẬP NHẬT] Sử dụng helper isAdmin()
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $assignment = PhancongGvDetai::findOrFail($assignmentId);
+
+        // Kiểm tra nếu phân công đề tài đã có nhóm đăng ký
+        if ($assignment->ID_DETAI && $assignment->detai->phancongDetaiNhom()->exists()) {
+            return response()->json(['message' => 'Không thể hủy phân công vì đề tài đã có nhóm đăng ký'], 409);
+        }
+
+        $assignment->delete();
+
+        return response()->json(['message' => 'Hủy phân công thành công']);
     }
 }

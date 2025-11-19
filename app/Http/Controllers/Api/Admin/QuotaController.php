@@ -140,15 +140,10 @@ class QuotaController extends Controller
 
         $currentUser = Auth::user();
 
-        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
-        $roleName = $currentUser->vaitro->TEN_VAITRO;
-        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
-
-        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
-        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
+        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-        // [HẾT SỬA ĐỔI]
 
         return $this->updateSingleDepartment($request, $currentUser);
     }
@@ -191,8 +186,12 @@ class QuotaController extends Controller
     {
         try {
             $department = KhoaBomon::find($departmentId);
+            
+            // [SỬA ĐỔI] Tìm Trưởng bộ môn qua bảng quan hệ N-N
             $departmentHead = Giangvien::where('ID_KHOA_BOMON', $departmentId)
-                ->where('CHUCVU', 'Trưởng bộ môn')
+                ->whereHas('chucvus', function ($q) {
+                    $q->where('MA_CHUCVU', 'TRUONG_BOMON');
+                })
                 ->first();
 
             if ($departmentHead && $departmentHead->nguoidung) {
@@ -224,15 +223,10 @@ class QuotaController extends Controller
 
         $currentUser = Auth::user();
         
-        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
-        $roleName = $currentUser->vaitro->TEN_VAITRO;
-        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
-
-        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
-        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
+        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-        // [HẾT SỬA ĐỔI]
 
         $planId = $request->ID_KEHOACH;
 
@@ -338,15 +332,10 @@ class QuotaController extends Controller
 
         $currentUser = Auth::user();
 
-        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
-        $roleName = $currentUser->vaitro->TEN_VAITRO;
-        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
-
-        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
-        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
+        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-        // [HẾT SỬA ĐỔI]
 
         $assignment = QuotaGiangvien::findOrFail($assignmentId);
         $assignment->update(['TRANGTHAI' => $request->TRANGTHAI]);
@@ -358,15 +347,10 @@ class QuotaController extends Controller
     {
         $currentUser = Auth::user();
 
-        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
-        $roleName = $currentUser->vaitro->TEN_VAITRO;
-        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
-
-        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
-        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
+        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
-        // [HẾT SỬA ĐỔI]
 
         $assignment = QuotaGiangvien::findOrFail($assignmentId);
         if (!$assignment->canDelete()) {

@@ -264,7 +264,7 @@ class NhomController extends Controller
         return response()->json($nhoms);
     }
 
-    // QUẢN LÝ YÊU CẦU VÀ LỜI MỜI
+    // QUẢN lý YÊU CẦU VÀ LỜI MỜI
 
     /**
      * Gửi yêu cầu xin tham gia một nhóm.
@@ -722,7 +722,7 @@ class NhomController extends Controller
 
         // [MỚI] Kiểm tra thời gian nộp bài (SV_NOP_BAI)
         // Admin/Giáo vụ được phép nộp hộ (nếu logic frontend cho phép, ở đây backend cứ mở cổng bypass)
-        if (!$this->isAdmin() && !$this->isGiaoVu()) {
+        if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
              $phancong->load('nhom.kehoach');
              if (!$phancong->nhom->kehoach->isFeatureActive('SV_NOP_BAI')) {
                   return response()->json(['message' => 'Cổng nộp bài hiện chưa mở hoặc đã đóng.'], 403);

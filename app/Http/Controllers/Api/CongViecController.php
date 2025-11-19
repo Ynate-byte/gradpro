@@ -34,6 +34,7 @@ class CongViecController extends Controller
         $isGvhd = $user->giangvien && $nhom->phancongDetaiNhom?->ID_GVHD === $user->giangvien->ID_GIANGVIEN;
         
         // Kiểm tra Admin/Quản lý khoa
+        // [LƯU Ý] Các hàm này đã được cập nhật ở Base Controller để check bảng quan hệ N-N
         $isAdmin = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
 
         // 1. canView: Quyền cơ bản (Xem, Tạo, Sửa nội dung, Chuyển trạng thái, Checklist, Comment)

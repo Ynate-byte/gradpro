@@ -8,8 +8,6 @@ use Illuminate\Http\Request;
 
 class ThesisPlanTemplateController extends Controller
 {
-    // QUẢN LÝ MẪU KẾ HOẠCH (CHO SINH VIÊN)
-
     /**
      * Lấy danh sách các bản mẫu (chỉ tên và ID).
      */

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 use App\Models\LoimoiNhom;
 use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
-use App\Models\KehoachKhoaluan; // Thêm model
+use App\Models\KehoachKhoaluan;
 
 class InvitationController extends Controller
 {
@@ -53,11 +53,9 @@ class InvitationController extends Controller
         return DB::transaction(function () use ($loimoi, $user) {
             $nhom = Nhom::where('ID_NHOM', $loimoi->ID_NHOM)->lockForUpdate()->first();
             
-            // [MỚI] Kiểm tra Feature Flag SV_TAO_NHOM
             $plan = KehoachKhoaluan::find($nhom->ID_KEHOACH);
             if ($plan && !$plan->isFeatureActive('SV_TAO_NHOM')) {
-                 // Chỉ cho phép Admin bypass (nhưng InvitationController thường do SV gọi)
-                 if (!$this->isAdmin() && !$this->isGiaoVu()) {
+                 if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
                      return response()->json(['message' => 'Giai đoạn tham gia nhóm đã kết thúc.'], 403);
                  }
             }
@@ -72,6 +70,7 @@ class InvitationController extends Controller
             ThanhvienNhom::create([
                 'ID_NHOM' => $nhom->ID_NHOM,
                 'ID_NGUOIDUNG' => $user->ID_NGUOIDUNG,
+                'NGAY_VAONHOM' => now(),
             ]);
             
             // Cập nhật số lượng thành viên và trạng thái nhóm nếu cần
@@ -84,7 +83,6 @@ class InvitationController extends Controller
             // Cập nhật trạng thái lời mời hiện tại là "Chấp nhận"
             $loimoi->update(['TRANGTHAI' => 'Chấp nhận', 'NGAY_PHANHOI' => now()]);
             
-            // Tự động từ chối tất cả các lời mời đang chờ khác của người dùng
             LoimoiNhom::where('ID_NGUOI_DUOCMOI', $user->ID_NGUOIDUNG)
                       ->where('TRANGTHAI', 'Đang chờ')
                       ->update(['TRANGTHAI' => 'Từ chối']);

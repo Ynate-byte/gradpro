@@ -122,7 +122,11 @@ class ChamDiemController extends Controller
      */
     public function capNhatTyTrong(Request $request)
     {
-        // Ghi chú: Quyền đã được kiểm tra ở routes/api.php
+        // [CẬP NHẬT] Bổ sung kiểm tra quyền Admin/Giáo vụ
+        if (!$this->isAdmin() && !$this->isGiaoVu()) {
+            return response()->json(['error' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
         $validated = $request->validate([
             'HUONGDAN'  => 'required|numeric|min:0|max:1',
             'PHANBIEN'  => 'required|numeric|min:0|max:1',
@@ -328,6 +332,10 @@ class ChamDiemController extends Controller
         $data = $request->all();
         $idNhom = $nhom->ID_NHOM;
         Log::info("Admin/Giáo vụ lưu tổng hợp điểm nhóm #{$idNhom}", $data);
+
+        if (!$this->isAdmin() && !$this->isGiaoVu()) {
+            return response()->json(['error' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
 
         try {
             DB::beginTransaction();

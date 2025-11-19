@@ -44,6 +44,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('roles', [UserController::class, 'getRoles']);
     Route::get('chuyen-nganhs', [UserController::class, 'getChuyenNganhs']);
     Route::get('khoa-bo-mons', [UserController::class, 'getKhoaBomons']);
+    Route::get('positions', [UserController::class, 'getPositions']); // Route Mới cho Chức vụ
     Route::get('/users/import/template', [UserController::class, 'downloadImportTemplate']);
     Route::post('/users/import/preview', [UserController::class, 'previewImport']);
     Route::post('/users/import/process', [UserController::class, 'processImport']);
@@ -126,7 +127,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // ----- KẾ HOẠCH KHÓA LUẬN -----
         Route::get('thesis-plans/list-all', [ThesisPlanController::class, 'getAllPlans']);
         Route::post('thesis-plans/preview-new', [ThesisPlanController::class, 'previewNewPlan']);
-        Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']); // <-- ĐÃ DI CHUYỂN
+        Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']);
         Route::apiResource('thesis-plans', ThesisPlanController::class)->parameters(['thesis-plans' => 'plan']);
         Route::get('thesis-plans/{plan}/settings', [ThesisPlanController::class, 'getPlanSettings']);
         Route::put('thesis-plans/{plan}/settings', [ThesisPlanController::class, 'updatePlanSettings']);

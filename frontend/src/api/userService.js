@@ -151,3 +151,12 @@ export const getKhoaBomons = async () => {
     const response = await axiosClient.get('/khoa-bo-mons');
     return response.data;
 };
+
+/**
+ * [MỚI] Lấy danh sách các chức vụ.
+ * @returns {Promise<Array>} Mảng các chức vụ.
+ */
+export const getPositions = async () => {
+    const response = await axiosClient.get('/positions');
+    return response.data;
+};

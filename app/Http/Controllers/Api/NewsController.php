@@ -22,21 +22,9 @@ class NewsController extends Controller
             return false;
         }
 
-        $user = Auth::user();
-
-        // 1. Kiểm tra Vai trò (Role)
-        $roleName = $user->vaitro?->TEN_VAITRO;
-        if (in_array($roleName, ['Admin', 'Trưởng khoa', 'Giáo vụ'])) {
-            return true;
-        }
-
-        // 2. Kiểm tra Chức vụ (Position) trong bảng Giangvien (nếu có)
-        $positionName = $user->giangvien?->CHUCVU;
-         if (in_array($positionName, ['Trưởng khoa', 'Giáo vụ'])) {
-            return true;
-        }
-        
-        return false;
+        // [CẬP NHẬT] Sử dụng các hàm helper từ Base Controller
+        // Các hàm này đã được cập nhật để kiểm tra bảng quan hệ GIANGVIEN_CHUCVU
+        return $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
     }
 
     /* ===========================================================
@@ -45,16 +33,16 @@ class NewsController extends Controller
     public function index()
     {
         try {
-            // Đảm bảo load đúng relationship 'vaitro' (chữ v thường)
+            // Đảm bảo load đúng relationship 'vaitro'
             $newsList = News::with([
                 // Chọn cụ thể các cột cần thiết từ nguoiTao và vaitro liên quan
                 'nguoiTao' => function ($query) {
-                    $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO') // Cần ID_VAITRO để load vaitro
-                          ->with('vaitro:ID_VAITRO,TEN_VAITRO'); // Load vaitro với các cột cần thiết
+                    $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO')
+                          ->with('vaitro:ID_VAITRO,TEN_VAITRO');
                 },
                 // Tương tự cho nguoiCapNhat
                 'nguoiCapNhat' => function ($query) {
-                    $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO') // Cần ID_VAITRO
+                    $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO')
                           ->with('vaitro:ID_VAITRO,TEN_VAITRO');
                 },
                 'images' // Load danh sách ảnh phụ
@@ -62,7 +50,7 @@ class NewsController extends Controller
             ->orderByDesc('created_at') // Sắp xếp tin mới nhất lên đầu
             ->get();
 
-            // Map dữ liệu trả về client, sử dụng null-safe operator (?->) và null coalescing (??)
+            // Map dữ liệu trả về client
             $data = $newsList->map(fn($item) => [
                 'id' => $item->id,
                 'title' => $item->title,
@@ -75,11 +63,11 @@ class NewsController extends Controller
                 'updated_at' => $item->updated_at,
                 'nguoi_tao' => [
                     'ten' => $item->nguoiTao?->HODEM_VA_TEN ?? 'Không xác định',
-                    'vaitro' => $item->nguoiTao?->vaitro?->TEN_VAITRO ?? 'Không rõ', // Truy cập an toàn
+                    'vaitro' => $item->nguoiTao?->vaitro?->TEN_VAITRO ?? 'Không rõ',
                 ],
                 'nguoi_cap_nhat' => $item->nguoiCapNhat ? [
                     'ten' => $item->nguoiCapNhat->HODEM_VA_TEN,
-                    'vaitro' => $item->nguoiCapNhat->vaitro?->TEN_VAITRO ?? 'Không rõ', // Truy cập an toàn
+                    'vaitro' => $item->nguoiCapNhat->vaitro?->TEN_VAITRO ?? 'Không rõ',
                 ] : null,
             ]);
 
@@ -94,9 +82,8 @@ class NewsController extends Controller
                 'message' => $e->getMessage(),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString() // Thêm trace để biết lỗi ở đâu
+                'trace' => $e->getTraceAsString()
             ]);
-            // Trả về lỗi 500 với thông báo chung chung
             return response()->json(['error' => 'Không thể tải danh sách tin tức. Vui lòng kiểm tra log server.'], 500);
         }
     }
@@ -108,11 +95,10 @@ class NewsController extends Controller
     public function store(Request $request)
     {
         try {
-            // ----- SỬA ĐỔI: Sử dụng hàm canManageNews() -----
+            // Kiểm tra quyền quản lý tin tức
             if (!$this->canManageNews()) {
                 return response()->json(['error' => 'Bạn không có quyền thêm tin tức.'], 403);
             }
-            // ----- KẾT THÚC SỬA ĐỔI -----
 
             $validated = $request->validate([
                 'title' => 'required|string|max:255',
@@ -152,17 +138,16 @@ class NewsController extends Controller
 
             return response()->json([
                 'message' => 'Thêm tin tức thành công!',
-                'data' => $this->formatNewsData($news), // Sử dụng helper để format data
+                'data' => $this->formatNewsData($news),
             ], 201);
 
-        } catch (ValidationException $e) { // Bắt lỗi validation cụ thể
+        } catch (ValidationException $e) {
              Log::error('News.store Validation Error', ['errors' => $e->errors()]);
-             // Trả về lỗi 422 với cấu trúc chuẩn
              return response()->json([
                  'message' => 'Dữ liệu không hợp lệ.',
                  'errors' => $e->errors()
              ], 422);
-        } catch (\Throwable $e) { // Bắt các lỗi khác
+        } catch (\Throwable $e) {
             Log::error('News.store General Error', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
@@ -178,18 +163,16 @@ class NewsController extends Controller
     {
         try {
              $news = News::with([
-                // Tải nguoiTao và vaitro liên quan, chỉ lấy các cột cần thiết
                 'nguoiTao' => function ($query) {
                     $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO')->with('vaitro:ID_VAITRO,TEN_VAITRO');
                 },
-                // Tương tự cho nguoiCapNhat
                 'nguoiCapNhat' => function ($query) {
                     $query->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO')->with('vaitro:ID_VAITRO,TEN_VAITRO');
                 },
                 'images'
-            ])->findOrFail($id); // Sử dụng findOrFail để tự động trả về 404 nếu không tìm thấy
+            ])->findOrFail($id);
 
-            return response()->json($this->formatNewsData($news)); // Format dữ liệu trước khi trả về
+            return response()->json($this->formatNewsData($news));
 
         } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
              Log::warning('News.show Not Found', ['id' => $id]);
@@ -207,25 +190,24 @@ class NewsController extends Controller
     public function update(Request $request, $id)
     {
         try {
-            // ----- SỬA ĐỔI: Sử dụng hàm canManageNews() -----
+            // Kiểm tra quyền quản lý tin tức
             if (!$this->canManageNews()) {
                 return response()->json(['error' => 'Bạn không có quyền chỉnh sửa tin tức.'], 403);
             }
-            // ----- KẾT THÚC SỬA ĐỔI -----
 
-            $news = News::findOrFail($id); // Tìm news hoặc báo lỗi 404
+            $news = News::findOrFail($id);
 
             $validated = $request->validate([
-                'title' => 'sometimes|required|string|max:255', // 'sometimes' để không bắt buộc nếu không gửi lên
+                'title' => 'sometimes|required|string|max:255',
                 'content' => 'sometimes|required|string',
                 'pdf_file' => 'nullable|file|mimes:pdf|max:20480',
                 'cover_image' => 'nullable|image|mimes:jpg,jpeg,png|max:5120',
                 'images.*' => 'nullable|image|mimes:jpg,jpeg,png|max:5120',
                 'category' => 'nullable|string|max:100',
-                'deleted_images' => 'nullable|array', // Mảng các URL/tên file ảnh phụ cần xóa
+                'deleted_images' => 'nullable|array',
                 'deleted_images.*' => 'string',
-                'remove_pdf' => 'nullable|boolean', // Flag để xóa pdf hiện tại
-                'remove_cover_image' => 'nullable|boolean', // Flag để xóa ảnh bìa hiện tại
+                'remove_pdf' => 'nullable|boolean',
+                'remove_cover_image' => 'nullable|boolean',
             ]);
 
             // Cập nhật các trường text nếu có trong request
@@ -239,7 +221,7 @@ class NewsController extends Controller
             if ($request->hasFile('pdf_file')) {
                 Storage::disk('public')->delete($news->pdf_file ?? ''); // Xóa file cũ nếu có
                 $news->pdf_file = $request->file('pdf_file')->store('news/pdfs', 'public');
-            } elseif ($request->input('remove_pdf') == true) { // Nếu có flag yêu cầu xóa pdf
+            } elseif ($request->input('remove_pdf') == true) {
                 Storage::disk('public')->delete($news->pdf_file ?? '');
                 $news->pdf_file = null;
             }
@@ -248,7 +230,7 @@ class NewsController extends Controller
             if ($request->hasFile('cover_image')) {
                 Storage::disk('public')->delete($news->cover_image ?? ''); // Xóa ảnh cũ nếu có
                 $news->cover_image = $request->file('cover_image')->store('news/covers', 'public');
-            } elseif ($request->input('remove_cover_image') == true) { // Nếu có flag yêu cầu xóa ảnh bìa
+            } elseif ($request->input('remove_cover_image') == true) {
                 Storage::disk('public')->delete($news->cover_image ?? '');
                 $news->cover_image = null;
             }
@@ -259,13 +241,11 @@ class NewsController extends Controller
             if (!empty($validated['deleted_images'])) {
                 $filenamesToDelete = $validated['deleted_images'];
 
-                // Tìm các bản ghi NewsImage dựa trên filename (cần khớp với DB)
+                // Tìm các bản ghi NewsImage dựa trên filename
                 $imagesToDeleteQuery = NewsImage::where('news_id', $news->id);
 
-                // Xây dựng query động để tìm các filename
-                 $imagesToDeleteQuery->where(function ($query) use ($filenamesToDelete) {
+                $imagesToDeleteQuery->where(function ($query) use ($filenamesToDelete) {
                      foreach ($filenamesToDelete as $filename) {
-                         // Cần logic để lấy đúng tên file lưu trong DB từ URL gửi lên (ví dụ: lấy phần cuối của path)
                          $dbFilename = basename($filename); // Giả định filename là phần cuối của URL
                          $query->orWhere('filename', 'like', '%' . $dbFilename);
                      }
@@ -278,7 +258,6 @@ class NewsController extends Controller
                     $img->delete(); // Xóa bản ghi trong DB
                 }
             }
-
 
             // Xử lý thêm ảnh phụ mới
             if ($request->hasFile('images')) {
@@ -293,7 +272,7 @@ class NewsController extends Controller
 
             return response()->json([
                 'message' => 'Cập nhật tin tức thành công!',
-                'data' => $this->formatNewsData($news), // Sử dụng helper để format data
+                'data' => $this->formatNewsData($news),
             ]);
 
         } catch (ValidationException $e) {
@@ -308,31 +287,24 @@ class NewsController extends Controller
         }
     }
 
-
-    /* ===========================================================
-     | ✅ XÓA TIN TỨC
-     =========================================================== */
     public function destroy($id)
     {
         try {
-            // ----- SỬA ĐỔI: Sử dụng hàm canManageNews() -----
             if (!$this->canManageNews()) {
                 return response()->json(['error' => 'Bạn không có quyền xóa tin tức.'], 403);
             }
-            // ----- KẾT THÚC SỬA ĐỔI -----
 
-            $news = News::with('images')->findOrFail($id); // Load kèm images để xóa file
+            $news = News::with('images')->findOrFail($id);
 
-            // Xóa file vật lý trước
             Storage::disk('public')->delete($news->pdf_file ?? '');
             Storage::disk('public')->delete($news->cover_image ?? '');
             foreach ($news->images as $img) {
                 Storage::disk('public')->delete($img->filename);
             }
 
-            $news->deleted_by = Auth::id(); // Ghi nhận người xóa
-            $news->save(); // Lưu deleted_by
-            $news->delete(); // Thực hiện soft delete
+            $news->deleted_by = Auth::id();
+            $news->save();
+            $news->delete();
 
             return response()->json(['message' => 'Đã xóa tin tức thành công!']);
        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
@@ -344,9 +316,6 @@ class NewsController extends Controller
         }
     }
 
-    /* ===========================================================
-     | ✅ XEM FILE PDF
-     =========================================================== */
     public function pdf($id)
     {
         try {
@@ -380,7 +349,6 @@ class NewsController extends Controller
      */
     private function formatNewsData(News $news)
     {
-        // Đảm bảo các quan hệ cần thiết đã được load (loadMissing chỉ load nếu chưa có)
         $news->loadMissing(['nguoiTao.vaitro', 'nguoiCapNhat.vaitro', 'images']);
 
         return [
@@ -388,19 +356,19 @@ class NewsController extends Controller
             'title' => $news->title,
             'content' => $news->content,
             'category' => $news->category ?? 'Chưa phân loại',
-            'pdf_url' => $news->pdf_url, // Sử dụng Accessor
-            'cover_image_url' => $news->cover_image_url, // Sử dụng Accessor
-            'images' => $news->images_urls, // Sử dụng Accessor
+            'pdf_url' => $news->pdf_url,
+            'cover_image_url' => $news->cover_image_url,
+            'images' => $news->images_urls,
             'created_at' => $news->created_at,
             'updated_at' => $news->updated_at,
-            'nguoi_tao' => $news->nguoiTao ? [ // Kiểm tra null trước khi truy cập
+            'nguoi_tao' => $news->nguoiTao ? [
                 'ten' => $news->nguoiTao->HODEM_VA_TEN,
-                'vaitro' => $news->nguoiTao->vaitro?->TEN_VAITRO ?? 'Không rõ', // Null safe cho vaitro
-            ] : ['ten' => 'Không xác định', 'vaitro' => 'Không rõ'], // Giá trị mặc định nếu nguoiTao là null
-            'nguoi_cap_nhat' => $news->nguoiCapNhat ? [ // Kiểm tra null
+                'vaitro' => $news->nguoiTao->vaitro?->TEN_VAITRO ?? 'Không rõ',
+            ] : ['ten' => 'Không xác định', 'vaitro' => 'Không rõ'],
+            'nguoi_cap_nhat' => $news->nguoiCapNhat ? [
                 'ten' => $news->nguoiCapNhat->HODEM_VA_TEN,
-                'vaitro' => $news->nguoiCapNhat->vaitro?->TEN_VAITRO ?? 'Không rõ', // Null safe cho vaitro
-            ] : null, // Trả về null nếu không có người cập nhật
+                'vaitro' => $news->nguoiCapNhat->vaitro?->TEN_VAITRO ?? 'Không rõ',
+            ] : null,
         ];
     }
 }

@@ -22,7 +22,10 @@ class LichHopController extends Controller
     private function checkGroupAccess(Nhom $nhom)
     {
         $user = Auth::user();
-        if ($this->isAdmin()) return true;
+        
+        if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
+            return true;
+        }
 
         // Kiểm tra thành viên
         $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
@@ -36,11 +39,6 @@ class LichHopController extends Controller
 
         return false;
     }
-
-    // =========================================================================
-    // API CHO SINH VIÊN / CHI TIẾT NHÓM (Tab Lịch họp trong chi tiết nhóm)
-    // =========================================================================
-
     /**
      * Lấy tất cả lịch họp (sắp tới và đã qua) của một nhóm.
      */
@@ -92,8 +90,11 @@ class LichHopController extends Controller
         
         $isGvhd = $user->giangvien && ($nhom->phancongDetaiNhom?->ID_GVHD === $user->giangvien->ID_GIANGVIEN);
 
-        if (!$isLeader && !$isGvhd && !$this->isAdmin()) {
-            return response()->json(['message' => 'Chỉ Nhóm trưởng hoặc GVHD mới có thể tạo lịch họp.'], 403);
+        // [CẬP NHẬT] Cho phép các vai trò quản lý tạo lịch họp
+        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
+
+        if (!$isLeader && !$isGvhd && !$isManager) {
+            return response()->json(['message' => 'Chỉ Nhóm trưởng, GVHD hoặc Quản lý mới có thể tạo lịch họp.'], 403);
         }
 
         $validated = $request->validate([
@@ -126,7 +127,10 @@ class LichHopController extends Controller
      */
     public function updateMeeting(Request $request, LichHop $lichhop)
     {
-        if ($lichhop->ID_NGUOITAO !== Auth::id()) {
+        $isCreator = $lichhop->ID_NGUOITAO === Auth::id();
+        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
+
+        if (!$isCreator && !$isManager) {
             return response()->json(['message' => 'Bạn không có quyền sửa lịch họp này.'], 403);
         }
 
@@ -143,13 +147,6 @@ class LichHopController extends Controller
             'DANHGIA' => 'nullable|in:Tot,BinhThuong,KhongTot',
         ]);
 
-        // ================= [FIX: Xóa logic xử lý múi giờ] =================
-        // Frontend (MeetingDialog) đã chuyển đổi chuỗi thời gian địa phương
-        // thành chuẩn ISO 8601 (có 'Z' hoặc '+00:00') trước khi gửi lên.
-        // Laravel/Carbon sẽ tự động hiểu chuỗi này là UTC và lưu đúng giờ.
-        // KHÔNG CẦN Carbon::parse($validated['THOIGIAN_BATDAU'], config('app.timezone')).
-        // ================= [KẾT THÚC FIX] =================
-
         // Xử lý logic địa điểm/link nếu hình thức họp thay đổi
         if (isset($validated['HINHTHUC_HOP'])) {
             if ($validated['HINHTHUC_HOP'] === 'Trực tiếp') {
@@ -159,11 +156,6 @@ class LichHopController extends Controller
             }
         }
         
-        // Nếu có đánh giá, có thể ngầm hiểu là đã diễn ra (tuỳ chọn logic business)
-        // if (isset($validated['DANHGIA']) && $validated['DANHGIA']) {
-        //  $validated['TRANGTHAI'] = 'Đã diễn ra';
-        // }
-
         $lichhop->update($validated);
 
         return response()->json($lichhop->load('nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN,ID_VAITRO', 'nguoiTao.vaitro:ID_VAITRO,TEN_VAITRO'));
@@ -174,7 +166,10 @@ class LichHopController extends Controller
      */
     public function cancelMeeting(LichHop $lichhop)
     {
-        if ($lichhop->ID_NGUOITAO !== Auth::id()) {
+        $isCreator = $lichhop->ID_NGUOITAO === Auth::id();
+        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
+
+        if (!$isCreator && !$isManager) {
             return response()->json(['message' => 'Bạn không có quyền hủy lịch họp này.'], 403);
         }
 
@@ -186,10 +181,6 @@ class LichHopController extends Controller
 
         return response()->json(['message' => 'Đã hủy lịch họp thành công.']);
     }
-
-    // =========================================================================
-    // API CHO TRANG LỊCH GIẢNG VIÊN (Drag & Drop)
-    // =========================================================================
 
     /**
      * Lấy danh sách các nhóm mà giảng viên đang hướng dẫn 
@@ -213,7 +204,6 @@ class LichHopController extends Controller
                 $q->where('ID_GVHD', $gvId);
             })
             ->with('kehoach:ID_KEHOACH,TEN_DOT')
-            // [FIX] Chỉ lấy các cột tồn tại trong bảng NHOM (loại bỏ MA_NHOM nếu không có)
             ->select('ID_NHOM', 'TEN_NHOM', 'ID_KEHOACH') 
             ->get();
 
@@ -231,11 +221,10 @@ class LichHopController extends Controller
 
         $query = LichHop::query()
             ->where('ID_NGUOITAO', $user->ID_NGUOIDUNG)
-            ->where('TRANGTHAI', '!=', 'Đã hủy') // Ẩn các lịch đã hủy cho gọn bảng
+            ->where('TRANGTHAI', '!=', 'Đã hủy')
             ->with('nhom:ID_NHOM,TEN_NHOM');
 
         if ($startDate && $endDate) {
-            // Parse ngày từ query params để lọc
             $start = Carbon::parse($startDate)->startOfDay();
             $end = Carbon::parse($endDate)->endOfDay();
             $query->whereBetween('THOIGIAN_BATDAU', [$start, $end]);
@@ -253,16 +242,13 @@ class LichHopController extends Controller
     {
         $request->validate([
             'ID_NHOM' => 'required|exists:NHOM,ID_NHOM',
-            'START_TIME' => 'required' // Nhận chuỗi YYYY-MM-DD HH:mm:ss
+            'START_TIME' => 'required'
         ]);
 
         $user = Auth::user();
         
-        // [FIX] Carbon parse chuỗi thời gian từ Frontend.
-        // Frontend đã gửi chuỗi "YYYY-MM-DD HH:mm:ss" đại diện cho giờ mong muốn.
-        // Carbon sẽ tạo đối tượng datetime dựa trên chuỗi đó và múi giờ mặc định của App.
         $startTime = Carbon::parse($request->START_TIME);
-        $endTime = $startTime->copy()->addMinutes(45); // Mặc định họp 45p
+        $endTime = $startTime->copy()->addMinutes(45);
 
         $nhom = Nhom::find($request->ID_NHOM);
         $title = "Họp hướng dẫn - " . $nhom->TEN_NHOM;
@@ -273,7 +259,7 @@ class LichHopController extends Controller
             'TIEUDE_LICHHOP' => $title,
             'THOIGIAN_BATDAU' => $startTime,
             'THOIGIAN_KETTHUC' => $endTime,
-            'HINHTHUC_HOP' => 'Trực tiếp', // Mặc định
+            'HINHTHUC_HOP' => 'Trực tiếp',
             'TRANGTHAI' => 'Đã lên lịch',
             'GHICHU' => 'Lịch hẹn nhanh qua Calendar'
         ]);
@@ -296,7 +282,6 @@ class LichHopController extends Controller
 
         $lichHop->update([
             'DANHGIA' => $request->DANHGIA,
-            // Có thể thêm logic tự chuyển trạng thái nếu cần
         ]);
 
         return response()->json(['message' => 'Đã đánh giá cuộc họp.', 'data' => $lichHop]);

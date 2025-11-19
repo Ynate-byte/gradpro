@@ -32,6 +32,11 @@ class ThesisPlanTemplateController extends Controller
      */
     public function store(Request $request)
     {
+        // [UPDATE] Kiểm tra quyền (Sử dụng logic N-N từ Base Controller)
+        if (!$this->canCreatePlan()) {
+            return response()->json(['message' => 'Bạn không có quyền tạo mẫu kế hoạch.'], 403);
+        }
+
         $validated = $request->validate([
             'TEN_MAU' => 'required|string|max:100|unique:MAU_KEHOACH,TEN_MAU',
             'HEDAOTAO_MACDINH' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
@@ -90,6 +95,11 @@ class ThesisPlanTemplateController extends Controller
      */
     public function update(Request $request, MauKehoach $template)
     {
+        // [UPDATE] Kiểm tra quyền
+        if (!$this->canCreatePlan()) {
+            return response()->json(['message' => 'Bạn không có quyền cập nhật mẫu kế hoạch.'], 403);
+        }
+
         $validated = $request->validate([
             'TEN_MAU' => 'required|string|max:100|unique:MAU_KEHOACH,TEN_MAU,' . $template->ID_MAU . ',ID_MAU',
             'HEDAOTAO_MACDINH' => 'required|in:Cử nhân,Kỹ sư,Thạc sỹ',
@@ -141,12 +151,16 @@ class ThesisPlanTemplateController extends Controller
         }
     }
 
-
     /**
      * Xóa một mẫu kế hoạch.
      */
     public function destroy(MauKehoach $template)
     {
+        // [UPDATE] Kiểm tra quyền
+        if (!$this->canCreatePlan()) {
+            return response()->json(['message' => 'Bạn không có quyền xóa mẫu kế hoạch.'], 403);
+        }
+
         try {
             DB::transaction(function () use ($template) {
                 $template->delete();
