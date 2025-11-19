@@ -55,8 +55,8 @@
         --background: 222 84% 5%; /* Very Dark Blue */
         --foreground: 0 0% 98%; /* White */
         --card: 222 84% 7%; /* Darker Blue */
-        /* ✅ Sửa lại: */
-        --card-foreground: 0 0% 98%;
+        /* ✅ Sửa lại màu chữ trên card cho dễ đọc */
+        --card-foreground: 0 0% 98%; 
         --popover: 222 84% 5%;
         --popover-foreground: 0 0% 98%;
         --primary: 217.2 91.2% 59.8%; /* Blue */
@@ -89,8 +89,15 @@
         @apply border-border;
     }
 
+    body {
+        @apply bg-background text-foreground;
+    }
+}
+
+/* Các class utility tùy chỉnh */
+@layer utilities {
     .bg-blue-activity {
-    background-color: #e0f2fe;
+        background-color: #e0f2fe;
     }
     .text-blue-activity {
         color: #2563eb;
@@ -100,9 +107,5 @@
     }
     .text-orange-activity {
         color: #ea580c;
-    }
-
-    body {
-        @apply bg-background text-foreground;
     }
 }

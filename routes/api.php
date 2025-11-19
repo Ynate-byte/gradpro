@@ -204,6 +204,13 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::prefix('giangvien')->group(function () {
             Route::get('/', [GiangVienController::class, 'index']);
+            
+            Route::prefix('submissions')->group(function () {
+                Route::get('/', [AdminSubmissionController::class, 'index']); 
+                Route::get('/{submission}', [AdminSubmissionController::class, 'show']); 
+                Route::post('/{submission}/confirm', [AdminSubmissionController::class, 'confirmSubmission']); 
+                Route::post('/{submission}/reject', [AdminSubmissionController::class, 'rejectSubmission']); 
+            });
         });
 
         // ----- QUẢN LÝ HỘI ĐỒNG (ADMIN) -----

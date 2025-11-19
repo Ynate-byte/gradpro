@@ -108,8 +108,6 @@ const TopicInfoCard = ({ phancong, onDetailsClick }) => {
     );
 };
 
-// (Gỡ bỏ MemberListCard)
-
 export default function MyGroupPage() {
     const { user } = useAuth();
     const [selectedPlanIdForDisplay, setSelectedPlanIdForDisplay] = useState('');
@@ -203,33 +201,41 @@ export default function MyGroupPage() {
         transferMutation.mutate(transferAlertInfo.member.ID_NGUOIDUNG);
     };
 
-    // (useMemo 'upcomingMeetingsCount' giữ nguyên)
+    // [ĐÃ SỬA LẠI LOGIC LỌC]
     const { upcomingMeetingsCount, upcomingTasksCount } = useMemo(() => {
         const meetings = groupDetails?.meetings || [];
         const tasksCount = groupDetails?.tasksCount || 0;
 
         const now = new Date();
+        // startOfWeek với weekStartsOn: 1 (Thứ 2) để khớp với logic lịch Việt Nam
         const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
         const endOfThisWeek = endOfWeek(now, { weekStartsOn: 1 });
 
-        let meetingsInWeek = 0;
+        // Lọc danh sách lịch họp hợp lệ
+        const validMeetings = meetings.filter(meeting => {
+            // 1. Kiểm tra thời gian tồn tại
+            if (!meeting.THOIGIAN_BATDAU) return false;
 
-        meetings.forEach(meeting => {
-            if (!meeting.THOIGIAN_BATDAU) return;
+            // 2. Kiểm tra trạng thái: BẮT BUỘC phải là "Đã lên lịch"
+            // Sử dụng trim() và normalize() để tránh lỗi font chữ hoặc khoảng trắng thừa
+            const status = meeting.TRANGTHAI ? meeting.TRANGTHAI.trim().normalize("NFC") : "";
+            if (status !== 'Đã lên lịch') return false;
+
             try {
                 const meetingDate = parseISO(meeting.THOIGIAN_BATDAU);
-                if (
-                    isFuture(meetingDate) && 
-                    isWithinInterval(meetingDate, { start: startOfThisWeek, end: endOfThisWeek })
-                ) {
-                    meetingsInWeek++;
-                }
+                
+                // 3. Kiểm tra thời gian: Phải trong tương lai VÀ nằm trong tuần này
+                const isFutureMeeting = isFuture(meetingDate);
+                const isInCurrentWeek = isWithinInterval(meetingDate, { start: startOfThisWeek, end: endOfThisWeek });
+                
+                return isFutureMeeting && isInCurrentWeek;
             } catch (e) {
-                console.error("Invalid date format for meeting:", meeting);
+                console.error("Lỗi parse ngày tháng:", meeting.THOIGIAN_BATDAU);
+                return false;
             }
         });
         
-        return { upcomingMeetingsCount: meetingsInWeek, upcomingTasksCount: tasksCount }; 
+        return { upcomingMeetingsCount: validMeetings.length, upcomingTasksCount: tasksCount }; 
     }, [groupDetails?.meetings, groupDetails?.tasksCount]);
 
 
@@ -311,7 +317,7 @@ export default function MyGroupPage() {
                         )}
                     </div>
 
-                    {/* CỘT 2: Card Thống kê (Mới) */}
+                    {/* CỘT 2: Card Thống kê */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-1">
                         <ActivityCard 
                             title="Lịch họp trong tuần" 
@@ -322,14 +328,14 @@ export default function MyGroupPage() {
                         />
                         <ActivityCard 
                             title="Công việc tồn đọng" 
-                            count={upcomingTasksCount}
+                            count={upcomingTasksCount} 
                             icon={LayoutDashboard} 
                             colorClass="orange"
                             onClick={() => navigate(`/projects/my-group/kanban/${groupData.ID_NHOM}`)}
                         />
                     </div>
 
-                    {/* CỘT 3: Danh sách Thành viên (Code gốc của bạn) */}
+                    {/* CỘT 3: Danh sách Thành viên */}
                     <div className="lg:col-span-1 space-y-1">
                         {groupData.thanhviens?.map(member => {
                             const nguoidung = member.nguoidung;
@@ -371,7 +377,6 @@ export default function MyGroupPage() {
                                                 </div>
                                             </div>
                                             <Separator />
-                                            {/* ===== [SỬA LỖI TẠI ĐÂY] ===== */}
                                             <div className="space-y-2">
                                                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                     <Mail className="h-3 w-3" />
@@ -383,8 +388,7 @@ export default function MyGroupPage() {
                                                         <span>{nguoidung.SO_DIENTHOAI}</span>
                                                     </div>
                                                 )}
-                                            </div> {/* <-- Sửa Vov> thành </div> */}
-                                            {/* ===== [KẾT THÚC SỬA LỖI] ===== */}
+                                            </div>
                                             
                                             {isLeader && !isSelf && !hasTopic && (
                                                 <div className="pt-3 border-t mt-3">
@@ -406,7 +410,7 @@ export default function MyGroupPage() {
                     </div>
                 </div>
             ) : (
-                // Nếu không có nhóm (Giữ nguyên)
+                // Nếu không có nhóm
                 <div>
                     <label className="text-sm font-medium">Kế hoạch</label>
                     <Select value={selectedPlanIdForDisplay} onValueChange={setSelectedPlanIdForDisplay}>
@@ -424,7 +428,7 @@ export default function MyGroupPage() {
                 </div>
             )}
             
-            {/* ALERT KHÔNG ĐỦ ĐIỀU KIỆN (Giữ nguyên) */}
+            {/* ALERT KHÔNG ĐỦ ĐIỀU KIỆN */}
             {!isEligible && (
                 <Alert variant="destructive">
                     <AlertCircle className="h-4 w-4" />
@@ -434,7 +438,7 @@ export default function MyGroupPage() {
 
             <Separator />
 
-            {/* NỘI DUNG CHÍNH (Tabs) (Giữ nguyên) */}
+            {/* NỘI DUNG CHÍNH (Tabs) */}
             {groupDetails && isEligible ? (
                 hasGroup ? (
                     <GroupManagementView
@@ -449,7 +453,7 @@ export default function MyGroupPage() {
                 !isEligible ? null : <p className="text-muted-foreground text-center py-8">Vui lòng chọn kế hoạch.</p>
             )}
 
-            {/* DIALOG CHI TIẾT ĐỀ TÀI (Giữ nguyên) */}
+            {/* DIALOG CHI TIẾT ĐỀ TÀI */}
             {hasTopic && (
                 <TopicDetailsDialog
                     phancong={phancong}
@@ -458,7 +462,7 @@ export default function MyGroupPage() {
                 />
             )}
             
-            {/* Dialog Nộp sản phẩm (Giữ nguyên) */}
+            {/* Dialog Nộp sản phẩm */}
             {hasGroup && (
                 <SubmissionDialog
                     isOpen={isSubmissionOpen}
@@ -469,7 +473,7 @@ export default function MyGroupPage() {
                 />
             )}
 
-            {/* Alert Dialog để xác nhận chuyển quyền (Giữ nguyên) */}
+            {/* Alert Dialog để xác nhận chuyển quyền */}
             <AlertDialog open={transferAlertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setTransferAlertInfo({ isOpen: false, member: null })}>
                 <AlertDialogContent aria-labelledby={alertTransferTitleId} aria-describedby={alertTransferDescId}>
                     <AlertDialogHeader>

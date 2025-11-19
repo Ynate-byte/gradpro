@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserPlus, FileText, Users, KanbanSquare, Calendar } from 'lucide-react';
+import { UserPlus, Users } from 'lucide-react'; // Bỏ import KanbanSquare, Calendar, FileText
 import { useAuth } from '@/contexts/AuthContext';
-import { InviteMemberDialog } from './InviteMemberDialog'; 
+import { InviteMemberDialog } from './InviteMemberDialog';
 import { SentInvitationsList } from './SentInvitationsList';
-import { JoinRequests } from './JoinRequests'; 
-import KanbanPage from '@/features/student/my-group/pages/KanbanPage'; 
-import MeetingCalendarPage from '@/features/student/my-group/pages/MeetingCalendarPage';
-import { SubmissionArea } from '../SubmissionArea'
-import { toast } from 'sonner';
+import { JoinRequests } from './JoinRequests';
+// Bỏ import KanbanPage, MeetingCalendarPage, SubmissionArea
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
 
 /**
  * Component quản lý nhóm, được sử dụng cho cả Sinh viên và Giảng viên (Group Management View).
- * Chứa logic phân quyền hiển thị các Tab công việc, lịch họp, nộp bài.
  */
 export function GroupManagementView({ groupData, planId, plan }) {
     const { user } = useAuth();
@@ -36,13 +32,9 @@ export function GroupManagementView({ groupData, planId, plan }) {
     // Sinh viên xem nhóm (không phải GVHD) -> có quyền nộp bài
     const isStudentViewer = !isSupervisor; 
 
+    // [SỬA ĐỔI] Chỉ giữ lại tab Management, bỏ 3 tab kia
     const tabs = [
-        { value: 'management', label: 'Thành viên & Quản lý', icon: Users, condition: true }, 
-        // Kanban và Lịch họp: Cần có đề tài VÀ người dùng có quyền quản lý (Leader/Supervisor)
-        { value: 'tasks', label: 'Bảng Công việc', icon: KanbanSquare, condition: hasTopic && isManager }, 
-        { value: 'schedule', label: 'Lịch Họp', icon: Calendar, condition: hasTopic && isManager }, 
-        // Tab nộp bài: Chỉ hiển thị cho Sinh viên (isStudentViewer) khi có đề tài
-        { value: 'submission', label: 'Nộp sản phẩm', icon: FileText, condition: hasTopic && isStudentViewer }, 
+        { value: 'management', label: 'Thành viên & Quản lý', icon: Users, condition: true },
     ].filter(tab => tab.condition);
 
     const gridStyle = { gridTemplateColumns: `repeat(${tabs.length}, 1fr)` };
@@ -52,7 +44,7 @@ export function GroupManagementView({ groupData, planId, plan }) {
         <>
             <Tabs defaultValue={defaultTab} className="w-full">
                 
-                {/* TABS LIST: Sử dụng mảng tabs đã lọc */}
+                {/* TABS LIST */}
                 <TabsList className="grid w-full" style={gridStyle}>
                     {tabs.map(tab => (
                         <TabsTrigger key={tab.value} value={tab.value}>
@@ -61,7 +53,7 @@ export function GroupManagementView({ groupData, planId, plan }) {
                     ))}
                 </TabsList>
 
-                {/* TAB 1: QUẢN LÝ THÀNH VIÊN (Giữ nguyên) */}
+                {/* TAB 1: QUẢN LÝ THÀNH VIÊN */}
                 <TabsContent value="management" className="mt-6 space-y-6">
                     
                     {hasTopic && (
@@ -100,32 +92,8 @@ export function GroupManagementView({ groupData, planId, plan }) {
                     )}
                 </TabsContent>
 
-                {/* TAB 2: BẢNG CÔNG VIỆC (TASKS) - Giờ đã có chuyển tuần */}
-                {tabs.some(t => t.value === 'tasks') && ( 
-                    <TabsContent value="tasks" className="mt-6">
-                        {/* [FIXED] Nhúng toàn bộ trang KanbanPage và truyền prop embedded */}
-                        <KanbanPage embedded nhomId={nhomId} /> 
-                    </TabsContent>
-                )}
+                {/* [SỬA ĐỔI] Đã xóa TabsContent cho 'tasks', 'schedule', 'submission' */}
 
-                {/* TAB 3: LỊCH HỌP (SCHEDULE) - Giờ đã có chuyển tuần */}
-                {tabs.some(t => t.value === 'schedule') && ( 
-                    <TabsContent value="schedule" className="mt-6">
-                        {/* [FIXED] Nhúng toàn bộ trang MeetingCalendarPage và truyền prop embedded */}
-                        <MeetingCalendarPage embedded nhomId={nhomId} />
-                    </TabsContent>
-                )}
-                
-                {/* TAB 4: NỘP SẢN PHẨM (Submission) - Chỉ cho Sinh viên */}
-                {tabs.some(t => t.value === 'submission') && (
-                    <TabsContent value="submission" className="mt-6">
-                        <SubmissionArea
-                            phancong={phancong}
-                            planId={planId}
-                            plan={plan}
-                        />
-                    </TabsContent>
-                )}
             </Tabs>
 
             {/* Dialog mời thành viên (Giữ nguyên) */}

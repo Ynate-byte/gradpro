@@ -23,25 +23,35 @@ class CongViecController extends Controller
     private function getAuthInfo(Nhom $nhom)
     {
         $user = Auth::user();
+        
+        // Kiểm tra xem user có phải là thành viên của nhóm không
         $isMember = $user->thanhvienNhom()->where('ID_NHOM', $nhom->ID_NHOM)->exists();
+        
+        // Kiểm tra Nhóm trưởng
         $isLeader = $nhom->ID_NHOMTRUONG === $user->ID_NGUOIDUNG;
+        
+        // Kiểm tra GVHD (Dựa vào phân công đề tài)
         $isGvhd = $user->giangvien && $nhom->phancongDetaiNhom?->ID_GVHD === $user->giangvien->ID_GIANGVIEN;
+        
+        // Kiểm tra Admin/Quản lý khoa
         $isAdmin = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
 
+        // 1. canView: Quyền cơ bản (Xem, Tạo, Sửa nội dung, Chuyển trạng thái, Checklist, Comment)
+        // Áp dụng cho: Tất cả thành viên nhóm + GVHD + Admin
         $canView = $isMember || $isGvhd || $isAdmin;
+        
+        // 2. canManage: Quyền cao cấp (Xóa Task, Gán người)
+        // Áp dụng cho: Nhóm trưởng + GVHD + Admin
         $canManage = $isGvhd || $isLeader || $isAdmin;
 
         return compact('user', 'isMember', 'isLeader', 'isGvhd', 'isAdmin', 'canView', 'canManage');
     }
 
-    private function checkTaskEditPermission(CongViec $congviec, Nguoidung $user, bool $canManage)
-    {
-        if ($canManage) return true;
-        return $congviec->ID_NGUOITAO === $user->ID_NGUOIDUNG;
-    }
-
     // --- CÁC HÀM API CHÍNH ---
 
+    /**
+     * Lấy thống kê số lượng công việc tồn đọng (chưa hoàn thành)
+     */
     public function getTaskStats(Nhom $nhom)
     {
         try {
@@ -66,53 +76,56 @@ class CongViecController extends Controller
         }
     }
 
+    /**
+     * Lấy dữ liệu bảng Kanban (Cột, Task, Thành viên)
+     */
     public function getBoardData(Nhom $nhom, Request $request) 
     {
         $auth = $this->getAuthInfo($nhom);
-        // Sử dụng canView vì cả GVHD và thành viên đều có thể xem Kanban
         if (!$auth['canView']) {
             return response()->json(['message' => 'Không có quyền truy cập.'], 403);
         }
 
-        // 1. Lấy tham số lọc ngày từ request
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
-        // Lấy danh sách các cột
+        // Lấy danh sách cột
         $columns = CotCongViec::orderBy('THUTU_HIENTHI', 'asc')->get();
 
-        // Khởi tạo query lấy các công việc của nhóm
+        // Query Task
         $tasksQuery = $nhom->congViecs()
-            ->whereNotIn('TRANGTHAI', ['Đã hủy']) // Chỉ hiển thị các task chưa bị hủy
+            ->whereNotIn('TRANGTHAI', ['Đã hủy'])
             ->with([
-                'nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN',
+                // [QUAN TRỌNG] Load thêm vai trò của người tạo để Frontend highlight task GV
+                'nguoiTao' => function($q) {
+                    $q->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO')
+                      ->with('vaitro:ID_VAITRO,TEN_VAITRO');
+                },
                 'nguoiDuocPhanCong:ID_NGUOIDUNG,HODEM_VA_TEN',
                 'checklistItems',
             ])
             ->withCount('allComments')
             ->orderBy('THUTU_HIENTHI', 'asc');
 
-        // 2. Áp dụng bộ lọc tuần nếu có tham số ngày
+        // Lọc theo ngày (nếu có)
         if ($startDate && $endDate) {
-            // [ĐÃ SỬA] Bao gồm cả các task có deadline trong tuần VÀ task không có deadline (NULL)
             $tasksQuery->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('NGAY_HETHAN', [
                     $startDate . ' 00:00:00',
                     $endDate . ' 23:59:59'
                 ])
-                // THÊM: Hoặc những công việc không có thời gian cụ thể (deadline IS NULL)
-                ->orWhereNull('NGAY_HETHAN');
+                ->orWhereNull('NGAY_HETHAN'); // Luôn hiện task không có deadline
             });
         }
         
         $tasks = $tasksQuery->get();
         
-        // Đảm bảo count comments được thêm vào task object
+        // Map thêm count comment vào attribute dễ dùng
         $tasks->each(function ($task) {
             $task->binh_luans_count = $task->all_comments_count;
         });
 
-        // Lấy danh sách thành viên (cho dropdown gán việc)
+        // Lấy danh sách thành viên để gán task
         $members = $nhom->thanhviens()->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH')->get();
 
         return response()->json([
@@ -122,9 +135,14 @@ class CongViecController extends Controller
         ]);
     }
 
+    /**
+     * Tạo công việc mới
+     */
     public function createTask(Request $request, Nhom $nhom)
     {
         $auth = $this->getAuthInfo($nhom);
+        
+        // [RULE] Ai trong nhóm (SV, GV) cũng có thể tạo công việc
         if (!$auth['canView']) { 
             return response()->json(['message' => 'Không có quyền tạo công việc.'], 403);
         }
@@ -133,7 +151,7 @@ class CongViecController extends Controller
             'TEN_CONGVIEC' => 'required|string|max:255',
             'ID_COT' => 'required|exists:COT_CONGVIEC,ID_COT',
             'MOTA' => 'nullable|string',
-            'NGAY_HETHAN' => 'nullable|date|after_or_equal:today',
+            'NGAY_HETHAN' => 'nullable|date',
             'DO_UUTIEN' => ['nullable', Rule::in(['Thấp', 'Trung bình', 'Cao'])],
             'assignee_ids' => 'nullable|array', 
             'assignee_ids.*' => 'integer|exists:NGUOIDUNG,ID_NGUOIDUNG',
@@ -151,13 +169,18 @@ class CongViecController extends Controller
                 'TRANGTHAI' => 'Hoạt động',
             ]);
 
+            // Gán người thực hiện ngay khi tạo (cho phép ở bước tạo)
             if (!empty($validated['assignee_ids'])) {
                 $task->nguoiDuocPhanCong()->sync($validated['assignee_ids']);
             }
         });
 
+        // [QUAN TRỌNG] Load lại đầy đủ thông tin (bao gồm vai trò người tạo) để trả về Frontend
         $task->load([
-            'nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN',
+            'nguoiTao' => function($q) {
+                $q->select('ID_NGUOIDUNG', 'HODEM_VA_TEN', 'ID_VAITRO')
+                  ->with('vaitro:ID_VAITRO,TEN_VAITRO');
+            },
             'nguoiDuocPhanCong:ID_NGUOIDUNG,HODEM_VA_TEN',
             'checklistItems',
         ])->loadCount('allComments');
@@ -167,10 +190,15 @@ class CongViecController extends Controller
         return response()->json($task, 201);
     }
 
+    /**
+     * Cập nhật công việc (Tên, Mô tả, Trạng thái...)
+     */
     public function updateTask(Request $request, CongViec $congviec)
     {
         $auth = $this->getAuthInfo($congviec->nhom);
-        if (!$this->checkTaskEditPermission($congviec, $auth['user'], $auth['canManage'])) {
+
+        // [RULE] Ai trong nhóm cũng có thể sửa nội dung, chuyển trạng thái
+        if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền sửa công việc này.'], 403);
         }
 
@@ -187,23 +215,15 @@ class CongViecController extends Controller
         return response()->json($congviec);
     }
 
-    public function deleteTask(CongViec $congviec)
-    {
-        $auth = $this->getAuthInfo($congviec->nhom);
-        if (!$this->checkTaskEditPermission($congviec, $auth['user'], $auth['canManage'])) {
-            return response()->json(['message' => 'Bạn không có quyền xóa công việc này.'], 403);
-        }
-
-        $congviec->delete();
-        return response()->json(null, 204);
-    }
-
+    /**
+     * Di chuyển công việc (Kéo thả sang cột khác hoặc đổi thứ tự)
+     */
     public function moveTask(Request $request, CongViec $congviec)
     {
         $auth = $this->getAuthInfo($congviec->nhom);
-        $isAssigned = $congviec->nguoiDuocPhanCong()->where('NGUOIDUNG.ID_NGUOIDUNG', $auth['user']->ID_NGUOIDUNG)->exists();
 
-        if (!$auth['canManage'] && !$isAssigned) {
+        // [RULE] Ai trong nhóm cũng có thể kéo thả
+        if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền di chuyển công việc này.'], 403);
         }
 
@@ -217,6 +237,7 @@ class CongViecController extends Controller
             $congviec->ID_COT = $validated['ID_COT_MOI'];
             $congviec->THUTU_HIENTHI = $validated['THUTU_MOI'];
 
+            // Nếu chuyển sang cột Hoàn thành -> Cập nhật ngày hoàn thành
             $cotMoi = CotCongViec::find($validated['ID_COT_MOI']);
             if ($cotMoi && $cotMoi->TEN_COT === 'Hoàn thành') {
                 $congviec->NGAY_HOANTHANH = now();
@@ -225,6 +246,7 @@ class CongViecController extends Controller
             }
             $congviec->save();
 
+            // Cập nhật thứ tự các task khác trong cùng cột
             if (!empty($validated['sibling_task_ids'])) {
                 foreach ($validated['sibling_task_ids'] as $index => $taskId) {
                     CongViec::where('ID_CONGVIEC', $taskId)
@@ -237,26 +259,47 @@ class CongViecController extends Controller
         return response()->json(['message' => 'Cập nhật vị trí thành công.']);
     }
 
+    /**
+     * Xóa công việc
+     */
+    public function deleteTask(CongViec $congviec)
+    {
+        $auth = $this->getAuthInfo($congviec->nhom);
+
+        // [RULE] CHỈ Nhóm trưởng / GV / Admin mới được XÓA công việc
+        if (!$auth['canManage']) {
+            return response()->json(['message' => 'Chỉ Nhóm trưởng hoặc Giảng viên mới có quyền xóa công việc.'], 403);
+        }
+
+        $congviec->delete();
+        return response()->json(null, 204);
+    }
+
+    /**
+     * Gán người thực hiện (Sau khi đã tạo task)
+     */
     public function assignTask(Request $request, CongViec $congviec)
     {
         $auth = $this->getAuthInfo($congviec->nhom);
+
+        // [RULE] CHỈ Nhóm trưởng / GV / Admin mới được GÁN người
         if (!$auth['canManage']) {
             return response()->json(['message' => 'Chỉ Nhóm trưởng hoặc GVHD mới có quyền gán việc.'], 403);
         }
 
-        // ===== [SỬA LỖI TẠI ĐÂY] =====
-        // Thay 'required' bằng 'present' để cho phép gửi mảng rỗng [] (khi gỡ hết assign)
         $validated = $request->validate([
             'user_ids' => 'present|array', 
             'user_ids.*' => 'integer|exists:NGUOIDUNG,ID_NGUOIDUNG',
         ]);
-        // ============================
         
         $congviec->nguoiDuocPhanCong()->sync($validated['user_ids']);
 
         return response()->json($congviec->load('nguoiDuocPhanCong:ID_NGUOIDUNG,HODEM_VA_TEN'));
     }
 
+    /**
+     * Lấy chi tiết một công việc (cho Dialog)
+     */
     public function getTaskDetails(CongViec $congviec)
     {
         $auth = $this->getAuthInfo($congviec->nhom);
@@ -274,7 +317,7 @@ class CongViecController extends Controller
                         'replies' => fn($q2) => $q2->with('nguoiBinhLuan:ID_NGUOIDUNG,HODEM_VA_TEN')->orderBy('NGAYTAO', 'asc'),
                     ])->orderBy('NGAYTAO', 'asc'),
             ]);
-    
+        
             return response()->json($congviec);
 
         } catch (\Exception $e) {
@@ -282,10 +325,14 @@ class CongViecController extends Controller
             return response()->json(['message' => 'Lỗi máy chủ khi lấy chi tiết công việc.'], 500);
         }
     }
-
+    
+    /**
+     * Thêm mục checklist
+     */
     public function addChecklistItem(Request $request, CongViec $congviec)
     {
         $auth = $this->getAuthInfo($congviec->nhom);
+        // [RULE] Ai trong nhóm cũng có thể thêm checklist
         if (!$auth['canView']) {
             return response()->json(['message' => 'Không có quyền.'], 403);
         }
@@ -295,10 +342,14 @@ class CongViecController extends Controller
         return response()->json($item, 201);
     }
 
+    /**
+     * Xóa mục checklist
+     */
     public function deleteChecklistItem(DanhSachKiemTraCongViec $item)
     {
         $auth = $this->getAuthInfo($item->congViec->nhom);
-        if (!$auth['canManage'] && $item->congViec->ID_NGUOITAO !== $auth['user']->ID_NGUOIDUNG) {
+        // [RULE] Ai trong nhóm cũng có thể xóa mục checklist
+        if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền xóa mục này.'], 403);
         }
         
@@ -307,11 +358,12 @@ class CongViecController extends Controller
     }
 
     /**
-     * Thêm bình luận (Chỉ có 1 hàm này)
+     * Thêm bình luận
      */
     public function addComment(Request $request, CongViec $congviec)
     {
         $auth = $this->getAuthInfo($congviec->nhom);
+        // [RULE] Ai trong nhóm cũng có thể bình luận
         if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền bình luận.'], 403);
         }
@@ -335,13 +387,16 @@ class CongViecController extends Controller
         return response()->json($comment, 201);
     }
 
+    /**
+     * Cập nhật mục checklist (Hoàn thành/Chưa hoàn thành)
+     */
     public function updateChecklistItem(Request $request, DanhSachKiemTraCongViec $item)
     {
         $congviec = $item->congViec;
         $auth = $this->getAuthInfo($congviec->nhom);
-        $isAssigned = $congviec->nguoiDuocPhanCong()->where('NGUOIDUNG.ID_NGUOIDUNG', $auth['user']->ID_NGUOIDUNG)->exists();
-
-        if (!$auth['canManage'] && !$isAssigned) {
+        
+        // [RULE] Ai trong nhóm cũng có thể check/uncheck
+        if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền sửa mục này.'], 403);
         }
 

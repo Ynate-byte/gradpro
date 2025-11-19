@@ -14,51 +14,82 @@ use Illuminate\Validation\ValidationException;
 class SubmissionController extends Controller
 {
     /**
+     * Helper: Kiểm tra quyền duyệt bài (Admin, GVu, TKhoa HOẶC là GVHD của nhóm đó)
+     */
+    private function checkApprovalPermission($submission = null)
+    {
+        $user = Auth::user();
+        
+        // 1. Quyền quản trị cấp cao (duyệt tất cả)
+        if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
+            return true;
+        }
+
+        // 2. Quyền Giảng viên hướng dẫn (chỉ duyệt nhóm mình)
+        if ($user->giangvien && $submission) {
+            // Lấy thông tin phân công từ phiếu nộp
+            $phancong = $submission->phancong; 
+            if ($phancong && $phancong->ID_GVHD === $user->giangvien->ID_GIANGVIEN) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Lấy danh sách các phiếu nộp
      */
     public function index(Request $request)
     {
-        if (!$this->canApproveSubmissions()) {
+        $user = Auth::user();
+
+        if (!$user->giangvien && !$this->isAdmin() && !$this->isGiaoVu()) {
             return response()->json(['message' => 'Bạn không có quyền truy cập.'], 403);
         }
 
         try {
-            $submissionTable = (new NopSanpham)->getTable(); // 'NOP_SANPHAM'
+            $submissionTable = (new NopSanpham)->getTable();
 
-            // ***** SỬA LỖI 500 (AMBIGUOUS COLUMN) *****
-            $query = NopSanpham::query()->where(function ($mainQuery) use ($request, $submissionTable) {
-                
-                // Lọc theo trạng thái (ĐÃ SỬA: thêm tiền tố bảng)
-                if ($request->filled('trangthai') && $request->trangthai !== 'Tất cả') {
-                    // Thêm tiền tố bảng $submissionTable để tránh xung đột
-                    $mainQuery->where("{$submissionTable}.TRANGTHAI", $request->trangthai);
-                }
-                
-            })->with([ // Tải các quan hệ
+            $query = NopSanpham::query()->with([
                 'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN',
                 'phancong.nhom:ID_NHOM,TEN_NHOM',
-                'phancong.detai:ID_DETAI,TEN_DETAI'
+                'phancong.detai:ID_DETAI,TEN_DETAI',
+                
+                // [SỬA ĐỔI] Load thêm thông tin người dùng của GVHD để hiển thị tên
+                'phancong.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN' 
             ]);
 
-            // Lọc theo kế hoạch (whereHas ở ngoài closure là OK)
+            // ... (Giữ nguyên phần logic lọc quyền, filter, sort) ...
+            // (Code bên dưới không thay đổi so với phiên bản trước)
+
+            if (!($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa())) {
+                if ($user->giangvien) {
+                    $gvId = $user->giangvien->ID_GIANGVIEN;
+                    $query->whereHas('phancong', function($q) use ($gvId) {
+                        $q->where('ID_GVHD', $gvId);
+                    });
+                } else {
+                    return response()->json(['data' => []]);
+                }
+            }
+
+            if ($request->filled('trangthai') && $request->trangthai !== 'Tất cả') {
+                $query->where("{$submissionTable}.TRANGTHAI", $request->trangthai);
+            }
+
             if ($request->filled('plan_id')) {
                 $query->whereHas('phancong.nhom', function ($q) use ($request) {
                     $q->where('ID_KEHOACH', $request->plan_id);
                 });
             }
-            
-            // ***** KẾT THÚC SỬA LỖI *****
 
-
-            // Logic sắp xếp động
             if ($request->filled('sort')) {
                 list($sortCol, $sortDir) = explode(',', $request->sort);
                 $sortDir = strtolower($sortDir) === 'desc' ? 'desc' : 'asc';
-                
                 $allowedSorts = ['NGAY_NOP', 'TRANGTHAI'];
                 
                 if (in_array($sortCol, $allowedSorts)) {
-                     // Luôn thêm tiền tố bảng
                     $query->orderBy("{$submissionTable}.{$sortCol}", $sortDir);
                 } else {
                     $query->orderBy("{$submissionTable}.NGAY_NOP", 'asc');
@@ -71,30 +102,27 @@ class SubmissionController extends Controller
             return response()->json($submissions);
 
         } catch (\Throwable $e) {
-            // Ghi log lỗi chi tiết
-            Log::error('Error in SubmissionController@index: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all()
-            ]);
-            // Trả về lỗi 500
-            return response()->json(['message' => 'Lỗi máy chủ nội bộ. Vui lòng kiểm tra file log Laravel.'], 500);
+            \Illuminate\Support\Facades\Log::error('Error in SubmissionController@index: ' . $e->getMessage());
+            return response()->json(['message' => 'Lỗi máy chủ nội bộ.'], 500);
         }
     }
 
     /**
-     * Lấy chi tiết một phiếu nộp (bao gồm file)
+     * Lấy chi tiết một phiếu nộp
      */
     public function show(NopSanpham $submission)
     {
-        if (!$this->canApproveSubmissions()) {
-            return response()->json(['message' => 'Bạn không có quyền truy cập.'], 403);
+        // Kiểm tra quyền xem chi tiết
+        if (!$this->checkApprovalPermission($submission)) {
+             return response()->json(['message' => 'Bạn không có quyền xem phiếu nộp này.'], 403);
         }
 
         return $submission->load([
             'files',
             'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN,EMAIL',
             'phancong.nhom',
-            'phancong.detai'
+            'phancong.detai',
+            'phancong.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN'
         ]);
     }
 
@@ -103,8 +131,8 @@ class SubmissionController extends Controller
      */
     public function confirmSubmission(NopSanpham $submission)
     {
-        if (!$this->canApproveSubmissions()) {
-            return response()->json(['message' => 'Bạn không có quyền duyệt.'], 403);
+        if (!$this->checkApprovalPermission($submission)) {
+            return response()->json(['message' => 'Bạn không có quyền duyệt phiếu nộp của nhóm này.'], 403);
         }
 
         if ($submission->TRANGTHAI !== 'Chờ xác nhận') {
@@ -124,8 +152,6 @@ class SubmissionController extends Controller
             $submission->phancong()->update(['TRANGTHAI' => 'Đã hoàn thành']);
         });
 
-        // TODO: Gửi thông báo cho nhóm
-
         return response()->json(['message' => 'Đã xác nhận nhóm nộp sản phẩm thành công.']);
     }
 
@@ -134,8 +160,8 @@ class SubmissionController extends Controller
      */
     public function rejectSubmission(Request $request, NopSanpham $submission)
     {
-        if (!$this->canApproveSubmissions()) {
-            return response()->json(['message' => 'Bạn không có quyền thực hiện việc này.'], 403);
+        if (!$this->checkApprovalPermission($submission)) {
+            return response()->json(['message' => 'Bạn không có quyền từ chối phiếu nộp của nhóm này.'], 403);
         }
 
         $validated = $request->validate([
@@ -156,18 +182,20 @@ class SubmissionController extends Controller
             'PHANHOI_ADMIN' => $validated['ly_do'],
         ]);
 
-        // TODO: Gửi thông báo cho nhóm
-
         return response()->json(['message' => 'Đã gửi yêu cầu nộp lại cho nhóm.']);
     }
 
     /**
-     * ***** HÀM MỚI: Lấy lịch sử nộp bài cho Admin *****
-     * Tương tự NhomController@getSubmissions nhưng không kiểm tra quyền thành viên
+     * Lấy lịch sử nộp bài cho Admin/GV
      */
     public function getSubmissionsForPhancong(Request $request, PhancongDetaiNhom $phancong)
     {
-        if (!$this->canApproveSubmissions()) {
+        // Giả lập một object submission ảo để dùng hàm checkApprovalPermission
+        // Vì hàm check cần relation phancong, ta truyền object có property phancong
+        $dummySubmission = new NopSanpham();
+        $dummySubmission->setRelation('phancong', $phancong);
+
+        if (!$this->checkApprovalPermission($dummySubmission)) {
             return response()->json(['message' => 'Bạn không có quyền xem thông tin này.'], 403);
         }
 
@@ -180,7 +208,7 @@ class SubmissionController extends Controller
             return response()->json($submissions);
 
         } catch (\Exception $e) {
-            Log::error('Error in AdminSubmissionController@getSubmissionsForPhancong: ' . $e->getMessage());
+            Log::error('Error in SubmissionController@getSubmissionsForPhancong: ' . $e->getMessage());
             return response()->json(['message' => 'Lỗi máy chủ khi lấy lịch sử nộp bài.'], 500);
         }
     }

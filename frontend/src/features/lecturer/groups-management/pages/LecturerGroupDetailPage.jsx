@@ -73,6 +73,9 @@ export default function LecturerGroupDetailPage() {
 
         const meetingsInWeek = meetings.filter(meet => {
             if (!meet.THOIGIAN_BATDAU) return false;
+            // [SỬA ĐỔI] Bỏ qua lịch đã hủy giống bên Sinh viên
+            if (meet.TRANGTHAI === 'Đã hủy') return false;
+
             try {
                 const meetingDate = parseISO(meet.THOIGIAN_BATDAU);
                 // Kiểm tra nếu sự kiện chưa diễn ra VÀ nằm trong tuần này
@@ -145,18 +148,12 @@ export default function LecturerGroupDetailPage() {
                             </h3>
                             {hasTopic && (
                                 <>
-                                    <div className='flex items-center gap-2 mt-2'>
-                                        <Badge className="bg-green-600 text-white hover:bg-green-600/90 text-sm">
-                                            {phancong.detai?.TRANGTHAI}
-                                        </Badge>
-                                    </div>
                                     <p className="text-sm text-muted-foreground">GVHD: {phancong?.gvhd?.nguoidung?.HODEM_VA_TEN || 'N/A'}</p>
                                 </>
                             )}
                             <div className="pt-2 text-sm text-gray-600">
                                 Kế hoạch: 
                                 <Badge variant="outline" className='text-xs ml-1'>
-                                    {/* [FIXED N/A PLAN] Hiển thị TEN_DOT hoặc NAMHOC */}
                                     {currentPlan?.TEN_DOT || currentPlan?.NAMHOC || 'N/A'} 
                                 </Badge>
                             </div>
@@ -171,14 +168,16 @@ export default function LecturerGroupDetailPage() {
                         count={isLoading ? 'loading' : upcomingMeetingsCount} 
                         icon={CalendarCheck} 
                         colorClass="blue"
-                        onClick={() => navigate(`/projects/my-group/schedule/${nhomId}`)}
+                        // [SỬA ĐỔI] Trỏ về route của Giảng viên
+                        onClick={() => navigate(`/lecturer/groups-management/${nhomId}/schedule`)}
                     />
                     <ActivityCard 
                         title="Công việc tồn đọng" 
                         count={isLoading ? 'loading' : taskStats?.tasks_ton_dong ?? 0} 
                         icon={LayoutDashboard} 
                         colorClass="orange"
-                        onClick={() => navigate(`/projects/my-group/kanban/${nhomId}`)} 
+                        // [SỬA ĐỔI] Trỏ về route của Giảng viên
+                        onClick={() => navigate(`/lecturer/groups-management/${nhomId}/kanban`)} 
                     />
                 </div>
 
@@ -186,14 +185,12 @@ export default function LecturerGroupDetailPage() {
                         {groupDetails.thanhviens?.map(member => {
                             const memberUser = member.nguoidung;
                             const isLeader = member.ID_NGUOIDUNG === groupDetails.ID_NHOMTRUONG;
-                            // [MODIFIED CALL SITE]: Truyền memberUser object
                             const shortRole = getShortRole(memberUser, isLeader); 
 
                             return (
                                 <Popover key={member.ID_NGUOIDUNG}>
                                     <PopoverTrigger asChild>
                                         <div 
-                                            // Giao diện list item giống hệt ảnh mẫu (có border)
                                             className={cn(
                                                 "flex items-center justify-between p-2 m-1 hover:bg-muted/50 rounded-md cursor-pointer border",
                                                 isLeader ? "border-primary/50" : "border-gray-200" 
@@ -210,7 +207,6 @@ export default function LecturerGroupDetailPage() {
                                         </div>
                                     </PopoverTrigger>
                                     
-                                    {/* Popover Content (Chi tiết liên hệ) */}
                                     <PopoverContent className="w-64" align="end">
                                         <div className="space-y-3">
                                             <div className="flex items-center gap-2 text-sm font-semibold">
@@ -250,7 +246,6 @@ export default function LecturerGroupDetailPage() {
                     <CardTitle>Quản lý Chi tiết</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {/* Component này đã được sửa để có Tab và chuyển tuần */}
                     <GroupManagementView groupData={groupDetails} planId={String(planId)} />
                 </CardContent>
             </Card>

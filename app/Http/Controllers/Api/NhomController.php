@@ -656,6 +656,7 @@ class NhomController extends Controller
         }
         
         $nhom->load([
+            'kehoach',
             'phancongDetaiNhom',
             'thanhviens.nguoidung.vaitro', 
             'thanhviens.nguoidung.sinhvien.chuyennganh', 

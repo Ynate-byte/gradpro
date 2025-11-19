@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight,
     LogOut, CircleUserRound, Newspaper, Shield, FileText, CheckCircle, GraduationCap, PenSquare,
-    Layers 
+    Layers
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -26,22 +26,31 @@ export function AppSidebar() {
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Kiểm tra vai trò và chức vụ ---
+    // --- Lấy thông tin User ---
     const role = user?.vaitro?.TEN_VAITRO;
-    const position = user?.giangvien?.CHUCVU; 
+    const position = user?.giangvien?.CHUCVU;
 
+    // --- Logic phân quyền ---
     const isAdmin = role === 'Admin';
     const isTruongKhoa = role === 'Trưởng khoa' || position === 'Trưởng khoa';
     const isGiaoVu = role === 'Giáo vụ' || position === 'Giáo vụ';
-    const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role); 
+    const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
     const isSinhVien = role === 'Sinh viên';
 
-    // Quyền xem menu Admin (Admin, Trưởng khoa, Giáo vụ)
+    // Quyền xem menu Admin
     const canViewAdminMenu = isAdmin || isTruongKhoa || isGiaoVu;
-    // Quyền xem các mục của Giảng viên (GV, TK, GVụ, Admin)
+    // Quyền xem các mục của Giảng viên
     const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
-    // Quyền chấm điểm (GV, TK, GVụ, Admin)
+    // Quyền chấm điểm
     const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
+
+    // --- HÀM HELPER: Kiểm tra Active ---
+    const checkActive = (href) => {
+        if (!href) return false;
+        if (href === '/') return currentUrl === '/';
+        // Active khi URL trùng khớp hoặc là trang con của href
+        return currentUrl === href || currentUrl.startsWith(`${href}/`);
+    };
 
     // --- Cấu hình Menu Chính ---
     const menuConfig = [
@@ -66,31 +75,28 @@ export function AppSidebar() {
                     href: "/projects",
                     subItems: [
                         { href: "/projects/topics", title: "Đề tài" },
-                        // Sinh viên
+                        // Menu cho Sinh viên
                         ...(isSinhVien ? [
                             { href: "/projects/my-plans", title: "Kế hoạch KLTN" },
                             { href: "/projects/my-group", title: "Nhóm của tôi" },
                             { href: "/projects/find-group", title: "Tìm nhóm" },
                         ] : []),
-                        // Giảng viên (và các vai trò cao hơn)
+                        // Menu cho Giảng viên (và cấp cao hơn)
                         ...(canViewGiangVienRoutes ? [
                             { href: "/lecturer/groups-management", title: "Quản lý nhóm SV" },
-
+                            { href: "/lecturer/submissions", title: "Duyệt nộp bài" },
                             {
                                 href: "/lecturer/quota-management",
                                 title: position === 'Trưởng bộ môn' ? "Phân công (GV)" : "Thông tin Quota",
                                 hidden: isSinhVien || isAdmin
                             },
-
                             ...(position === 'Trưởng bộ môn' ? [{
                                 href: "/department-head/topic-reviewer-assignment",
                                 title: "Phân công Người Góp ý"
                             }] : []),
-
                         ] : []),
                     ],
                 },
-
                 {
                     title: "Hội đồng",
                     href: canViewAdminMenu ? "/admin/hoidong" : "/lecturer/council",
@@ -124,57 +130,35 @@ export function AppSidebar() {
         },
     ];
 
-    // --- HÀM MỚI: Kiểm tra xem có mục nào trong danh sách đang Active không ---
+    // --- Kiểm tra xem một nhóm menu có active không ---
     const isGroupActive = (items) => {
         return items.some(item => {
-            // Kiểm tra mục trực tiếp
-            const isDirectActive = item.href && (
-                (item.href === '/' && currentUrl === '/') ||
-                (item.href !== '/' && currentUrl.startsWith(item.href))
-            );
-            // Hoặc mục con
-            const isSubItemActive = item.subItems?.some(sub => 
-                (sub.href === '/' && currentUrl === '/') || 
-                (sub.href !== '/' && currentUrl.startsWith(sub.href))
-            );
-            return isDirectActive || isSubItemActive;
+            if (item.subItems) {
+                return item.subItems.some(sub => checkActive(sub.href));
+            }
+            return checkActive(item.href);
         });
     };
 
-    // --- Component MenuItem (render đệ quy) ---
+    // --- Component hiển thị từng mục Menu ---
     const MenuItem = ({ item }) => {
+        if (item.hidden) return null;
 
-        if (item.hidden) {
-            return null;
-        }
-
-        // 1. Kiểm tra trạng thái active của mục con
-        const isSubItemActive = item.subItems?.some(sub => {
-            if (sub.href === '/') {
-                return currentUrl === '/';
-            }
-            return currentUrl.startsWith(sub.href);
-        });
-
-        // 2. Kiểm tra trạng thái active trực tiếp của mục cha (nếu có href)
-        const isDirectActive = item.href && (
-            (item.href === '/' && currentUrl === '/') ||
-            (item.href !== '/' && currentUrl.startsWith(item.href))
-        );
-
-        // 3. Trạng thái active cuối cùng: hoặc là mục con active, hoặc mục cha direct active
+        const isSubItemActive = item.subItems?.some(sub => checkActive(sub.href));
+        const isDirectActive = checkActive(item.href);
         const isActive = isSubItemActive || isDirectActive;
 
-
-        // Ẩn nếu có subItems nhưng rỗng
-        if (item.subItems && item.subItems.length === 0) return null;
-
         if (item.subItems) {
+            if (item.subItems.length === 0) return null;
+
             return (
                 <Collapsible defaultOpen={isActive} className="group/collapsible">
                     <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
-                            <SidebarMenuButton className="w-full" isActive={isActive}>
+                            <SidebarMenuButton 
+                                className={`w-full ${isActive ? 'font-semibold text-primary' : ''}`}
+                                isActive={isActive}
+                            >
                                 <item.icon className="size-4 shrink-0" />
                                 <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
                                     {item.title}
@@ -185,15 +169,19 @@ export function AppSidebar() {
                         <CollapsibleContent>
                             <SidebarMenuSub>
                                 {item.subItems.map((subItem, idx) => {
-                                    const isSubActive = (subItem.href === '/' && currentUrl === '/') || 
-                                        (subItem.href !== '/' && currentUrl.startsWith(subItem.href));
+                                    const isSubActive = checkActive(subItem.href);
                                     return (
                                         <SidebarMenuSubItem key={idx}>
-                                            <SidebarMenuSubButton asChild isActive={isSubActive}>
+                                            <SidebarMenuSubButton 
+                                                asChild 
+                                                isActive={isSubActive}
+                                                className={isSubActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
+                                            >
                                                 <Link to={subItem.href}>{subItem.title}</Link>
                                             </SidebarMenuSubButton>
                                         </SidebarMenuSubItem>
-                                    )})}
+                                    );
+                                })}
                             </SidebarMenuSub>
                         </CollapsibleContent>
                     </SidebarMenuItem>
@@ -204,9 +192,13 @@ export function AppSidebar() {
         if (item.href) {
             return (
                 <SidebarMenuItem>
-                    <SidebarMenuButton asChild isActive={isActive}>
+                    <SidebarMenuButton 
+                        asChild 
+                        isActive={isActive}
+                        className={isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-bold border-r-4 border-primary' : ''}
+                    >
                         <Link to={item.href}>
-                            <item.icon className="size-4 shrink-0" />
+                            <item.icon className={`size-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
                             <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
                                 {item.title}
                             </span>
@@ -219,9 +211,19 @@ export function AppSidebar() {
         return null;
     };
 
+    // --- Logic hiển thị tiêu đề user ---
+    const getUserDisplayTitle = () => {
+        // Nếu vai trò là Giảng viên VÀ có chức vụ -> Hiển thị chức vụ (VD: Trưởng bộ môn)
+        if (role === 'Giảng viên' && position) {
+            return position;
+        }
+        // Các trường hợp còn lại (Admin, Sinh viên, GV không chức vụ) -> Hiển thị vai trò
+        return role || position || '...';
+    };
+
     return (
         <Sidebar collapsible="icon" className="group">
-            {/* Header: Logo + Vai trò/Chức vụ */}
+            {/* Header: Logo + Thông tin */}
             <SidebarHeader>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -232,7 +234,8 @@ export function AppSidebar() {
                             <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden">
                                 <span className="text-sm font-semibold">GradPro</span>
                                 <span className="text-xs text-muted-foreground">
-                                    {position || role || '...'}
+                                    {/* Sử dụng hàm logic mới */}
+                                    {getUserDisplayTitle()}
                                 </span>
                             </div>
                             <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden" />
@@ -266,18 +269,16 @@ export function AppSidebar() {
                     </SidebarGroup>
                 ))}
 
-                {/* Menu Quản trị (chỉ hiển thị nếu có quyền) */}
+                {/* Menu Quản trị (nếu có quyền) */}
                 {canViewAdminMenu &&
                     adminMenuConfig.map((group, idx) => {
                         const isActive = isGroupActive(group.items);
                         return (
                             <SidebarGroup 
                                 key={`admin-${idx}`}
-                                // Áp dụng viền bên trái cho nhóm và màu chữ cho nhãn
-                                className={isActive ? 'border-l-2 border-primary' : ''} 
+                                className={isActive ? 'border-l-4 border-primary/20 bg-sidebar-accent/5' : ''} 
                             >
-                                {/* Thêm màu chữ và độ đậm cho nhãn nhóm khi active */}
-                                <SidebarGroupLabel className={`group-data-[collapsible=icon]:hidden ${isActive ? 'text-primary font-semibold' : ''}`}>
+                                <SidebarGroupLabel className={`group-data-[collapsible=icon]:hidden ${isActive ? 'text-primary font-bold' : ''}`}>
                                     {group.label}
                                 </SidebarGroupLabel>
                                 <SidebarGroupContent>
@@ -292,7 +293,7 @@ export function AppSidebar() {
                     })}
             </SidebarContent>
 
-            {/* Footer: Thông tin người dùng */}
+            {/* Footer: User Info */}
             <SidebarFooter>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>

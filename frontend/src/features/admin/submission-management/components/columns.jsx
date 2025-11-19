@@ -15,31 +15,34 @@ const statusConfig = {
 
 export const getColumns = ({ onViewDetails, onSuccess }) => [
   {
-    accessorKey: "phancong.nhom.TEN_NHOM",
-    header: "Tên Nhóm",
-    cell: ({ row }) => (
-      <button
-        className="font-medium text-left hover:underline text-blue-600 dark:text-blue-400"
-        onClick={() => onViewDetails(row.original)}
-      >
-        {row.original.phancong?.nhom?.TEN_NHOM || 'N/A'}
-      </button>
-    )
-  },
-  {
     accessorKey: "phancong.detai.TEN_DETAI",
     header: "Tên Đề tài",
     cell: ({ row }) => (
-      <span className="text-sm text-muted-foreground line-clamp-2">
-        {row.original.phancong?.detai?.TEN_DETAI || 'N/A'}
-      </span>
+      <div className="flex flex-col">
+        <button
+          className="font-medium text-left hover:underline text-blue-600 dark:text-blue-400 line-clamp-1"
+          onClick={() => onViewDetails(row.original)}
+          title={row.original.phancong?.detai?.TEN_DETAI}
+        >
+          {row.original.phancong?.detai?.TEN_DETAI || 'N/A'}
+        </button>
+        {/* Hiển thị tên nhóm nhỏ ở dưới để dễ nhận biết */}
+        <span className="text-xs text-muted-foreground">
+          Nhóm: {row.original.phancong?.nhom?.TEN_NHOM || 'N/A'}
+        </span>
+      </div>
     )
   },
   {
-    accessorKey: "nguoiNop.HODEM_VA_TEN",
-    header: "Người nộp",
+    id: "gvhd",
+    header: "GV Hướng dẫn",
     cell: ({ row }) => {
-      return row.original.nguoiNop?.HODEM_VA_TEN || 'N/A';
+      const gvhdName = row.original.phancong?.gvhd?.nguoidung?.HODEM_VA_TEN;
+      return (
+        <span className="text-sm font-medium">
+          {gvhdName || 'Chưa phân công'}
+        </span>
+      );
     }
   },
   {
@@ -51,7 +54,9 @@ export const getColumns = ({ onViewDetails, onSuccess }) => [
     ),
     cell: ({ row }) => (
       <span className="text-xs text-muted-foreground pl-4">
-        {format(new Date(row.original.NGAY_NOP), 'dd/MM/yyyy HH:mm', { locale: vi })}
+        {row.original.NGAY_NOP 
+          ? format(new Date(row.original.NGAY_NOP), 'dd/MM/yyyy HH:mm', { locale: vi }) 
+          : 'N/A'}
       </span>
     )
   },
@@ -62,7 +67,7 @@ export const getColumns = ({ onViewDetails, onSuccess }) => [
       const status = row.original.TRANGTHAI;
       const statusStyle = statusConfig[status] || 'bg-gray-100 text-gray-800';
       return (
-        <Badge variant="outline" className={cn("text-xs py-0.5", statusStyle)}>
+        <Badge variant="outline" className={cn("text-xs py-0.5 whitespace-nowrap", statusStyle)}>
           {status}
         </Badge>
       );

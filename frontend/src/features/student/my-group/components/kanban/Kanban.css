@@ -10,17 +10,18 @@
     width: 100%; 
 }
 
-/* Cột (Đã thêm màu ở bước trước) */
+/* Cột Kanban */
 .kanban-column {
     flex: 1 1 0;
-    min-width: 240px; 
+    min-width: 280px; /* Tăng chiều rộng một chút */
     border-radius: var(--radius);
     background-color: hsl(var(--muted)); 
     display: flex;
     flex-direction: column;
-    max-height: 70vh;
+    max-height: 75vh;
     border: 1px solid hsl(var(--border));
 }
+
 .kanban-column-header {
     padding: 0.75rem 1rem;
     font-weight: 600;
@@ -29,31 +30,19 @@
     justify-content: space-between;
     align-items: center;
     transition: all 0.2s;
+    background-color: hsl(var(--background) / 0.5);
+    border-radius: var(--radius) var(--radius) 0 0;
 }
-.kanban-column:nth-child(2) {
-    background-color: hsl(217 91% 96%); /* blue-50 */
-    border-color: hsl(217 91% 85%);
-}
-.kanban-column:nth-child(2) .kanban-column-header {
-    color: hsl(var(--primary));
-    border-color: hsl(217 91% 85%);
-}
-.kanban-column:nth-child(3) {
-    background-color: hsl(38 92% 95%); /* orange-50 */
-    border-color: hsl(38 92% 85%);
-}
-.kanban-column:nth-child(3) .kanban-column-header {
-    color: hsl(30 90% 40%);
-    border-color: hsl(38 92% 85%);
-}
-.kanban-column:nth-child(4) {
-    background-color: hsl(140 80% 96%); /* green-50 */
-    border-color: hsl(140 80% 88%);
-}
-.kanban-column:nth-child(4) .kanban-column-header {
-    color: hsl(140 80% 30%);
-    border-color: hsl(140 80% 88%);
-}
+
+/* Màu sắc riêng cho từng cột */
+.kanban-column:nth-child(1) { background-color: hsl(var(--background)); }
+.kanban-column:nth-child(2) { background-color: #eff6ff; border-color: #dbeafe; } /* blue-50 */
+.kanban-column:nth-child(2) .kanban-column-header { color: #1d4ed8; background-color: #dbeafe; border-color: #bfdbfe; }
+.kanban-column:nth-child(3) { background-color: #fff7ed; border-color: #ffedd5; } /* orange-50 */
+.kanban-column:nth-child(3) .kanban-column-header { color: #c2410c; background-color: #ffedd5; border-color: #fed7aa; }
+.kanban-column:nth-child(4) { background-color: #f0fdf4; border-color: #dcfce7; } /* green-50 */
+.kanban-column:nth-child(4) .kanban-column-header { color: #15803d; background-color: #dcfce7; border-color: #bbf7d0; }
+
 
 /* Vùng chứa các thẻ công việc */
 .kanban-task-list {
@@ -65,64 +54,112 @@
     gap: 0.75rem;
 }
 
-/* ===== [THAY ĐỔI] Thẻ công việc (Task Card) ===== */
+/* ===== CARD CÔNG VIỆC (TASK CARD) ===== */
 .kanban-task-card {
     background-color: hsl(var(--card));
     border: 1px solid hsl(var(--border));
     border-radius: var(--radius);
     padding: 0.75rem;
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     cursor: grab;
-    transition: all 0.2s; /* Sửa thành all */
+    transition: all 0.2s;
     outline: none;
-    
-    /* Thêm viền trái mặc định */
-    border-left-width: 4px; 
+    border-left-width: 4px; /* Viền trái thể hiện độ ưu tiên */
+    position: relative;
 }
+
 .kanban-task-card:hover {
-    box-shadow: 0 2px 4px 0 rgb(0 0 0 / 0.07);
-    border-color: hsl(var(--primary) / 0.5); /* Sáng lên khi hover */
+    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+    transform: translateY(-2px);
 }
 
-/* [MỚI] Màu theo Độ ưu tiên */
-.kanban-task-card.priority-Cao {
-    border-left-color: hsl(var(--destructive)); /* Màu Đỏ */
-}
-.kanban-task-card.priority-Trungbình { /* "Trung bình" không có dấu cách */
-    border-left-color: hsl(var(--primary)); /* Màu Xanh dương */
-}
-.kanban-task-card.priority-Thấp {
-    border-left-color: hsl(var(--muted-foreground) / 0.5); /* Màu Xám */
-}
-
-/* [MỚI] Màu theo Trạng thái */
-.kanban-task-card.status-Tạmdừng { /* "Tạm dừng" không có dấu cách */
-    opacity: 0.6;
-    background-color: hsl(var(--muted) / 0.5);
-}
-.kanban-task-card.status-Đãhủy { /* "Đã hủy" không có dấu cách */
-    opacity: 0.5;
-    background-color: hsl(var(--muted) / 0.3);
-}
-.kanban-task-card.status-Đãhủy .kanban-task-title {
-    text-decoration: line-through; /* Gạch ngang tiêu đề */
-}
-/* ============================================= */
-
-
-/* Khi task đang được kéo */
 .kanban-task-card:active {
     cursor: grabbing;
 }
-.kanban-task-card.is-dragging {
-    opacity: 0.5;
-    box-shadow: 0 4px 8px 0 rgb(0 0 0 / 0.1);
+
+/* --- Style cho Độ ưu tiên (Priority) --- */
+.kanban-task-card.priority-Cao {
+    border-left-color: #ef4444; /* Red-500 */
 }
-.kanban-task-card.is-overlay {
-    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+.kanban-task-card.priority-Trungbình {
+    border-left-color: #3b82f6; /* Blue-500 */
+}
+.kanban-task-card.priority-Thấp {
+    border-left-color: #a1a1aa; /* Zinc-400 */
 }
 
-/* (Vùng rỗng và Multi-select giữ nguyên) */
+/* --- Style cho Trạng thái (Status) --- */
+.kanban-task-card.status-Tạmdừng {
+    opacity: 0.7;
+    background-color: #f4f4f5; /* Zinc-100 */
+    border-style: dashed;
+}
+
+.kanban-task-card.status-Đãhủy {
+    opacity: 0.6;
+    background-color: #fef2f2; /* Red-50 */
+    border-color: #fecaca;
+}
+.kanban-task-card.status-Đãhủy .kanban-task-title {
+    text-decoration: line-through;
+    color: #991b1b;
+}
+
+/* --- [QUAN TRỌNG] Style cho Công việc do GIẢNG VIÊN/ADMIN tạo --- */
+.kanban-task-card.is-authority-task {
+    border-color: #7c3aed; /* Violet-600 */
+    background: linear-gradient(to bottom right, #ffffff, #f5f3ff); /* White to Violet-50 */
+    box-shadow: 0 4px 6px -1px rgba(124, 58, 237, 0.1), 0 2px 4px -1px rgba(124, 58, 237, 0.06);
+}
+
+/* Ghi đè viền trái cho task của GV */
+.kanban-task-card.is-authority-task {
+    border-left-width: 4px;
+    border-left-color: #7c3aed; /* Luôn là màu tím bất kể độ ưu tiên */
+}
+
+.kanban-task-card.is-authority-task:hover {
+    box-shadow: 0 10px 15px -3px rgba(124, 58, 237, 0.15), 0 4px 6px -2px rgba(124, 58, 237, 0.1);
+    border-color: #6d28d9; /* Violet-700 */
+    transform: translateY(-2px);
+}
+
+/* Style cho tiêu đề của task Giảng viên */
+.kanban-task-card.is-authority-task .kanban-task-title {
+    color: #5b21b6; /* Violet-900 */
+    font-weight: 700;
+}
+
+/* Badge đặc biệt hiển thị trong card */
+.authority-badge {
+    background-color: #7c3aed; /* Violet-600 */
+    color: white;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 6px;
+    box-shadow: 0 2px 4px rgba(124, 58, 237, 0.2);
+}
+
+/* Hiệu ứng khi kéo thả */
+.kanban-task-card.is-dragging {
+    opacity: 0.5;
+    box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+    border-color: hsl(var(--primary));
+    z-index: 50;
+}
+
+.kanban-task-card.is-overlay {
+    box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 10px 10px -5px rgb(0 0 0 / 0.04);
+    cursor: grabbing;
+    transform: scale(1.02);
+}
+
+/* Vùng rỗng */
 .kanban-task-list-empty {
     min-height: 100px;
     border: 2px dashed hsl(var(--border));
@@ -132,7 +169,6 @@
     justify-content: center;
     color: hsl(var(--muted-foreground));
     font-size: 0.875rem;
-}
-.w-\[--radix-popover-trigger-width\] {
-    width: var(--radix-popover-trigger-width) !important;
+    margin: 0.75rem;
+    background-color: transparent;
 }

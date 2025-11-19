@@ -4,8 +4,8 @@ import { getSubmissions } from '@/api/adminSubmissionService';
 import { getAllPlans } from '@/api/thesisPlanService';
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getColumns } from './components/columns';
-import { AnimatePresence } from 'framer-motion';
-import { SubmissionDetailSheet } from './components/SubmissionDetailSheet';
+// Đổi import sang Dialog mới
+import { SubmissionDetailDialog } from './components/SubmissionDetailDialog'; 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BookCopy, CheckCircle } from 'lucide-react';
@@ -36,8 +36,14 @@ export default function SubmissionManagementPage() {
   const [columnFilters, setColumnFilters] = useState([]);
   const [activeTab, setActiveTab] = useState('Chờ xác nhận');
 
-  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingSubmission, setViewingSubmission] = useState(null);
+
+  // Tính toán index để Next/Prev
+  const viewingIndex = useMemo(() => {
+    if (!viewingSubmission) return -1;
+    return submissions.findIndex(s => s.ID_NOP_SANPHAM === viewingSubmission.ID_NOP_SANPHAM);
+  }, [submissions, viewingSubmission]);
 
   useEffect(() => {
     getAllPlans()
@@ -73,13 +79,32 @@ export default function SubmissionManagementPage() {
   }, [selectedPlanId, activeTab]);
 
   const handleSuccess = () => {
-    fetchData();
+    fetchData(); // Reload lại bảng dữ liệu sau khi duyệt
+    // Lưu ý: viewingSubmission sẽ tự động update nếu nó vẫn nằm trong danh sách data mới,
+    // nhưng để an toàn, ta giữ nguyên object cũ cho Dialog cho đến khi user bấm Next/Prev hoặc đóng.
   };
 
   const handleViewDetails = (submission) => {
     setViewingSubmission(submission);
-    setIsSheetOpen(true);
+    setIsDialogOpen(true);
   };
+
+  // --- Logic Next/Prev ---
+  const handleNext = () => {
+    if (viewingIndex < submissions.length - 1) {
+      setViewingSubmission(submissions[viewingIndex + 1]);
+    } else if (pagination.pageIndex < pageCount - 1) {
+       // (Nâng cao) Tự động load trang sau nếu đang ở cuối trang này - Chưa implement để tránh phức tạp
+       toast.info("Đã hết danh sách trang hiện tại.");
+    }
+  };
+
+  const handlePrevious = () => {
+    if (viewingIndex > 0) {
+      setViewingSubmission(submissions[viewingIndex - 1]);
+    }
+  };
+  // -----------------------
 
   const columns = useMemo(() => getColumns({
     onViewDetails: handleViewDetails,
@@ -162,16 +187,19 @@ export default function SubmissionManagementPage() {
         </CardContent>
       </Card>
 
-      <AnimatePresence>
-        {isSheetOpen && viewingSubmission && (
-          <SubmissionDetailSheet
-            submission={viewingSubmission}
-            isOpen={isSheetOpen}
-            setIsOpen={setIsSheetOpen}
-            onSuccess={handleSuccess}
-          />
-        )}
-      </AnimatePresence>
+      {/* Dialog Chi tiết & Duyệt */}
+      {viewingSubmission && (
+        <SubmissionDetailDialog
+          submission={viewingSubmission}
+          isOpen={isDialogOpen}
+          setIsOpen={setIsDialogOpen}
+          onSuccess={handleSuccess}
+          onNext={handleNext}
+          onPrevious={handlePrevious}
+          hasNext={viewingIndex < submissions.length - 1}
+          hasPrevious={viewingIndex > 0}
+        />
+      )}
     </div>
   );
 }

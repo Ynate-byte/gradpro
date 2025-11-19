@@ -139,10 +139,16 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-        // Allow both Admin and Dean (Trưởng khoa)
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
+
+        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
+        $roleName = $currentUser->vaitro->TEN_VAITRO;
+        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
+
+        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
+        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        // [HẾT SỬA ĐỔI]
 
         return $this->updateSingleDepartment($request, $currentUser);
     }
@@ -217,10 +223,16 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-        // Allow both Admin and Dean (Trưởng khoa)
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
+        
+        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
+        $roleName = $currentUser->vaitro->TEN_VAITRO;
+        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
+
+        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
+        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        // [HẾT SỬA ĐỔI]
 
         $planId = $request->ID_KEHOACH;
 
@@ -325,10 +337,16 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-        // Allow both Admin and Dean (Trưởng khoa)
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
+
+        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
+        $roleName = $currentUser->vaitro->TEN_VAITRO;
+        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
+
+        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
+        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        // [HẾT SỬA ĐỔI]
 
         $assignment = QuotaGiangvien::findOrFail($assignmentId);
         $assignment->update(['TRANGTHAI' => $request->TRANGTHAI]);
@@ -339,10 +357,16 @@ class QuotaController extends Controller
     public function removeAssignment($assignmentId)
     {
         $currentUser = Auth::user();
-        // Allow both Admin and Dean (Trưởng khoa)
-        if ($currentUser->vaitro->TEN_VAITRO !== 'Admin' && (!$currentUser->giangvien || $currentUser->giangvien->CHUCVU !== 'Trưởng khoa')) {
+
+        // [SỬA ĐỔI] Logic kiểm tra quyền hạn linh hoạt hơn
+        $roleName = $currentUser->vaitro->TEN_VAITRO;
+        $position = $currentUser->giangvien ? $currentUser->giangvien->CHUCVU : '';
+
+        // Cho phép: Admin, Trưởng khoa (Role) hoặc Trưởng khoa (Position)
+        if ($roleName !== 'Admin' && $roleName !== 'Trưởng khoa' && $position !== 'Trưởng khoa') {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
+        // [HẾT SỬA ĐỔI]
 
         $assignment = QuotaGiangvien::findOrFail($assignmentId);
         if (!$assignment->canDelete()) {
