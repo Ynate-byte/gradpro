@@ -55,4 +55,10 @@ class AuthController extends Controller
         
         return response()->json(['message' => 'Đăng xuất thành công']);
     }
+
+    public function me(Request $request) {
+        $user = $request->user();
+        $user->load('sinhvien', 'giangvien'); 
+        return response()->json($user);
+    }
 }

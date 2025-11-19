@@ -27,13 +27,17 @@ use App\Http\Controllers\Api\PhanhoiGoiyController;
 use App\Http\Controllers\Api\LichHopController;
 use App\Http\Controllers\Api\CongViecController;
 use App\Http\Controllers\Api\LecturerDashboardController;
+use App\Http\Controllers\Api\ProfileController; // [NEW]
+use App\Http\Controllers\Api\NewsController; // [NEW]
 
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::middleware('auth:sanctum')->group(function () {
     
-    // ---------------- XÁC THỰC ----------------
+    // ---------------- XÁC THỰC & PROFILE ----------------
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::put('/user/profile', [ProfileController::class, 'updateProfile']); // [NEW]
+    Route::put('/user/change-password', [ProfileController::class, 'changePassword']); // [NEW]
 
     // ---------------- NGƯỜI DÙNG ----------------
     Route::apiResource('users', UserController::class);
@@ -89,12 +93,12 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ---------------- TIN TỨC (Chung) ----------------
-    Route::get('/news', [\App\Http\Controllers\Api\NewsController::class, 'index']);
-    Route::post('/news', [\App\Http\Controllers\Api\NewsController::class, 'store']);
-    Route::get('/news/{id}', [\App\Http\Controllers\Api\NewsController::class, 'show']);
-    Route::post('/news/{id}', [\App\Http\Controllers\Api\NewsController::class, 'update']);
-    Route::delete('/news/{id}', [\App\Http\Controllers\Api\NewsController::class, 'destroy']);
-    Route::get('/news/{id}/pdf', [\App\Http\Controllers\Api\NewsController::class, 'pdf']);
+    Route::get('/news', [NewsController::class, 'index']); // [UPDATED] Use imported controller
+    Route::post('/news', [NewsController::class, 'store']);
+    Route::get('/news/{id}', [NewsController::class, 'show']);
+    Route::post('/news/{id}', [NewsController::class, 'update']);
+    Route::delete('/news/{id}', [NewsController::class, 'destroy']);
+    Route::get('/news/{id}/pdf', [NewsController::class, 'downloadPdf']); // [UPDATED] Correct method name
 
     // ---------------- KẾ HOẠCH MẪU (User) ----------------
     Route::get('thesis-plan-templates', [UserTemplateController::class, 'index']);
@@ -153,7 +157,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('thesis-plans/{plan}/import-preview', [ThesisPlanController::class, 'importPreview']); // Giai đoạn 2 & 3
         Route::post('thesis-plans/{plan}/import-process', [ThesisPlanController::class, 'importProcess']); // Giai đoạn 4
         
-
         // ----- NHÓM (Admin) -----
         Route::prefix('groups')->group(function () {
             Route::get('/', [GroupAdminController::class, 'getGroups']);

@@ -48,6 +48,15 @@ class Nguoidung extends Authenticatable
     {
         return $this->belongsTo(Vaitro::class, 'ID_VAITRO', 'ID_VAITRO');
     }
+    
+    public function hasRole($roleName)
+    {
+        if (!$this->relationLoaded('vaitro')) {
+            $this->load('vaitro');
+        }
+        
+        return $this->vaitro && $this->vaitro->TEN_VAITRO === $roleName;
+    }
 
     public function sinhvien()
     {
