@@ -119,7 +119,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
     // Handle select/deselect all *filtered* students
     const handleSelectAllFiltered = () => {
         setApiError(null);
-        const currentFilteredIds = new Set(filteredStudents.map(s => s.ID_THAMGIA)); 
+        const currentFilteredIds = new Set(filteredStudents.map(s => s.ID_THAMGIA));  
         const currentSelectedFiltered = Array.from(selected).filter(id => currentFilteredIds.has(id));
 
         if (currentSelectedFiltered.length === filteredStudents.length && filteredStudents.length > 0) {
@@ -170,7 +170,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
 
             if (error.response?.status === 409) {
                  toast.error("Thao tác bị chặn", {
-                     description: "Xem chi tiết lỗi trong dialog."
+                      description: "Xem chi tiết lỗi trong dialog."
                  });
             } else {
                  toast.error("Lỗi:", { description: errorMsg });
@@ -186,7 +186,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                 <DialogHeader className="p-6 pb-4 border-b flex-shrink-0">
                     <DialogTitle className="flex items-center gap-2 text-xl">
                         <UserX className="h-6 w-6 text-orange-600" />
-                        Sinh viên chưa từng đăng nhập ({isLoading ? '...' : filteredStudents.length})
+                        Sinh viên chưa từng đăng nhập ({isLoading ? '...' : allStudents.length})
                     </DialogTitle>
                     <DialogDescription>
                         Hành động này sẽ xóa sinh viên khỏi kế hoạch VÀ khỏi nhóm hiện tại của họ.
@@ -195,16 +195,16 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                     </DialogDescription>
                 </DialogHeader>
 
-                 <div className="px-6 pt-4 pb-2 flex-shrink-0">
+                <div className="px-6 pt-4 pb-2 flex-shrink-0">
                      <div className="relative">
-                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                         <Input
-                             placeholder="Tìm theo tên, MSSV, email..."
-                             className="pl-10"
-                             value={searchTerm}
-                             onChange={(e) => setSearchTerm(e.target.value)}
-                             disabled={isLoading}
-                         />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Tìm theo tên, MSSV, email..."
+                            className="pl-10"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            disabled={isLoading}
+                        />
                     </div>
                 </div>
 
@@ -229,9 +229,8 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                         )}
                     </AnimatePresence>
 
-                    {/* [START SỬA LỖI] Đổi h-[calc(...)] thành h-full */}
+                    {/* [SỬA LỖI] Đổi h-[calc(...)] thành h-full */}
                     <ScrollArea className="h-full border rounded-md">
-                    {/* [END SỬA LỖI] */}
                         {isLoading ? (
                             <InactiveStudentListSkeleton />
                         ) : (
@@ -275,13 +274,15 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                                                 <TableCell className="font-medium">{student.HODEM_VA_TEN}</TableCell>
                                                 <TableCell>{student.MA_DINHDANH}</TableCell>
                                                 <TableCell className="text-muted-foreground text-xs">{student.EMAIL}</TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">{student.sinhvien?.chuyennganh?.TEN_CHUYENNGANH ?? 'N/A'}</TableCell>
+                                                <TableCell className="text-muted-foreground text-xs">
+                                                    {student.sinhvien?.chuyennganh?.TEN_CHUYENNGANH ?? 'N/A'}
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
                                         <TableRow>
                                             <TableCell colSpan={6} className="h-32 text-center text-muted-foreground">
-                                                {allStudents.length === 0 ? 'Không có sinh viên nào chưa đăng nhập.' : 'Không tìm thấy sinh viên phù hợp.'}
+                                                {allStudents.length === 0 ? 'Tất cả sinh viên đều đã có nhóm.' : 'Không tìm thấy sinh viên phù hợp.'}
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -295,7 +296,7 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                     <div className="text-sm text-muted-foreground pt-2">
                         Đã chọn: {selected.size}
                     </div>
-                     <div className="flex gap-2">
+                    <div className="flex gap-2">
                         <Button variant="outline" onClick={() => setIsOpen(false)}>
                             Đóng
                         </Button>
@@ -316,5 +317,5 @@ export function InactiveStudentsDialog({ isOpen, setIsOpen, onSuccess, planId })
                 </DialogFooter>
             </DialogContent>
         </Dialog>
-    )
+    );
 }

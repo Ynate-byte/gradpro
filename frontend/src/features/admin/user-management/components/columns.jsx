@@ -4,7 +4,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DataTableRowActions } from "./row-actions";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, ArrowUp, ArrowDown, ShieldCheck, Briefcase, GraduationCap, Circle } from "lucide-react";
-import { format, formatDistanceToNow, parseISO, isValid } from 'date-fns'; // Đã import
+import { format, formatDistanceToNow, isValid } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,25 @@ const roleConfig = {
     'Trưởng khoa': { icon: Briefcase, color: "bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300 border-teal-200 dark:border-teal-700" },
 };
 
+// Sắp xếp ưu tiên chức vụ (dựa trên MA_CHUCVU)
+const POSITION_ORDER = [
+    'TRUONG_KHOA', 'PHO_TRUONG_KHOA', 
+    'TRUONG_BOMON', 'PHO_TRUONG_BOMON', 
+    'GIAO_VU'
+];
+
+// Helper: Tìm chức vụ có thứ tự ưu tiên cao nhất
+const getHighestPriorityPosition = (chucVus) => {
+    const codes = chucVus.map(cv => cv.MA_CHUCVU);
+    for (const code of POSITION_ORDER) {
+        if (codes.includes(code)) {
+            // Trả về đối tượng chức vụ tương ứng
+            return chucVus.find(cv => cv.MA_CHUCVU === code);
+        }
+    }
+    return null;
+}
+
 
 // Hiển thị biểu tượng sắp xếp cho cột
 const SortIndicator = ({ column }) => {
@@ -36,6 +55,28 @@ const SortIndicator = ({ column }) => {
         return <ArrowUpDown className="ml-2 h-4 w-4" />;
     }
     return sorted === "desc" ? <ArrowDown className="ml-2 h-4 w-4" /> : <ArrowUp className="ml-2 h-4 w-4" />;
+};
+
+// Hàm helper để parse ngày sinh (Đã sửa lỗi lệch giờ)
+const formatNgaySinh = (dateString) => {
+    if (!dateString || dateString.startsWith('0000-00-00')) return null;
+    try {
+        // Tạo Date object từ chuỗi YYYY-MM-DD.
+        let date = new Date(dateString);
+
+        // Khắc phục lỗi lệch múi giờ (Date object coi YYYY-MM-DD là 00:00 UTC)
+        // Bằng cách tăng offset timezone của trình duyệt.
+        if (dateString.length === 10) {
+             date = new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+        }
+
+        if (isValid(date)) {
+            return format(date, 'dd/MM/yyyy');
+        }
+    } catch (e) {
+        return null;
+    }
+    return null;
 };
 
 // Tạo cấu hình các cột cho bảng dữ liệu
@@ -60,7 +101,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         ),
         enableSorting: false,
         enableHiding: false,
-        size: 40, 
+        size: 40,
     },
     {
         accessorKey: "HODEM_VA_TEN",
@@ -91,7 +132,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             </div>
         ),
-        minSize: 250, 
+        minSize: 250,
     },
     {
         accessorKey: "MA_DINHDANH",
@@ -101,7 +142,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 {row.original.MA_DINHDANH}
             </div>
         ),
-        size: 140, 
+        size: 140,
     },
     {
         accessorKey: "NGAYSINH",
@@ -116,43 +157,65 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         ),
         cell: ({ row }) => {
             const ngaySinh = row.original.NGAYSINH;
-            // ----- [SỬA LỖI NGÀY SINH] -----
-            // Kiểm tra null, undefined, và '0000-00-00'
-            if (!ngaySinh || ngaySinh.startsWith('0000-00-00')) {
+            const formattedDate = formatNgaySinh(ngaySinh);
+            if (!formattedDate) {
                 return <span className="text-xs text-muted-foreground">Chưa có</span>;
             }
-            // ----- [KẾT THÚC SỬA LỖI] -----
-            try {
-                const date = parseISO(ngaySinh);
-                if (isValid(date)) {
-                    return <div className="text-sm">{format(date, 'dd/MM/yyyy')}</div>;
-                }
-                // Lỗi này không nên xảy ra nếu seeder đúng
-                return <span className="text-xs text-red-500">Ngày lỗi</span>; 
-            } catch (e) {
-                return <span className="text-xs text-red-500">Ngày lỗi</span>;
-            }
+            return <div className="text-sm">{formattedDate}</div>;
         },
-        size: 120, 
+        size: 120,
     },
     {
         id: "vai_tro",
         accessorKey: "vaitro.TEN_VAITRO",
         header: "Vai trò",
         cell: ({ row }) => {
-            const roleName = row.original.vaitro.TEN_VAITRO;
-            const positionName = row.original.giangvien?.CHUCVU;
-            const displayRoleName = positionName || roleName;
+            const user = row.original;
+            const roleName = user.vaitro.TEN_VAITRO;
+            const chucVus = user.giangvien?.chucvus || [];
+
+            // 1. Tìm chức vụ ưu tiên cao nhất
+            const highestPosition = getHighestPriorityPosition(chucVus);
+            
+            // 2. Xác định tên hiển thị chính và tooltip content
+            let displayRoleName = roleName;
+            let tooltipContent = null;
+
+            if (highestPosition) {
+                 displayRoleName = highestPosition.TEN_CHUCVU;
+                 tooltipContent = chucVus.map(cv => cv.TEN_CHUCVU).join(', ');
+            }
+            
+            // 3. Chọn config dựa trên tên hiển thị
             const config = roleConfig[displayRoleName] || roleConfig[roleName] || {};
             const Icon = config.icon || null;
+
+            // Kiểm tra xem có cần hiển thị tooltip/border dashed không
+            const isPositionBadge = highestPosition || chucVus.length > 0;
+
             return (
-                <Badge variant="outline" className={cn('gap-1.5', config.color)}>
-                    {Icon && <Icon className="h-3.5 w-3.5" />}
-                    {displayRoleName}
-                </Badge>
+                <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Badge variant="outline" className={cn('gap-1.5', config.color, isPositionBadge && 'border-dashed')}>
+                                {Icon && <Icon className="h-3.5 w-3.5" />}
+                                {displayRoleName}
+                            </Badge>
+                        </TooltipTrigger>
+                        {isPositionBadge && (
+                             <TooltipContent>
+                                {highestPosition && <p className="font-medium mb-1">Quyền cao nhất: {highestPosition.TEN_CHUCVU}</p>}
+                                <p className="font-medium">Tất cả chức vụ:</p>
+                                {chucVus.map((cv, index) => (
+                                    <div key={cv.ID_CHUCVU}>{cv.TEN_CHUCVU}</div>
+                                ))}
+                            </TooltipContent>
+                        )}
+                    </Tooltip>
+                </TooltipProvider>
             );
         },
-        minSize: 150, 
+        minSize: 150,
     },
     {
         id: "unit_major",
@@ -179,7 +242,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             );
         },
-        minSize: 200, 
+        minSize: 200,
     },
     { // Cột ẩn để lọc chuyên ngành
         id: "chuyen_nganh_id",
@@ -206,7 +269,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                 </div>
             );
         },
-        size: 120, 
+        size: 120,
     },
     {
         accessorKey: "NGAYTAO",

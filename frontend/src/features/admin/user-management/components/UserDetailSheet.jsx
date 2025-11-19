@@ -12,10 +12,8 @@ import {
     Users, Activity, Loader2, Circle
 } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-// ----- [SỬA LỖI] Gộp 2 dòng import 'format' -----
-import { format, isValid, parseISO } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import { vi } from 'date-fns/locale';
-// ----- [KẾT THÚC SỬA LỖI] -----
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
@@ -44,6 +42,25 @@ const planStatusConfig = {
     'Chờ duyệt chỉnh sửa': 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300 border-orange-200 dark:border-orange-600',
     'Đã phê duyệt': 'bg-sky-100 text-sky-800 dark:bg-sky-900/20 dark:text-sky-300 border-sky-200 dark:border-sky-600',
 };
+
+// Sắp xếp ưu tiên chức vụ (dựa trên MA_CHUCVU)
+const POSITION_ORDER = [
+    'TRUONG_KHOA', 'PHO_TRUONG_KHOA', 
+    'TRUONG_BOMON', 'PHO_TRUONG_BOMON', 
+    'GIAO_VU'
+];
+
+// Helper: Tìm chức vụ có thứ tự ưu tiên cao nhất
+const getHighestPriorityPositionName = (chucVus) => {
+    const codes = chucVus.map(cv => cv.MA_CHUCVU);
+    for (const code of POSITION_ORDER) {
+        if (codes.includes(code)) {
+            // Trả về TEN_CHUCVU tương ứng
+            return chucVus.find(cv => cv.MA_CHUCVU === code).TEN_CHUCVU;
+        }
+    }
+    return null;
+}
 
 // Component hiển thị thông tin
 const InfoItem = ({ icon: Icon, label, value }) => (
@@ -103,36 +120,41 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
         }
     }, [userId, isOpen, setIsOpen]);
 
-    // ----- [SỬA LỖI] Dùng hàm parse an toàn hơn -----
+    // Hàm helper: format ngày sinh (Đã sửa lỗi lệch giờ)
     const formatNgaySinh = (dateString) => {
-        if (!dateString) return null;
+        if (!dateString || dateString.startsWith('0000-00-00')) return null;
         try {
-            // Sử dụng new Date() để xử lý chuỗi Y-m-d an toàn hơn parseISO
-            // vì nó sẽ coi "2000-01-01" là 00:00 local, không phải UTC
-            const date = new Date(dateString);
+            let date = new Date(dateString);
+            if (dateString.length === 10) {
+                 date = new Date(date.getTime() + date.getTimezoneOffset() * 60000);
+            }
             if (isValid(date)) {
-                 // Tăng 1 ngày vì new Date("Y-m-d") bị lỗi timezone, coi là 00:00 UTC
-                // (chỉ khi nó không phải là ISO string đầy đủ)
-                if (dateString.length === 10) {
-                        date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-                }
                 return format(date, 'dd/MM/yyyy', { locale: vi });
             }
         } catch (e) {
-            console.error("Error formatting date:", dateString, e);
+            return "Ngày không hợp lệ";
         }
         return "Ngày không hợp lệ";
     };
-    // ----- [KẾT THÚC SỬA LỖI] -----
 
     return (
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
-            <SheetContent className="w-full sm:max-w-lg p-0 flex flex-col bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500">
+            <SheetContent 
+                className="w-full sm:max-w-lg p-0 flex flex-col bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500"
+                aria-describedby="user-sheet-description" 
+                aria-labelledby="user-sheet-title"
+            >
                 <div className="flex flex-col h-full">
                     {isLoading ? (
                         <SheetLoadingSkeleton />
                     ) : !user ? (
-                        <div className="p-6 text-center text-gray-500 dark:text-gray-400">Không thể tải dữ liệu người dùng.</div>
+                        <>
+                            <SheetHeader className="p-6 pb-4">
+                                <SheetTitle id="user-sheet-title">Không có người dùng</SheetTitle>
+                                <SheetDescription id="user-sheet-description">Dữ liệu bị lỗi hoặc không tìm thấy.</SheetDescription>
+                            </SheetHeader>
+                            <div className="p-6 text-center text-gray-500 dark:text-gray-400">Không thể tải dữ liệu người dùng.</div>
+                        </>
                     ) : (
                         <>
                             <SheetHeader className="p-6 pb-4 space-y-4 bg-white dark:bg-gray-800 border-b border-blue-200 dark:border-blue-700 shadow-sm">
@@ -143,22 +165,29 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="space-y-1">
-                                        <SheetTitle className="text-2xl font-bold text-gray-800 dark:text-gray-100">{user.HODEM_VA_TEN}</SheetTitle>
-                                        <SheetDescription className="text-gray-600 dark:text-gray-300 break-all">{user.EMAIL}</SheetDescription>
+                                        <SheetTitle id="user-sheet-title" className="text-2xl font-bold text-gray-800 dark:text-gray-100">{user.HODEM_VA_TEN}</SheetTitle>
+                                        <SheetDescription id="user-sheet-description" className="text-gray-600 dark:text-gray-300 break-all">{user.EMAIL}</SheetDescription>
                                         <div className="flex items-center flex-wrap gap-2 pt-2">
                                             {(() => {
                                                 const roleName = user.vaitro.TEN_VAITRO;
-                                                const positionName = user.giangvien?.CHUCVU;
-                                                const displayRoleName = positionName || roleName;
-                                                const roleInfo = roleConfig[displayRoleName] || roleConfig[roleName] || {};
-                                                const RoleIcon = roleInfo.icon;
+                                                const chucVus = user.giangvien?.chucvus || [];
+                                                
+                                                // Tìm chức vụ ưu tiên cao nhất để hiển thị
+                                                const highestPositionName = getHighestPriorityPositionName(chucVus);
+                                                const displayRoleName = highestPositionName || roleName;
+
+                                                const config = roleConfig[highestPositionName] || roleConfig[roleName] || {};
+                                                const RoleIcon = config.icon;
                                                 const isActive = user.TRANGTHAI_KICHHOAT;
+
                                                 return (
                                                     <>
-                                                        <Badge variant="outline" className={cn('gap-1.5 border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 text-xs py-0.5')}>
+                                                        <Badge variant="outline" className={cn('gap-1.5 border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 text-xs py-0.5', highestPositionName ? 'border-dashed' : '')}>
                                                             {RoleIcon && <RoleIcon className="h-3.5 w-3.5 text-blue-500" />}
                                                             {displayRoleName}
                                                         </Badge>
+
+                                                        {/* Badge trạng thái */}
                                                         <Badge
                                                             variant="outline"
                                                             className={cn(
@@ -186,9 +215,7 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
                                         <CardHeader><CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2"><Hash className="h-5 w-5 text-blue-500" />Thông tin chung</CardTitle></CardHeader>
                                         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-4 text-sm">
                                             <InfoItem icon={Hash} label="Mã định danh" value={user.MA_DINHDANH} />
-                                            {/* ----- [THÊM MỚI] ----- */}
                                             <InfoItem icon={Calendar} label="Ngày sinh" value={formatNgaySinh(user.NGAYSINH)} />
-                                            {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
                                             <InfoItem icon={Calendar} label="Ngày tham gia" value={format(new Date(user.NGAYTAO), 'dd/MM/yyyy', { locale: vi })} />
                                             <InfoItem icon={Clock} label="Đăng nhập cuối" value={user.DANGNHAP_CUOI ? format(new Date(user.DANGNHAP_CUOI), 'dd/MM/yyyy HH:mm', { locale: vi }) : 'Chưa đăng nhập'} />
                                         </CardContent>
@@ -203,6 +230,23 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
                                                 <InfoItem icon={Bookmark} label="Lớp" value={user.sinhvien.TEN_LOP} />
                                                 <InfoItem icon={Hash} label="Niên khóa" value={user.sinhvien.NIENKHOA} />
                                                 <InfoItem icon={Briefcase} label="Hệ đào tạo" value={user.sinhvien.HEDAOTAO} />
+                                                {user.sinhvien.cac_dot_tham_gia && user.sinhvien.cac_dot_tham_gia.length > 0 && (
+                                                    <div className="sm:col-span-2 space-y-2 pt-2">
+                                                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-2"><Activity className="h-4 w-4" /> Đang tham gia Khóa luận</p>
+                                                        {user.sinhvien.cac_dot_tham_gia.map(thamgia => {
+                                                            const plan = thamgia.kehoach;
+                                                            if (!plan) return null;
+                                                            const status = plan.TRANGTHAI;
+                                                            const statusStyle = planStatusConfig[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300 border-gray-200 dark:border-gray-600';
+                                                            return (
+                                                                <div key={thamgia.ID_THAMGIA} className="flex items-center justify-between p-2 border border-dashed rounded-md">
+                                                                    <p className="text-sm font-medium">{plan.TEN_DOT}</p>
+                                                                    <Badge variant="outline" className={cn('text-xs py-0.5', statusStyle)}>{status}</Badge>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
                                             </CardContent>
                                         </Card>
                                     )}
@@ -214,54 +258,20 @@ export function UserDetailSheet({ userId, isOpen, setIsOpen }) {
                                             <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-4 text-sm">
                                                 <InfoItem icon={Building} label="Khoa/Bộ môn" value={user.giangvien.khoabomon?.TEN_KHOA_BOMON} />
                                                 <InfoItem icon={GraduationCap} label="Học vị" value={user.giangvien.HOCVI} />
-                                                {user.giangvien.CHUCVU && (
-                                                    <InfoItem icon={Award} label="Chức vụ" value={user.giangvien.CHUCVU} />
-                                                )}
+                                                
+                                                {/* Hiển thị Chức vụ (Mảng N-N) */}
+                                                <div className="sm:col-span-2">
+                                                    <InfoItem 
+                                                        icon={Award} 
+                                                        label="Chức vụ" 
+                                                        value={user.giangvien.chucvus?.map(cv => cv.TEN_CHUCVU).join(', ') || 'Không có'} 
+                                                    />
+                                                </div>
+
                                                 <InfoItem icon={Users} label="Số nhóm HD tối đa" value={user.giangvien.SO_NHOM_TOIDA} />
                                                 <div className="sm:col-span-2">
                                                     <InfoItem icon={BookText} label="Chuyên môn" value={user.giangvien.CHUYENMON} />
                                                 </div>
-                                            </CardContent>
-                                        </Card>
-                                    )}
-
-                                    {/* Các khóa luận đang tham gia */}
-                                    {user.vaitro.TEN_VAITRO === 'Sinh viên' && (
-                                        <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                                            <CardHeader>
-                                                <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                                                    <Activity className="h-5 w-5 text-blue-500" />
-                                                    Các khóa luận đang tham gia
-                                                </CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="space-y-3">
-                                                {user.sinhvien?.cac_dot_tham_gia && user.sinhvien.cac_dot_tham_gia.length > 0 ? (
-                                                    user.sinhvien.cac_dot_tham_gia.map(thamgia => {
-                                                        const plan = thamgia.kehoach;
-                                                        if (!plan) return null;
-                                                        const status = plan.TRANGTHAI;
-                                                        const statusStyle = planStatusConfig[status] || 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-300 border-gray-200 dark:border-gray-600';
-                                                        return (
-                                                            <Link
-                                                                to={`/projects/my-plans`}
-                                                                key={thamgia.ID_THAMGIA || `plan-${plan.ID_KEHOACH}`}
-                                                                className="flex items-center justify-between p-3 border border-blue-100 dark:border-blue-800 rounded-lg bg-blue-50/50 dark:bg-blue-900/10 shadow-sm hover:shadow-md transition-colors"
-                                                            >
-                                                                <div className="space-y-1">
-                                                                    <p className="font-semibold text-gray-900 dark:text-gray-100">{plan.TEN_DOT}</p>
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400">{plan.NAMHOC} - HK {plan.HOCKY}</p>
-                                                                </div>
-                                                                <Badge variant="outline" className={cn('border-blue-400 text-blue-600 dark:border-blue-600 dark:text-blue-300 text-xs', statusStyle)}>
-                                                                    {status}
-                                                                </Badge>
-                                                            </Link>
-                                                        );
-                                                    })
-                                                ) : (
-                                                    <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
-                                                        Không tham gia kế hoạch nào đang hoạt động.
-                                                    </p>
-                                                )}
                                             </CardContent>
                                         </Card>
                                     )}

@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 
 import StatCard from "@/components/shared/StatCard"; 
 
+// Biến thể cho container chính (các thẻ thống kê)
 const containerVariants = {
   hidden: { opacity: 0 },
   visible: {
@@ -32,6 +33,7 @@ const containerVariants = {
   }
 };
 
+// Biến thể cho từng thẻ thống kê
 const itemVariants = {
   hidden: { y: 20, opacity: 0 },
   visible: { 
@@ -41,6 +43,17 @@ const itemVariants = {
   }
 };
 
+// Biến thể cho bảng (fade in và slide up)
+const tableVariants = {
+  hidden: { opacity: 0, y: 30 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.5, delay: 0.2, ease: "easeOut" }
+  }
+};
+
+// Định nghĩa các cột cho DataTable
 const getColumns = (onGradeClick) => [
   {
     accessorKey: "TEN_NHOM",
@@ -51,6 +64,7 @@ const getColumns = (onGradeClick) => [
     accessorKey: "detai",
     header: "Đề Tài",
     cell: ({ row }) => {
+      // Truy cập thông tin đề tài từ phancong_detai_nhom
       const detai = row.original.phancong_detai_nhom?.detai;
       return detai ? detai.TEN_DETAI : <span className="text-muted-foreground italic">Chưa đăng ký</span>;
     },
@@ -59,6 +73,7 @@ const getColumns = (onGradeClick) => [
     accessorKey: "trang_thai_cham", 
     header: "Trạng Thái",
     cell: ({ row }) => {
+      // Kiểm tra điểm tổng kết trước
       const diem = row.original.diem_tong_ket?.DIEM_TONG;
       const phancong = row.original.phancong_detai_nhom;
 
@@ -66,8 +81,10 @@ const getColumns = (onGradeClick) => [
         return <Badge variant="success">Đã hoàn thành</Badge>;
       }
       if (phancong) {
-         return <Badge variant="default">{phancong.TRANGTHAI || 'Đang thực hiện'}</Badge>;
+        // Nếu đã phân công đề tài nhưng chưa có điểm
+        return <Badge variant="default">{phancong.TRANGTHAI || 'Đang thực hiện'}</Badge>;
       }
+      // Nếu chưa có đề tài phân công
       return <Badge variant="secondary" className="italic">Chưa có đề tài</Badge>;
     },
   },
@@ -75,6 +92,7 @@ const getColumns = (onGradeClick) => [
     accessorKey: "diem_tong",
     header: "Điểm Tổng Kết",
     cell: ({ row }) => {
+      // Truy cập điểm tổng kết
       const diem = row.original.diem_tong_ket?.DIEM_TONG;
       return diem !== null && diem !== undefined ? (
         <div className="font-bold text-lg text-primary">{parseFloat(diem).toFixed(2)}</div>
@@ -88,6 +106,7 @@ const getColumns = (onGradeClick) => [
     header: "Thao tác",
     cell: ({ row }) => {
       const nhom = row.original;
+      // Chỉ cho phép chấm điểm nếu nhóm đã có đề tài được phân công
       const canGrade = !!nhom.phancong_detai_nhom; 
       
       return (
@@ -107,19 +126,24 @@ const getColumns = (onGradeClick) => [
 
 const ListNhomChamDiem = () => {
   const navigate = useNavigate();
+  // State quản lý phân trang, bộ lọc và sắp xếp
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [columnFilters, setColumnFilters] = useState([]);
   const [sorting, setSorting] = useState([]);
+  // State quản lý kế hoạch được chọn
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
+  // State quản lý tìm kiếm
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
+  // Lấy danh sách Kế hoạch
   const { data: plansData, isLoading: isLoadingPlans } = useQuery({
     queryKey: ["allThesisPlans"],
     queryFn: getAllPlans,
   });
 
+  // Thiết lập Kế hoạch đầu tiên khi dữ liệu Plans được tải
   useEffect(() => {
     if (!isInitialPlanSet && plansData && plansData.length > 0) {
       setSelectedPlanId(plansData[0].ID_KEHOACH.toString());
@@ -127,13 +151,17 @@ const ListNhomChamDiem = () => {
     }
   }, [plansData, isInitialPlanSet]);
 
+  // Key query phụ thuộc vào state của bảng và plan ID
   const queryKey = ["adminGroupsForGrading", pagination, columnFilters, sorting, selectedPlanId, debouncedSearchTerm];
   
+  // Lấy danh sách Nhóm
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: queryKey,
     queryFn: async () => {
+      // Chuyển đổi columnFilters sang định dạng query params
       const filters = columnFilters.reduce((acc, filter) => {
         if (filter.id === 'trang_thai_cham') { 
+          // Giả định backend chấp nhận statuses là mảng/chuỗi trạng thái
           acc['statuses'] = filter.value; 
         } else {
           acc[filter.id] = filter.value;
@@ -158,12 +186,17 @@ const ListNhomChamDiem = () => {
       });
       return response; 
     },
-    enabled: !!selectedPlanId, 
+    enabled: !!selectedPlanId, // Chỉ chạy query khi đã chọn kế hoạch
     placeholderData: (prev) => prev,
   });
 
   const isLoading = isLoadingGroups || isLoadingPlans;
 
+  // Lấy dữ liệu và thông tin phân trang
+  const data = groupsData?.data ?? [];
+  const pageCount = groupsData?.meta?.last_page ?? 0;
+
+  // Tính toán thống kê
   const stats = useMemo(() => {
     if (isLoading) {
       return { total: 'loading', daCham: 'loading', chuaCham: 'loading', chuaCoDeTai: 'loading' };
@@ -173,9 +206,15 @@ const ListNhomChamDiem = () => {
     }
     
     const totalGroups = groupsData.meta?.total ?? 0;
-    const daChamDiem = groupsData.data.filter(g => g.diem_tong_ket?.DIEM_TONG !== null && g.diem_tong_ket?.DIEM_TONG !== undefined).length;
-    const chuaCoDeTai = groupsData.data.filter(g => !g.phancong_detai_nhom).length;
-    const chuaChamDiem = groupsData.data.filter(g => g.phancong_detai_nhom && (g.diem_tong_ket?.DIEM_TONG === null || g.diem_tong_ket?.DIEM_TONG === undefined)).length;
+    
+    const groups = groupsData.data || [];
+    
+    // Đã hoàn thành (có điểm tổng kết)
+    const daChamDiem = groups.filter(g => g.diem_tong_ket?.DIEM_TONG !== null && g.diem_tong_ket?.DIEM_TONG !== undefined).length;
+    // Chưa có đề tài
+    const chuaCoDeTai = groups.filter(g => !g.phancong_detai_nhom).length;
+    // Đang thực hiện (có đề tài nhưng chưa có điểm)
+    const chuaChamDiem = groups.filter(g => g.phancong_detai_nhom && (g.diem_tong_ket?.DIEM_TONG === null || g.diem_tong_ket?.DIEM_TONG === undefined)).length;
 
     return {
       total: totalGroups,
@@ -185,6 +224,7 @@ const ListNhomChamDiem = () => {
     };
   }, [groupsData, isLoading]);
 
+  // Tùy chọn cho Select Kế hoạch
   const planOptions = useMemo(() => {
     if (!plansData) return [];
     return plansData.map(plan => ({
@@ -193,48 +233,44 @@ const ListNhomChamDiem = () => {
     }));
   }, [plansData]);
 
+  // Tùy chọn cho filter trạng thái
   const statusOptions = [
     { label: 'Đã hoàn thành', value: 'Đã hoàn thành' },
     { label: 'Đang thực hiện', value: 'Đang thực hiện' },
     { label: 'Chưa có đề tài', value: 'Chưa có đề tài' }, 
   ];
+  
+  // Handler khi click nút Chấm điểm
   const handleGradeClick = (nhomId) => {
     navigate(`/admin/cham-diem/${nhomId}`);
   };
 
+  // Handler khi click vào thẻ thống kê (để lọc theo trạng thái)
   const handleStatCardClick = (statusValue) => {
     setPagination(prev => ({ ...prev, pageIndex: 0 })); 
-        if (!statusValue) {
-      setColumnFilters(prev => prev.filter(f => f.id !== 'trang_thai_cham'));
+    const filterId = 'trang_thai_cham';
+    
+    if (!statusValue) {
+      // Xóa bộ lọc trạng thái nếu click vào "Tổng số nhóm"
+      setColumnFilters(prev => prev.filter(f => f.id !== filterId));
       return;
     }
     
-    // Set bộ lọc trạng thái
-    setColumnFilters(prev => [
-      ...prev.filter(f => f.id !== 'trang_thai_cham'), // Xóa filter cũ
-      { id: 'trang_thai_cham', value: [statusValue] } // Thêm filter mới
-    ]);
+    // Thiết lập bộ lọc trạng thái mới
+    setColumnFilters(prev => {
+      const existingFilters = prev.filter(f => f.id !== filterId);
+      return [
+        ...existingFilters, 
+        { id: filterId, value: [statusValue] } 
+      ];
+    });
   };
 
+  // Memoize columns để tránh re-render không cần thiết
   const columns = useMemo(() => getColumns(handleGradeClick), [handleGradeClick]);
 
-  const pageCount = groupsData?.meta?.last_page ?? 0;
-  const data = groupsData?.data ?? [];
-
-  // Logic tự động co dãn chiều cao bảng
-  const [tableHeight, setTableHeight] = useState('auto');
-  const tableRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (tableRef.current) {
-      const height = tableRef.current.getBoundingClientRect().height;
-      setTableHeight(height);
-    }
-  }, [data, isLoading, pagination]); 
-
   return (
-    <div className="p-4 md:p-8 space-y-5">
-      
+    <div className="p-4 md:p-8 space-y-6">      
       {/* Thẻ Thống Kê */}
       <motion.div
         className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
@@ -288,12 +324,15 @@ const ListNhomChamDiem = () => {
         </motion.div>
       </motion.div>
 
+      {/* Bộ lọc Kế hoạch */}
       <div className="flex justify-start">
         <div className="max-w-xs w-full space-y-2">
+          <Label htmlFor="plan-select" className="text-sm font-medium">Lọc theo Kế hoạch</Label>
           <Select
             id="plan-select"
             value={selectedPlanId}
             onValueChange={(value) => setSelectedPlanId(value === "all" ? "" : value)}
+            disabled={isLoadingPlans}
           >
             <SelectTrigger>
               <SelectValue placeholder="Tất cả kế hoạch" />
@@ -312,36 +351,31 @@ const ListNhomChamDiem = () => {
 
       {/* Bảng Dữ liệu */}
       <motion.div
-        initial={false}
-        animate={{ height: tableHeight }}
-        transition={{
-            duration: 0.5,
-            ease: [0.4, 0, 0.2, 1]
-        }}
-        style={{ overflow: 'hidden' }}
+        className="flex-grow min-h-0"
+        variants={tableVariants}
+        initial="hidden"
+        animate="visible"
       >
-        <div ref={tableRef}>
-          <DataTable
-            columns={columns}
-            data={data}
-            pageCount={pageCount}
-            loading={isLoading}
-            pagination={pagination}
-            setPagination={setPagination}
-            columnFilters={columnFilters}
-            setColumnFilters={setColumnFilters}
-            sorting={sorting}
-            setSorting={setSorting}
-            
-            statusColumnId="trang_thai_cham"
-            statusOptions={statusOptions}
-            
-            searchColumnId="search"
-            searchPlaceholder="Tìm tên nhóm, đề tài..."
-            searchTerm={searchTerm}
-            onSearchChange={setSearchTerm}
-          />
-        </div>
+        <DataTable
+          columns={columns}
+          data={data}
+          pageCount={pageCount}
+          loading={isLoading}
+          pagination={pagination}
+          setPagination={setPagination}
+          columnFilters={columnFilters}
+          setColumnFilters={setColumnFilters}
+          sorting={sorting}
+          setSorting={setSorting}
+          
+          statusColumnId="trang_thai_cham"
+          statusOptions={statusOptions}
+          
+          searchColumnId="search"
+          searchPlaceholder="Tìm tên nhóm, đề tài..."
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+        />
       </motion.div>
     </div>
   );

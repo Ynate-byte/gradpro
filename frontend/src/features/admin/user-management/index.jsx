@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getColumns } from './components/columns';
 import { DataTable } from '@/components/shared/data-table/DataTable';
-import { getUsers, getChuyenNganhs, getKhoaBomons } from '@/api/userService';
+import { getUsers, getChuyenNganhs, getKhoaBomons, getPositions } from '@/api/userService';
 import { UserFormDialog } from './components/user-form-dialog';
 import { UserImportDialog } from './components/UserImportDialog';
 import { UserDetailSheet } from './components/UserDetailSheet';
@@ -142,6 +142,7 @@ const userColumnVisibility = {
     khoa_bomon: false,
     chuyen_nganh_id: false,
     khoa_bomon_id: false,
+    chuc_vu_id: false, 
 };
 
 export default function UserManagementPage() {
@@ -161,18 +162,25 @@ export default function UserManagementPage() {
     const [sorting, setSorting] = useState([]);
     const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
     const [khoaBomonOptions, setKhoaBomonOptions] = useState([]);
+    const [positionOptions, setPositionOptions] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [rowSelection, setRowSelection] = useState({});
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-    // Fetch Chuyên ngành và Khoa/Bộ môn
+    // Fetch Chuyên ngành, Khoa/Bộ môn và Chức vụ
     useEffect(() => {
         Promise.all([
             getChuyenNganhs().catch(() => []),
-            getKhoaBomons().catch(() => [])
-        ]).then(([chuyenNganhs, khoaBomons]) => {
+            getKhoaBomons().catch(() => []),
+            getPositions().catch(() => []), 
+        ]).then(([chuyenNganhs, khoaBomons, positions]) => {
             setChuyenNganhOptions(chuyenNganhs);
             setKhoaBomonOptions(khoaBomons);
+            // Xử lý dữ liệu trả về của positions
+            setPositionOptions(positions.map(p => ({ label: p.TEN_CHUCVU, value: String(p.ID_CHUCVU) })));
+        })
+        .catch(() => {
+            toast.error("Lỗi khi tải các tùy chọn lọc (Chuyên ngành, Khoa/Bộ môn, Chức vụ).");
         });
     }, []);
 
@@ -183,14 +191,21 @@ export default function UserManagementPage() {
         }
         setLoading(true);
 
+        // Lọc theo tên vai trò chính (TEN_VAITRO)
+        let roleFilter = activeTab === "Tất cả" ? undefined : activeTab;
+
+        // Lọc theo ID chức vụ
+        const positionFilter = columnFilters.find(f => f.id === 'chuc_vu_id')?.value; 
+        
         const params = {
             page: pagination.pageIndex + 1,
             per_page: pagination.pageSize,
             search: debouncedSearchTerm,
-            role: activeTab === "Tất cả" ? undefined : activeTab,
+            role: roleFilter,
             statuses: columnFilters.find(f => f.id === 'trang_thai')?.value,
             chuyen_nganh_ids: columnFilters.find(f => f.id === 'chuyen_nganh_id')?.value,
             khoa_bomon_ids: columnFilters.find(f => f.id === 'khoa_bomon_id')?.value,
+            position_ids: positionFilter, 
             sort: sorting[0] ? `${sorting[0].id},${sorting[0].desc ? 'desc' : 'asc'}` : undefined,
         };
         getUsers(params)
@@ -201,8 +216,8 @@ export default function UserManagementPage() {
             })
             .catch(error => toast.error("Lỗi khi tải dữ liệu người dùng."))
             .finally(() => {
-                 setLoading(false);
-                 setLoadingStats(false);
+                setLoading(false);
+                setLoadingStats(false);
             });
     }, [pagination, columnFilters, sorting, activeTab, debouncedSearchTerm]);
 
@@ -242,6 +257,11 @@ export default function UserManagementPage() {
     const khoaBomonFilterOptions = useMemo(() =>
         (khoaBomonOptions || []).map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) })),
         [khoaBomonOptions]
+    );
+    // Options cho bộ lọc chức vụ
+    const positionFilterOptions = useMemo(() =>
+        (positionOptions || []).map(p => ({ label: p.label, value: p.value })),
+        [positionOptions]
     );
 
     // Hàm render DataTable cho các tab với smooth reveal animation
@@ -285,6 +305,10 @@ export default function UserManagementPage() {
                         chuyenNganhFilterOptions={(tabName === 'Tất cả' || tabName === 'Sinh viên') ? chuyenNganhFilterOptions : undefined}
                         khoaBomonFilterColumnId="khoa_bomon_id"
                         khoaBomonFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? khoaBomonFilterOptions : undefined}
+                        // Thêm bộ lọc chức vụ
+                        chucVuFilterColumnId="chuc_vu_id" 
+                        chucVuFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? positionFilterOptions : undefined}
+                        // End bộ lọc chức vụ
                         searchColumnId="HODEM_VA_TEN"
                         searchPlaceholder="Tìm theo tên, email, mã..."
                         addBtnText="Thêm người dùng"
@@ -386,7 +410,7 @@ export default function UserManagementPage() {
                             </TabsList>
                         </motion.div>
                         <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
-                             {renderDataTable(activeTab)}
+                            {renderDataTable(activeTab)}
                         </TabsContent>
                     </Tabs>
                 </motion.div>

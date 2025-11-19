@@ -60,6 +60,12 @@ class UserController extends Controller
             });
         }
 
+        if ($request->filled('position_ids')) {
+            $query->whereHas('giangvien.chucvus', function ($q) use ($request) {
+                $q->whereIn('CHUCVU.ID_CHUCVU', $request->position_ids);
+            });
+        }
+
         // Xử lý lọc theo trạng thái
         if ($request->filled('statuses')) {
             $statusesBool = collect($request->statuses)->map(fn($status) => filter_var($status, FILTER_VALIDATE_BOOLEAN))->all();

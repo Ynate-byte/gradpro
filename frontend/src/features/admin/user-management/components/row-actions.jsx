@@ -91,7 +91,7 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
         }
     };
 
-     // Xử lý xóa (lần 2 - force)
+    // Xử lý xóa (lần 2 - force)
     const handleForceDeleteUser = async () => {
         setIsLoading(true);
         try {
@@ -102,7 +102,7 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
             toast.success(`Đã xóa bắt buộc người dùng ${user.HODEM_VA_TEN}.`);
             onSuccess();
         } catch (error) {
-             toast.error(error.response?.data?.message || "Xóa thất bại.");
+            toast.error(error.response?.data?.message || "Xóa thất bại.");
         } finally {
             setIsLoading(false);
             setCriticalAlertInfo({ isOpen: false, data: null });
@@ -165,7 +165,7 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
                     <DropdownMenuSeparator />
                     {/* Kích hoạt/Vô hiệu hóa */}
                     <DropdownMenuItem onClick={() => openConfirmation('toggle')}>
-                        {/* --- SỬA LỖI SLOT --- */}
+                        {/* --- SỬA LỖI SLOT (Đã sửa) --- */}
                         <span className="flex items-center w-full">
                             {user.TRANGTHAI_KICHHOAT ? (
                                 <>
@@ -212,28 +212,28 @@ export function DataTableRowActions({ row, onEdit, onSuccess }) {
                 </AlertDialogContent>
             </AlertDialog>
 
-             {/* Dialog cảnh báo xóa trưởng nhóm (Delete lần 2 - Force) */}
-             <AlertDialog open={criticalAlertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setCriticalAlertInfo({ isOpen: false, data: null })}>
+            {/* Dialog cảnh báo xóa trưởng nhóm (Delete lần 2 - Force) */}
+            <AlertDialog open={criticalAlertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setCriticalAlertInfo({ isOpen: false, data: null })}>
                 <AlertDialogContent aria-labelledby={criticalTitleId} aria-describedby={criticalDescriptionId}>
                     <AlertDialogHeader>
-                         <AlertDialogTitle id={criticalTitleId} className="flex items-center gap-2 text-destructive">
+                        <AlertDialogTitle id={criticalTitleId} className="flex items-center gap-2 text-destructive">
                             <ShieldAlert className="h-6 w-6" /> Cảnh báo nghiêm trọng!
-                         </AlertDialogTitle>
-                         <AlertDialogDescription id={criticalDescriptionId} className="text-base text-foreground space-y-3">
-                             <p>
-                                 Người dùng <strong>{user.HODEM_VA_TEN}</strong> hiện đang là Trưởng nhóm của một nhóm thuộc kế hoạch <strong className="text-destructive">ĐANG THỰC HIỆN</strong>.
-                             </p>
-                             <div className="border bg-muted/50 p-3 rounded-md text-sm space-y-1">
-                                 <div><span className="font-medium text-muted-foreground">Nhóm:</span> "{criticalAlertInfo.data?.group_name}"</div>
-                                 <div><span className="font-medium text-muted-foreground">Kế hoạch:</span> "{criticalAlertInfo.data?.plan_name}"</div>
-                             </div>
-                             <p>
-                                 Việc xóa người dùng này sẽ tự động <strong className="text-destructive">chuyển quyền trưởng nhóm hoặc giải tán nhóm</strong> nói trên.
-                             </p>
-                             <p>
-                                 Bạn có chắc chắn muốn <strong className="text-destructive">XÓA BẮT BUỘC</strong> người dùng này không?
-                             </p>
-                         </AlertDialogDescription>
+                        </AlertDialogTitle>
+                        <AlertDialogDescription id={criticalDescriptionId} className="text-base text-foreground space-y-3">
+                            <p>
+                                Người dùng <strong>{user.HODEM_VA_TEN}</strong> hiện đang là Trưởng nhóm của một nhóm thuộc kế hoạch <strong className="text-destructive">ĐANG THỰC HIỆN</strong>.
+                            </p>
+                            <div className="border bg-muted/50 p-3 rounded-md text-sm space-y-1">
+                                <div><span className="font-medium text-muted-foreground">Nhóm:</span> "{criticalAlertInfo.data?.group_name}"</div>
+                                <div><span className="font-medium text-muted-foreground">Kế hoạch:</span> "{criticalAlertInfo.data?.plan_name}"</div>
+                            </div>
+                            <p>
+                                Việc xóa người dùng này sẽ tự động <strong className="text-destructive">chuyển quyền trưởng nhóm hoặc giải tán nhóm</strong> nói trên.
+                            </p>
+                            <p>
+                                Bạn có chắc chắn muốn <strong className="text-destructive">XÓA BẮT BUỘC</strong> người dùng này không?
+                            </p>
+                        </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isLoading}>Hủy</AlertDialogCancel>

@@ -15,7 +15,7 @@ export const userFormSchema = z.object({
         .string()
         .refine((val) => val !== "", { message: "Vui lòng chọn vai trò." }),
     TRANGTHAI_KICHHOAT: z.boolean().default(true),
-    
+
     password: z
         .string()
         .min(6, { message: "Mật khẩu phải có ít nhất 6 ký tự." })
@@ -33,7 +33,8 @@ export const userFormSchema = z.object({
     giangvien_details: z.object({
         ID_KHOA_BOMON: z.string().optional().nullable(),
         HOCVI: z.string().optional().nullable(),
-        CHUCVU: z.string().optional().nullable(),
+        // Đã sửa: giờ là mảng ID, không phải chuỗi
+        CHUCVU_IDS: z.array(z.number().int()).optional(), 
     }).optional(),
 
 }).refine(
