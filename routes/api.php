@@ -353,6 +353,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ---------------- LỊCH SỬ HOẠT ĐỘNG ----------------
+    Route::get('/history/personal/stats', [HistoryController::class, 'getPersonalStats']);
     Route::get('/history/personal', [HistoryController::class, 'getPersonalHistory']);
     Route::get('/history/group/{groupId}', [HistoryController::class, 'getGroupHistory']);
     

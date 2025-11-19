@@ -1,374 +1,399 @@
-import React, { useState, useEffect, useCallback, useId } from 'react';
-import { findGroups, requestToJoin, getMyActivePlans, cancelJoinRequest } from '@/api/groupService';
-import { getChuyenNganhs, getKhoaBomons } from '@/api/userService';
-import { useForm } from 'react-hook-form';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { findGroups, requestToJoin, cancelJoinRequest, getMyActivePlans } from '@/api/groupService';
+import { getChuyenNganhs } from '@/api/userService';
+import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import {
+    Search, Users, Filter, ArrowLeft, UserPlus,
+    Loader2, AlertCircle, Undo2, Info, GraduationCap, Crown
+} from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, UserPlus, CheckCircle, BookCopy, X, AlertCircle } from 'lucide-react';
+import { Separator } from "@/components/ui/separator";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
-// ***** SỬA ĐỔI: Thêm AlertDialog *****
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle
-} from "@/components/ui/alert-dialog";
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
 
+const getInitials = (name) => name ? name.charAt(0).toUpperCase() : '?';
 
-const requestSchema = z.object({ LOINHAN: z.string().max(150, 'Lời nhắn không quá 150 ký tự.').optional() });
+const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
+    const maxMembers = group.kehoach?.SO_THANHVIEN_TOIDA || 4;
+    const currentMembers = group.SO_THANHVIEN_HIENTAI;
+    const progress = (currentMembers / maxMembers) * 100;
+    const isFull = currentMembers >= maxMembers;
+    const progressColor = isFull ? "bg-red-500" : (progress >= 75 ? "bg-yellow-500" : "bg-green-500");
 
-// Component Dialog để gửi yêu cầu gia nhập nhóm
-const RequestJoinDialog = ({ group, isOpen, setIsOpen, onSuccess }) => {
-    // ... (Không thay đổi)
-    const [isLoading, setIsLoading] = useState(false);
-    const form = useForm({
-        resolver: zodResolver(requestSchema),
-        defaultValues: { LOINHAN: '' },
-    });
-    const onSubmit = async (data) => {
-        setIsLoading(true);
-        try {
-            const response = await requestToJoin(group.ID_NHOM, data);
-            toast.success(response.message);
-            onSuccess();
-            setIsOpen(false);
-            form.reset();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Gửi yêu cầu thất bại.');
-        } finally {
-            setIsLoading(false);
-        }
-    };
-    if (!group) return null;
     return (
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle>Gửi yêu cầu gia nhập "{group.TEN_NHOM}"</DialogTitle>
-                    <DialogDescription>Gửi lời nhắn (tùy chọn) đến nhóm trưởng.</DialogDescription>
-                </DialogHeader>
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                        <FormField
-                            control={form.control}
-                            name="LOINHAN"
-                            render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Lời nhắn</FormLabel>
-                                    <FormControl>
-                                        <Textarea placeholder="Chào bạn, mình muốn tham gia nhóm..." {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
+        <div className="flex flex-col md:flex-row items-center justify-between py-2 px-4 border rounded-lg bg-card hover:shadow-sm hover:bg-accent/5 transition-all gap-3 group relative">
+            <div className="w-full md:w-[30%] flex flex-col justify-center shrink-0 min-w-0">
+                <div className="flex items-center gap-2">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <h3 className="text-sm font-bold truncate text-primary cursor-pointer hover:underline underline-offset-2 decoration-dashed max-w-[200px] md:max-w-full">
+                                {group.TEN_NHOM}
+                            </h3>
+                        </PopoverTrigger>
+
+                        <PopoverContent className="w-96 p-0" align="start">
+                            <div className="p-4 border-b bg-muted/30">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    <Info className="w-4 h-4 text-primary" />
+                                    Thông tin nhóm
+                                </h4>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                    {group.chuyennganh?.TEN_CHUYENNGANH || 'Chưa phân chuyên ngành'}
+                                </p>
+                            </div>
+                            <div className="p-4 space-y-4">
+                                {group.MOTA && (
+                                    <div className="text-sm bg-muted/50 p-2.5 rounded border italic text-muted-foreground">
+                                        "{group.MOTA}"
+                                    </div>
+                                )}
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-semibold text-muted-foreground uppercase">Thành viên ({group.SO_THANHVIEN_HIENTAI}/{maxMembers})</span>
+                                    </div>
+                                    <ScrollArea className="h-[180px]">
+                                        <div className="space-y-2 pr-3">
+                                            {group.thanhviens?.map((tv) => (
+                                                <div key={tv.ID_NGUOIDUNG} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 transition-colors border border-transparent hover:border-border">
+                                                    <Avatar className="h-8 w-8 border bg-background">
+                                                        <AvatarFallback className="text-xs">{getInitials(tv.nguoidung?.HODEM_VA_TEN)}</AvatarFallback>
+                                                    </Avatar>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between">
+                                                            <p className="text-sm font-medium truncate text-foreground">
+                                                                {tv.nguoidung?.HODEM_VA_TEN}
+                                                            </p>
+                                                            {tv.ID_NGUOIDUNG === group.ID_NHOMTRUONG && (
+                                                                <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500 ml-1" />
+                                                            )}
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground font-mono">{tv.nguoidung?.MA_DINHDANH}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
+                                </div>
+                                <div className="pt-2 border-t flex items-center gap-2 text-xs text-muted-foreground">
+                                    <GraduationCap className="w-3 h-3" />
+                                    <span className="truncate">{group.khoabomon?.TEN_KHOA_BOMON || 'Khoa chưa xác định'}</span>
+                                </div>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+
+                    {group.da_gui_yeu_cau && (
+                        <Badge variant="secondary" className="bg-blue-50 text-blue-600 text-[10px] h-4 px-1 border-blue-100">
+                            Đã xin
+                        </Badge>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                    <span className="flex items-center gap-1 truncate" title={`Trưởng nhóm: ${group.nhomtruong?.HODEM_VA_TEN}`}>
+                        <Users className="h-3 w-3" />
+                        {group.nhomtruong?.HODEM_VA_TEN}
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span className="truncate max-w-[150px]" title={group.chuyennganh?.TEN_CHUYENNGANH}>
+                        {group.chuyennganh?.TEN_CHUYENNGANH || 'Chưa phân ngành'}
+                    </span>
+                </div>
+            </div>
+
+            <div className="hidden md:flex flex-1 items-center justify-between px-4 border-l border-r border-dashed border-gray-200 dark:border-gray-800 h-full min-h-[40px]">
+                <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 italic flex-1 mr-4">
+                    {group.MOTA || "Chưa có mô tả..."}
+                </p>
+
+                <div className="flex items-center shrink-0">
+                    <div className="flex -space-x-1.5 overflow-hidden mr-2">
+                        {group.thanhviens?.slice(0, 4).map((tv) => (
+                            <Avatar key={tv.ID_NGUOIDUNG} className="inline-block h-6 w-6 rounded-full ring-1 ring-background" title={tv.nguoidung?.HODEM_VA_TEN}>
+                                <AvatarFallback className="bg-muted text-[9px] text-muted-foreground">
+                                    {getInitials(tv.nguoidung?.HODEM_VA_TEN)}
+                                </AvatarFallback>
+                            </Avatar>
+                        ))}
+                        {group.thanhviens?.length > 4 && (
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full ring-1 ring-background bg-muted text-[9px] font-medium">
+                                +{group.thanhviens.length - 4}
+                            </div>
+                        )}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground tabular-nums">
+                        {group.SO_THANHVIEN_HIENTAI}/{maxMembers}
+                    </span>
+                </div>
+            </div>
+
+            <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-3 shrink-0">
+                <div className="flex md:hidden flex-1 flex-col items-start mr-2">
+                    <Progress value={progress} className="h-1.5 w-full" indicatorClassName={progressColor} />
+                </div>
+
+                <div className="hidden md:block w-16 mr-2">
+                    <Progress value={progress} className="h-1.5 w-full" indicatorClassName={progressColor} />
+                </div>
+
+                <div className="w-[100px] flex justify-end">
+                    {group.da_gui_yeu_cau ? (
+                        <Button
+                            variant="outline" size="sm"
+                            className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-8 text-xs px-2"
+                            onClick={(e) => { e.stopPropagation(); onCancelRequest(group.id_yeu_cau_da_gui); }}
+                        >
+                            <Undo2 className="w-3 h-3 mr-1.5" /> Hủy
+                        </Button>
+                    ) : (
+                        <Button
+                            size="sm"
+                            className="w-full h-8 text-xs px-2"
+                            disabled={isFull}
+                            onClick={(e) => { e.stopPropagation(); onRequestJoin(group); }}
+                            variant={isFull ? "secondary" : "default"}
+                        >
+                            {isFull ? (
+                                <span className="flex items-center text-muted-foreground"><AlertCircle className="w-3 h-3 mr-1.5" /> Đầy</span>
+                            ) : (
+                                <span className="flex items-center"><UserPlus className="w-3 h-3 mr-1.5" /> Xin vào</span>
                             )}
-                        />
-                        <DialogFooter>
-                            <Button type="button" variant="outline" onClick={() => setIsOpen(false)}>Hủy</Button>
-                            <Button type="submit" disabled={isLoading}>
-                                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Gửi
-                            </Button>
-                        </DialogFooter>
-                    </form>
-                </Form>
-            </DialogContent>
-        </Dialog>
+                        </Button>
+                    )}
+                </div>
+            </div>
+        </div>
     );
 };
 
-// ***** COMPONENT MỚI: Dialog xác nhận hủy yêu cầu *****
-const CancelRequestAlert = ({ isOpen, setIsOpen, requestId, groupName, onSuccess }) => {
-    const [isCanceling, setIsCanceling] = useState(false);
-    const alertTitleId = useId();
-    const alertDescriptionId = useId();
-
-    const handleCancel = async () => {
-        setIsCanceling(true);
-        try {
-            const res = await cancelJoinRequest(requestId);
-            toast.success(res.message);
-            onSuccess();
-        } catch (error) {
-            toast.error(error.response?.data?.message || 'Hủy yêu cầu thất bại.');
-        } finally {
-            setIsCanceling(false);
-            setIsOpen(false);
-        }
-    };
-
-    return (
-        <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-            <AlertDialogContent aria-labelledby={alertTitleId} aria-describedby={alertDescriptionId}>
-                <AlertDialogHeader>
-                    <AlertDialogTitle id={alertTitleId}>Xác nhận Hủy Yêu cầu</AlertDialogTitle>
-                    <AlertDialogDescription id={alertDescriptionId}>
-                        Bạn có chắc chắn muốn hủy yêu cầu tham gia nhóm <strong>"{groupName}"</strong> không?
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isCanceling}>Không</AlertDialogCancel>
-                    <AlertDialogAction
-                        disabled={isCanceling}
-                        onClick={handleCancel}
-                        className="bg-destructive hover:bg-destructive/90"
-                    >
-                        {isCanceling ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Đồng ý Hủy
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-    );
-};
-
-
-// Component chính của trang Tìm Nhóm
 export default function FindGroupPage() {
-    const [groups, setGroups] = useState([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [filters, setFilters] = useState({ search: '', ID_CHUYENNGANH: '', ID_KHOA_BOMON: '' });
-    const [options, setOptions] = useState({ chuyenNganhs: [], khoaBomons: [], activePlans: [] });
-    const [selectedPlanId, setSelectedPlanId] = useState('');
-    const [selectedGroup, setSelectedGroup] = useState(null); // Dùng cho dialog Gửi Yêu Cầu
+    const [searchParams, setSearchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const queryClient = useQueryClient();
 
-    // ***** STATE MỚI: Dùng cho dialog Hủy Yêu Cầu *****
-    const [cancelInfo, setCancelInfo] = useState({ isOpen: false, requestId: null, groupName: '' });
+    const planId = searchParams.get('plan_id');
+    const [search, setSearch] = useState('');
+    const [debouncedSearch] = useDebounce(search, 500);
+    const [selectedMajor, setSelectedMajor] = useState('all');
+    const [page, setPage] = useState(1);
+    const [requestDialog, setRequestDialog] = useState({ open: false, group: null, message: '' });
 
-
-    const fetchPrerequisites = useCallback(async () => {
-        try {
-            const [cn, kb, plans] = await Promise.all([getChuyenNganhs(), getKhoaBomons(), getMyActivePlans()]);
-            setOptions({ chuyenNganhs: cn, khoaBomons: kb, activePlans: plans });
-            if (plans.length > 0) {
-                setSelectedPlanId(String(plans[0].ID_KEHOACH));
-            } else {
-                setIsLoading(false);
-            }
-        } catch {
-            toast.error("Lỗi tải dữ liệu ban đầu.");
-            setIsLoading(false);
-        }
-    }, []);
+    const { data: activePlans, isLoading: loadingPlans } = useQuery({
+        queryKey: ['myActivePlans'],
+        queryFn: getMyActivePlans,
+        staleTime: 5 * 60 * 1000,
+    });
 
     useEffect(() => {
-        fetchPrerequisites();
-    }, [fetchPrerequisites]);
-
-    const fetchData = useCallback(async () => {
-        if (!selectedPlanId) return;
-        setIsLoading(true);
-        try {
-            const res = await findGroups(filters, selectedPlanId);
-            setGroups(res.data);
-        } catch (error) {
-            toast.error("Tải danh sách nhóm thất bại.");
-            setGroups([]);
-        } finally {
-            setIsLoading(false);
+        if (!loadingPlans && activePlans?.length > 0 && !planId) {
+            const defaultPlanId = String(activePlans[0].ID_KEHOACH);
+            setSearchParams({ plan_id: defaultPlanId }, { replace: true });
         }
-    }, [filters, selectedPlanId]);
+    }, [loadingPlans, activePlans, planId, setSearchParams]);
 
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchData();
-        }, 300);
-        return () => clearTimeout(timer);
-    }, [fetchData]);
+    const { data: majors } = useQuery({
+        queryKey: ['chuyenNganhs'],
+        queryFn: getChuyenNganhs,
+        staleTime: Infinity
+    });
 
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value === 'all' ? '' : value }));
+    const { data: groupsData, isLoading: loadingGroups } = useQuery({
+        queryKey: ['findGroups', planId, debouncedSearch, selectedMajor, page],
+        queryFn: () => findGroups({
+            search: debouncedSearch,
+            ID_CHUYENNGANH: selectedMajor === 'all' ? null : selectedMajor,
+            page
+        }, planId),
+        enabled: !!planId,
+        keepPreviousData: true,
+    });
+
+    const requestMutation = useMutation({
+        mutationFn: ({ groupId, message }) => requestToJoin(groupId, { LOINHAN: message }),
+        onSuccess: (res) => {
+            toast.success(res.message);
+            setRequestDialog({ open: false, group: null, message: '' });
+            queryClient.invalidateQueries(['findGroups']);
+        },
+        onError: (err) => toast.error(err.response?.data?.message || "Gửi yêu cầu thất bại")
+    });
+
+    const cancelMutation = useMutation({
+        mutationFn: (requestId) => cancelJoinRequest(requestId),
+        onSuccess: (res) => {
+            toast.success(res.message);
+            queryClient.invalidateQueries(['findGroups']);
+        },
+        onError: (err) => toast.error(err.response?.data?.message || "Hủy yêu cầu thất bại")
+    });
+
+    const handleOpenRequestDialog = (group) => setRequestDialog({ open: true, group, message: '' });
+
+    const handleSubmitRequest = () => {
+        if (!requestDialog.group) return;
+        requestMutation.mutate({ groupId: requestDialog.group.ID_NHOM, message: requestDialog.message });
     };
 
-    if (options.activePlans.length === 0 && !isLoading) {
+    const handlePlanChange = (newPlanId) => {
+        setSearchParams({ plan_id: newPlanId });
+        setPage(1);
+    };
+
+    if (loadingPlans || (!planId && activePlans?.length > 0)) {
         return (
-            <Card>
-                <CardHeader><CardTitle>Chưa tham gia đợt khóa luận</CardTitle></CardHeader>
-                <CardContent><p>Bạn không thể tìm nhóm khi chưa tham gia vào một đợt khóa luận đang hoạt động.</p></CardContent>
-            </Card>
+            <div className="p-4 md:p-8 space-y-6 container mx-auto max-w-7xl">
+                <div className="flex justify-between items-center"><Skeleton className="h-10 w-32" /><Skeleton className="h-10 w-64" /></div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4"><Skeleton className="h-12 md:col-span-3" /><Skeleton className="h-12 md:col-span-1" /></div>
+                <div className="space-y-4">{[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 rounded-lg" />)}</div>
+            </div>
+        );
+    }
+
+    if (!loadingPlans && activePlans?.length === 0) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
+                <AlertCircle className="h-12 w-12 text-muted-foreground" />
+                <h3 className="text-xl font-semibold">Không tìm thấy kế hoạch</h3>
+                <p className="text-muted-foreground">Bạn chưa được thêm vào đợt khóa luận nào.</p>
+                <Button onClick={() => navigate('/')}>Quay về trang chủ</Button>
+            </div>
         );
     }
 
     return (
-        <div className="space-y-6">
-            <Card>
-                {/* ... (Phần CardHeader và Lọc không đổi) ... */}
-                <CardHeader>
-                    <CardTitle>Tìm kiếm nhóm</CardTitle>
-                    <CardDescription>Tìm và xin gia nhập các nhóm còn trống thành viên.</CardDescription>
-                </CardHeader>
-                
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        <Select 
-                            onValueChange={setSelectedPlanId} 
-                            value={selectedPlanId} 
-                            disabled={options.activePlans.length <= 1}
-                        >
-                            <SelectTrigger>
-                                <div className='flex items-center gap-2'>
-                                    <BookCopy className='h-4 w-4 text-muted-foreground' />
-                                    <SelectValue placeholder="Chọn một kế hoạch..." />
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {options.activePlans.map(p => 
-                                    <SelectItem 
-                                        key={p.ID_KEHOACH} 
-                                        value={String(p.ID_KEHOACH)}
-                                    >
-                                        {p.TEN_DOT}
-                                    </SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                        
-                        <Input 
-                            placeholder="Tìm theo tên nhóm..." 
-                            value={filters.search} 
-                            onChange={e => handleFilterChange('search', e.target.value)} 
-                        />
-                        
-                        <Select 
-                            value={filters.ID_CHUYENNGANH} 
-                            onValueChange={v => handleFilterChange('ID_CHUYENNGANH', v)}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Lọc theo chuyên ngành" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Tất cả chuyên ngành</SelectItem>
-                                {options.chuyenNganhs.map(o => 
-                                    <SelectItem 
-                                        key={o.ID_CHUYENNGANH} 
-                                        value={String(o.ID_CHUYENNGANH)}
-                                    >
-                                        {o.TEN_CHUYENNGANH}
-                                    </SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                        
-                        <Select 
-                            value={filters.ID_KHOA_BOMON} 
-                            onValueChange={v => handleFilterChange('ID_KHOA_BOMON', v)}
-                        >
-                            <SelectTrigger><SelectValue placeholder="Lọc theo khoa/bộ môn" /></SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Tất cả khoa/bộ môn</SelectItem>
-                                {options.khoaBomons.map(o => 
-                                    <SelectItem 
-                                        key={o.ID_KHOA_BOMON} 
-                                        value={String(o.ID_KHOA_BOMON)}
-                                    >
-                                        {o.TEN_KHOA_BOMON}
-                                    </SelectItem>
-                                )}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardContent>
-            </Card>
+        <div className="p-4 md:p-8 space-y-6 container mx-auto max-w-7xl animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <Button variant="ghost" className="pl-0 hover:bg-transparent" onClick={() => navigate(-1)}>
+                        <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
+                    </Button>
+                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 mt-2">
+                        <Users className="h-6 w-6 text-primary" /> Tìm kiếm Nhóm
+                    </h1>
+                </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Kết quả tìm kiếm ({groups.length})</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    {isLoading ? (
-                        <div className="text-center p-8">
-                            <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary"/>
-                        </div>
+                <div className="w-full md:w-auto">
+                    <Select value={planId} onValueChange={handlePlanChange}>
+                        <SelectTrigger className="w-full md:w-[280px] bg-background">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {activePlans?.map(plan => (
+                                <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                    {plan.TEN_DOT}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <div className="bg-card p-4 rounded-lg border shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <div className="md:col-span-2 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="Tìm tên nhóm, tên thành viên..."
+                        className="pl-9 h-11"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                </div>
+                <div className="md:col-span-1">
+                    <Select value={selectedMajor} onValueChange={setSelectedMajor}>
+                        <SelectTrigger className="h-11">
+                            <div className="flex items-center gap-2">
+                                <Filter className="h-4 w-4 opacity-50" />
+                                <SelectValue placeholder="Lọc theo chuyên ngành" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Tất cả chuyên ngành</SelectItem>
+                            {majors?.map(m => (
+                                <SelectItem key={m.ID_CHUYENNGANH} value={String(m.ID_CHUYENNGANH)}>
+                                    {m.TEN_CHUYENNGANH}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+            </div>
+
+            <Card className="border-none shadow-none bg-transparent">
+                <CardContent className="p-0 space-y-3">
+                    {loadingGroups ? (
+                        [...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)
+                    ) : groupsData?.data?.length > 0 ? (
+                        <>
+                            <div className="text-sm text-muted-foreground mb-2 px-1">
+                                Tìm thấy {groupsData.total} nhóm
+                            </div>
+                            {groupsData.data.map(group => (
+                                <GroupListItem
+                                    key={group.ID_NHOM}
+                                    group={group}
+                                    onRequestJoin={handleOpenRequestDialog}
+                                    onCancelRequest={(reqId) => cancelMutation.mutate(reqId)}
+                                />
+                            ))}
+                        </>
                     ) : (
-                        <div className="border rounded-md">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[30%]">Tên Nhóm</TableHead>
-                                        <TableHead>Trưởng nhóm</TableHead>
-                                        <TableHead className="w-[15%] text-center">Thành viên</TableHead>
-                                        <TableHead>Chuyên ngành / Khoa</TableHead>
-                                        <TableHead className="w-[15%] text-right">Hành động</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {groups.length > 0 ? (
-                                        groups.map(group => (
-                                            <TableRow key={group.ID_NHOM}>
-                                                <TableCell className="font-medium">{group.TEN_NHOM}</TableCell>
-                                                <TableCell>{group.nhomtruong.HODEM_VA_TEN}</TableCell>
-                                                <TableCell className="text-center">{group.SO_THANHVIEN_HIENTAI} / 4</TableCell>
-                                                <TableCell className="text-xs text-muted-foreground">
-                                                    {group.chuyennganh?.TEN_CHUYENNGANH || group.khoabomon?.TEN_KHOA_BOMON || 'N/A'}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    {/* ***** SỬA ĐỔI LOGIC NÚT BẤM ***** */}
-                                                    {group.da_gui_yeu_cau ? (
-                                                        <Button 
-                                                            variant="destructive" 
-                                                            size="sm" 
-                                                            onClick={() => setCancelInfo({ isOpen: true, requestId: group.id_yeu_cau_da_gui, groupName: group.TEN_NHOM })}
-                                                            className="text-xs h-8"
-                                                        >
-                                                            <X className="mr-1.5 h-3.5 w-3.5" /> Hủy
-                                                        </Button>
-                                                    ) : (
-                                                        <Button 
-                                                            size="sm" 
-                                                            onClick={() => setSelectedGroup(group)} 
-                                                            className="text-xs h-8"
-                                                        >
-                                                            <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Xin gia nhập
-                                                        </Button>
-                                                    )}
-                                                    {/* ***** KẾT THÚC SỬA ĐỔI ***** */}
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    ) : (
-                                        <TableRow>
-                                            <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                                                Không tìm thấy nhóm nào phù hợp với tiêu chí của bạn.
-                                            </TableCell>
-                                        </TableRow>
-                                    )}
-                                </TableBody>
-                            </Table>
+                        <div className="text-center py-20 bg-muted/30 rounded-lg border border-dashed">
+                            <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                            <h3 className="text-lg font-medium">Không tìm thấy kết quả</h3>
+                            <p className="text-muted-foreground">Thử tìm kiếm với từ khóa khác.</p>
                         </div>
                     )}
                 </CardContent>
             </Card>
 
-            {/* Dialog Xin gia nhập nhóm */}
-            <RequestJoinDialog
-                group={selectedGroup}
-                isOpen={!!selectedGroup}
-                setIsOpen={() => setSelectedGroup(null)}
-                onSuccess={fetchData}
-            />
+            {groupsData?.last_page > 1 && (
+                <div className="flex justify-center gap-2 mt-4">
+                    <Button variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>Trước</Button>
+                    <span className="flex items-center px-4 font-medium text-sm">Trang {page} / {groupsData.last_page}</span>
+                    <Button variant="outline" disabled={page === groupsData.last_page} onClick={() => setPage(p => p + 1)}>Sau</Button>
+                </div>
+            )}
 
-            <CancelRequestAlert
-                isOpen={cancelInfo.isOpen}
-                setIsOpen={(isOpen) => setCancelInfo(prev => ({ ...prev, isOpen }))}
-                requestId={cancelInfo.requestId}
-                groupName={cancelInfo.groupName}
-                onSuccess={fetchData}
-            />
+            <Dialog open={requestDialog.open} onOpenChange={(open) => setRequestDialog(prev => ({ ...prev, open }))}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Gửi yêu cầu tham gia</DialogTitle>
+                        <DialogDescription>
+                            Gửi lời nhắn đến trưởng nhóm <strong>{requestDialog.group?.TEN_NHOM}</strong>.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <Textarea
+                            placeholder="Chào bạn, mình muốn tham gia nhóm..."
+                            value={requestDialog.message}
+                            onChange={(e) => setRequestDialog(prev => ({ ...prev, message: e.target.value }))}
+                            rows={3}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRequestDialog({ open: false, group: null, message: '' })}>Hủy</Button>
+                        <Button onClick={handleSubmitRequest} disabled={requestMutation.isPending}>
+                            {requestMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Gửi
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

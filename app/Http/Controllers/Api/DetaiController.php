@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Services\ActivityLogger;
 
 class DetaiController extends Controller
 {
@@ -122,6 +123,14 @@ class DetaiController extends Controller
             'TRANGTHAI' => 'Nháp',
         ]);
 
+        ActivityLogger::log(
+            'PROPOSE_TOPIC', 
+            "Đề xuất đề tài mới: {$topic->TEN_DETAI}", 
+            ['topic_code' => $topicCode], 
+            null,
+            'FileText'
+        );
+
         return response()->json($topic->load(['nguoiDexuat.nguoidung', 'chuyennganh']), 201);
     }
 
@@ -224,6 +233,14 @@ class DetaiController extends Controller
         if ($isProposer && $topic->TRANGTHAI === 'Đang chỉnh sửa') {
             $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
         }
+
+        ActivityLogger::log(
+            'UPDATE_TOPIC', 
+            "Cập nhật đề tài: {$topic->TEN_DETAI}", 
+            ['topic_id' => $topic->ID_DETAI], 
+            null, 
+            'Edit'
+        );
 
         return response()->json($topic->load(['nguoiDexuat.nguoidung', 'chuyennganh']));
     }
@@ -353,6 +370,14 @@ class DetaiController extends Controller
         if ($topic->TRANGTHAI === 'Chờ duyệt') {
             $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
         }
+
+        ActivityLogger::log(
+            'ADD_SUGGESTION', 
+            "Góp ý cho đề tài: {$topic->TEN_DETAI}", 
+            ['content_preview' => substr($request->NOIDUNG_GOIY, 0, 50) . '...'], 
+            null, 
+            'MessageSquare'
+        );
 
         // Load relationships for response
         $suggestion->load(['giangvien.nguoidung']);

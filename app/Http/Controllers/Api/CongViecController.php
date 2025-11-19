@@ -206,7 +206,6 @@ class CongViecController extends Controller
     {
         $auth = $this->getAuthInfo($congviec->nhom);
 
-        // [RULE] Ai trong nhóm cũng có thể sửa nội dung, chuyển trạng thái
         if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền sửa công việc này.'], 403);
         }
@@ -216,14 +215,59 @@ class CongViecController extends Controller
             'MOTA' => 'nullable|string',
             'NGAY_HETHAN' => 'nullable|date',
             'DO_UUTIEN' => ['nullable', Rule::in(['Thấp', 'Trung bình', 'Cao'])],
-            'TRANGTHAI' => ['sometimes', Rule::in(['Hoạt động', 'Đã hủy', 'Tạm dừng'])],
+            'TRANGTHAI' => ['sometimes', Rule::in(['Hoạt động', 'Đã hủy', 'Tạm dừng', 'Hoàn thành'])],
+            'ID_COT' => 'sometimes|exists:COT_CONGVIEC,ID_COT', // Cho phép đổi cột trong dialog
         ]);
 
-        $congviec->update($validated);
+        // [FIX LOG 2 LẦN] Kiểm tra xem có gì thay đổi không
+        $congviec->fill($validated);
+        
+        // Nếu có thay đổi cột (ID_COT) -> Cần xử lý thứ tự để tránh lỗi hiển thị
+        if ($congviec->isDirty('ID_COT')) {
+            // Đưa task xuống cuối cột mới
+            $maxOrder = CongViec::where('ID_COT', $validated['ID_COT'])
+                                ->where('ID_NHOM', $congviec->ID_NHOM)
+                                ->max('THUTU_HIENTHI');
+            $congviec->THUTU_HIENTHI = $maxOrder + 1;
+        }
+
+        // Kiểm tra các trường quan trọng đã thay đổi để ghi log
+        $changes = $congviec->getDirty();
+        $congviec->save();
+
+        // Chỉ ghi log nếu có thay đổi quan trọng
+        if (!empty($changes)) {
+            // Ưu tiên log trạng thái hoặc cột trước
+            if (isset($changes['TRANGTHAI'])) {
+                ActivityLogger::log(
+                    'TASK_UPDATE', 
+                    "Đổi trạng thái công việc '{$congviec->TEN_CONGVIEC}' sang {$changes['TRANGTHAI']}", 
+                    ['task_id' => $congviec->ID_CONGVIEC, 'status' => $changes['TRANGTHAI']], 
+                    $congviec->ID_NHOM
+                );
+            } 
+            elseif (isset($changes['ID_COT'])) {
+                $tenCot = CotCongViec::find($changes['ID_COT'])?->TEN_COT ?? 'Cột mới';
+                ActivityLogger::log(
+                    'TASK_MOVE', 
+                    "Chuyển công việc '{$congviec->TEN_CONGVIEC}' sang cột {$tenCot}", 
+                    ['task_id' => $congviec->ID_CONGVIEC, 'column' => $tenCot], 
+                    $congviec->ID_NHOM
+                );
+            }
+            // Nếu chỉ đổi tên/mô tả thì log nhẹ nhàng hoặc bỏ qua nếu muốn ít spam
+            elseif (isset($changes['TEN_CONGVIEC']) || isset($changes['MOTA']) || isset($changes['DO_UUTIEN'])) {
+                ActivityLogger::log(
+                    'TASK_UPDATE', 
+                    "Cập nhật thông tin công việc: {$congviec->TEN_CONGVIEC}", 
+                    ['task_id' => $congviec->ID_CONGVIEC], 
+                    $congviec->ID_NHOM
+                );
+            }
+        }
         
         return response()->json($congviec);
     }
-
     /**
      * Di chuyển công việc (Kéo thả sang cột khác hoặc đổi thứ tự)
      */
@@ -231,7 +275,6 @@ class CongViecController extends Controller
     {
         $auth = $this->getAuthInfo($congviec->nhom);
 
-        // [RULE] Ai trong nhóm cũng có thể kéo thả
         if (!$auth['canView']) {
             return response()->json(['message' => 'Bạn không có quyền di chuyển công việc này.'], 403);
         }
@@ -242,6 +285,10 @@ class CongViecController extends Controller
             'sibling_task_ids' => 'nullable|array', 
         ]);
 
+        // [FIX LOG] Lưu trạng thái cột cũ
+        $oldColumnId = $congviec->ID_COT;
+        $newColumnId = $validated['ID_COT_MOI'];
+
         DB::transaction(function () use ($congviec, $validated) {
             $congviec->ID_COT = $validated['ID_COT_MOI'];
             $congviec->THUTU_HIENTHI = $validated['THUTU_MOI'];
@@ -250,8 +297,13 @@ class CongViecController extends Controller
             $cotMoi = CotCongViec::find($validated['ID_COT_MOI']);
             if ($cotMoi && $cotMoi->TEN_COT === 'Hoàn thành') {
                 $congviec->NGAY_HOANTHANH = now();
+                $congviec->TRANGTHAI = 'Hoàn thành'; // [BỔ SUNG] Cập nhật luôn trạng thái
             } else {
                 $congviec->NGAY_HOANTHANH = null;
+                // Nếu cột cũ là hoàn thành mà kéo ra, có thể set lại Hoạt động
+                if($congviec->TRANGTHAI === 'Hoàn thành') {
+                     $congviec->TRANGTHAI = 'Hoạt động';
+                }
             }
             $congviec->save();
 
@@ -265,15 +317,17 @@ class CongViecController extends Controller
             }
         });
 
-        $cotMoi = \App\Models\CotCongViec::find($validated['ID_COT_MOI']);
-        $tenCot = $cotMoi ? $cotMoi->TEN_COT : 'Cột mới';
+        if ($oldColumnId != $newColumnId) {
+            $cotMoi = \App\Models\CotCongViec::find($validated['ID_COT_MOI']);
+            $tenCot = $cotMoi ? $cotMoi->TEN_COT : 'Cột mới';
 
-        ActivityLogger::log(
-            'TASK_MOVE', 
-            "Chuyển công việc '{$congviec->TEN_CONGVIEC}' sang '{$tenCot}'", 
-            ['task_id' => $congviec->ID_CONGVIEC, 'to_column' => $tenCot], 
-            $congviec->ID_NHOM
-        );
+            ActivityLogger::log(
+                'TASK_MOVE', 
+                "Chuyển công việc '{$congviec->TEN_CONGVIEC}' sang '{$tenCot}'", 
+                ['task_id' => $congviec->ID_CONGVIEC, 'to_column' => $tenCot], 
+                $congviec->ID_NHOM
+            );
+        }
 
         return response()->json(['message' => 'Cập nhật vị trí thành công.']);
     }

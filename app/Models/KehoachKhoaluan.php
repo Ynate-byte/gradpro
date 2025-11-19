@@ -79,8 +79,11 @@ class KehoachKhoaluan extends Model
 
     public function isFeatureActive(string $featureKey): bool
     {
-        // Lấy cài đặt từ cột SETTINGS (đã được cast thành array)
-        $featureConfig = $this->SETTINGS[$featureKey] ?? null;
+        // SỬA LỖI: Đảm bảo $this->SETTINGS là mảng trước khi truy cập key
+        // Nếu SETTINGS là null, gán nó là mảng rỗng []
+        $settings = $this->SETTINGS ?? [];
+        
+        $featureConfig = $settings[$featureKey] ?? null;
 
         // Nếu không có cấu hình -> Mặc định là TẮT
         if (!$featureConfig) {

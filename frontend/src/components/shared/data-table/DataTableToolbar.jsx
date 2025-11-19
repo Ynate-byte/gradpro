@@ -33,7 +33,7 @@ export function DataTableToolbar({
   searchPlaceholder,
   statusColumnId,
   statusOptions,
-  typeFilterColumnId,
+  typeFilterColumnId, // ID cột Vai trò (VD: 'vaitro.TEN_VAITRO' hoặc 'TEN_VAITRO')
   typeFilterOptions,
   addBtnText,
   searchTerm,
@@ -53,17 +53,21 @@ export function DataTableToolbar({
   const [bulkAction, setBulkAction] = useState(null);
   const selectedRows = table.getFilteredSelectedRowModel().rows;
   
+  // --- XỬ LÝ HÀNH ĐỘNG HÀNG LOẠT ---
   const confirmBulkAction = (action) => {
     setBulkAction(action);
     setIsAlertOpen(true);
   }
+
   const handleBulkAction = async () => {
     const userIds = selectedRows.map(row => row.original.ID_NGUOIDUNG).filter(Boolean);
+    
     if (userIds.length === 0) {
         toast.warning("Hành động này chỉ áp dụng cho người dùng.");
         setIsAlertOpen(false);
         return;
     }
+
     setIsAlertOpen(false);
     try {
         if (bulkAction === 'activate' || bulkAction === 'deactivate') {
@@ -78,11 +82,12 @@ export function DataTableToolbar({
             toast.success(`Đã reset mật khẩu cho ${userIds.length} tài khoản.`);
         }
         table.resetRowSelection();
-        onSuccess();
+        if (onSuccess) onSuccess();
     } catch (error) {
         toast.error("Thao tác hàng loạt thất bại. Vui lòng thử lại.");
     }
   }
+
   const getDialogContent = () => {
     if (!bulkAction) return { title: '', description: '' };
     const count = selectedRows.length;
@@ -96,40 +101,26 @@ export function DataTableToolbar({
   }
   const dialogContent = getDialogContent();
   
-  const activeFilterCount = table.getState().columnFilters.filter(
-    f => f.id !== searchColumnId
-  ).length;
-  const isFiltered = activeFilterCount > 0;
+  // --- LOGIC HIỂN THỊ BỘ LỌC THÔNG MINH ---
+  // 1. Lấy giá trị đang lọc của cột Vai trò
+  const roleColumn = typeFilterColumnId ? table.getColumn(typeFilterColumnId) : null;
+  const selectedRolesRaw = roleColumn?.getFilterValue();
   
-  const hasFacetedFilters =
-    (chuyenNganhFilterOptions) ||
-    (khoaBomonFilterOptions) ||
-    (statusColumnId && statusOptions) ||
-    (typeFilterColumnId && typeFilterOptions) ||
-    (khoahocFilterOptions) || (namhocFilterOptions) ||
-    (hockyFilterOptions) || (hedaotaoFilterOptions);
+  // Chuyển về mảng để dễ kiểm tra
+  const selectedRoles = Array.isArray(selectedRolesRaw) 
+    ? selectedRolesRaw 
+    : (selectedRolesRaw ? [selectedRolesRaw] : []);
 
+  // 2. Cờ hiển thị
+  // Hiện lọc Sinh viên nếu: Đang chọn 'Sinh viên' HOẶC Không chọn vai trò nào (hiện tất cả)
+  const showStudentFilters = selectedRoles.includes('Sinh viên') || selectedRoles.length === 0;
+
+  // Hiện lọc Giảng viên nếu: Đang chọn 'Giảng viên' HOẶC Không chọn vai trò nào
+  const showLecturerFilters = selectedRoles.includes('Giảng viên') || selectedRoles.length === 0;
+
+  // 3. Xây dựng danh sách các bộ lọc
   const filterGroups = [
-    (chuyenNganhFilterOptions) ? (
-        <DataTableFacetedFilterGroup
-            key="chuyen_nganh_filter"
-            column={table.getColumn(chuyenNganhFilterColumnId || "chuyen_nganh_id")}
-            title="Chuyên ngành"
-            options={chuyenNganhFilterOptions}
-            className="min-w-[200px]"
-        />
-    ) : null,
-    
-    (khoaBomonFilterOptions) ? (
-        <DataTableFacetedFilterGroup
-            key="khoa_bomon_filter"
-            column={table.getColumn(khoaBomonFilterColumnId || "khoa_bomon_id")}
-            title={khoaBomonFilterTitle || "Khoa/Bộ môn"}
-            options={khoaBomonFilterOptions}
-            className="min-w-[200px]"
-        />
-    ) : null,
-
+    // --- Bộ lọc CHUNG ---
     (statusColumnId && statusOptions) ? (
         <DataTableFacetedFilterGroup
             key="status_filter"
@@ -144,12 +135,24 @@ export function DataTableToolbar({
         <DataTableFacetedFilterGroup
             key="type_filter"
             column={table.getColumn(typeFilterColumnId)}
-            title="Loại nhóm"
+            title="Vai trò"
             options={typeFilterOptions}
             className="min-w-[200px]"
         />
     ) : null,
-    (khoahocFilterOptions) ? (
+
+    // --- Bộ lọc RIÊNG cho SINH VIÊN ---
+    (chuyenNganhFilterOptions && showStudentFilters) ? (
+        <DataTableFacetedFilterGroup
+            key="chuyen_nganh_filter"
+            column={table.getColumn(chuyenNganhFilterColumnId || "chuyen_nganh_id")}
+            title="Chuyên ngành"
+            options={chuyenNganhFilterOptions}
+            className="min-w-[200px]"
+        />
+    ) : null,
+
+    (khoahocFilterOptions && showStudentFilters) ? (
         <DataTableFacetedFilterGroup
             key="khoahoc_filter"
             column={table.getColumn("KHOAHOC")}
@@ -158,7 +161,8 @@ export function DataTableToolbar({
             className="min-w-[200px]"
         />
     ) : null,
-    (namhocFilterOptions) ? (
+
+    (namhocFilterOptions && showStudentFilters) ? (
         <DataTableFacetedFilterGroup
             key="namhoc_filter"
             column={table.getColumn("NAMHOC")}
@@ -167,7 +171,8 @@ export function DataTableToolbar({
             className="min-w-[200px]"
         />
     ) : null,
-    (hockyFilterOptions) ? (
+
+    (hockyFilterOptions && showStudentFilters) ? (
         <DataTableFacetedFilterGroup
             key="hocky_filter"
             column={table.getColumn("HOCKY")}
@@ -176,7 +181,8 @@ export function DataTableToolbar({
             className="min-w-[200px]"
         />
     ) : null,
-    (hedaotaoFilterOptions) ? (
+
+    (hedaotaoFilterOptions && showStudentFilters) ? (
         <DataTableFacetedFilterGroup
             key="hedaotao_filter"
             column={table.getColumn("HEDAOTAO")}
@@ -185,7 +191,23 @@ export function DataTableToolbar({
             className="min-w-[200px]"
         />
     ) : null,
+
+    // --- Bộ lọc RIÊNG cho GIẢNG VIÊN ---
+    (khoaBomonFilterOptions && showLecturerFilters) ? (
+        <DataTableFacetedFilterGroup
+            key="khoa_bomon_filter"
+            column={table.getColumn(khoaBomonFilterColumnId || "khoa_bomon_id")}
+            title={khoaBomonFilterTitle || "Khoa/Bộ môn"}
+            options={khoaBomonFilterOptions}
+            className="min-w-[200px]"
+        />
+    ) : null,
   ].filter(Boolean);
+
+  const activeFilterCount = table.getState().columnFilters.filter(
+    f => f.id !== searchColumnId
+  ).length;
+  const isFiltered = activeFilterCount > 0;
 
   const allOptionsMap = useMemo(() => {
     const options = [
@@ -223,6 +245,8 @@ export function DataTableToolbar({
     }
     return labels;
   }, [table.getState().columnFilters, allOptionsMap, searchColumnId]);
+
+  const hasFacetedFilters = filterGroups.length > 0;
 
   return (
     <>

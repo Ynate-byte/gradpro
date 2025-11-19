@@ -16,6 +16,7 @@ use App\Models\DiemPhanBien;
 use App\Models\DiemHoiDong;
 use App\Models\DiemTongKet;
 use App\Models\PhancongDetaiNhom;
+use App\Services\ActivityLogger;
 
 class ChamDiemController extends Controller
 {
@@ -213,7 +214,7 @@ class ChamDiemController extends Controller
         try {
             DB::beginTransaction();
             
-            // 4. Xác định Model tương ứng
+            // 4. Xác định Model tương ứng (Giữ nguyên)
             $modelMap = [
                 'HUONGDAN' => DiemHuongDan::class,
                 'PHANBIEN' => DiemPhanBien::class,
@@ -226,7 +227,7 @@ class ChamDiemController extends Controller
             
             $model = $modelMap[$loai];
 
-            // 5. Lưu điểm vào CSDL
+            // 5. Lưu điểm vào CSDL (Giữ nguyên)
             $model::updateOrCreate(
                 [
                     'ID_NHOM' => $idNhom, 
@@ -234,25 +235,41 @@ class ChamDiemController extends Controller
                 ],
                 [
                     'DIEM' => $validated['DIEM'],
-                    'NHANXET' => $validated['NHANXET'] ?? null
+                    // Sử dụng ?? null để tránh lỗi nếu không có nhận xét
+                    'NHANXET' => $validated['NHANXET'] ?? null 
                 ]
             );
             
-            // 6. Cập nhật điểm tổng kết cho nhóm ngay lập tức
+            // 6. Cập nhật điểm tổng kết cho nhóm ngay lập tức (Giữ nguyên)
             $this->capNhatTong($nhom);
             
+            $logTitle = "Chấm điểm " . ($loai === 'HUONGDAN' ? 'Hướng dẫn' : ($loai === 'PHANBIEN' ? 'Phản biện' : 'Hội đồng'));
+            
+            ActivityLogger::log(
+                'GRADE_' . $loai, 
+                "{$logTitle} nhóm {$nhom->TEN_NHOM}: {$validated['DIEM']} điểm",
+                [
+                    'score' => $validated['DIEM'], 
+                    'comment' => $validated['NHANXET'] ?? null 
+                ], 
+                $idNhom,
+                'Star'
+            );
+
             DB::commit();
 
             return response()->json(['message' => "Lưu điểm {$loai} thành công!"]);
 
         } catch (\Throwable $e) {
             DB::rollBack();
+            
             Log::error("Lỗi lưu điểm {$loai}: " . $e->getMessage(), [
                 'id_nhom' => $idNhom, 
                 'id_gv' => $giangvienId,
                 'trace' => $e->getTraceAsString()
             ]);
-            return response()->json(['error' => 'Lỗi máy chủ khi xử lý điểm.'], 500);
+            
+            return response()->json(['error' => 'Lỗi máy chủ khi xử lý điểm: ' . $e->getMessage()], 500);
         }
     }
 
@@ -490,10 +507,16 @@ class ChamDiemController extends Controller
                 ]
             );
             
-            // 3. Cập nhật điểm tổng (nếu đủ điều kiện)
             $this->capNhatTong($nhom);
-            
             DB::commit();
+
+            ActivityLogger::log(
+                'REJECT_REVIEW', 
+                "Từ chối phản biện (0 điểm)", 
+                ['reason' => 'Không chấp thuận'], 
+                $nhom->ID_NHOM,
+                'XCircle'
+            );
 
             return response()->json(['message' => "Đã ghi nhận 0 điểm Phản biện thành công."]);
 

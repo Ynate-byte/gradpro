@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use App\Services\ActivityLogger;
 
 class SubmissionController extends Controller
 {
@@ -145,6 +146,15 @@ class SubmissionController extends Controller
             $submission->phancong()->update(['TRANGTHAI' => 'Đã hoàn thành']);
         });
 
+        $submission->load('phancong.nhom');
+        ActivityLogger::log(
+            'CONFIRM_SUBMISSION', 
+            "Đã xác nhận bài nộp", 
+            ['submission_id' => $submission->ID_NOP_SANPHAM], 
+            $submission->phancong->nhom->ID_NHOM,
+            'CheckCircle'
+        );
+
         return response()->json(['message' => 'Đã xác nhận nhóm nộp sản phẩm thành công.']);
     }
 
@@ -174,6 +184,15 @@ class SubmissionController extends Controller
             'NGAY_XACNHAN' => now(),
             'PHANHOI_ADMIN' => $validated['ly_do'],
         ]);
+
+        $submission->load('phancong.nhom');
+        ActivityLogger::log(
+            'REJECT_SUBMISSION', 
+            "Yêu cầu nộp lại bài", 
+            ['reason' => $validated['ly_do']], 
+            $submission->phancong->nhom->ID_NHOM,
+            'AlertCircle'
+        );
 
         return response()->json(['message' => 'Đã gửi yêu cầu nộp lại cho nhóm.']);
     }

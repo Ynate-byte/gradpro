@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,17 +16,133 @@ import {
     DialogDescription,
     DialogHeader,
     DialogTitle,
+    DialogFooter,
 } from '@/components/ui/dialog';
-import { Loader2, Eye, UserPlus, Search, BookCopy, Lock } from 'lucide-react'; // Thêm Lock
+import { 
+    Loader2, Eye, UserPlus, Search, BookCopy, Lock, Filter, 
+    AlertCircle, CheckCircle, BookOpen, Users, Info 
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import { getChuyenNganhs } from '@/api/userService';
 import axios from '@/api/axiosConfig';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag'; // Hook kiểm tra
-import { getThesisPlanById } from '@/api/thesisPlanService'; // API lấy chi tiết plan
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'; // Alert component
-import { format, parseISO } from 'date-fns'; // Date utils
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+import { getThesisPlanById } from '@/api/thesisPlanService';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { format, parseISO } from 'date-fns';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from "@/components/ui/separator";
 
+// Helper lấy tên giảng viên an toàn
+const getLecturerName = (topic) => {
+    if (topic.ten_giang_vien && topic.ten_giang_vien !== 'N/A') return topic.ten_giang_vien;
+    return topic.nguoi_dexuat?.nguoidung?.HODEM_VA_TEN || 'Chưa cập nhật';
+};
+
+// --- Component: Thẻ Đề tài (Topic Card) ---
+const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopicId, canRegister, onViewDetails, onRegister }) => {
+    const currentGroups = topic.SO_NHOM_HIENTAI || 0;
+    const maxGroups = topic.SO_NHOM_TOIDA || 1;
+    const progress = (currentGroups / maxGroups) * 100;
+    const isFull = currentGroups >= maxGroups;
+    const isMyTopic = hasRegisteredTopic && topic.ID_DETAI === myRegisteredTopicId;
+    
+    const progressColor = isFull ? "bg-red-500" : (progress >= 75 ? "bg-yellow-500" : "bg-green-500");
+    const lecturerName = getLecturerName(topic);
+
+    return (
+        <div className={`flex flex-col md:flex-row items-stretch justify-between p-4 border rounded-lg bg-card hover:shadow-md transition-all gap-4 group relative ${isMyTopic ? 'border-l-4 border-l-green-500 bg-green-50/30' : ''}`}>
+             
+            {/* 1. CỘT TRÁI: THÔNG TIN CƠ BẢN (35%) */}
+            <div className="w-full md:w-[35%] flex flex-col justify-center shrink-0">
+                <div className="flex items-center gap-2 mb-1">
+                    {/* Click vào tên đề tài để mở Dialog */}
+                    <h3 
+                        onClick={() => onViewDetails(topic.ID_DETAI)}
+                        className="text-lg font-bold truncate text-primary cursor-pointer hover:underline underline-offset-4 decoration-dashed max-w-[250px] md:max-w-full"
+                    >
+                        {topic.TEN_DETAI}
+                    </h3>
+
+                    <Badge 
+                        variant="outline" 
+                        className="text-[10px] font-normal h-5 text-muted-foreground cursor-pointer hover:bg-accent"
+                        onClick={() => onViewDetails(topic.ID_DETAI)}
+                    >
+                        <Info className="w-3 h-3 mr-1" /> Chi tiết
+                    </Badge>
+
+                    {isMyTopic && (
+                        <Badge variant="secondary" className="bg-green-100 text-green-700 text-[10px] h-5 px-1.5 border-green-200">
+                            Đã đăng ký
+                        </Badge>
+                    )}
+                </div>
+                
+                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span className="flex items-center gap-1.5 truncate max-w-[200px]" title={`GVHD: ${lecturerName}`}>
+                        <Users className="h-3.5 w-3.5" />
+                        {lecturerName}
+                    </span>
+                    <Separator orientation="vertical" className="h-3" />
+                    <span className="truncate max-w-[250px]" title={topic.chuyennganh?.TEN_CHUYENNGANH}>
+                        {topic.chuyennganh?.TEN_CHUYENNGANH || 'Tất cả chuyên ngành'}
+                    </span>
+                </div>
+            </div>
+
+            {/* 2. CỘT GIỮA: MÔ TẢ (Lấp đầy khoảng trống) */}
+            <div className="hidden md:flex flex-1 flex-col justify-center px-6 border-l border-r border-dashed border-gray-200 dark:border-gray-800 min-h-[60px]">
+                <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2 italic">
+                    "{topic.MOTA || "Không có mô tả..."}"
+                </p>
+            </div>
+
+            {/* 3. CỘT PHẢI: TIẾN ĐỘ & HÀNH ĐỘNG */}
+            <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-4 shrink-0 min-w-[140px]">
+                {/* Progress Bar */}
+                <div className="flex flex-col items-end min-w-[100px]">
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className={`text-xs font-bold ${isFull ? 'text-red-600' : 'text-primary'}`}>
+                            {currentGroups}/{maxGroups} Nhóm
+                        </span>
+                    </div>
+                    <Progress value={progress} className="h-2.5 w-24" indicatorClassName={progressColor} />
+                </div>
+
+                {/* Actions */}
+                <div className="w-[120px] flex justify-end">
+                    {isMyTopic ? (
+                        <Button variant="outline" size="sm" className="w-full h-9 bg-green-50 text-green-700 border-green-200 hover:bg-green-100 cursor-default opacity-100">
+                            <CheckCircle className="w-4 h-4 mr-2" /> Đã chọn
+                        </Button>
+                    ) : (
+                        <Button 
+                            size="sm"
+                            className={`w-full h-9 ${
+                                !canRegister ? "bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-100" : ""
+                            }`}
+                            disabled={hasRegisteredTopic || isFull || !canRegister || !isGroupLeader}
+                            onClick={(e) => { e.stopPropagation(); onRegister(topic); }}
+                            variant={isFull ? "secondary" : (!canRegister ? "outline" : "default")}
+                        >
+                            {isFull ? (
+                                <span className="flex items-center text-muted-foreground"><AlertCircle className="w-4 h-4 mr-2" /> Đầy</span>
+                            ) : !canRegister ? (
+                                <span className="flex items-center"><Lock className="w-3 h-3 mr-2" /> Khóa</span>
+                            ) : (
+                                <span className="flex items-center"><UserPlus className="w-4 h-4 mr-2" /> Đăng ký</span>
+                            )}
+                        </Button>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// --- Component: Dialog Chi tiết Đề tài ---
 const TopicDetailDialog = ({
     open,
     onOpenChange,
@@ -35,7 +151,7 @@ const TopicDetailDialog = ({
     onRegisterGroup,
     hasRegisteredTopic,
     myRegisteredTopic,
-    canRegister, // [MỚI] Nhận quyền đăng ký
+    canRegister,
 }) => {
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -69,66 +185,84 @@ const TopicDetailDialog = ({
         return <Badge className={statusColors[status] || 'bg-gray-300'}>{status}</Badge>;
     };
 
-    if (loading)
-        return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-                    <div className="flex justify-center items-center h-64">Đang tải...</div>
-                </DialogContent>
-            </Dialog>
-        );
-
+    if (loading) return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent><Loader2 className="h-8 w-8 animate-spin mx-auto" /></DialogContent></Dialog>;
     if (!topic) return null;
+
+    const lecturerName = getLecturerName(topic);
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-3xl max-h-[80vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2">
-                        {topic.TEN_DETAI} {getStatusBadge(topic.TRANGTHAI)}
+                    <DialogTitle className="text-xl text-primary flex items-center gap-2">
+                        <BookOpen className="h-5 w-5" /> {topic.TEN_DETAI}
                     </DialogTitle>
-                    <DialogDescription>Mã đề tài: {topic.MA_DETAI}</DialogDescription>
+                    <DialogDescription className="flex items-center gap-2 mt-1">
+                        {getStatusBadge(topic.TRANGTHAI)}
+                        <span className="text-xs text-muted-foreground font-mono">Mã: {topic.MA_DETAI}</span>
+                    </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6">
-                    <Card>
-                        <CardContent className="space-y-3 p-4">
-                            <p><strong>Mô tả:</strong> {topic.MOTA}</p>
-                            <p><strong>Giảng viên:</strong> {topic.ten_giang_vien || 'N/A'}</p>
-                            <p><strong>Chuyên ngành:</strong> {topic.chuyennganh?.TEN_CHUYENNGANH || 'Tất cả'}</p>
-                            <p><strong>Số nhóm tối đa:</strong> {topic.SO_NHOM_TOIDA}</p>
-                            <p><strong>Đã đăng ký:</strong> {topic.SO_NHOM_HIENTAI}</p>
-                            <p><strong>Ngày tạo:</strong> {new Date(topic.NGAYTAO).toLocaleDateString('vi-VN')}</p>
-                        </CardContent>
-                    </Card>
-
-                    {/* [MỚI] Kiểm tra quyền đăng ký ở đây */}
-                    {isGroupLeader && !hasRegisteredTopic && (
-                        <div className="flex justify-end">
-                            <Button 
-                                onClick={() => onRegisterGroup(topic)}
-                                disabled={!canRegister} // Disable nếu bị khóa
-                                className={!canRegister ? "opacity-50 cursor-not-allowed" : ""}
-                            >
-                                <UserPlus className="w-4 h-4 mr-2" /> 
-                                {canRegister ? "Đăng ký đề tài" : "Chưa mở đăng ký"}
-                            </Button>
+                <div className="space-y-6 py-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="p-3 bg-muted/30 rounded-lg border">
+                            <p className="text-muted-foreground mb-1">Giảng viên hướng dẫn</p>
+                            <p className="font-medium">{lecturerName}</p>
                         </div>
-                    )}
-
-                    {hasRegisteredTopic && topicId === myRegisteredTopic?.ID_DETAI && (
-                        <div className="flex justify-end">
-                            <Button variant="outline" onClick={() => onOpenChange(false)}>
-                                <Eye className="w-4 h-4 mr-2" /> Đề tài của tôi
-                            </Button>
+                        <div className="p-3 bg-muted/30 rounded-lg border">
+                            <p className="text-muted-foreground mb-1">Chuyên ngành</p>
+                            <p className="font-medium">{topic.chuyennganh?.TEN_CHUYENNGANH || 'Tất cả'}</p>
                         </div>
-                    )}
+                        <div className="p-3 bg-muted/30 rounded-lg border">
+                            <p className="text-muted-foreground mb-1">Số nhóm tối đa</p>
+                            <p className="font-medium">{topic.SO_NHOM_TOIDA} nhóm</p>
+                        </div>
+                        <div className="p-3 bg-muted/30 rounded-lg border">
+                            <p className="text-muted-foreground mb-1">Đã đăng ký</p>
+                            <p className="font-medium">{topic.SO_NHOM_HIENTAI} nhóm</p>
+                        </div>
+                    </div>
+                    <Separator />
+                    <div className="space-y-4">
+                        <div>
+                            <h4 className="font-semibold text-sm mb-1">Mô tả</h4>
+                            <div className="text-sm text-muted-foreground bg-muted/20 p-3 rounded-md whitespace-pre-line">
+                                {topic.MOTA || "Không có mô tả."}
+                            </div>
+                        </div>
+                        {topic.YEUCAU && (
+                            <div>
+                                <h4 className="font-semibold text-sm mb-1">Yêu cầu</h4>
+                                <div className="text-sm text-muted-foreground bg-muted/20 p-3 rounded-md whitespace-pre-line">{topic.YEUCAU}</div>
+                            </div>
+                        )}
+                        {topic.KETQUA_MONGDOI && (
+                            <div>
+                                <h4 className="font-semibold text-sm mb-1">Kết quả mong đợi</h4>
+                                <div className="text-sm text-muted-foreground bg-muted/20 p-3 rounded-md whitespace-pre-line">{topic.KETQUA_MONGDOI}</div>
+                            </div>
+                        )}
+                    </div>
                 </div>
+
+                <DialogFooter>
+                    {isGroupLeader && !hasRegisteredTopic && (
+                        <Button 
+                            onClick={() => onRegisterGroup(topic)}
+                            disabled={!canRegister}
+                            className={!canRegister ? "opacity-50 cursor-not-allowed" : ""}
+                        >
+                            {canRegister ? <> <UserPlus className="w-4 h-4 mr-2" /> Đăng ký đề tài </> : <> <Lock className="w-4 h-4 mr-2" /> Chưa mở đăng ký </>}
+                        </Button>
+                    )}
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>Đóng</Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 };
 
+// --- Component: Dialog Xác nhận Đăng ký ---
 const RegisterGroupDialog = ({ open, onOpenChange, topic, onSuccess }) => {
     const [loading, setLoading] = useState(false);
 
@@ -153,29 +287,32 @@ const RegisterGroupDialog = ({ open, onOpenChange, topic, onSuccess }) => {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
                 <DialogHeader>
-                    <DialogTitle>Đăng ký đề tài</DialogTitle>
+                    <DialogTitle>Xác nhận đăng ký</DialogTitle>
                     <DialogDescription>
-                        Đăng ký đề tài "{topic?.TEN_DETAI}" cho nhóm của bạn.
+                        Bạn đang đăng ký đề tài: <span className="font-bold text-primary">{topic.TEN_DETAI}</span>
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
-                    <p className="text-sm text-gray-600">
-                        Bạn có chắc chắn muốn đăng ký đề tài này cho nhóm của mình không? Hành động này không thể hoàn tác.
-                    </p>
+                    <Alert className="bg-blue-50 text-blue-800 border-blue-200">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Lưu ý quan trọng</AlertTitle>
+                        <AlertDescription>
+                            Sau khi đăng ký, tên nhóm của bạn sẽ được đổi thành tên đề tài. Hành động này không thể hoàn tác bởi sinh viên.
+                        </AlertDescription>
+                    </Alert>
                 </div>
-                <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-                        Hủy
-                    </Button>
+                <DialogFooter>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Hủy</Button>
                     <Button onClick={handleRegister} disabled={loading}>
-                        {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Đăng ký
+                        {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />} Đăng ký ngay
                     </Button>
-                </div>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     );
 };
 
+// --- MAIN COMPONENT ---
 const StudentThesisTopicsPage = () => {
     const [topics, setTopics] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -193,39 +330,32 @@ const StudentThesisTopicsPage = () => {
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopic, setSelectedTopic] = useState(null);
 
-    // [MỚI] State để lưu chi tiết kế hoạch (bao gồm SETTINGS)
     const [fullPlanData, setFullPlanData] = useState(null);
-    
-    // [MỚI] Kiểm tra quyền đăng ký
     const canRegisterFlag = useFeatureFlag(fullPlanData, 'SV_DANGKY_DE');
 
     useEffect(() => {
         loadPlans();
         loadMajors();
         checkGroupStatus();
-        loadTopics();
     }, []);
 
-    // Load chi tiết plan khi user chọn plan khác
+    useEffect(() => {
+        if (plans.length > 0 && !selectedPlan) {
+            setSelectedPlan(String(plans[0].ID_KEHOACH));
+        }
+    }, [plans, selectedPlan]);
+
     useEffect(() => {
         if (selectedPlan) {
             getThesisPlanById(selectedPlan)
-                .then((res) => {
-                    setFullPlanData(res); // API này trả về trực tiếp object plan (hoặc res.data tùy cấu hình axios)
-                })
+                .then((res) => setFullPlanData(res))
                 .catch((err) => console.error("Failed to load plan settings:", err));
+            loadTopics();
         } else {
             setFullPlanData(null);
+            setTopics([]);
         }
-    }, [selectedPlan]);
-
-    useEffect(() => {
-        const delaySearch = setTimeout(() => {
-            loadTopics();
-        }, 500); // 0.5 giây sau khi người dùng dừng gõ
-
-        return () => clearTimeout(delaySearch);
-    }, [searchTerm, selectedMajor, selectedPlan]);
+    }, [selectedPlan, searchTerm, selectedMajor]);
 
     const loadTopics = async () => {
         try {
@@ -234,10 +364,11 @@ const StudentThesisTopicsPage = () => {
             if (searchTerm) params.search = searchTerm;
             if (selectedMajor && selectedMajor !== 'all') params.major_id = selectedMajor;
             if (selectedPlan) params.plan_id = selectedPlan;
-            const response = await thesisTopicService.getTopics(params);
+            const response = await thesisTopicService.getAvailableTopics(params);
             setTopics(response.data.data || []);
         } catch (error) {
             console.error('Error loading topics:', error);
+            toast.error("Không thể tải danh sách đề tài.");
         } finally {
             setLoading(false);
         }
@@ -245,13 +376,8 @@ const StudentThesisTopicsPage = () => {
 
     const loadPlans = async () => {
         try {
-            // Chỉ lấy danh sách rút gọn để đổ vào dropdown
             const response = await axios.get('/admin/thesis-plans/list-all');
-            const plansData = response.data || [];
-            setPlans(plansData);
-            if (plansData.length > 0 && !selectedPlan) {
-                setSelectedPlan(String(plansData[0].ID_KEHOACH));
-            }
+            setPlans(response.data || []);
         } catch (error) {
             console.error('Error loading plans:', error);
         }
@@ -281,19 +407,6 @@ const StudentThesisTopicsPage = () => {
         }
     };
 
-    const getStatusBadge = (status) => {
-        const colors = {
-            'Nháp': 'bg-gray-400 text-white',
-            'Chờ duyệt': 'bg-yellow-400 text-black',
-            'Yêu cầu chỉnh sửa': 'bg-orange-400 text-white',
-            'Đã duyệt': 'bg-green-500 text-white',
-            'Từ chối': 'bg-red-500 text-white',
-            'Đã đầy': 'bg-blue-400 text-white',
-            'Đã khóa': 'bg-black text-white',
-        };
-        return <Badge className={colors[status] || 'bg-gray-200'}>{status}</Badge>;
-    };
-
     const handleViewTopicDetails = (id) => {
         setSelectedTopicId(id);
         setShowTopicDetailDialog(true);
@@ -310,55 +423,62 @@ const StudentThesisTopicsPage = () => {
         loadTopics();
     };
 
-    if (loading) return <div className="flex justify-center items-center h-64">Đang tải...</div>;
-
     return (
-        <div className="container mx-auto p-6">
-            <h1 className="text-2xl font-bold mb-2">Danh sách Đề tài</h1>
-            <p className="text-sm text-gray-500 mb-4">Tất cả đề tài có sẵn và đang triển khai.</p>
-
-            {/* [MỚI] Hiển thị thông báo nếu chức năng đăng ký bị tắt */}
-            {!canRegisterFlag && fullPlanData && (
-                <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-6">
-                    <Lock className="h-4 w-4" />
-                    <AlertTitle className="ml-2">Chưa đến thời gian đăng ký</AlertTitle>
-                    <AlertDescription className="ml-2">
-                        Cổng đăng ký đề tài hiện đang đóng. 
-                        {fullPlanData.SETTINGS?.SV_DANGKY_DE?.start && 
-                         ` Thời gian mở: ${format(parseISO(fullPlanData.SETTINGS.SV_DANGKY_DE.start), 'dd/MM/yyyy')}`}
-                    </AlertDescription>
-                </Alert>
-            )}
-
-            {/* Bộ lọc tìm kiếm */}
-            <div className="flex flex-col md:flex-row items-center gap-4 mb-6">
-                <div className="relative flex-[2] w-full">
-                    <Input
-                        placeholder="Tìm theo tên đề tài..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 w-full"
-                    />
-                    <Search className="w-4 h-4 absolute left-3 top-3 text-gray-400" />
+        <div className="p-4 md:p-8 space-y-6 container mx-auto max-w-7xl animate-in fade-in duration-500">
+            
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                        <BookCopy className="h-6 w-6 text-primary" /> Đăng ký Đề tài
+                    </h1>
+                    <p className="text-muted-foreground">Danh sách đề tài được phê duyệt cho đợt khóa luận.</p>
                 </div>
-
-                <div className="flex flex-row items-center gap-3 flex-[1] w-full md:w-auto">
-                    <Select value={selectedPlan} onValueChange={setSelectedPlan}>
-                        <SelectTrigger className="w-full md:w-48">
-                            <SelectValue placeholder="Chọn kế hoạch" />
+                
+                <div className="w-full md:w-auto">
+                     <Select value={selectedPlan} onValueChange={setSelectedPlan}>
+                        <SelectTrigger className="w-full md:w-[280px] bg-background">
+                            <SelectValue placeholder="Chọn kế hoạch..." />
                         </SelectTrigger>
                         <SelectContent>
                             {plans.map(plan => (
                                 <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                    {plan.TEN_DOT} - {plan.NAMHOC}
+                                    {plan.TEN_DOT}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
+                </div>
+            </div>
 
+            {!canRegisterFlag && fullPlanData && (
+                <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800">
+                    <Lock className="h-4 w-4" />
+                    <AlertTitle className="ml-2 font-semibold">Chưa đến thời gian đăng ký</AlertTitle>
+                    <AlertDescription className="ml-2">
+                        Cổng đăng ký đề tài hiện đang đóng. 
+                        {fullPlanData.SETTINGS?.SV_DANGKY_DE?.start && 
+                         ` Thời gian mở dự kiến: ${format(parseISO(fullPlanData.SETTINGS.SV_DANGKY_DE.start), 'dd/MM/yyyy HH:mm')}`}
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            <div className="bg-card p-4 rounded-lg border shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <div className="md:col-span-2 relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input 
+                        placeholder="Tìm theo tên đề tài, tên giảng viên..." 
+                        className="pl-9 h-11"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+                </div>
+                <div className="md:col-span-1">
                     <Select value={selectedMajor} onValueChange={setSelectedMajor}>
-                        <SelectTrigger className="w-full md:w-48">
-                            <SelectValue placeholder="Chuyên ngành" />
+                        <SelectTrigger className="h-11">
+                            <div className="flex items-center gap-2">
+                                <Filter className="h-4 w-4 opacity-50" />
+                                <SelectValue placeholder="Lọc theo chuyên ngành" />
+                            </div>
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">Tất cả chuyên ngành</SelectItem>
@@ -369,88 +489,40 @@ const StudentThesisTopicsPage = () => {
                             ))}
                         </SelectContent>
                     </Select>
-
-                    {hasRegisteredTopic && myRegisteredTopic && (
-                        <Button
-                            variant="secondary"
-                            onClick={() => {
-                                setSelectedTopicId(myRegisteredTopic.ID_DETAI);
-                                setShowTopicDetailDialog(true);
-                            }}
-                            className="whitespace-nowrap"
-                        >
-                            <BookCopy className="w-4 h-4 mr-2" />
-                            Đề tài của tôi
-                        </Button>
-                    )}
                 </div>
             </div>
 
-            <div className="border rounded-lg overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200 text-sm">
-                    <thead className="bg-gray-50">
-                        <tr>
-                            <th className="px-4 py-3 text-left font-semibold">Tên đề tài</th>
-                            <th className="px-4 py-3 text-left font-semibold">Giảng viên</th>
-                            <th className="px-4 py-3 text-left font-semibold">Chuyên ngành</th>
-                            <th className="px-4 py-3 text-left font-semibold">Số nhóm</th>
-                            <th className="px-4 py-3 text-left font-semibold">Ngày tạo</th>
-                            <th className="px-4 py-3 text-left font-semibold">Trạng thái</th>
-                            <th className="px-4 py-3 text-center font-semibold">Hành động</th>
-                        </tr>
-                    </thead>
-
-                    <tbody className="divide-y divide-gray-100">
-                        {topics.length === 0 ? (
-                            <tr>
-                                <td colSpan="7" className="py-10 text-center text-gray-500">
-                                    <div className="flex flex-col items-center justify-center">
-                                        <BookCopy className="w-8 h-8 mb-2 text-gray-400" />
-                                        Không có đề tài nào
-                                    </div>
-                                </td>
-                            </tr>
-                        ) : (
-                            topics.map((topic) => (
-                                <tr key={topic.ID_DETAI} className="hover:bg-gray-50 transition">
-                                    <td className="px-4 py-3 font-medium">{topic.TEN_DETAI}</td>
-                                    <td className="px-4 py-3">{topic.ten_giang_vien || 'N/A'}</td>
-                                    <td className="px-4 py-3">{topic.chuyennganh?.TEN_CHUYENNGANH || 'Tất cả'}</td>
-                                    <td className="px-4 py-3">{`${topic.SO_NHOM_HIENTAI}/${topic.SO_NHOM_TOIDA}`}</td>
-                                    <td className="px-4 py-3">
-                                        {new Date(topic.NGAYTAO).toLocaleDateString('vi-VN')}
-                                    </td>
-                                    <td className="px-4 py-3">{getStatusBadge(topic.TRANGTHAI)}</td>
-                                    <td className="px-4 py-3 text-center space-x-2">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleViewTopicDetails(topic.ID_DETAI)}
-                                        >
-                                            <Eye className="w-4 h-4 mr-1" /> Xem
-                                        </Button>
-
-                                        {topic.TRANGTHAI === 'Đã duyệt' &&
-                                            topic.SO_NHOM_HIENTAI < topic.SO_NHOM_TOIDA &&
-                                            !hasRegisteredTopic &&
-                                            isGroupLeader && (
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => handleRegisterGroup(topic)}
-                                                    disabled={!canRegisterFlag} // [MỚI] Disable nếu bị khóa
-                                                    className={!canRegisterFlag ? "opacity-50 cursor-not-allowed" : ""}
-                                                >
-                                                    <UserPlus className="w-4 h-4 mr-1" /> 
-                                                    {canRegisterFlag ? "Đăng ký" : "Đóng"}
-                                                </Button>
-                                            )}
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            <Card className="border-none shadow-none bg-transparent">
+                <CardContent className="p-0 space-y-3">
+                    {loading ? (
+                        [...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-lg" />)
+                    ) : topics.length > 0 ? (
+                        <>
+                            <div className="text-sm text-muted-foreground mb-2 px-1">
+                                Tìm thấy {topics.length} đề tài
+                            </div>
+                            {topics.map(topic => (
+                                <TopicCard 
+                                    key={topic.ID_DETAI} 
+                                    topic={topic}
+                                    isGroupLeader={isGroupLeader}
+                                    hasRegisteredTopic={hasRegisteredTopic}
+                                    myRegisteredTopicId={myRegisteredTopic?.ID_DETAI}
+                                    canRegister={canRegisterFlag}
+                                    onViewDetails={handleViewTopicDetails}
+                                    onRegister={handleRegisterGroup}
+                                />
+                            ))}
+                        </>
+                    ) : (
+                        <div className="text-center py-20 bg-muted/30 rounded-lg border border-dashed">
+                            <BookCopy className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                            <h3 className="text-lg font-medium">Không tìm thấy đề tài nào</h3>
+                            <p className="text-muted-foreground">Thử thay đổi bộ lọc hoặc chọn kế hoạch khác.</p>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             <TopicDetailDialog
                 open={showTopicDetailDialog}
@@ -460,7 +532,7 @@ const StudentThesisTopicsPage = () => {
                 onRegisterGroup={handleRegisterGroup}
                 hasRegisteredTopic={hasRegisteredTopic}
                 myRegisteredTopic={myRegisteredTopic}
-                canRegister={canRegisterFlag} // [MỚI] Truyền prop
+                canRegister={canRegisterFlag}
             />
 
             <RegisterGroupDialog

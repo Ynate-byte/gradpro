@@ -19,7 +19,7 @@ return new class extends Migration
             $table->text('MOTA')->nullable();
             
             // [ĐÃ THÊM] Thêm "Tạm dừng" theo yêu cầu của bạn
-            $table->enum('TRANGTHAI', ['Hoạt động', 'Đã hủy', 'Tạm dừng'])->default('Hoạt động');
+            $table->enum('TRANGTHAI', ['Hoạt động', 'Đã hủy', 'Tạm dừng', 'Hoàn thành'])->default('Hoạt động');
             
             $table->dateTime('NGAY_BATDAU')->nullable();
             $table->dateTime('NGAY_HETHAN')->nullable()->comment('Deadline');

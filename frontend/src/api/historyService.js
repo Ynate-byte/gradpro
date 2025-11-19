@@ -8,6 +8,10 @@ export const getPersonalHistory = (params) => {
     return axiosClient.get('/history/personal', { params }).then(res => res.data);
 };
 
+export const getPersonalHistoryStats = () => {
+    return axiosClient.get('/history/personal/stats').then(res => res.data);
+};
+
 /**
  * Lấy lịch sử hoạt động của nhóm.
  * @param {number} groupId
