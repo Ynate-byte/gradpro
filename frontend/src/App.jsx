@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
+import ProfilePage from './features/profile';
 
 // --- Import các components Layout và Auth ---
 const AuthenticatedLayout = lazy(() => import('./layout/AuthenticatedLayout'));
@@ -150,6 +151,7 @@ function App() {
           <Route path="history" element={<PlaceholderPage title="Lịch sử" />} />
           <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
           <Route path="students" element={<PlaceholderPage title="Sinh viên" />} />
+          <Route path="/profile" element={<ProfilePage />} />
 
           <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
           <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />

@@ -318,9 +318,14 @@ export function AppSidebar() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" className="w-56">
                         <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
-                        <DropdownMenuItem onClick={() => navigate('/settings/account')}>
-                            <CircleUserRound className="mr-2 size-4" /> Thông tin
+                        
+                        {/* [FIXED] Dùng asChild để render Link */}
+                        <DropdownMenuItem asChild>
+                            <Link to="/profile" className="w-full cursor-pointer flex items-center">
+                                <CircleUserRound className="mr-2 size-4" /> Thông tin
+                            </Link>
                         </DropdownMenuItem>
+
                         <DropdownMenuItem onClick={() => navigate('/settings/appearance')}>
                             <Settings className="mr-2 size-4" /> Giao diện
                         </DropdownMenuItem>
