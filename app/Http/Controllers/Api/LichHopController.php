@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
+use App\Services\ActivityLogger;
 
 class LichHopController extends Controller
 {
@@ -117,6 +118,13 @@ class LichHopController extends Controller
             $validated,
             ['ID_NGUOITAO' => $user->ID_NGUOIDUNG]
         ));
+
+        ActivityLogger::log(
+            'CREATE_MEETING', 
+            "Lên lịch họp: {$lichHop->TIEUDE_LICHHOP}", 
+            ['meeting_id' => $lichHop->ID_LICHHOP, 'time' => $lichHop->THOIGIAN_BATDAU], 
+            $nhom->ID_NHOM
+        );
 
         return response()->json($lichHop->load('nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN,ID_VAITRO', 'nguoiTao.vaitro:ID_VAITRO,TEN_VAITRO'), 201);
     }

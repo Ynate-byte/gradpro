@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use App\Services\ActivityLogger;
 
 class ProfileController extends Controller
 {
@@ -63,6 +64,8 @@ class ProfileController extends Controller
 
             DB::commit();
 
+            ActivityLogger::log('UPDATE_PROFILE', 'Cập nhật thông tin cá nhân');
+
             // 4. Load lại đầy đủ thông tin để trả về frontend cập nhật state
             $user->refresh()->load(['sinhvien.chuyennganh', 'giangvien.khoabomon', 'vaitro']);
 
@@ -112,6 +115,8 @@ class ProfileController extends Controller
         $user->update([
             'MATKHAU_BAM' => Hash::make($request->new_password)
         ]);
+
+        ActivityLogger::log('CHANGE_PASSWORD', 'Đổi mật khẩu đăng nhập');
 
         return response()->json(['message' => 'Đổi mật khẩu thành công.']);
     }

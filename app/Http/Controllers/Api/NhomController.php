@@ -19,16 +19,11 @@ use App\Models\Notification;
 use App\Models\SinhvienThamgia;
 use App\Models\KehoachKhoaluan;
 use Illuminate\Support\Facades\Log;
+use App\Services\ActivityLogger;
+
 
 class NhomController extends Controller
 {
-    // ==========================================
-    // [MỚI] HELPER: KIỂM TRA GIAI ĐOẠN NHÓM
-    // ==========================================
-    /**
-     * Kiểm tra xem có đang trong thời gian cho phép thay đổi nhóm không.
-     * Admin/Giáo vụ/Trưởng khoa được quyền bỏ qua giới hạn này.
-     */
     private function isGroupPhaseActive($planId)
     {
         // 1. Cho phép Admin/Giáo vụ/Trưởng khoa thao tác bất kể thời gian
@@ -206,6 +201,13 @@ class NhomController extends Controller
                 'NGAY_VAONHOM' => now(),
             ]);
         });
+
+        ActivityLogger::log(
+            'CREATE_GROUP', 
+            "Thành lập nhóm mới: {$nhom->TEN_NHOM}", 
+            ['ten_nhom' => $nhom->TEN_NHOM], 
+            $nhom->ID_NHOM
+        );
 
         return response()->json($nhom->load('thanhviens.nguoidung'), 201);
     }
@@ -790,6 +792,15 @@ class NhomController extends Controller
 
                 return $submission;
             });
+
+            $tenDetai = $phancong->detai ? $phancong->detai->TEN_DETAI : 'Đề tài';
+            
+            ActivityLogger::log(
+                'SUBMIT_PRODUCT', 
+                "Nộp sản phẩm cho đề tài: {$tenDetai}", 
+                ['submission_id' => $newSubmission->ID_NOP_SANPHAM], 
+                $phancong->ID_NHOM
+            );
 
             return response()->json([
                 'message' => 'Nộp sản phẩm thành công! Vui lòng chờ admin xác nhận.',

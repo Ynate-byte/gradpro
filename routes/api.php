@@ -27,8 +27,9 @@ use App\Http\Controllers\Api\PhanhoiGoiyController;
 use App\Http\Controllers\Api\LichHopController;
 use App\Http\Controllers\Api\CongViecController;
 use App\Http\Controllers\Api\LecturerDashboardController;
-use App\Http\Controllers\Api\ProfileController; // [NEW]
-use App\Http\Controllers\Api\NewsController; // [NEW]
+use App\Http\Controllers\Api\ProfileController;
+use App\Http\Controllers\Api\NewsController;
+use App\Http\Controllers\Api\HistoryController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -36,8 +37,8 @@ Route::middleware('auth:sanctum')->group(function () {
     
     // ---------------- XÁC THỰC & PROFILE ----------------
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::put('/user/profile', [ProfileController::class, 'updateProfile']); // [NEW]
-    Route::put('/user/change-password', [ProfileController::class, 'changePassword']); // [NEW]
+    Route::put('/user/profile', [ProfileController::class, 'updateProfile']);
+    Route::put('/user/change-password', [ProfileController::class, 'changePassword']);
 
     // ---------------- NGƯỜI DÙNG ----------------
     Route::apiResource('users', UserController::class);
@@ -350,6 +351,11 @@ Route::middleware('auth:sanctum')->group(function () {
         // Route cho Bình luận
         Route::post('/task/{congviec}/comment', [CongViecController::class, 'addComment']);
     });
+
+    // ---------------- LỊCH SỬ HOẠT ĐỘNG ----------------
+    Route::get('/history/personal', [HistoryController::class, 'getPersonalHistory']);
+    Route::get('/history/group/{groupId}', [HistoryController::class, 'getGroupHistory']);
+    
 });
 
 Route::fallback(function () {

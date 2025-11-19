@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
+use App\Services\ActivityLogger;
 
 class CongViecController extends Controller
 {
@@ -188,6 +189,13 @@ class CongViecController extends Controller
 
         $task->binh_luans_count = $task->all_comments_count;
 
+        ActivityLogger::log(
+            'TASK_CREATE', 
+            "Tạo công việc mới: {$task->TEN_CONGVIEC}", 
+            ['task_id' => $task->ID_CONGVIEC], 
+            $nhom->ID_NHOM
+        );
+
         return response()->json($task, 201);
     }
 
@@ -256,6 +264,16 @@ class CongViecController extends Controller
                 }
             }
         });
+
+        $cotMoi = \App\Models\CotCongViec::find($validated['ID_COT_MOI']);
+        $tenCot = $cotMoi ? $cotMoi->TEN_COT : 'Cột mới';
+
+        ActivityLogger::log(
+            'TASK_MOVE', 
+            "Chuyển công việc '{$congviec->TEN_CONGVIEC}' sang '{$tenCot}'", 
+            ['task_id' => $congviec->ID_CONGVIEC, 'to_column' => $tenCot], 
+            $congviec->ID_NHOM
+        );
 
         return response()->json(['message' => 'Cập nhật vị trí thành công.']);
     }

@@ -441,6 +441,13 @@ class DetaiController extends Controller
             ]);
         });
 
+        ActivityLogger::log(
+            'REGISTER_TOPIC', 
+            "Đăng ký thành công đề tài: {$topic->TEN_DETAI}", 
+            ['topic_id' => $topic->ID_DETAI], 
+            $group->ID_NHOM
+        );
+
         return response()->json(['message' => 'Group registered successfully']);
     }
 

@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 use App\Models\Nguoidung;
+use App\Services\ActivityLogger;
 
 class AuthController extends Controller
 {
@@ -38,6 +39,8 @@ class AuthController extends Controller
         $user->DANGNHAP_CUOI = now();
         $user->save();
 
+        ActivityLogger::logLogin($user->ID_NGUOIDUNG);
+        
         return response()->json([
             'message' => 'Đăng nhập thành công',
             'access_token' => $token,
@@ -51,6 +54,8 @@ class AuthController extends Controller
      */
     public function logout(Request $request)
     {
+        ActivityLogger::log('LOGOUT', 'Đăng xuất hệ thống');
+        
         $request->user()->currentAccessToken()->delete();
         
         return response()->json(['message' => 'Đăng xuất thành công']);

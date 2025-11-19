@@ -9,11 +9,10 @@ use App\Models\LoimoiNhom;
 use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
 use App\Models\KehoachKhoaluan;
+use App\Services\ActivityLogger;
 
 class InvitationController extends Controller
 {
-    // QUẢN LÝ LỜI MỜI VÀO NHÓM
-
     /**
      * Lấy danh sách các lời mời đang chờ của người dùng.
      */
@@ -43,7 +42,7 @@ class InvitationController extends Controller
         
         $validated = $request->validate(['action' => 'required|in:accept,decline']);
 
-        // Trường hợp từ chối lời mời -> Không cần check phase, cho phép từ chối thoải mái
+        // Trường hợp từ chối lời mời -> Không cần check phase
         if ($validated['action'] === 'decline') {
             $loimoi->update(['TRANGTHAI' => 'Từ chối', 'NGAY_PHANHOI' => now()]);
             return response()->json(['message' => 'Bạn đã từ chối lời mời.']);
@@ -73,20 +72,27 @@ class InvitationController extends Controller
                 'NGAY_VAONHOM' => now(),
             ]);
             
-            // Cập nhật số lượng thành viên và trạng thái nhóm nếu cần
+            // Cập nhật số lượng thành viên và trạng thái nhóm
             $nhom->increment('SO_THANHVIEN_HIENTAI');
             if ($nhom->SO_THANHVIEN_HIENTAI >= 4) {
                 $nhom->TRANGTHAI = 'Đã đủ thành viên';
                 $nhom->save();
             }
 
-            // Cập nhật trạng thái lời mời hiện tại là "Chấp nhận"
             $loimoi->update(['TRANGTHAI' => 'Chấp nhận', 'NGAY_PHANHOI' => now()]);
             
             LoimoiNhom::where('ID_NGUOI_DUOCMOI', $user->ID_NGUOIDUNG)
                       ->where('TRANGTHAI', 'Đang chờ')
                       ->update(['TRANGTHAI' => 'Từ chối']);
-                      
+            
+            $nhomForLog = Nhom::find($loimoi->ID_NHOM);
+            ActivityLogger::log(
+                'JOIN_GROUP', 
+                "Đã gia nhập nhóm: {$nhomForLog->TEN_NHOM}", 
+                ['role' => 'Thành viên'], 
+                $nhomForLog->ID_NHOM
+            );
+
             return response()->json(['message' => 'Chào mừng bạn đến với nhóm mới!']);
         });
     }
