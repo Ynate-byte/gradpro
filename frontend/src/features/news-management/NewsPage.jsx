@@ -13,15 +13,14 @@ const NewsPage = () => {
 
     // ----- SỬA ĐỔI: Logic kiểm tra quyền -----
     const userRoleName = user?.vaitro?.TEN_VAITRO;
-    const userPositionName = user?.giangvien?.CHUCVU;
+    const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
 
     const canManageNews = 
-        userRoleName === 'Admin' || 
-        userRoleName === 'Trưởng khoa' || 
-        userPositionName === 'Trưởng khoa' ||
-        userRoleName === 'Giáo vụ' ||
-        userPositionName === 'Giáo vụ';
-    // ----- KẾT THÚC SỬA ĐỔI -----
+    userRoleName === 'Admin' || 
+    userRoleName === 'Trưởng khoa' || // Check theo Vai trò (nếu có)
+    positionCodes.includes('TRUONG_KHOA') || // Check theo Chức vụ
+    userRoleName === 'Giáo vụ' || 
+    positionCodes.includes('GIAO_VU');
 
 
     const [editingNews, setEditingNews] = useState(null);

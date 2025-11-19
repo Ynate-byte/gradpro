@@ -29,15 +29,14 @@ const NewsDetail = () => {
     
     // ----- SỬA ĐỔI: Logic kiểm tra quyền -----
     const userRoleName = user?.vaitro?.TEN_VAITRO;
-    const userPositionName = user?.giangvien?.CHUCVU;
-    
+    const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
+
     const canManageNews = 
         userRoleName === 'Admin' || 
         userRoleName === 'Trưởng khoa' || 
-        userPositionName === 'Trưởng khoa' ||
-        userRoleName === 'Giáo vụ' ||
-        userPositionName === 'Giáo vụ';
-    // ----- KẾT THÚC SỬA ĐỔI -----
+        positionCodes.includes('TRUONG_KHOA') ||
+        userRoleName === 'Giáo vụ' || 
+        positionCodes.includes('GIAO_VU');
 
     const [news, setNews] = useState(null);
     const [relatedNews, setRelatedNews] = useState([]);

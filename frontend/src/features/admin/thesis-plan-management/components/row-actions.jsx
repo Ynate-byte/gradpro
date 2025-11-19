@@ -22,13 +22,11 @@ export function PlanRowActions({ row, onSuccess }) {
     const titleId = useId();
     const descriptionId = useId();
 
-    // ----- SỬA ĐỔI: Logic phân quyền dựa trên vai trò VÀ chức vụ -----
     const { user } = useAuth();
     const userRoleName = user?.vaitro?.TEN_VAITRO;
-    const userPositionName = user?.giangvien?.CHUCVU;
-    
-    const isTruongKhoa = userRoleName === 'Trưởng khoa' || userPositionName === 'Trưởng khoa';
-    const isGiaoVu = userRoleName === 'Giáo vụ' || userPositionName === 'Giáo vụ';
+    const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
+    const isTruongKhoa = userRoleName === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
+    const isGiaoVu = userRoleName === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
     const isAdmin = userRoleName === 'Admin';
     const isCreator = plan.ID_NGUOITAO === user.ID_NGUOIDUNG;
 

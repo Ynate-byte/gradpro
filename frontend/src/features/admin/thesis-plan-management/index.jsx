@@ -48,11 +48,16 @@ export default function ThesisPlanManagementPage() {
     const [filterOptionsData, setFilterOptionsData] = useState({ khoahoc: [], namhoc: [], hocky: [], hedaotao: [] });
 
     const { user } = useAuth();
-    const userRole = user?.giangvien?.CHUCVU; 
-    const isAdmin = user?.vaitro?.TEN_VAITRO === 'Admin';
-    const canCreate = userRole === 'Giáo vụ' || userRole === 'Trưởng khoa' || isAdmin;  
+    const userRoleName = user?.vaitro?.TEN_VAITRO;
+    
+    const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
 
-    // ... (useEffect tải filter options không đổi)
+    const isAdmin = userRoleName === 'Admin';
+    const isTruongKhoa = userRoleName === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
+    const isGiaoVu = userRoleName === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
+
+    const canCreate = isGiaoVu || isTruongKhoa || isAdmin;
+
     useEffect(() => {
         getPlanFilterOptions()
             .then(data => {

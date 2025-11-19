@@ -82,8 +82,8 @@ const InfoItem = ({ icon: Icon, label, value }) => (
 
 const LecturerQuotaManagementPage = () => {
   const { user } = useAuth();
-  const isDepartmentHead = user?.giangvien?.CHUCVU === 'Trưởng bộ môn';
-
+  const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
+  const isDepartmentHead = positionCodes.includes('TRUONG_BOMON');
   const [myQuota, setMyQuota] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState('');
   const [plans, setPlans] = useState([]);
