@@ -85,7 +85,9 @@ export function InviteMemberDialog({ isOpen, setIsOpen, groupId, planId, groupDa
     mutationFn: ({ userIds, message }) => inviteMultipleMembers(groupId, userIds, message),
     onSuccess: (res) => {
       toast.success(res.message);
+      // [FIX] Làm mới cả thông tin nhóm VÀ lịch sử hoạt động
       queryClient.invalidateQueries({ queryKey: ['myGroupDetails', planId] });
+      queryClient.invalidateQueries({ queryKey: ['group-history', groupId] }); // <--- THÊM DÒNG NÀY
       setIsOpen(false);
     },
     onError: (error) => {
@@ -128,19 +130,13 @@ export function InviteMemberDialog({ isOpen, setIsOpen, groupId, planId, groupDa
     },
   ], []);
 
-  // --- NÂNG CẤP: Tính toán giới hạn ---
   const selectedRowCount = Object.keys(rowSelection).length;
-  // const currentMemberCount = groupData?.SO_THANHVIEN_HIENTAI || 0; // <-- KHÔNG CẦN NỮA
   const pendingInviteCount = groupData?.loimois?.filter(
     inv => inv.TRANGTHAI === 'Đang chờ'
   ).length || 0;
 
-  // const totalMembersIfInvited = currentMemberCount + selectedRowCount; // <-- KHÔNG CẦN NỮA
   const totalPendingIfInvited = pendingInviteCount + selectedRowCount;
-
-  // const isOverMemberLimit = totalMembersIfInvited > 4; // <-- KHÔNG CẦN NỮA
-  const isOverInviteLimit = totalPendingIfInvited > 8; // <-- GIỮ LẠI
-  // --- KẾT THÚC NÂNG CẤP ---
+  const isOverInviteLimit = totalPendingIfInvited > 8;
 
   const onSubmit = (data) => {
     const selectedUserIds = Object.keys(rowSelection)
@@ -152,14 +148,10 @@ export function InviteMemberDialog({ isOpen, setIsOpen, groupId, planId, groupDa
       return;
     }
 
-    // --- NÂNG CẤP: Kiểm tra lại trước khi gửi ---
-    // if (isOverMemberLimit) { ... } // <-- ĐÃ GỠ BỎ
-    
     if (isOverInviteLimit) {
       toast.error(`Nhóm chỉ được có 8 lời mời chờ. (Hiện tại: ${pendingInviteCount})`);
       return;
     }
-    // --- KẾT THÚC NÂNG CẤP ---
 
     inviteMutation.mutate({ userIds: selectedUserIds, message: data.LOINHAN });
   };
@@ -205,11 +197,8 @@ export function InviteMemberDialog({ isOpen, setIsOpen, groupId, planId, groupDa
           chuyenNganhFilterOptions={chuyenNganhFilterOptions}
         />
 
-        {/* Form lời nhắn và nút gửi */}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 pt-4 border-t">
-            
-            {/* --- GỠ BỎ ALERT GIỚI HẠN THÀNH VIÊN --- */}
             
             {isOverInviteLimit && (
               <Alert variant="destructive" className="py-2">
@@ -240,8 +229,7 @@ export function InviteMemberDialog({ isOpen, setIsOpen, groupId, planId, groupDa
                 disabled={
                   inviteMutation.isPending || 
                   selectedRowCount === 0 ||
-                  // isOverMemberLimit || // <-- ĐÃ GỠ BỎ
-                  isOverInviteLimit // <-- Giữ lại
+                  isOverInviteLimit
                 }
               >
                 {inviteMutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}

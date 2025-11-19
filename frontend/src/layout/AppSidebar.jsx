@@ -2,8 +2,8 @@ import React from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight,
-    LogOut, CircleUserRound, Newspaper, Shield, FileText, CheckCircle, GraduationCap, PenSquare,
-    Layers
+    LogOut, CircleUserRound, Newspaper, Shield, CheckCircle, GraduationCap, PenSquare,
+    Layers, History, FileText
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,7 @@ export function AppSidebar() {
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Lấy thông tin User (Cập nhật) ---
+    // --- Lấy thông tin User ---
     const role = user?.vaitro?.TEN_VAITRO;
     
     // Lấy mảng chức vụ từ quan hệ mới
@@ -34,7 +34,7 @@ export function AppSidebar() {
     const positionCodes = positions.map(p => p.MA_CHUCVU);
     const positionNames = positions.map(p => p.TEN_CHUCVU);
 
-    // --- Logic phân quyền (Cập nhật) ---
+    // --- Logic phân quyền ---
     const isAdmin = role === 'Admin';
     const isTruongKhoa = role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
     const isGiaoVu = role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
@@ -54,7 +54,6 @@ export function AppSidebar() {
     const checkActive = (href) => {
         if (!href) return false;
         if (href === '/') return currentUrl === '/';
-        // Active khi URL trùng khớp hoặc là trang con của href
         return currentUrl === href || currentUrl.startsWith(`${href}/`);
     };
 
@@ -70,7 +69,7 @@ export function AppSidebar() {
                     subItems: [
                         { href: "/", title: "Trang chủ" },
                         { href: "/notifications", title: "Thông báo" },
-                        { href: "/history", title: "Lịch sử" },
+                        { href: "/history", title: "Lịch sử hoạt động" }, 
                         { href: "/starred", title: "Đã lưu" },
                     ],
                 },
@@ -93,11 +92,9 @@ export function AppSidebar() {
                             { href: "/lecturer/submissions", title: "Duyệt nộp bài" },
                             {
                                 href: "/lecturer/quota-management",
-                                // Hiển thị tiêu đề linh hoạt hơn
                                 title: isTruongBoMon ? "Phân công (GV)" : "Thông tin Quota",
                                 hidden: isSinhVien || isAdmin
                             },
-                            // Sử dụng cờ isTruongBoMon đã tính toán
                             ...(isTruongBoMon ? [{
                                 href: "/department-head/topic-reviewer-assignment",
                                 title: "Phân công Người Góp ý"
@@ -129,9 +126,9 @@ export function AppSidebar() {
                 { title: "Người dùng", href: "/admin/users", icon: Shield },
                 { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
                 { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
-                { title: "Kế hoạch Mẫu", href: "/admin/templates", icon: FileText },
+                { title: "Kế hoạch Mẫu", href: "/admin/templates", icon: FileText }, // Sử dụng FileText ở đây
                 { title: "Phân công Quota", href: "/admin/quota-management", icon: Layers },
-                { title: "Đề tài Khóa luận", href: "/admin/thesis-topics", icon: FileText },
+                { title: "Đề tài Khóa luận", href: "/admin/thesis-topics", icon: BookCopy }, 
                 { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
                 { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
             ],
@@ -219,13 +216,11 @@ export function AppSidebar() {
         return null;
     };
 
-    // --- Logic hiển thị tiêu đề user (Cập nhật) ---
+    // --- Logic hiển thị tiêu đề user ---
     const getUserDisplayTitle = () => {
-        // Nếu là Giảng viên và có chức vụ -> Hiển thị danh sách chức vụ
         if (role === 'Giảng viên' && positionNames.length > 0) {
-            return positionNames.join(', '); // VD: "Trưởng bộ môn, Giáo vụ"
+            return positionNames.join(', ');
         }
-        // Các trường hợp còn lại (Admin, Sinh viên, GV thường) -> Hiển thị vai trò
         return role || '...';
     };
 
@@ -242,7 +237,6 @@ export function AppSidebar() {
                             <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden">
                                 <span className="text-sm font-semibold">GradPro</span>
                                 <span className="text-xs text-muted-foreground">
-                                    {/* Sử dụng hàm logic mới */}
                                     {getUserDisplayTitle()}
                                 </span>
                             </div>
@@ -277,7 +271,7 @@ export function AppSidebar() {
                     </SidebarGroup>
                 ))}
 
-                {/* Menu Quản trị (nếu có quyền) */}
+                {/* Menu Quản trị */}
                 {canViewAdminMenu &&
                     adminMenuConfig.map((group, idx) => {
                         const isActive = isGroupActive(group.items);
@@ -319,10 +313,15 @@ export function AppSidebar() {
                     <DropdownMenuContent side="right" align="start" className="w-56">
                         <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
                         
-                        {/* [FIXED] Dùng asChild để render Link */}
                         <DropdownMenuItem asChild>
                             <Link to="/profile" className="w-full cursor-pointer flex items-center">
                                 <CircleUserRound className="mr-2 size-4" /> Thông tin
+                            </Link>
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem asChild>
+                            <Link to="/history" className="w-full cursor-pointer flex items-center">
+                                <History className="mr-2 size-4" /> Lịch sử hoạt động
                             </Link>
                         </DropdownMenuItem>
 

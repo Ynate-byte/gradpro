@@ -1,4 +1,3 @@
-// frontend/src/features/student/my-group/components/JoinRequests.jsx
 import React, { useState, useId } from 'react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,6 @@ import { handleJoinRequest } from '@/api/groupService';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 
-// Component con: Hiển thị Trạng thái
 const StatusBadge = ({ status }) => {
   const statusMap = {
     'Chấp nhận': 'bg-green-100 text-green-800',
@@ -27,7 +25,6 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-// Component con: Lấy chữ cái đầu
 const getInitials = (name) => {
   if (!name) return '?';
   const parts = name.split(' ');
@@ -46,7 +43,9 @@ export function JoinRequests({ requests, groupId, planId }) {
     mutationFn: ({ requestId, action }) => handleJoinRequest(groupId, requestId, action),
     onSuccess: (res) => {
       toast.success(res.message);
+      // [FIX] Làm mới cả thông tin nhóm VÀ lịch sử hoạt động
       queryClient.invalidateQueries({ queryKey: ['myGroupDetails', planId] });
+      queryClient.invalidateQueries({ queryKey: ['group-history', groupId] }); // <--- THÊM DÒNG NÀY
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || 'Thao tác thất bại.');

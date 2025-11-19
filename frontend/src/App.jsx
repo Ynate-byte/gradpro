@@ -11,6 +11,8 @@ const Login = lazy(() => import('./features/auth/Login'));
 const HomePage = lazy(() => import('./features/home/HomePage'));
 const NewsManagementPage = lazy(() => import('./features/news-management/index.jsx'));
 const NewsDetail = lazy(() => import('./features/news-management/NewsDetail'));
+// Đảm bảo file này tồn tại tại: src/features/history/PersonalHistoryPage.jsx
+const PersonalHistoryPage = lazy(() => import('./features/history/PersonalHistoryPage'));
 
 // --- Import components Giảng viên (bao gồm Dashboard) ---
 const LecturerDashboard = lazy(() => import('./features/lecturer/dashboard/LecturerDashboard.jsx'));
@@ -50,7 +52,6 @@ const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomCh
 const ChamDiemChiTiet = lazy(() => import('./features/admin/chamdiem/ChamDiemChiTiet.jsx'));
 const GeneralSettingsPage = lazy(() => import('./features/admin/settings/GeneralSettingsPage.jsx'));
 
-
 // Component placeholder cho các trang chưa có nội dung
 const PlaceholderPage = ({ title }) => (
   <div className="p-4 bg-white rounded-lg shadow dark:bg-card">
@@ -85,7 +86,6 @@ function App() {
   const role = user?.vaitro?.TEN_VAITRO;
   
   // Lấy danh sách mã chức vụ (nếu có)
-  // Backend trả về user.giangvien.chucvus = [{ MA_CHUCVU: 'TRUONG_KHOA', ... }, ...]
   const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
 
   const isAdmin = role === 'Admin';
@@ -95,7 +95,7 @@ function App() {
   const isGiaoVu = isAdmin || role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
   const isTruongBoMon = isAdmin || positionCodes.includes('TRUONG_BOMON');
   
-  const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role); // Giảng viên thường
+  const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
   const isSinhVien = role === 'Sinh viên';
 
   // Quyền xem menu Admin (Admin, Trưởng khoa, Giáo vụ)
@@ -106,7 +106,6 @@ function App() {
   
   // Quyền chấm điểm (GV, TK, GVụ, Admin)
   const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
-
 
   return (
     <Suspense
@@ -148,10 +147,12 @@ function App() {
 
           {/* Các Routes chung */}
           <Route path="notifications" element={<PlaceholderPage title="Thông báo" />} />
-          <Route path="history" element={<PlaceholderPage title="Lịch sử" />} />
           <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
           <Route path="students" element={<PlaceholderPage title="Sinh viên" />} />
           <Route path="/profile" element={<ProfilePage />} />
+          
+          {/* [ĐÃ SỬA] Chỉ giữ lại 1 route cho History và trỏ đúng component */}
+          <Route path="history" element={<PersonalHistoryPage />} />
 
           <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
           <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />

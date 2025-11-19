@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { UserPlus, Users } from 'lucide-react'; // Bỏ import KanbanSquare, Calendar, FileText
+import { UserPlus, Users, Activity } from 'lucide-react'; // [THÊM] Import Activity icon
 import { useAuth } from '@/contexts/AuthContext';
 import { InviteMemberDialog } from './InviteMemberDialog';
 import { SentInvitationsList } from './SentInvitationsList';
 import { JoinRequests } from './JoinRequests';
-// Bỏ import KanbanPage, MeetingCalendarPage, SubmissionArea
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
+
+// [THÊM] Import Component Lịch sử (Lưu ý đường dẫn relative từ folder management ra ngoài)
+import GroupHistoryTab from '../GroupHistoryTab'; 
 
 /**
  * Component quản lý nhóm, được sử dụng cho cả Sinh viên và Giảng viên (Group Management View).
@@ -32,13 +34,15 @@ export function GroupManagementView({ groupData, planId, plan }) {
     // Sinh viên xem nhóm (không phải GVHD) -> có quyền nộp bài
     const isStudentViewer = !isSupervisor; 
 
-    // [SỬA ĐỔI] Chỉ giữ lại tab Management, bỏ 3 tab kia
+    // [CẬP NHẬT] Cấu hình Tabs: Đưa 'activity' lên vị trí đầu tiên
     const tabs = [
+        { value: 'activity', label: 'Hoạt động', icon: Activity, condition: true }, // Tab Lịch sử (Mới)
         { value: 'management', label: 'Thành viên & Quản lý', icon: Users, condition: true },
     ].filter(tab => tab.condition);
 
     const gridStyle = { gridTemplateColumns: `repeat(${tabs.length}, 1fr)` };
-    const defaultTab = tabs.length > 0 ? tabs[0].value : 'management';
+    // Mặc định chọn tab đầu tiên (activity)
+    const defaultTab = tabs.length > 0 ? tabs[0].value : 'activity';
 
     return (
         <>
@@ -53,7 +57,12 @@ export function GroupManagementView({ groupData, planId, plan }) {
                     ))}
                 </TabsList>
 
-                {/* TAB 1: QUẢN LÝ THÀNH VIÊN */}
+                {/* [THÊM] TAB 1: LỊCH SỬ HOẠT ĐỘNG */}
+                <TabsContent value="activity" className="mt-6 space-y-6">
+                     <GroupHistoryTab groupId={nhomId} />
+                </TabsContent>
+
+                {/* TAB 2: QUẢN LÝ THÀNH VIÊN & LỜI MỜI */}
                 <TabsContent value="management" className="mt-6 space-y-6">
                     
                     {hasTopic && (
@@ -92,11 +101,9 @@ export function GroupManagementView({ groupData, planId, plan }) {
                     )}
                 </TabsContent>
 
-                {/* [SỬA ĐỔI] Đã xóa TabsContent cho 'tasks', 'schedule', 'submission' */}
-
             </Tabs>
 
-            {/* Dialog mời thành viên (Giữ nguyên) */}
+            {/* Dialog mời thành viên */}
             <InviteMemberDialog
                 isOpen={isInviteOpen}
                 setIsOpen={setIsInviteOpen}

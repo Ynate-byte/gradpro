@@ -13,7 +13,7 @@
 /* Cột Kanban */
 .kanban-column {
     flex: 1 1 0;
-    min-width: 280px; /* Tăng chiều rộng một chút */
+    min-width: 200px;
     border-radius: var(--radius);
     background-color: hsl(var(--muted)); 
     display: flex;

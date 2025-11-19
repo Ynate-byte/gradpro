@@ -6,9 +6,9 @@ import { getTaskStats } from '@/api/kanbanService';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-    BookCopy, Users, CheckCircle, AlertTriangle, Crown, Phone, Mail,
-    AlertCircle, RefreshCw, Loader2, CalendarCheck, UploadCloud,
-    LayoutDashboard
+    BookCopy, CheckCircle, AlertTriangle, Crown,
+    AlertCircle, UploadCloud, CalendarCheck, LayoutDashboard,
+    Mail, Phone // Icon đã được import đúng
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NoGroupView } from './components/NoGroupView';
@@ -35,11 +35,11 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ActivityCard } from './components/ActivityCard';
-import { format, isFuture, startOfWeek, endOfWeek, isWithinInterval, parseISO } from 'date-fns';
+import { startOfWeek, endOfWeek, isWithinInterval, parseISO, isFuture } from 'date-fns';
 import { SubmissionDialog } from './components/submission/SubmissionDialog';
-// import { MeetingArea } from './components/MeetingArea'; // Đã gỡ bỏ
+import { RefreshCw, Loader2 } from 'lucide-react';
 
-// (Component LoadingSkeleton giữ nguyên)
+// Component Skeleton khi đang tải dữ liệu
 const LoadingSkeleton = () => (
     <div className="p-4 md:p-8 space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -51,61 +51,22 @@ const LoadingSkeleton = () => (
                 <Skeleton className="h-[105px]" />
                 <Skeleton className="h-[105px]" />
             </div>
-            <Skeleton className="h-40 lg:col-span-1" />
+            <div className="h-40 lg:col-span-1">
+                 <Skeleton className="h-full w-full" />
+            </div>
         </div>
         <Separator />
         <Skeleton className="h-64 w-full" />
     </div>
 );
 
-// (Component getInitials giữ nguyên)
+// Helper lấy chữ cái đầu tên
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
     return parts.length > 1
         ? `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase()
         : name.substring(0, 2).toUpperCase();
-};
-
-// (Component TopicInfoCard giữ nguyên)
-const TopicInfoCard = ({ phancong, onDetailsClick }) => {
-    const project = phancong?.detai;
-    const gvhd = phancong?.gvhd;
-    return (
-        <Card className="lg:col-span-1 h-full flex flex-col">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                    <BookCopy className="h-5 w-5 text-green-600" /> Đề tài
-                </CardTitle>
-                {project && (
-                    <Badge variant={project.TRANGTHAI === 'Đã duyệt' ? 'default' : 'secondary'}>
-                        {project.TRANGTHAI}
-                    </Badge>
-                )}
-            </CardHeader>
-            <CardContent className="flex-1 flex flex-col justify-between">
-                {project ? (
-                    <div className="space-y-2">
-                        <p 
-                            className="text-lg font-medium text-primary cursor-pointer hover:underline"
-                            onClick={onDetailsClick}
-                        >
-                            {project.TEN_DETAI}
-                        </p>
-                        <p className="text-sm text-muted-foreground">Mã ĐT: {project.MA_DETAI || 'N/A'}</p>
-                        <p className="text-sm">GVHD: {gvhd?.nguoidung?.HODEM_VA_TEN || 'Chưa rõ'}</p>
-                    </div>
-                ) : (
-                    <p className="text-muted-foreground mt-2">Nhóm chưa đăng ký đề tài.</p>
-                )}
-                {project && (
-                    <Button variant="link" size="sm" className="p-0 h-auto text-xs mt-2" onClick={onDetailsClick}>
-                        Xem chi tiết đề tài...
-                    </Button>
-                )}
-            </CardContent>
-        </Card>
-    );
 };
 
 export default function MyGroupPage() {
@@ -119,7 +80,7 @@ export default function MyGroupPage() {
     const navigate = useNavigate();
     const [isSubmissionOpen, setIsSubmissionOpen] = useState(false);
 
-    // (useQuery 'activePlans' giữ nguyên)
+    // 1. Lấy danh sách kế hoạch hoạt động
     const {
         data: activePlans,
         isLoading: isLoadingPlans,
@@ -130,7 +91,7 @@ export default function MyGroupPage() {
         onError: () => toast.error('Lỗi khi tải danh sách kế hoạch.'),
     });
 
-    // (useQuery 'groupDetails' giữ nguyên)
+    // 2. Lấy chi tiết nhóm (Bao gồm merge dữ liệu từ nhiều nguồn API)
     const {
         data: groupDetails,
         isLoading: isLoadingGroup,
@@ -139,17 +100,22 @@ export default function MyGroupPage() {
         queryFn: async () => {
             const params = { plan_id: selectedPlanIdForDisplay };
             const plan = activePlans.find(p => String(p.ID_KEHOACH) === selectedPlanIdForDisplay);
+            
+            // Gọi API chính lấy thông tin nhóm (chứa thành viên, yêu cầu, lời mời)
             const groupRes = await getMyGroup(params);
             
             let meetingsData = { meetings: [], groupInfo: null };
-            let tasksCount = 0; // Tách riêng
+            let tasksCount = 0;
             
+            // Nếu sinh viên đã có nhóm
             if (groupRes.has_group) {
+                // Gọi song song các API phụ (Lịch họp, Kanban stats)
                 try {
                     meetingsData = await getMeetingsForGroup(groupRes.group_data.ID_NHOM);
                 } catch (e) {
-                    console.error("Failed to fetch meetings in parallel", e);
+                    console.error("Failed to fetch meetings", e);
                 }
+                
                 try {
                     const stats = await getTaskStats(groupRes.group_data.ID_NHOM);
                     tasksCount = stats.tasks_ton_dong || 0;
@@ -157,14 +123,27 @@ export default function MyGroupPage() {
                     console.error("Failed to fetch task stats", e);
                 }
 
+                // Merge dữ liệu cẩn thận
+                const baseGroupData = groupRes.group_data;
+                
+                const finalGroupData = {
+                    ...baseGroupData,
+                    ...(meetingsData.groupInfo || {}), 
+                    yeucaus: baseGroupData.yeucaus || [],
+                    loimois: baseGroupData.loimois || [],
+                    thanhviens: baseGroupData.thanhviens || [],
+                    phancong_detai_nhom: baseGroupData.phancongDetaiNhom || baseGroupData.phancong_detai_nhom
+                };
+
                 return { 
-                    groupData: meetingsData.groupInfo || groupRes.group_data, 
+                    groupData: finalGroupData, 
                     invitations: [], 
                     plan, 
                     meetings: meetingsData.meetings || [],
                     tasksCount: tasksCount
                 };
             } else {
+                // Nếu chưa có nhóm, lấy danh sách lời mời cá nhân
                 const invitationsRes = await getPendingInvitations(params);
                 return { 
                     groupData: null, 
@@ -179,13 +158,14 @@ export default function MyGroupPage() {
         onError: () => toast.error('Lỗi tải dữ liệu nhóm.'),
     });
 
-    // (useEffect và useMutation giữ nguyên)
+    // Tự động chọn kế hoạch đầu tiên nếu chưa chọn
     useEffect(() => {
         if (activePlans && activePlans.length > 0 && !selectedPlanIdForDisplay) {
             setSelectedPlanIdForDisplay(String(activePlans[0].ID_KEHOACH));
         }
     }, [activePlans, selectedPlanIdForDisplay]);
 
+    // Mutation chuyển quyền trưởng nhóm
     const transferMutation = useMutation({
         mutationFn: (memberId) => transferGroupLeadership(groupDetails?.groupData?.ID_NHOM, memberId),
         onSuccess: (res) => {
@@ -201,36 +181,26 @@ export default function MyGroupPage() {
         transferMutation.mutate(transferAlertInfo.member.ID_NGUOIDUNG);
     };
 
-    // [ĐÃ SỬA LẠI LOGIC LỌC]
+    // Tính toán thống kê cho Dashboard
     const { upcomingMeetingsCount, upcomingTasksCount } = useMemo(() => {
         const meetings = groupDetails?.meetings || [];
         const tasksCount = groupDetails?.tasksCount || 0;
 
         const now = new Date();
-        // startOfWeek với weekStartsOn: 1 (Thứ 2) để khớp với logic lịch Việt Nam
         const startOfThisWeek = startOfWeek(now, { weekStartsOn: 1 });
         const endOfThisWeek = endOfWeek(now, { weekStartsOn: 1 });
 
-        // Lọc danh sách lịch họp hợp lệ
         const validMeetings = meetings.filter(meeting => {
-            // 1. Kiểm tra thời gian tồn tại
             if (!meeting.THOIGIAN_BATDAU) return false;
-
-            // 2. Kiểm tra trạng thái: BẮT BUỘC phải là "Đã lên lịch"
-            // Sử dụng trim() và normalize() để tránh lỗi font chữ hoặc khoảng trắng thừa
             const status = meeting.TRANGTHAI ? meeting.TRANGTHAI.trim().normalize("NFC") : "";
             if (status !== 'Đã lên lịch') return false;
 
             try {
                 const meetingDate = parseISO(meeting.THOIGIAN_BATDAU);
-                
-                // 3. Kiểm tra thời gian: Phải trong tương lai VÀ nằm trong tuần này
                 const isFutureMeeting = isFuture(meetingDate);
                 const isInCurrentWeek = isWithinInterval(meetingDate, { start: startOfThisWeek, end: endOfThisWeek });
-                
                 return isFutureMeeting && isInCurrentWeek;
             } catch (e) {
-                console.error("Lỗi parse ngày tháng:", meeting.THOIGIAN_BATDAU);
                 return false;
             }
         });
@@ -249,12 +219,12 @@ export default function MyGroupPage() {
         );
     }
 
-    // (Định nghĩa biến giữ nguyên)
     const isLoadingData = isLoadingGroup;
     const isEligible = groupDetails?.plan?.sinhvien_thamgias?.[0]?.DU_DIEUKIEN ?? true;
     const hasGroup = !!groupDetails?.groupData;
     const groupData = groupDetails?.groupData;
-    const phancong = groupData?.phancong_detai_nhom;
+    
+    const phancong = groupData?.phancongDetaiNhom || groupData?.phancong_detai_nhom;
     const hasTopic = !!phancong?.detai;
     const isLeader = user?.ID_NGUOIDUNG === groupData?.ID_NHOMTRUONG;
 
@@ -266,9 +236,10 @@ export default function MyGroupPage() {
     return (
         <div className="p-4 md:p-8 space-y-6">
             
+            {/* HEADER */}
             {hasGroup ? (
-                // --- Bố cục 3 cột khi ĐÃ CÓ NHÓM ---
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                    {/* CỘT 1 */}
                     <div className="flex-1 space-y-4 lg:col-span-1">
                         <div>
                             <Select value={selectedPlanIdForDisplay} onValueChange={setSelectedPlanIdForDisplay}>
@@ -293,7 +264,7 @@ export default function MyGroupPage() {
                                 >
                                     {phancong.detai.TEN_DETAI}
                                 </AlertTitle>
-                                <AlertDescription className="text-green-800 dark:text-green-200">
+                                <AlertDescription className="text-green-800 dark:text-green-200 text-xs mt-1">
                                     GVHD: {phancong.detai.nguoi_dexuat?.nguoidung?.HODEM_VA_TEN || 'Chưa rõ'}
                                 </AlertDescription>
                             </Alert>
@@ -301,7 +272,7 @@ export default function MyGroupPage() {
                             <Alert variant="destructive" className="bg-yellow-50 border-yellow-300 text-yellow-900 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-100">
                                 <AlertTriangle className="h-4 w-4 !text-yellow-700 dark:!text-yellow-300" />
                                 <AlertTitle className="font-bold">Chưa đăng ký đề tài</AlertTitle>
-                                <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                                <AlertDescription className="text-yellow-800 dark:text-yellow-200 text-xs">
                                     Nhóm cần đăng ký đề tài để có thể nộp sản phẩm.
                                 </AlertDescription>
                             </Alert>
@@ -317,7 +288,7 @@ export default function MyGroupPage() {
                         )}
                     </div>
 
-                    {/* CỘT 2: Card Thống kê */}
+                    {/* CỘT 2 */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:col-span-1">
                         <ActivityCard 
                             title="Lịch họp trong tuần" 
@@ -335,82 +306,83 @@ export default function MyGroupPage() {
                         />
                     </div>
 
-                    {/* CỘT 3: Danh sách Thành viên */}
+                    {/* CỘT 3: DANH SÁCH THÀNH VIÊN (ĐÃ BỌC TRONG CARD) */}
                     <div className="lg:col-span-1 space-y-1">
-                        {groupData.thanhviens?.map(member => {
-                            const nguoidung = member.nguoidung;
-                            const isMemberLeader = member.ID_NGUOIDUNG === groupData.ID_NHOMTRUONG;
-                            const isSelf = member.ID_NGUOIDUNG === user.ID_NGUOIDUNG;
+                            <CardContent className="px-4 pb-4 pt-0 space-y-1">
+                                {groupData.thanhviens?.map(member => {
+                                    const nguoidung = member.nguoidung;
+                                    const isMemberLeader = member.ID_NGUOIDUNG === groupData.ID_NHOMTRUONG;
+                                    const isSelf = member.ID_NGUOIDUNG === user.ID_NGUOIDUNG;
 
-                            return (
-                                <Popover key={member.ID_NGUOIDUNG}>
-                                    <PopoverTrigger asChild>
-                                        <button
-                                            className={cn(
-                                                "flex items-center justify-between px-3 py-1.5 hover:bg-muted/50 transition-colors w-full text-left text-sm border rounded-md overflow-hidden bg-card",
-                                                isMemberLeader && "border-primary/50"
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-2 overflow-hidden">
-                                                <Avatar className="h-6 w-6 text-xs">
-                                                    <AvatarFallback>{getInitials(nguoidung.HODEM_VA_TEN)}</AvatarFallback>
-                                                </Avatar>
-                                                <div className="flex-1 min-w-0">
-                                                    <span className="font-medium truncate block text-sm">
-                                                        {nguoidung.HODEM_VA_TEN}
-                                                        {isMemberLeader && <Crown className="inline h-3 w-3 text-primary ml-1" />}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <span className="text-muted-foreground text-xs font-mono">{nguoidung.MA_DINHDANH}</span>
-                                        </button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-64" align="end">
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-2">
-                                                <Avatar className="h-9 w-9">
-                                                    <AvatarFallback>{getInitials(nguoidung.HODEM_VA_TEN)}</AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="text-sm font-semibold">{nguoidung.HODEM_VA_TEN}</p>
-                                                    <p className="text-xs text-muted-foreground">{nguoidung.MA_DINHDANH}</p>
-                                                </div>
-                                            </div>
-                                            <Separator />
-                                            <div className="space-y-2">
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                    <Mail className="h-3 w-3" />
-                                                    <span className="truncate">{nguoidung.EMAIL}</span>
-                                                </div>
-                                                {nguoidung.SO_DIENTHOAI && (
-                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                                        <Phone className="h-3 w-3" />
-                                                        <span>{nguoidung.SO_DIENTHOAI}</span>
+                                    return (
+                                        <Popover key={member.ID_NGUOIDUNG}>
+                                            <PopoverTrigger asChild>
+                                                <button
+                                                    className={cn(
+                                                        "flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors w-full text-left text-sm border rounded-md overflow-hidden bg-card",
+                                                        isMemberLeader && "border-primary/50 bg-primary/5"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                        <Avatar className="h-8 w-8 text-xs">
+                                                            <AvatarFallback>{getInitials(nguoidung.HODEM_VA_TEN)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="flex-1 min-w-0">
+                                                            <span className="font-medium truncate block text-sm">
+                                                                {nguoidung.HODEM_VA_TEN}
+                                                                {isMemberLeader && <Crown className="inline h-3 w-3 text-yellow-500 ml-1 fill-yellow-500" />}
+                                                            </span>
+                                                            <span className="text-muted-foreground text-xs font-mono truncate block">{nguoidung.MA_DINHDANH}</span>
+                                                        </div>
                                                     </div>
-                                                )}
-                                            </div>
-                                            
-                                            {isLeader && !isSelf && !hasTopic && (
-                                                <div className="pt-3 border-t mt-3">
-                                                    <Button
-                                                        variant="outline"
-                                                        className="w-full h-8 text-xs"
-                                                        onClick={() => setTransferAlertInfo({ isOpen: true, member: nguoidung })}
-                                                        disabled={transferMutation.isPending}
-                                                    >
-                                                        <RefreshCw className="mr-2 h-3 w-3" /> Chuyển quyền Trưởng nhóm
-                                                    </Button>
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-72" align="end">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar className="h-10 w-10">
+                                                            <AvatarFallback>{getInitials(nguoidung.HODEM_VA_TEN)}</AvatarFallback>
+                                                        </Avatar>
+                                                        <div>
+                                                            <p className="text-sm font-semibold">{nguoidung.HODEM_VA_TEN}</p>
+                                                            <p className="text-xs text-muted-foreground">{nguoidung.MA_DINHDANH}</p>
+                                                        </div>
+                                                    </div>
+                                                    <Separator />
+                                                    <div className="space-y-2">
+                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Mail className="h-3 w-3" />
+                                                            <span className="truncate">{nguoidung.EMAIL}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                            <Phone className="h-3 w-3" />
+                                                            {/* [FIX] Luôn hiển thị text nếu SĐT rỗng */}
+                                                            <span>{nguoidung.SO_DIENTHOAI || 'Chưa cập nhật'}</span>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {isLeader && !isSelf && !hasTopic && (
+                                                        <div className="pt-3 border-t mt-3">
+                                                            <Button
+                                                                variant="outline"
+                                                                className="w-full h-8 text-xs"
+                                                                onClick={() => setTransferAlertInfo({ isOpen: true, member: nguoidung })}
+                                                                disabled={transferMutation.isPending}
+                                                            >
+                                                                <RefreshCw className="mr-2 h-3 w-3" /> Chuyển quyền Trưởng nhóm
+                                                            </Button>
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
-                            );
-                        })}
+                                            </PopoverContent>
+                                        </Popover>
+                                    );
+                                })}
+                            </CardContent>
                     </div>
                 </div>
             ) : (
-                // Nếu không có nhóm
+                // Selector khi chưa có nhóm
                 <div>
                     <label className="text-sm font-medium">Kế hoạch</label>
                     <Select value={selectedPlanIdForDisplay} onValueChange={setSelectedPlanIdForDisplay}>
@@ -438,11 +410,11 @@ export default function MyGroupPage() {
 
             <Separator />
 
-            {/* NỘI DUNG CHÍNH (Tabs) */}
+            {/* NỘI DUNG CHÍNH */}
             {groupDetails && isEligible ? (
                 hasGroup ? (
                     <GroupManagementView
-                        groupData={groupData}
+                        groupData={groupDetails.groupData} 
                         planId={selectedPlanIdForDisplay}
                         plan={groupDetails.plan}
                     />
@@ -453,7 +425,7 @@ export default function MyGroupPage() {
                 !isEligible ? null : <p className="text-muted-foreground text-center py-8">Vui lòng chọn kế hoạch.</p>
             )}
 
-            {/* DIALOG CHI TIẾT ĐỀ TÀI */}
+            {/* DIALOGS */}
             {hasTopic && (
                 <TopicDetailsDialog
                     phancong={phancong}
@@ -462,7 +434,6 @@ export default function MyGroupPage() {
                 />
             )}
             
-            {/* Dialog Nộp sản phẩm */}
             {hasGroup && (
                 <SubmissionDialog
                     isOpen={isSubmissionOpen}
@@ -473,7 +444,7 @@ export default function MyGroupPage() {
                 />
             )}
 
-            {/* Alert Dialog để xác nhận chuyển quyền */}
+            {/* Alert Dialog Chuyển quyền */}
             <AlertDialog open={transferAlertInfo.isOpen} onOpenChange={(isOpen) => !isOpen && setTransferAlertInfo({ isOpen: false, member: null })}>
                 <AlertDialogContent aria-labelledby={alertTransferTitleId} aria-describedby={alertTransferDescId}>
                     <AlertDialogHeader>
