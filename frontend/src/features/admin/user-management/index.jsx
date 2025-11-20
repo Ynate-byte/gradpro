@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'; // [MỚI] Import useReducedMotion
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { getColumns } from './components/columns';
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getUsers, getChuyenNganhs, getKhoaBomons, getPositions } from '@/api/userService';
 import { UserFormDialog } from './components/user-form-dialog';
 import { UserImportDialog } from './components/UserImportDialog';
 import { UserDetailSheet } from './components/UserDetailSheet';
-import { Toaster, toast } from "sonner";
+import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, GraduationCap, Briefcase, ShieldCheck, Circle, Loader2 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
-import { useTheme } from "@/components/theme-provider"; // [MỚI] Để lấy setting reduceMotion thủ công nếu cần
+import { useTheme } from "@/components/theme-provider";
 
 // Component StatCard (Đã tối ưu cho Reduce Motion)
 const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot }) => {
@@ -20,7 +20,7 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-pri
     return (
         <motion.div 
             className="bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1"
-            whileHover={shouldReduceMotion ? {} : { y: -4 }} // Tắt hover effect
+            whileHover={shouldReduceMotion ? {} : { y: -4 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
             <motion.div 
@@ -84,7 +84,7 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-pri
     );
 };
 
-// Animation variants (Đã tối ưu)
+// Animation variants
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -119,13 +119,13 @@ const getVariants = (shouldReduce) => {
     };
 };
 
-// Cấu hình ẩn cột
+// Cấu hình ẩn cột mặc định (Ẩn các cột ID)
 const userColumnVisibility = {
     chuyen_nganh: false,
     khoa_bomon: false,
     chuyen_nganh_id: false,
     khoa_bomon_id: false,
-    chuc_vu_id: false, 
+    chuc_vu_id: false, // Ẩn cột mảng ID chức vụ
 };
 
 export default function UserManagementPage() {
@@ -150,16 +150,13 @@ export default function UserManagementPage() {
     const [rowSelection, setRowSelection] = useState({});
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-    // [MỚI] Kiểm tra Reduce Motion
     const shouldReduceMotion = useReducedMotion();
-    // Hoặc lấy từ ThemeContext nếu muốn đồng bộ chính xác với nút switch trong settings
     const { reduceMotion } = useTheme(); 
-    // Ưu tiên setting của App hơn setting hệ điều hành
     const isReduced = reduceMotion || shouldReduceMotion;
 
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // Fetch Chuyên ngành, Khoa/Bộ môn và Chức vụ
+    // 1. Fetch các Options cho bộ lọc (Chuyên ngành, Khoa/BM, Chức vụ)
     useEffect(() => {
         Promise.all([
             getChuyenNganhs().catch(() => []),
@@ -168,22 +165,54 @@ export default function UserManagementPage() {
         ]).then(([chuyenNganhs, khoaBomons, positions]) => {
             setChuyenNganhOptions(chuyenNganhs);
             setKhoaBomonOptions(khoaBomons);
+            // Map chức vụ sang dạng { label, value } để dùng cho filter
             setPositionOptions(positions.map(p => ({ label: p.TEN_CHUCVU, value: String(p.ID_CHUCVU) })));
         })
         .catch(() => {
-            toast.error("Lỗi khi tải các tùy chọn lọc (Chuyên ngành, Khoa/Bộ môn, Chức vụ).");
+            toast.error("Lỗi khi tải các tùy chọn lọc.");
         });
     }, []);
 
-    // Fetch danh sách người dùng
+    // 2. Hàm Fetch dữ liệu chính (Người dùng)
     const fetchData = useCallback((isInitialLoad = false) => {
         if (isInitialLoad || activeTab || columnFilters.length > 0 || debouncedSearchTerm) {
             setLoadingStats(true);
         }
         setLoading(true);
 
-        let roleFilter = activeTab === "Tất cả" ? undefined : activeTab;
-        const positionFilter = columnFilters.find(f => f.id === 'chuc_vu_id')?.value; 
+        let roleFilter = undefined;
+        let positionFilterIds = undefined;
+
+        // Lấy filter chức vụ thủ công từ dropdown (nếu người dùng chọn)
+        const manualPositionFilter = columnFilters.find(f => f.id === 'chuc_vu_id')?.value;
+
+        // Logic map Tab sang API Params
+        if (activeTab === "Sinh viên") {
+            roleFilter = "Sinh viên";
+        } else if (activeTab === "Giảng viên") {
+            roleFilter = "Giảng viên";
+        } else if (activeTab === "Giáo vụ") {
+            // Tìm ID của chức vụ "Giáo vụ"
+            const gvOption = positionOptions.find(p => p.label.toLowerCase().includes('giáo vụ'));
+            if (gvOption) {
+                positionFilterIds = [gvOption.value]; 
+            }
+        } else if (activeTab === "Trưởng khoa") {
+            // Tìm ID của chức vụ "Trưởng khoa"
+            const tkOption = positionOptions.find(p => p.label.toLowerCase().includes('trưởng khoa'));
+            if (tkOption) {
+                positionFilterIds = [tkOption.value];
+            }
+        }
+
+        // Nếu người dùng chọn thêm filter chức vụ từ dropdown
+        if (manualPositionFilter && manualPositionFilter.length > 0) {
+            // Nếu đang ở Tab "Tất cả" hoặc "Giảng viên", ưu tiên bộ lọc thủ công (hoặc gộp vào nếu logic backend hỗ trợ)
+            // Ở đây ta ưu tiên bộ lọc thủ công nếu chưa có filter từ Tab
+            if (!positionFilterIds) {
+                positionFilterIds = manualPositionFilter;
+            }
+        }
         
         const params = {
             page: pagination.pageIndex + 1,
@@ -193,9 +222,10 @@ export default function UserManagementPage() {
             statuses: columnFilters.find(f => f.id === 'trang_thai')?.value,
             chuyen_nganh_ids: columnFilters.find(f => f.id === 'chuyen_nganh_id')?.value,
             khoa_bomon_ids: columnFilters.find(f => f.id === 'khoa_bomon_id')?.value,
-            position_ids: positionFilter, 
+            position_ids: positionFilterIds, // Gửi mảng ID chức vụ
             sort: sorting[0] ? `${sorting[0].id},${sorting[0].desc ? 'desc' : 'asc'}` : undefined,
         };
+        
         getUsers(params)
             .then(response => {
                 setData(response.data);
@@ -207,11 +237,14 @@ export default function UserManagementPage() {
                 setLoading(false);
                 setLoadingStats(false);
             });
-    }, [pagination, columnFilters, sorting, activeTab, debouncedSearchTerm]);
+    }, [pagination, columnFilters, sorting, activeTab, debouncedSearchTerm, positionOptions]);
 
+    // Gọi fetchData khi dependencies thay đổi (đặc biệt là khi positionOptions đã load xong)
     useEffect(() => {
-        fetchData(true);
-    }, [fetchData]);
+        if (positionOptions.length > 0 || activeTab === 'Tất cả' || activeTab === 'Sinh viên' || activeTab === 'Giảng viên') {
+             fetchData(true);
+        }
+    }, [fetchData, positionOptions.length]);
 
     const handleFormSuccess = () => fetchData(true);
     const handleOpenCreateDialog = () => { setEditingUser(null); setIsDialogOpen(true); };
@@ -227,17 +260,32 @@ export default function UserManagementPage() {
         onViewDetails: handleOpenViewSheet
     }), [handleFormSuccess]);
 
+    // Reset trang về 1 khi thay đổi bộ lọc/tab/search
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters, debouncedSearchTerm]);
 
-    const totalStudents = useMemo(() => loadingStats ? 'loading' : data.filter(u => u.vaitro.TEN_VAITRO === 'Sinh viên').length, [data, loadingStats]);
-    const totalLecturers = useMemo(() => loadingStats ? 'loading' : data.filter(u => ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(u.vaitro.TEN_VAITRO)).length, [data, loadingStats]);
-    const activeUsers = useMemo(() => loadingStats ? 'loading' : data.filter(u => u.TRANGTHAI_KICHHOAT).length, [data, loadingStats]);
+    // --- KHÔI PHỤC BIẾN THỐNG KÊ ---
+    // Tính toán số liệu hiển thị trên Card (Dựa trên dữ liệu trang hiện tại hoặc tổng số nếu có API stats riêng)
+    // Lưu ý: data.filter chỉ đếm trên trang hiện tại. Để chính xác cần API stats.
+    // Ở đây ta dùng tạm logic cũ đếm trên trang để không bị lỗi crash.
+    
+    const totalStudents = useMemo(() => 
+        loadingStats ? 'loading' : (activeTab === 'Sinh viên' ? total.toLocaleString('vi-VN') : '...'), 
+    [activeTab, total, loadingStats]);
+    
+    const totalLecturers = useMemo(() => 
+        loadingStats ? 'loading' : data.filter(u => ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(u.vaitro?.TEN_VAITRO)).length, 
+    [data, loadingStats]);
 
+    const activeUsers = useMemo(() => 
+        loadingStats ? 'loading' : data.filter(u => u.TRANGTHAI_KICHHOAT).length, 
+    [data, loadingStats]);
+
+    // Chuẩn bị Options cho các bộ lọc faceted
     const chuyenNganhFilterOptions = useMemo(() => (chuyenNganhOptions || []).map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) })), [chuyenNganhOptions]);
     const khoaBomonFilterOptions = useMemo(() => (khoaBomonOptions || []).map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) })), [khoaBomonOptions]);
-    const positionFilterOptions = useMemo(() => (positionOptions || []).map(p => ({ label: p.label, value: p.value })), [positionOptions]);
+    // positionOptions đã được map ở useEffect đầu tiên
 
     const renderDataTable = (tabName) => {
         const [tableHeight, setTableHeight] = useState('auto');
@@ -255,7 +303,7 @@ export default function UserManagementPage() {
                 initial={false}
                 animate={{ height: tableHeight }}
                 transition={{
-                    duration: isReduced ? 0 : 0.5, // Tắt animation height
+                    duration: isReduced ? 0 : 0.5,
                     ease: [0.4, 0, 0.2, 1]
                 }}
                 style={{ overflow: 'hidden' }}
@@ -273,21 +321,32 @@ export default function UserManagementPage() {
                         setColumnFilters={setColumnFilters}
                         sorting={sorting}
                         setSorting={setSorting}
+                        
+                        // Toolbar Actions
                         onAddUser={handleOpenCreateDialog}
                         onImportUser={() => setIsImportOpen(true)}
-                        chuyenNganhFilterColumnId="chuyen_nganh_id"
-                        chuyenNganhFilterOptions={(tabName === 'Tất cả' || tabName === 'Sinh viên') ? chuyenNganhFilterOptions : undefined}
-                        khoaBomonFilterColumnId="khoa_bomon_id"
-                        khoaBomonFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? khoaBomonFilterOptions : undefined}
-                        chucVuFilterColumnId="chuc_vu_id" 
-                        chucVuFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? positionFilterOptions : undefined}
+                        addBtnText="Thêm người dùng"
+                        
+                        // Search
                         searchColumnId="HODEM_VA_TEN"
                         searchPlaceholder="Tìm theo tên, email, mã..."
-                        addBtnText="Thêm người dùng"
-                        statusColumnId="trang_thai"
-                        statusOptions={[{ value: "1", label: "Hoạt động" }, { value: "0", label: "Vô hiệu" }]}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
+
+                        // Filters
+                        statusColumnId="trang_thai"
+                        statusOptions={[{ value: "1", label: "Hoạt động" }, { value: "0", label: "Vô hiệu" }]}
+                        
+                        chuyenNganhFilterColumnId="chuyen_nganh_id"
+                        chuyenNganhFilterOptions={(tabName === 'Tất cả' || tabName === 'Sinh viên') ? chuyenNganhFilterOptions : undefined}
+                        
+                        khoaBomonFilterColumnId="khoa_bomon_id"
+                        khoaBomonFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? khoaBomonFilterOptions : undefined}
+                        
+                        chucVuFilterColumnId="chuc_vu_id" 
+                        chucVuFilterOptions={(tabName === 'Tất cả' || tabName === 'Giảng viên') ? positionOptions : undefined}
+
+                        // Other configs
                         columnVisibility={userColumnVisibility}
                         state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility: userColumnVisibility }}
                         onRowSelectionChange={setRowSelection}
@@ -318,7 +377,7 @@ export default function UserManagementPage() {
                             icon={Users} 
                             title="Tổng số" 
                             value={loadingStats ? 'loading' : total.toLocaleString('vi-VN')} 
-                            description="tài khoản trong hệ thống" 
+                            description="tài khoản hiển thị" 
                             iconBgClass="bg-blue-100 dark:bg-blue-900/30" 
                             iconColorClass="text-blue-600 dark:text-blue-400" 
                         />
@@ -330,7 +389,7 @@ export default function UserManagementPage() {
                             value={totalStudents} 
                             description="trên trang này" 
                             iconBgClass="bg-sky-100 dark:bg-sky-900/30" 
-                            iconColorClass="text-sky-600 dark:text-sky-400"
+                            iconColorClass="text-sky-600 dark:text-sky-400" 
                         />
                     </motion.div>
                     <motion.div variants={variants.item}>
@@ -340,7 +399,7 @@ export default function UserManagementPage() {
                             value={totalLecturers} 
                             description="trên trang này" 
                             iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" 
-                            iconColorClass="text-indigo-600 dark:text-indigo-400"
+                            iconColorClass="text-indigo-600 dark:text-indigo-400" 
                         />
                     </motion.div>
                     <motion.div variants={variants.item}>
@@ -417,7 +476,6 @@ export default function UserManagementPage() {
                     />
                 )}
             </AnimatePresence>
-            <Toaster richColors position="top-right" />
         </>
     );
 }

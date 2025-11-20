@@ -33,7 +33,7 @@ export function DataTableToolbar({
   searchPlaceholder,
   statusColumnId,
   statusOptions,
-  typeFilterColumnId, // ID cột Vai trò (VD: 'vaitro.TEN_VAITRO' hoặc 'TEN_VAITRO')
+  typeFilterColumnId,
   typeFilterOptions,
   addBtnText,
   searchTerm,
@@ -47,6 +47,11 @@ export function DataTableToolbar({
   khoaBomonFilterColumnId,
   khoaBomonFilterOptions,
   khoaBomonFilterTitle,
+  
+  // [MỚI] Nhận props bộ lọc chức vụ
+  chucVuFilterColumnId,
+  chucVuFilterOptions,
+  
   bulkActions,
 }) {
   const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -102,25 +107,17 @@ export function DataTableToolbar({
   const dialogContent = getDialogContent();
   
   // --- LOGIC HIỂN THỊ BỘ LỌC THÔNG MINH ---
-  // 1. Lấy giá trị đang lọc của cột Vai trò
   const roleColumn = typeFilterColumnId ? table.getColumn(typeFilterColumnId) : null;
   const selectedRolesRaw = roleColumn?.getFilterValue();
-  
-  // Chuyển về mảng để dễ kiểm tra
   const selectedRoles = Array.isArray(selectedRolesRaw) 
     ? selectedRolesRaw 
     : (selectedRolesRaw ? [selectedRolesRaw] : []);
 
-  // 2. Cờ hiển thị
-  // Hiện lọc Sinh viên nếu: Đang chọn 'Sinh viên' HOẶC Không chọn vai trò nào (hiện tất cả)
   const showStudentFilters = selectedRoles.includes('Sinh viên') || selectedRoles.length === 0;
-
-  // Hiện lọc Giảng viên nếu: Đang chọn 'Giảng viên' HOẶC Không chọn vai trò nào
   const showLecturerFilters = selectedRoles.includes('Giảng viên') || selectedRoles.length === 0;
 
-  // 3. Xây dựng danh sách các bộ lọc
+  // 3. Xây dựng danh sách các bộ lọc (THÊM BỘ LỌC CHỨC VỤ VÀO ĐÂY)
   const filterGroups = [
-    // --- Bộ lọc CHUNG ---
     (statusColumnId && statusOptions) ? (
         <DataTableFacetedFilterGroup
             key="status_filter"
@@ -202,6 +199,18 @@ export function DataTableToolbar({
             className="min-w-[200px]"
         />
     ) : null,
+
+    // [SỬA LỖI] THÊM BỘ LỌC CHỨC VỤ VÀO ĐÚNG VỊ TRÍ NÀY
+    (chucVuFilterColumnId && chucVuFilterOptions && showLecturerFilters) ? (
+        <DataTableFacetedFilterGroup
+            key="chuc_vu_filter"
+            column={table.getColumn(chucVuFilterColumnId)}
+            title="Chức vụ"
+            options={chucVuFilterOptions}
+            className="min-w-[200px]"
+        />
+    ) : null,
+
   ].filter(Boolean);
 
   const activeFilterCount = table.getState().columnFilters.filter(
@@ -219,12 +228,14 @@ export function DataTableToolbar({
       ...(namhocFilterOptions || []),
       ...(hockyFilterOptions || []),
       ...(hedaotaoFilterOptions || []),
+      // [THÊM] Map options chức vụ
+      ...(chucVuFilterOptions || []), 
     ];
     return new Map(options.map(opt => [String(opt.value), opt.label]));
   }, [
     chuyenNganhFilterOptions, khoaBomonFilterOptions, statusOptions,
     typeFilterOptions, khoahocFilterOptions, namhocFilterOptions,
-    hockyFilterOptions, hedaotaoFilterOptions
+    hockyFilterOptions, hedaotaoFilterOptions, chucVuFilterOptions
   ]);
 
   const selectedFilterLabels = useMemo(() => {

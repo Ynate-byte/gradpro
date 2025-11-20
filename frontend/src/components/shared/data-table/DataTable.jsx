@@ -45,9 +45,13 @@ export function DataTable({
   onRowSelectionChange,
   getRowProps = () => ({}),
   containerClassName,
-  flexLayout = false, // Prop này không còn được sử dụng để kiểm soát layout
+  flexLayout = false, 
   className,
-  bulkActions, // Prop mới được thêm vào
+  bulkActions,
+  
+  // [SỬA LỖI] Thêm 2 props này vào đây
+  chucVuFilterColumnId,
+  chucVuFilterOptions,
 }) {
   const table = useReactTable({
     data: data ?? [],
@@ -76,7 +80,6 @@ export function DataTable({
   return (
     <div className={cn(
       "space-y-4",
-      // Đã gỡ bỏ: flexLayout && "flex h-full flex-col",
       className
     )}>
 
@@ -104,13 +107,16 @@ export function DataTable({
         khoaBomonFilterTitle={khoaBomonFilterTitle}
         khoaBomonFilterOptions={khoaBomonFilterOptions}
         bulkActions={bulkActions}
+
+        // [SỬA LỖI] Truyền xuống Toolbar
+        chucVuFilterColumnId={chucVuFilterColumnId}
+        chucVuFilterOptions={chucVuFilterOptions}
       />
       
       <div
         className={cn(
           "rounded-md border overflow-y-auto relative",
           containerClassName,
-          // Đã gỡ bỏ logic height/max-height cũ để cho phép co dãn tự động
           !containerClassName && (
             flexLayout
               ? "flex-1 min-h-0" 
