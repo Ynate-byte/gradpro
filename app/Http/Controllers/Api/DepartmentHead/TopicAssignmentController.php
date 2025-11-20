@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\DepartmentHead;
 
 use App\Http\Controllers\Api\Lecturer\TopicAssignmentController as BaseTopicAssignmentController;
+use App\Models\Thongbao;
 use App\Models\Detai;
 use App\Models\PhancongNguoiGopY;
 use Illuminate\Http\Request;
@@ -88,7 +89,7 @@ class TopicAssignmentController extends BaseTopicAssignmentController
             return [
                 'ID_DETAI' => $topic->ID_DETAI,
                 'TEN_DETAI' => $topic->TEN_DETAI,
-                'MO_TA' => $topic->MO_TA,
+                'MO_TA' => $topic->MOTA,
                 'ID_NGUOI_DEXUAT' => $topic->ID_NGUOI_DEXUAT,
                 'nguoiDexuat' => $topic->nguoiDexuat,
                 'phancong_nguoi_gop_y' => $topic->phancong_nguoi_gop_y,
@@ -166,10 +167,13 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
                 // Send notification to reviewer
                 if ($reviewer->nguoidung) {
-                    \App\Models\Notification::create([
-                        'user_id' => $reviewer->nguoidung->ID_NGUOIDUNG,
-                        'type' => 'reviewer_assigned',
-                        'data' => [
+                    Thongbao::create([
+                        'ID_NGUOINHAN' => $reviewer->nguoidung->ID_NGUOIDUNG,
+                        'TIEU_DE' => 'Phân công Người Góp ý',
+                        'NOI_DUNG' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                        'LOAI_THONGBAO' => 'ACADEMIC',
+                        'LIEN_KET' => '/projects/topics', // Thêm link
+                        'DU_LIEU_GOC' => [
                             'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
                             'topic_name' => $topic->TEN_DETAI,
                             'topic_id' => $topic->ID_DETAI,
@@ -296,11 +300,14 @@ class TopicAssignmentController extends BaseTopicAssignmentController
                     $assignmentCounts[$selectedReviewer->ID_GIANGVIEN]['count']++;
 
                     // Send notification to reviewer
-                    if ($selectedReviewer->nguoidung) {
-                        \App\Models\Notification::create([
-                            'user_id' => $selectedReviewer->nguoidung->ID_NGUOIDUNG,
-                            'type' => 'reviewer_assigned',
-                            'data' => [
+                    if ($selectedReviewer->nguoidung) { 
+                        Thongbao::create([
+                            'ID_NGUOINHAN' => $selectedReviewer->nguoidung->ID_NGUOIDUNG,
+                            'TIEU_DE' => 'Phân công Người Góp ý',
+                            'NOI_DUNG' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                            'LOAI_THONGBAO' => 'ACADEMIC',
+                            'LIEN_KET' => '/projects/topics', // Thêm link
+                            'DU_LIEU_GOC' => [
                                 'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
                                 'topic_name' => $topic->TEN_DETAI,
                                 'topic_id' => $topic->ID_DETAI,

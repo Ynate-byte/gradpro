@@ -1,8 +1,3 @@
-/*
-* FILE: frontend/src/features/lecturer/thesis-topics/components/columns.jsx
-* Mô tả: Cấu hình cột cho DataTable hiển thị danh sách đề tài (giảng viên)
-*/
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, ArrowUp, ArrowDown, Send } from "lucide-react";
@@ -12,197 +7,198 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 
 // === Badge trạng thái (tái sử dụng) ===
 const getStatusBadge = (status) => {
-  const statusConfig = {
-    'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700" },
-    'Chờ duyệt': { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700" },
-    'Đang chỉnh sửa': { label: "Đang chỉnh sửa", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" },
-    'Yêu cầu chỉnh sửa': { label: "Yêu cầu chỉnh sửa", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
-    'Đã duyệt': { label: "Đã duyệt", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700" },
-    'Đã đầy': { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
-    'Đã khóa': { label: "Đã khóa", className: "bg-red-200 text-red-800" },
-    'Từ chối': { label: "Từ chối", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700" },
-  };
+    const statusConfig = {
+        'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700" },
+        'Chờ duyệt': { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700" },
+        'Đang chỉnh sửa': { label: "Đang chỉnh sửa", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" },
+        'Yêu cầu chỉnh sửa': { label: "Yêu cầu chỉnh sửa", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
+        'Đã duyệt': { label: "Đã duyệt", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700" },
+        'Đã đầy': { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
+        'Đã khóa': { label: "Đã khóa", className: "bg-red-200 text-red-800" },
+        'Từ chối': { label: "Từ chối", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700" },
+    };
 
-  const config = statusConfig[status] || { label: status, className: "bg-gray-100 text-gray-700" };
-  return (
-    <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", config.className)}>
-      {config.label}
-    </Badge>
-  );
+    const config = statusConfig[status] || { label: status, className: "bg-gray-100 text-gray-700" };
+    return (
+        <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", config.className)}>
+            {config.label}
+        </Badge>
+    );
 };
 
 // === Icon sắp xếp ===
 const SortIndicator = ({ column }) => {
-  const sorted = column.getIsSorted();
-  if (!sorted) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />;
-  return sorted === "desc" ? (
-    <ArrowDown className="ml-2 h-4 w-4 text-primary" />
-  ) : (
-    <ArrowUp className="ml-2 h-4 w-4 text-primary" />
-  );
+    const sorted = column.getIsSorted();
+    if (!sorted) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />;
+    return sorted === "desc" ? (
+        <ArrowDown className="ml-2 h-4 w-4 text-primary" />
+    ) : (
+        <ArrowUp className="ml-2 h-4 w-4 text-primary" />
+    );
 };
 
 // === Cấu hình cột DataTable ===
 export const getColumns = ({
-  currentUserId,
-  onEdit,
-  onDelete,
-  onSubmit,
-  onViewDetails,
-  onAddSuggestion,
-  onViewRegisteredGroups,
-  isReviewTab = false,
-  canSubmitApproval = false, // [MỚI] Nhận biến quyền gửi duyệt
+    currentUserId,
+    onEdit,
+    onDelete,
+    onSubmit,
+    onViewDetails,
+    onAddSuggestion,
+    onViewRegisteredGroups,
+    isReviewTab = false,
+    canSubmitApproval = false, // [MỚI] Nhận biến quyền gửi duyệt
 }) => [
     {
-      accessorKey: "TEN_DETAI",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="h-8 px-0 font-medium"
-        >
-          Tên đề tài
-          <SortIndicator column={column} />
-        </Button>
-      ),
-      cell: ({ row }) => (
-        <button
-          onClick={() => onViewDetails(row.original.ID_DETAI)}
-          className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none focus:underline"
-          title={row.original.TEN_DETAI}
-        >
-          {row.original.TEN_DETAI}
-        </button>
-      ),
+        accessorKey: "TEN_DETAI",
+        header: ({ column }) => (
+            <Button
+                variant="ghost"
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="h-8 px-0 font-medium"
+            >
+                Tên đề tài
+                <SortIndicator column={column} />
+            </Button>
+        ),
+        cell: ({ row }) => (
+            <button
+                onClick={() => onViewDetails(row.original.ID_DETAI)}
+                className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none focus:underline"
+                title={row.original.TEN_DETAI}
+            >
+                {row.original.TEN_DETAI}
+            </button>
+        ),
     },
     {
-      accessorKey: "ten_giang_vien",
-      header: "GV Đề xuất",
-      cell: ({ row }) => {
-        const isOwner = row.original.ID_NGUOI_DEXUAT === currentUserId;
-        return (
-          <div
-            className={cn(
-              "text-sm max-w-[150px] truncate",
-              isOwner
-                ? "font-semibold text-indigo-600 dark:text-indigo-400"
-                : "text-muted-foreground"
-            )}
-            title={isOwner ? "Bạn là người đề xuất" : row.original.ten_giang_vien}
-          >
-            {isOwner ? "Của tôi" : row.original.ten_giang_vien}
-          </div>
-        );
-      },
+        accessorKey: "ten_giang_vien",
+        header: "GV Đề xuất",
+        cell: ({ row }) => {
+            const isOwner = row.original.ID_NGUOI_DEXUAT === currentUserId;
+            return (
+                <div
+                    className={cn(
+                        "text-sm max-w-[150px] truncate",
+                        isOwner
+                            ? "font-semibold text-indigo-600 dark:text-indigo-400"
+                            : "text-muted-foreground"
+                    )}
+                    title={isOwner ? "Bạn là người đề xuất" : row.original.ten_giang_vien}
+                >
+                    {isOwner ? "Của tôi" : row.original.ten_giang_vien}
+                </div>
+            );
+        },
     },
     {
-      accessorKey: "TRANGTHAI",
-      header: "Trạng thái",
-      cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
-      filterFn: (row, id, value) => value.includes(row.getValue(id)),
+        accessorKey: "TRANGTHAI",
+        header: "Trạng thái",
+        cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
     {
-      accessorKey: "chuyennganh.TEN_CHUYENNGANH",
-      header: "Chuyên ngành",
-      cell: ({ row }) => (
-        <div className="text-xs text-muted-foreground">
-          {row.original.chuyennganh?.TEN_CHUYENNGANH || "N/A"}
-        </div>
-      ),
+        accessorKey: "chuyennganh.TEN_CHUYENNGANH",
+        header: "Chuyên ngành",
+        cell: ({ row }) => (
+            <div className="text-xs text-muted-foreground">
+                {row.original.chuyennganh?.TEN_CHUYENNGANH || "N/A"}
+            </div>
+        ),
     },
     {
-      id: "chuyen_nganh_id",
-      accessorFn: (row) => String(row.chuyennganh?.ID_CHUYENNGANH || ""),
+        id: "chuyen_nganh_id",
+        accessorFn: (row) => String(row.chuyennganh?.ID_CHUYENNGANH || ""),
     },
     {
-      accessorKey: "SO_NHOM_HIENTAI",
-      header: "Đã ĐK",
-      cell: ({ row }) => {
-        const current = row.original.SO_NHOM_HIENTAI || 0;
-        const max = row.original.SO_NHOM_TOIDA || 0;
-        const isFull = current >= max;
-        return (
-          <div className="text-center font-medium">
-            <span className={cn(isFull ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
-              {current}
-            </span>
-            <span className="text-muted-foreground"> / {max}</span>
-          </div>
-        );
-      },
+        accessorKey: "SO_NHOM_HIENTAI",
+        header: "Đã ĐK",
+        cell: ({ row }) => {
+            const current = row.original.SO_NHOM_HIENTAI || 0;
+            const max = row.original.SO_NHOM_TOIDA || 0;
+            const isFull = current >= max;
+            return (
+                <div className="text-center font-medium">
+                    <span className={cn(isFull ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                        {current}
+                    </span>
+                    <span className="text-muted-foreground"> / {max}</span>
+                </div>
+            );
+        },
     },
     ...(isReviewTab ? [{
-      id: "contribution_status",
-      header: "Trạng thái góp ý",
-      cell: ({ row }) => {
-        const topic = row.original;
-        const hasContributed = topic.goiy_detai?.some(g => g.ID_GIANGVIEN === currentUserId);
+        id: "contribution_status",
+        header: "Trạng thái góp ý",
+        cell: ({ row }) => {
+            const topic = row.original;
+            // [SỬA LỖI] Dùng đúng tên thuộc tính: goiyDetai
+            const hasContributed = topic.goiyDetai?.some(g => g.ID_GIANGVIEN === currentUserId);
 
-        return (
-          <Badge
-            variant="outline"
-            className={cn(
-              "px-2 py-0.5 text-xs",
-              hasContributed
-                ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700"
-                : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700"
-            )}
-          >
-            {hasContributed ? "Đã góp ý" : "Chưa góp ý"}
-          </Badge>
-        );
-      },
+            return (
+                <Badge
+                    variant="outline"
+                    className={cn(
+                        "px-2 py-0.5 text-xs",
+                        hasContributed
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700"
+                            : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700"
+                    )}
+                >
+                    {hasContributed ? "Đã góp ý" : "Chưa góp ý"}
+                </Badge>
+            );
+        },
     }] : []),
     {
-      id: "actions",
-      cell: ({ row }) => {
-          const topic = row.original;
-          // Logic hiển thị nút Gửi duyệt:
-          // 1. Phải là Nháp hoặc Đang chỉnh sửa
-          // 2. Phải là người tạo (đã check trong component cha, ở đây check state)
-          const showSubmit = (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Đang chỉnh sửa');
+        id: "actions",
+        cell: ({ row }) => {
+            const topic = row.original;
+            // Logic hiển thị nút Gửi duyệt:
+            // 1. Phải là Nháp hoặc Đang chỉnh sửa
+            // 2. Phải là người tạo (đã check trong component cha, ở đây check state)
+            const showSubmit = (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Đang chỉnh sửa');
 
-          return (
-            <div className="flex items-center gap-1">
-                {/* [MỚI] Nút gửi duyệt nhanh với Tooltip kiểm tra quyền */}
-                {showSubmit && (
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                {/* Dùng span để wrap button disabled để tooltip vẫn hiện */}
-                                <span tabIndex={0}> 
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className={cn("h-8 w-8", !canSubmitApproval ? "opacity-50 cursor-not-allowed" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50")}
-                                        onClick={() => canSubmitApproval && onSubmit(topic.ID_DETAI)}
-                                        disabled={!canSubmitApproval}
-                                    >
-                                        <Send className="h-4 w-4" />
-                                    </Button>
-                                </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>{canSubmitApproval ? "Gửi duyệt đề tài" : "Hết thời gian gửi duyệt"}</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
-                )}
+            return (
+                <div className="flex items-center gap-1">
+                    {/* [MỚI] Nút gửi duyệt nhanh với Tooltip kiểm tra quyền */}
+                    {showSubmit && (
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    {/* Dùng span để wrap button disabled để tooltip vẫn hiện */}
+                                    <span tabIndex={0}>
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className={cn("h-8 w-8", !canSubmitApproval ? "opacity-50 cursor-not-allowed" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50")}
+                                            onClick={() => canSubmitApproval && onSubmit(topic.ID_DETAI)}
+                                            disabled={!canSubmitApproval}
+                                        >
+                                            <Send className="h-4 w-4" />
+                                        </Button>
+                                    </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>{canSubmitApproval ? "Gửi duyệt đề tài" : "Hết thời gian gửi duyệt"}</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                    )}
 
-                <DataTableRowActions
-                  row={row}
-                  currentUserId={currentUserId}
-                  onEdit={onEdit}
-                  onDelete={onDelete}
-                  onSubmit={onSubmit}
-                  onViewDetails={onViewDetails}
-                  onAddSuggestion={onAddSuggestion}
-                  onViewRegisteredGroups={onViewRegisteredGroups}
-                  canSubmitApproval={canSubmitApproval} // Truyền tiếp nếu cần dùng trong dropdown
-                />
-            </div>
-          );
-      },
+                    <DataTableRowActions
+                        row={row}
+                        currentUserId={currentUserId}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onSubmit={onSubmit}
+                        onViewDetails={onViewDetails}
+                        onAddSuggestion={onAddSuggestion}
+                        onViewRegisteredGroups={onViewRegisteredGroups}
+                        // canSubmitApproval={canSubmitApproval} // Truyền tiếp nếu cần dùng trong dropdown
+                    />
+                </div>
+            );
+        },
     },
-  ];
+];

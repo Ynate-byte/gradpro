@@ -14,38 +14,28 @@ class SinhvienThamgiaSeeder extends Seeder
     {
         DB::table('SINHVIEN_THAMGIA')->delete();
 
-        // Lấy cả kế hoạch 'Đang thực hiện' và 'Chờ duyệt chỉnh sửa'
-        $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'])->get();
-        if ($activePlans->isEmpty()) {
-            $this->command->warn("Không tìm thấy kế hoạch nào 'Đang thực hiện' hoặc 'Chờ duyệt chỉnh sửa' để thêm sinh viên.");
-            return;
-        }
+        $activePlans = KehoachKhoaluan::where('TRANGTHAI', 'Đang thực hiện')->get();
+        if ($activePlans->isEmpty()) return;
 
-        $allActiveStudents = Sinhvien::whereHas('nguoidung', fn($q) => $q->where('TRANGTHAI_KICHHOAT', true))->get();
+        $students = Sinhvien::all();
+        if ($students->count() < 10) return;
 
-        if ($allActiveStudents->count() < 30) {
-            $this->command->warn("Không đủ sinh viên để tạo dữ liệu mẫu. Cần ít nhất 30 sinh viên.");
-            return;
-        }
+        $chunks = $students->chunk(ceil($students->count() / $activePlans->count()));
 
-        $studentChunks = $allActiveStudents->shuffle()->chunk(ceil($allActiveStudents->count() / $activePlans->count()));
-        
         foreach ($activePlans as $index => $plan) {
-            $studentsForThisPlan = $studentChunks->get($index);
-            if (!$studentsForThisPlan) continue;
+            $planStudents = $chunks->get($index);
+            if (!$planStudents) continue;
 
-            $dataToInsert = [];
-            foreach ($studentsForThisPlan as $student) {
-                $dataToInsert[] = [
+            $data = [];
+            foreach ($planStudents as $sv) {
+                $data[] = [
                     'ID_KEHOACH' => $plan->ID_KEHOACH,
-                    'ID_SINHVIEN' => $student->ID_SINHVIEN,
+                    'ID_SINHVIEN' => $sv->ID_SINHVIEN,
                     'DU_DIEUKIEN' => true,
                     'NGAY_DANGKY' => now(),
                 ];
             }
-            SinhvienThamgia::insert($dataToInsert);
-
-            $this->command->info("Đã thêm " . count($dataToInsert) . " sinh viên vào kế hoạch: '{$plan->TEN_DOT}'.");
+            SinhvienThamgia::insert($data);
         }
     }
 }

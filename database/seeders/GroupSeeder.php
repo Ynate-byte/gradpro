@@ -7,6 +7,7 @@ use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
 use App\Models\KehoachKhoaluan;
 use Illuminate\Support\Facades\DB;
+use Faker\Factory as Faker;
 
 class GroupSeeder extends Seeder
 {
@@ -17,81 +18,46 @@ class GroupSeeder extends Seeder
         ThanhvienNhom::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
+        $faker = Faker::create('vi_VN');
         $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'])->get();
 
         if ($activePlans->isEmpty()) {
-            $this->command->info('Không có kế hoạch nào đang hoạt động/chờ duyệt để tạo nhóm.');
             return;
         }
 
         foreach ($activePlans as $plan) {
-            $this->command->info("Đang tạo nhóm cho kế hoạch: '{$plan->TEN_DOT}'...");
-
             $studentUserIdsInPlan = $plan->sinhvienThamgias()
                 ->with('sinhvien')
                 ->get()
                 ->pluck('sinhvien.ID_NGUOIDUNG')
                 ->shuffle();
 
-            if ($studentUserIdsInPlan->count() < 8) {
-                $this->command->warn("  -> Không đủ sinh viên trong kế hoạch '{$plan->TEN_DOT}' để tạo nhóm mẫu (cần ít nhất 8). Bỏ qua.");
-                continue;
-            }
-            
-            // Lấy 50% sinh viên để tạo nhóm mẫu
-            $studentsToGroup = $studentUserIdsInPlan->splice(0, floor($studentUserIdsInPlan->count() / 2));
+            if ($studentUserIdsInPlan->count() < 2) continue;
 
-            if ($studentsToGroup->count() >= 2) {
-                $group1_leader_id = $studentsToGroup->pop();
-                $group1 = Nhom::create([
-                    'ID_KEHOACH' => $plan->ID_KEHOACH,
-                    'TEN_NHOM' => "Nhóm Tên Lửa - {$plan->KHOAHOC}",
-                    'MOTA' => 'Nhóm còn thiếu thành viên, sẵn sàng kết nạp.',
-                    'ID_NHOMTRUONG' => $group1_leader_id,
-                    'SO_THANHVIEN_HIENTAI' => 2,
-                ]);
-                ThanhvienNhom::insert([
-                    ['ID_NHOM' => $group1->ID_NHOM, 'ID_NGUOIDUNG' => $group1_leader_id, 'NGAY_VAONHOM' => now()],
-                    ['ID_NHOM' => $group1->ID_NHOM, 'ID_NGUOIDUNG' => $studentsToGroup->pop(), 'NGAY_VAONHOM' => now()],
-                ]);
-            }
+            $studentsToGroup = $studentUserIdsInPlan->splice(0, floor($studentUserIdsInPlan->count() * 0.8));
 
-            if ($studentsToGroup->count() >= 4) {
-                $group2_leader_id = $studentsToGroup->pop();
-                $group2 = Nhom::create([
+            while ($studentsToGroup->count() >= 2) {
+                $size = rand(2, 4);
+                if ($studentsToGroup->count() < $size) $size = $studentsToGroup->count();
+                
+                $members = $studentsToGroup->splice(0, $size);
+                $leaderId = $members->pop();
+                
+                $group = Nhom::create([
                     'ID_KEHOACH' => $plan->ID_KEHOACH,
-                    'TEN_NHOM' => "Nhóm Siêu Nhân - {$plan->KHOAHOC}",
-                    'MOTA' => 'Nhóm đã đủ thành viên.',
-                    'ID_NHOMTRUONG' => $group2_leader_id,
-                    'SO_THANHVIEN_HIENTAI' => 4,
-                    'TRANGTHAI' => 'Đã đủ thành viên',
+                    'TEN_NHOM' => 'Nhóm ' . $faker->unique()->regexify('[A-Z]{2}[0-9]{3}') . ' - ' . $faker->colorName,
+                    'MOTA' => $faker->sentence(),
+                    'ID_NHOMTRUONG' => $leaderId,
+                    'SO_THANHVIEN_HIENTAI' => $size,
+                    'TRANGTHAI' => ($size >= 4) ? 'Đã đủ thành viên' : 'Đang mở',
                 ]);
-                ThanhvienNhom::insert([
-                    ['ID_NHOM' => $group2->ID_NHOM, 'ID_NGUOIDUNG' => $group2_leader_id, 'NGAY_VAONHOM' => now()],
-                    ['ID_NHOM' => $group2->ID_NHOM, 'ID_NGUOIDUNG' => $studentsToGroup->pop(), 'NGAY_VAONHOM' => now()],
-                    ['ID_NHOM' => $group2->ID_NHOM, 'ID_NGUOIDUNG' => $studentsToGroup->pop(), 'NGAY_VAONHOM' => now()],
-                    ['ID_NHOM' => $group2->ID_NHOM, 'ID_NGUOIDUNG' => $studentsToGroup->pop(), 'NGAY_VAONHOM' => now()],
-                ]);
+                
+                ThanhvienNhom::create(['ID_NHOM' => $group->ID_NHOM, 'ID_NGUOIDUNG' => $leaderId, 'NGAY_VAONHOM' => now()]);
+                
+                foreach ($members as $memId) {
+                    ThanhvienNhom::create(['ID_NHOM' => $group->ID_NHOM, 'ID_NGUOIDUNG' => $memId, 'NGAY_VAONHOM' => now()]);
+                }
             }
-
-            if ($studentsToGroup->count() >= 3) {
-                 $group3_leader_id = $studentsToGroup->pop();
-                 $group3 = Nhom::create([
-                    'ID_KEHOACH' => $plan->ID_KEHOACH,
-                    'TEN_NHOM' => "Nhóm Olympiad - {$plan->KHOAHOC}",
-                    'MOTA' => 'Nhóm đặc biệt được giáo vụ tạo sẵn.',
-                    'ID_NHOMTRUONG' => $group3_leader_id,
-                    'SO_THANHVIEN_HIENTAI' => 3,
-                    'LA_NHOM_DACBIET' => true,
-                ]);
-                ThanhvienNhom::insert([
-                    ['ID_NHOM' => $group3->ID_NHOM, 'ID_NGUOIDUNG' => $group3_leader_id, 'NGAY_VAONHOM' => now()],
-                    ['ID_NHOM' => $group3->ID_NHOM, 'ID_NGUOIDUNG' => $studentsToGroup->pop(), 'NGAY_VAONHOM' => now()],
-                    ['ID_NHOM' => $group3->ID_NHOM, 'ID_NGUOIDUNG' => $studentsToGroup->pop(), 'NGAY_VAONHOM' => now()],
-                ]);
-            }
-            $this->command->info("  -> Đã tạo xong các nhóm mẫu.");
         }
-        $this->command->info('Hoàn tất tạo dữ liệu mẫu cho nhóm!');
     }
 }

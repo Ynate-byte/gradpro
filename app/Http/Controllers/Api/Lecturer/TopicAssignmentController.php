@@ -10,11 +10,12 @@ use App\Models\KhoaBomon;
 use App\Models\KehoachKhoaluan;
 use App\Models\Nhom;
 use App\Models\SinhvienThamgia;
-use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 
 class TopicAssignmentController extends Controller
 {

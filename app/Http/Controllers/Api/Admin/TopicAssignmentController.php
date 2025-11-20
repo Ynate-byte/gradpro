@@ -6,15 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Models\Detai;
 use App\Models\Giangvien;
 use App\Models\PhancongGvDetai;
-use App\Models\KhoaBomon;
-use App\Models\KehoachKhoaluan;
-use App\Models\Nhom;
-use App\Models\SinhvienThamgia;
+use App\Models\Thongbao;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
+use App\Services\ActivityLogger;
 use App\Services\NotificationService;
+use App\Models\PhancongNguoiGopY;
+use App\Models\Nguoidung;
+use Illuminate\Database\Eloquent\Builder;
 
 class TopicAssignmentController extends Controller
 {

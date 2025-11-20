@@ -70,7 +70,7 @@ class Nguoidung extends Authenticatable
     
     public function notifications()
     {
-        return $this->hasMany(Notification::class, 'user_id', 'ID_NGUOIDUNG');
+        return $this->hasMany(Thongbao::class, 'user_id', 'ID_NGUOIDUNG');
     }
 
     public function thanhvienNhom()

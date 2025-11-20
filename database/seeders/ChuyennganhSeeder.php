@@ -8,16 +8,12 @@ use App\Models\Chuyennganh;
 
 class ChuyennganhSeeder extends Seeder
 {
-    /**
-     * Run the database seeds.
-     */
     public function run(): void
     {
         DB::statement('SET FOREIGN_KEY_CHECKS=0;');
         Chuyennganh::truncate();
         DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        // Danh sách 5 chuyên ngành mới, tương ứng 5 bộ môn
         $chuyenNganhs = [
             ['MA_CHUYENNGANH' => 'CN.KHDT', 'TEN_CHUYENNGANH' => 'Khoa học dữ liệu'],
             ['MA_CHUYENNGANH' => 'CN.HTTT', 'TEN_CHUYENNGANH' => 'Hệ thống thông tin'],

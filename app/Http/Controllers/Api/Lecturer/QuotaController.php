@@ -11,7 +11,6 @@ use App\Models\Nhom;
 use App\Models\QuotaGiangvien;
 use App\Models\QuotaKhoaBomon;
 use App\Models\SinhvienThamgia;
-use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;

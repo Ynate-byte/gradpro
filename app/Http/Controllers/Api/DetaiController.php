@@ -36,26 +36,54 @@ class DetaiController extends Controller
 
         // Get current user
         $currentUser = Auth::user();
+        $isLecturer = $currentUser->giangvien ? true : false;
+        $lecturerId = $currentUser->giangvien->ID_GIANGVIEN ?? null;
 
-        // If user is student, only show approved topics
         if ($currentUser->vaitro->TEN_VAITRO === 'Sinh viên') {
+            // Student: only show Approved topics
             $query->where('TRANGTHAI', 'Đã duyệt');
-        }
+        } else if ($isLecturer || $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
+            // Lecturer/Admin/GiaoVu/TruongKhoa: See all topics in the plan, plus their own/assigned reviews
+            
+            // Lọc theo Plan ID (bắt buộc)
+            if ($request->has('plan_id')) {
+                $query->where('ID_KEHOACH', $request->plan_id);
+            }
 
-        // Filter by lecturer (for lecturer view)
-        if ($request->has('lecturer_id')) {
+            // [SỬA LỖI LOGIC] Nếu là Giảng viên: Mở rộng kết quả để bao gồm:
+            // 1. Đề tài đã duyệt (của mọi người, để xem)
+            // 2. Đề tài của chính họ (bất kể trạng thái: Nháp, Chờ duyệt)
+            // 3. Đề tài họ được phân công góp ý
+            if ($lecturerId) {
+                $query->where(function ($q) use ($lecturerId, $request) {
+                    $q->where('TRANGTHAI', 'Đã duyệt') // 1. Tất cả đề tài đã duyệt
+                      ->orWhere('ID_NGUOI_DEXUAT', $lecturerId) // 2. Đề tài của chính họ
+                      ->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) { // 3. Đề tài họ được phân công góp ý
+                          $subQ->where('ID_GIANGVIEN', $lecturerId);
+                      });
+                    
+                    // Nếu có filter trạng thái, nó sẽ áp dụng trên tập hợp này.
+                    if ($request->has('status') && $request->status !== 'Tất cả') {
+                         $q->where('TRANGTHAI', $request->status);
+                    }
+                });
+            } else {
+                 // Admin/GiaoVu/TruongKhoa không có ID_GIANGVIEN, chỉ cần lọc trạng thái nếu có
+                if ($request->has('status') && $request->status !== 'Tất cả') {
+                    $query->where('TRANGTHAI', $request->status);
+                }
+            }
+        }
+        
+        // Filter by lecturer (if specifically requested, e.g., on a GV's profile page, which should override the above logic if present)
+        if ($request->has('lecturer_id') && $request->lecturer_id !== $lecturerId) {
             $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
         }
-
-        // Filter by status (only for non-student users)
-        if ($request->has('status') && $currentUser->vaitro->TEN_VAITRO !== 'Sinh viên') {
-            $query->where('TRANGTHAI', $request->status);
-        }
-
-        // Filter by plan
-        if ($request->has('plan_id')) {
-            $query->where('ID_KEHOACH', $request->plan_id);
-        }
+        
+        // Filter by plan - đã được xử lý ở trên
+        // if ($request->has('plan_id')) {
+        //     $query->where('ID_KEHOACH', $request->plan_id);
+        // }
 
         // Filter by major
         if ($request->has('major_id')) {
@@ -124,9 +152,9 @@ class DetaiController extends Controller
         ]);
 
         ActivityLogger::log(
-            'PROPOSE_TOPIC', 
-            "Đề xuất đề tài mới: {$topic->TEN_DETAI}", 
-            ['topic_code' => $topicCode], 
+            'PROPOSE_TOPIC',
+            "Đề xuất đề tài mới: {$topic->TEN_DETAI}",
+            ['topic_code' => $topicCode],
             null,
             'FileText'
         );
@@ -147,8 +175,8 @@ class DetaiController extends Controller
                 $query->with([
                         'giangvien.nguoidung', // Người góp ý
                         'phanhois.giangvien.nguoidung' // Những người phản hồi
-                     ])
-                     ->orderBy('NGAYTAO', 'desc');
+                       ])
+                       ->orderBy('NGAYTAO', 'desc');
             },
             'phancongDetaiNhom.nhom.nhomtruong',
             'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung',
@@ -235,10 +263,10 @@ class DetaiController extends Controller
         }
 
         ActivityLogger::log(
-            'UPDATE_TOPIC', 
-            "Cập nhật đề tài: {$topic->TEN_DETAI}", 
-            ['topic_id' => $topic->ID_DETAI], 
-            null, 
+            'UPDATE_TOPIC',
+            "Cập nhật đề tài: {$topic->TEN_DETAI}",
+            ['topic_id' => $topic->ID_DETAI],
+            null,
             'Edit'
         );
 
@@ -271,7 +299,7 @@ class DetaiController extends Controller
 
         if (!$topic->kehoachKhoaluan->isFeatureActive('GV_RA_DE')) {
              return response()->json(['message' => 'Chức năng gửi duyệt đề tài hiện đang đóng.'], 403);
-         }
+        }
         
         $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
         return response()->json(['message' => 'Đã gửi đề tài để phê duyệt.']);
@@ -372,10 +400,10 @@ class DetaiController extends Controller
         }
 
         ActivityLogger::log(
-            'ADD_SUGGESTION', 
-            "Góp ý cho đề tài: {$topic->TEN_DETAI}", 
-            ['content_preview' => substr($request->NOIDUNG_GOIY, 0, 50) . '...'], 
-            null, 
+            'ADD_SUGGESTION',
+            "Góp ý cho đề tài: {$topic->TEN_DETAI}",
+            ['content_preview' => substr($request->NOIDUNG_GOIY, 0, 50) . '...'],
+            null,
             'MessageSquare'
         );
 
@@ -424,7 +452,7 @@ class DetaiController extends Controller
         $currentUser = Auth::user();
         $topic = Detai::with('kehoachKhoaluan')->findOrFail($topicId);
 
-        if (!$topic->kehoachKhoaluan->isFeatureActive('SV_DANGKY_DE')) { 
+        if (!$topic->kehoachKhoaluan->isFeatureActive('SV_DANGKY_DE')) {
             return response()->json(['message' => 'Chức năng đăng ký đề tài hiện chưa mở hoặc đã kết thúc.'], 403);
         }
 
@@ -467,9 +495,9 @@ class DetaiController extends Controller
         });
 
         ActivityLogger::log(
-            'REGISTER_TOPIC', 
-            "Đăng ký thành công đề tài: {$topic->TEN_DETAI}", 
-            ['topic_id' => $topic->ID_DETAI], 
+            'REGISTER_TOPIC',
+            "Đăng ký thành công đề tài: {$topic->TEN_DETAI}",
+            ['topic_id' => $topic->ID_DETAI],
             $group->ID_NHOM
         );
 

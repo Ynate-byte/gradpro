@@ -8,10 +8,10 @@ use App\Models\Giangvien;
 use App\Models\KhoaBomon;
 use App\Models\KehoachKhoaluan;
 use App\Models\Nhom;
+use App\Models\Thongbao;
 use App\Models\QuotaGiangvien;
 use App\Models\QuotaKhoaBomon;
 use App\Models\SinhvienThamgia;
-use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -186,8 +186,6 @@ class QuotaController extends Controller
     {
         try {
             $department = KhoaBomon::find($departmentId);
-            
-            // [SỬA ĐỔI] Tìm Trưởng bộ môn qua bảng quan hệ N-N
             $departmentHead = Giangvien::where('ID_KHOA_BOMON', $departmentId)
                 ->whereHas('chucvus', function ($q) {
                     $q->where('MA_CHUCVU', 'TRUONG_BOMON');
@@ -195,10 +193,12 @@ class QuotaController extends Controller
                 ->first();
 
             if ($departmentHead && $departmentHead->nguoidung) {
-                Notification::create([
-                    'user_id' => $departmentHead->nguoidung->ID_NGUOIDUNG,
-                    'type' => 'department_quota_assigned',
-                    'data' => [
+                Thongbao::create([
+                    'ID_NGUOINHAN' => $departmentHead->nguoidung->ID_NGUOIDUNG,
+                    'TIEU_DE' => 'Phân công Quota Đề tài',
+                    'NOI_DUNG' => "Bạn đã được phân công {$quota} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}",
+                    'LOAI_THONGBAO' => 'ACADEMIC',
+                    'DU_LIEU_GOC' => [
                         'message' => "Bạn đã được phân công {$quota} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}",
                         'department_name' => $department->TEN_KHOA_BOMON,
                         'quota' => $quota,

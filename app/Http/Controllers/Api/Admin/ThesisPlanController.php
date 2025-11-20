@@ -29,6 +29,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Storage;
+use App\Services\ActivityLogger;
 
 class ThesisPlanController extends Controller
 {
