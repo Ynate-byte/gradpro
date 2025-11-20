@@ -1,452 +1,537 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  Send, MessageSquare, BookOpen, User,
-  Star, Target, Check, Layers, Users, Calendar, AlertTriangle,
-  CheckCircle, Edit, XCircle, ArrowRight, ArrowLeft
+    Send, BookOpen, User, Layers, Users,
+    Target, Check, MessageSquare, Loader2,
+    CheckCircle, Edit, XCircle, ChevronLeft, ChevronRight, Keyboard,
+    Clock, Info
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { thesisTopicService } from '@/api/thesisTopicService';
-import SuggestionDialog from './SuggestionDialog';
-import ReplyDialog from './ReplyDialog';
 import { toast } from 'sonner';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatDistanceToNow } from 'date-fns';
+import { vi } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
-const InfoItem = ({ icon: Icon, label, value, children }) => (
-  <div className="flex items-start">
-    <Icon className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-    <div className="ml-3 flex-1">
-      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">{label}</p>
-      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words">
-        {value || children || (
-          <span className="text-xs italic text-gray-400 dark:text-gray-500">Chưa có thông tin</span>
-        )}
-      </div>
+// --- COMPONENTS CON (SIMPLE & CLEAN) ---
+
+const CompactInfoItem = ({ icon: Icon, label, value }) => {
+    if (!value) return null;
+    return (
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
+            <div className="p-2 rounded-md bg-background text-primary shadow-sm border border-border shrink-0">
+                <Icon className="w-4 h-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
+                    {label}
+                </p>
+                <p className="font-medium text-foreground truncate text-sm" title={value}>
+                    {value}
+                </p>
+            </div>
+        </div>
+    );
+};
+
+const ChatBubble = ({ user, message, isMe, time, role }) => (
+    <div className={cn("flex gap-3 max-w-[90%]", isMe ? "ml-auto flex-row-reverse" : "")}>
+        <Avatar className="h-8 w-8 mt-1 border border-border">
+            <AvatarImage src={user?.AVATAR_URL} />
+            <AvatarFallback className={cn("text-xs font-medium", isMe ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+                {getInitials(user?.HODEM_VA_TEN)}
+            </AvatarFallback>
+        </Avatar>
+        <div className={cn("flex flex-col gap-1", isMe ? "items-end" : "items-start")}>
+            <div className="flex items-center gap-2 px-1">
+                <span className="text-xs font-medium text-foreground">
+                    {user?.HODEM_VA_TEN || 'Người dùng'}
+                </span>
+                {role && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium border border-border">
+                        {role}
+                    </span>
+                )}
+                <span className="text-[10px] text-muted-foreground">
+                    {time ? formatDistanceToNow(new Date(time), { addSuffix: true, locale: vi }) : ''}
+                </span>
+            </div>
+            <div className={cn(
+                "px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words shadow-sm",
+                isMe
+                    ? "bg-primary text-primary-foreground" // Màu xanh chủ đạo từ file CSS của bạn
+                    : "bg-secondary text-secondary-foreground border border-border" // Màu xám nhẹ
+            )}>
+                {message}
+            </div>
+        </div>
     </div>
-  </div>
 );
 
 const DialogLoadingSkeleton = () => (
-  <div className="p-6 space-y-6">
-    <div className="flex items-center gap-4">
-      <Skeleton className="h-16 w-16 rounded-lg shrink-0 border-2 border-blue-200 dark:border-blue-700" />
-      <div className="space-y-2 flex-1">
-        <Skeleton className="h-8 w-3/4" />
-        <Skeleton className="h-4 w-full max-w-xs" />
-        <div className="flex gap-2 pt-2">
-          <Skeleton className="h-5 w-24 rounded-full" />
+    <div className="h-full flex flex-col p-6 space-y-6 bg-background">
+        <div className="flex items-center gap-4">
+            <Skeleton className="h-12 w-12 rounded-lg" />
+            <div className="space-y-2 flex-1">
+                <Skeleton className="h-6 w-1/3" />
+                <Skeleton className="h-4 w-1/4" />
+            </div>
         </div>
-      </div>
+        <div className="grid grid-cols-4 gap-4">
+            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}
+        </div>
+        <Skeleton className="flex-1 w-full rounded-lg" />
     </div>
-    <Skeleton className="h-40 w-full rounded-lg shadow-sm border border-blue-200 dark:border-blue-700" />
-    <Skeleton className="h-32 w-full rounded-lg shadow-sm border border-blue-200 dark:border-blue-700" />
-    <Skeleton className="h-40 w-full rounded-lg shadow-sm border border-blue-200 dark:border-blue-700" />
-  </div>
 );
 
 const getStatusBadge = (status) => {
-  const statusConfig = {
-    'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700" },
-    'Chờ duyệt': { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700" },
-    'Yêu cầu chỉnh sửa': { label: "Yêu cầu chỉnh sửa", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
-    'Đã duyệt': { label: "Đã duyệt", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700" },
-    'Đã đầy': { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
-    'Đã khóa': { label: "Đã khóa", className: "bg-red-200 text-red-800" },
-    'Từ chối': { label: "Từ chối", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700" },
-  };
-  const config = statusConfig[status] || { label: status, className: "bg-gray-100 text-gray-700" };
-  return <Badge variant="outline" className={`px-2 py-0.5 text-xs ${config.className}`}>{config.label}</Badge>;
+    // Sử dụng các class utility thay vì hardcode màu gradient
+    let variant = "outline";
+    let className = "border-border font-medium";
+
+    switch (status) {
+        case 'Đã duyệt':
+            className = "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
+            break;
+        case 'Chờ duyệt':
+            className = "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
+            break;
+        case 'Yêu cầu chỉnh sửa':
+            className = "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800";
+            break;
+        case 'Từ chối':
+        case 'Đã khóa':
+            className = "bg-destructive/10 text-destructive border-destructive/20";
+            break;
+        default:
+            className = "bg-secondary text-secondary-foreground border-border";
+    }
+
+    return (
+        <Badge variant={variant} className={cn("px-2.5 py-0.5 text-xs shadow-none", className)}>
+            {status}
+        </Badge>
+    );
 };
 
-const TopicDetailDialog = ({ open, onOpenChange, topicId, showAdminActions = false, onApprove, onReject, onRequestEdit, onNext, onPrevious }) => {
-  const { user } = useAuth();
-  const [topic, setTopic] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [showSuggestionDialog, setShowSuggestionDialog] = useState(false);
-  const [showReplyDialog, setShowReplyDialog] = useState(false);
-  const [selectedSuggestion, setSelectedSuggestion] = useState(null);
-  const [showCommentInput, setShowCommentInput] = useState(false);
-  const [commentText, setCommentText] = useState('');
+const getInitials = (name) => {
+    if (!name) return 'U';
+    const parts = name.split(' ').filter(Boolean);
+    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    return name.substring(0, 2).toUpperCase();
+};
 
-  useEffect(() => {
-    if (open && topicId) {
-      loadTopicDetails();
-    } else if (!open) {
-      setTopic(null);
-    }
-  }, [open, topicId]);
+// --- COMPONENT CHÍNH ---
 
-  const loadTopicDetails = async () => {
-    try {
-      setLoading(true);
-      const response = await thesisTopicService.getTopicById(topicId);
-      setTopic(response.data);
-    } catch (error) {
-      console.error('Error loading topic details:', error);
-      toast.error("Không thể tải chi tiết đề tài.");
-      onOpenChange(false);
-    } finally {
-      setLoading(false);
-    }
-  };
+const TopicDetailDialog = ({
+    open,
+    onOpenChange,
+    topicId,
+    showAdminActions = false,
+    onApprove,
+    onReject,
+    onRequestEdit,
+    onNext,
+    onPrevious,
+    hasNext,
+    hasPrevious
+}) => {
+    const { user } = useAuth();
+    const [topic, setTopic] = useState(null);
+    const [loading, setLoading] = useState(false);
 
+    // State chat
+    const [replyInputs, setReplyInputs] = useState({});
+    const [newSuggestion, setNewSuggestion] = useState('');
+    const [sendingState, setSendingState] = useState({});
 
+    // Refs
+    const chatEndRef = useRef(null);
+    const scrollAreaRef = useRef(null);
 
-  const handleSubmitSuggestion = async (suggestion) => {
-    try {
-      const response = await thesisTopicService.addSuggestion(topic.ID_DETAI, { NOIDUNG_GOIY: suggestion });
-      toast.success(response.data.message || 'Góp ý đã được gửi thành công!');
-      setShowSuggestionDialog(false);
-      loadTopicDetails();
-    } catch (error) {
-      console.error('Error adding suggestion:', error);
-      const errorMessage = error.response?.data?.message || 'Có lỗi xảy ra khi gửi góp ý.';
-      toast.error(errorMessage);
-      throw error;
-    }
-  };
+    // --- XỬ LÝ PHÍM TẮT (ĐÃ FIX) ---
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (!open) return;
 
-  const handleReplyToSuggestion = (suggestion) => {
-    setSelectedSuggestion(suggestion);
-    setShowReplyDialog(true);
-  };
+            // QUAN TRỌNG: Kiểm tra xem người dùng có đang gõ phím không
+            const activeEl = document.activeElement;
+            const isTyping = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable;
 
-  const handleReplySuccess = () => {
-    loadTopicDetails();
-  };
+            if (isTyping) return; // Nếu đang gõ thì không làm gì cả (để phím mũi tên di chuyển con trỏ)
 
-  const handleSubmitComment = async () => {
-    if (!commentText.trim()) return;
-    try {
-      await thesisTopicService.addSuggestion(topic.ID_DETAI, { NOIDUNG_GOIY: commentText });
-      toast.success('Góp ý đã được gửi thành công!');
-      setShowCommentInput(false);
-      setCommentText('');
-      loadTopicDetails();
-    } catch (error) {
-      console.error('Error adding suggestion:', error);
-      const errorMessage = error.response?.data?.message || 'Có lỗi xảy ra khi gửi góp ý.';
-      toast.error(errorMessage);
-    }
-  };
+            if (e.key === 'ArrowLeft') {
+                if (hasPrevious && onPrevious) {
+                    e.preventDefault(); // Ngăn cuộn trang
+                    onPrevious();
+                }
+            }
 
-  return (
-    <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent
-          className="max-w-4xl w-full h-full max-h-[90vh] p-0 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 border-l-4 border-blue-500"
-          style={{ maxHeight: '90vh' }}
-        >
-          <div className="flex flex-col h-full overflow-hidden">
-            {loading ? (
-              <DialogLoadingSkeleton />
-            ) : !topic ? (
-              <div className="p-6 text-center text-gray-500 dark:text-gray-400">Không thể tải dữ liệu đề tài.</div>
-            ) : (
-              <>
-                <DialogHeader className="p-6 pb-4 space-y-4 bg-white dark:bg-gray-800 border-b border-blue-200 dark:border-blue-700 shadow-sm flex-shrink-0">
-                  <div className="flex items-center gap-4">
-                    <div className="h-16 w-16 flex items-center justify-center rounded-lg shrink-0 border-2 border-blue-300 dark:border-blue-600 bg-blue-100 dark:bg-blue-800">
-                      <BookOpen className="h-8 w-8 text-blue-600 dark:text-blue-300" />
-                    </div>
-                    <div className="space-y-1 flex-1 min-w-0">
-                      <DialogTitle className="text-xl font-bold text-gray-800 dark:text-gray-100 line-clamp-2">
-                        {topic.TEN_DETAI}
-                      </DialogTitle>
-                      <DialogDescription className="text-gray-600 dark:text-gray-300 break-all">
-                        Mã đề tài: {topic.MA_DETAI}
-                      </DialogDescription>
-                      <div className="flex items-center flex-wrap gap-2 pt-2">
-                        {getStatusBadge(topic.TRANGTHAI)}
-                      </div>
-                    </div>
-                  </div>
-                </DialogHeader>
+            if (e.key === 'ArrowRight') {
+                if (hasNext && onNext) {
+                    e.preventDefault(); // Ngăn cuộn trang
+                    onNext();
+                }
+            }
+        };
 
-                <ScrollArea className="flex-1 overflow-y-auto">
-                  <div className="px-6 pb-6 space-y-6 pt-6">
-                    {topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' && topic.LYDO_TUCHOI && (
-                      <Card className="border-orange-200 dark:border-orange-700 shadow-md bg-orange-50 dark:bg-orange-900/20">
-                        <CardHeader>
-                          <CardTitle className="text-lg font-semibold text-orange-700 dark:text-orange-300 flex items-center gap-2">
-                            <AlertTriangle className="h-5 w-5" /> Yêu cầu chỉnh sửa từ Admin
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <InfoItem icon={MessageSquare} label="Lý do">
-                            <p className="text-orange-800 dark:text-orange-200">{topic.LYDO_TUCHOI}</p>
-                          </InfoItem>
-                        </CardContent>
-                      </Card>
-                    )}
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open, hasPrevious, hasNext, onPrevious, onNext]);
 
-                    <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                          <Layers className="h-5 w-5 text-blue-500" /> Thông tin cơ bản
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-y-4 gap-x-4">
-                          <InfoItem icon={User} label="Giảng viên đề xuất" value={topic.ten_giang_vien} />
-                          <InfoItem icon={Layers} label="Chuyên ngành" value={topic.chuyennganh?.TEN_CHUYENNGANH} />
-                          <InfoItem icon={Users} label="Số nhóm tối đa" value={topic.SO_NHOM_TOIDA} />
-                          <InfoItem icon={Users} label="Đã đăng ký" value={topic.SO_NHOM_HIENTAI} />
-                          <InfoItem icon={Calendar} label="Ngày tạo" value={new Date(topic.NGAYTAO).toLocaleDateString('vi-VN')} />
-                        </div>
-                        <div className="flex items-start">
-                          <BookOpen className="h-5 w-5 text-blue-500 mt-0.5 shrink-0" />
-                          <div className="ml-3 flex-1">
-                            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400">Mô tả</p>
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-words">
-                              <div className="flex flex-col space-y-4">
-                                <div className="flex-1">
-                                  <div className="max-h-40 overflow-y-auto border rounded p-2 bg-gray-50 dark:bg-gray-800">
-                                    {topic.MOTA}
-                                  </div>
+    // --- Load dữ liệu ---
+    useEffect(() => {
+        if (open && topicId) {
+            loadTopicDetails(true);
+        } else if (!open) {
+            setTopic(null);
+            setReplyInputs({});
+            setNewSuggestion('');
+        }
+    }, [open, topicId]);
+
+    // --- Auto Scroll Chat ---
+    useEffect(() => {
+        if (topic?.goiyDetai && chatEndRef.current) {
+            setTimeout(() => {
+                chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+            }, 100);
+        }
+    }, [topic?.goiyDetai?.length, topic?.goiyDetai?.map(t => t.phanhois?.length).join(',')]);
+
+    const loadTopicDetails = async (showLoading = false) => {
+        try {
+            if (showLoading) setLoading(true);
+            const response = await thesisTopicService.getTopicById(topicId);
+            setTopic(response.data);
+        } catch (error) {
+            console.error('Error loading details:', error);
+            toast.error("Không thể tải chi tiết đề tài.");
+        } finally {
+            if (showLoading) setLoading(false);
+        }
+    };
+
+    const handleSendReply = async (suggestionId) => {
+        const content = replyInputs[suggestionId]?.trim();
+        if (!content) return;
+
+        const tempReply = {
+            ID_PHANHOI: Date.now(),
+            NOIDUNG: content,
+            created_at: new Date().toISOString(),
+            ID_GIANGVIEN: user?.giangvien?.ID_GIANGVIEN,
+            giangvien: { nguoidung: user }
+        };
+
+        setTopic(prev => ({
+            ...prev,
+            goiyDetai: prev.goiyDetai.map(g => {
+                if (g.ID_GOIY === suggestionId) {
+                    return { ...g, phanhois: [...(g.phanhois || []), tempReply] };
+                }
+                return g;
+            })
+        }));
+
+        setReplyInputs(prev => ({ ...prev, [suggestionId]: '' }));
+
+        try {
+            await thesisTopicService.addReplyToSuggestion(suggestionId, { NOIDUNG: content });
+            await loadTopicDetails(false);
+        } catch (error) {
+            toast.error("Gửi thất bại.");
+        }
+    };
+
+    const handleSendNewSuggestion = async () => {
+        const content = newSuggestion.trim();
+        if (!content) return;
+
+        const tempThread = {
+            ID_GOIY: Date.now(),
+            NOIDUNG_GOIY: content,
+            NGAYTAO: new Date().toISOString(),
+            ID_GIANGVIEN: user?.giangvien?.ID_GIANGVIEN,
+            giangvien: { nguoidung: user },
+            phanhois: []
+        };
+
+        setTopic(prev => ({
+            ...prev,
+            goiyDetai: [...(prev.goiyDetai || []), tempThread]
+        }));
+
+        setNewSuggestion('');
+        setSendingState(prev => ({ ...prev, NEW: true }));
+
+        try {
+            await thesisTopicService.addSuggestion(topic.ID_DETAI, { NOIDUNG_GOIY: content });
+            await loadTopicDetails(false);
+        } catch (error) {
+            toast.error("Lỗi khi gửi tin nhắn.");
+        } finally {
+            setSendingState(prev => ({ ...prev, NEW: false }));
+        }
+    };
+
+    const canComment = topic && ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI);
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-[95vw] lg:max-w-[85vw] xl:max-w-7xl h-[90vh] p-0 flex flex-col bg-background gap-0 overflow-hidden border border-border shadow-2xl sm:rounded-xl">
+
+                {loading || !topic ? (
+                    <DialogLoadingSkeleton />
+                ) : (
+                    <div className="flex flex-col h-full overflow-hidden">
+
+                        {/* --- 1. HEADER (CLEAN & PRIMARY) --- */}
+                        <DialogHeader className="px-6 py-4 border-b border-border shrink-0 flex flex-row items-center justify-between space-y-0 bg-background">
+                            <div className="flex items-start gap-4 overflow-hidden">
+                                <div className="h-10 w-10 mt-1 flex items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
+                                    <BookOpen className="h-5 w-5" />
                                 </div>
-                                {showCommentInput && (
-                                  <div>
-                                    <strong>Góp ý:</strong>
-                                    <textarea
-                                      className="mt-2 w-full border rounded p-2 resize-none"
-                                      rows="4"
-                                      placeholder="Nhập góp ý của bạn về đề tài này..."
-                                      value={commentText}
-                                      onChange={(e) => setCommentText(e.target.value)}
-                                    />
-                                    <div className="flex gap-2 mt-2">
-                                      <Button
-                                        size="sm"
-                                        onClick={handleSubmitComment}
-                                        disabled={!commentText.trim()}
-                                      >
-                                        Gửi góp ý
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          setShowCommentInput(false);
-                                          setCommentText('');
-                                        }}
-                                      >
-                                        Hủy
-                                      </Button>
+                                <div className="min-w-0">
+                                    <DialogTitle className="text-lg font-bold text-foreground leading-tight mb-1.5">
+                                        {topic.TEN_DETAI}
+                                    </DialogTitle>
+                                    <div className="flex items-center gap-3">
+                                        <code className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground font-mono border border-border">
+                                            {topic.MA_DETAI}
+                                        </code>
+                                        {getStatusBadge(topic.TRANGTHAI)}
                                     </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {(topic.YEUCAU || topic.MUCTIEU || topic.KETQUA_MONGDOI) && (
-                      <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                        <CardHeader>
-                          <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <Star className="h-5 w-5 text-blue-500" /> Yêu cầu chi tiết
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {topic.YEUCAU && <InfoItem icon={Check} label="Yêu cầu" value={topic.YEUCAU} />}
-                          {topic.MUCTIEU && <InfoItem icon={Target} label="Mục tiêu" value={topic.MUCTIEU} />}
-                          {topic.KETQUA_MONGDOI && <InfoItem icon={Check} label="Kết quả mong đợi" value={topic.KETQUA_MONGDOI} />}
-                        </CardContent>
-                      </Card>
-                    )}
-
-                    <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                      <CardHeader>
-                        <div className="flex justify-between items-center">
-                          <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <MessageSquare className="h-5 w-5 text-blue-500" /> Góp ý & Thảo luận
-                          </CardTitle>
-                          <div className="flex gap-2">
-                            {topic.ID_NGUOI_DEXUAT !== user?.giangvien?.ID_GIANGVIEN && (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Chờ duyệt') && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setShowCommentInput(true)}
-                                className="border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                              >
-                                <Send className="w-4 h-4 mr-1" />
-                                Thêm góp ý
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="space-y-4">
-                        {topic.goiyDetai && topic.goiyDetai.length > 0 ? (
-                          <div className="space-y-4">
-                            {topic.goiyDetai.map((suggestion) => (
-                              <div key={suggestion.ID_GOIY} className="border border-blue-100 dark:border-blue-800 rounded-lg p-4 bg-blue-50/30 dark:bg-blue-900/10 shadow-sm">
-                                <div className="flex justify-between items-start mb-2">
-                                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
-                                    {suggestion.giangvien?.nguoidung?.HODEM_VA_TEN || 'N/A'}
-                                  </span>
-                                  <span className="text-xs text-gray-500 dark:text-gray-400">
-                                    {new Date(suggestion.NGAYTAO).toLocaleString('vi-VN')}
-                                  </span>
                                 </div>
-                                <p className="text-gray-800 dark:text-gray-100 mb-3">{suggestion.NOIDUNG_GOIY}</p>
-
-                                {suggestion.phanhois && suggestion.phanhois.length > 0 && (
-                                  <div className="space-y-3 pl-4 border-l-2 border-blue-200 dark:border-blue-700 ml-2">
-                                    {suggestion.phanhois.map((reply) => (
-                                      <div key={reply.ID_PHANHOI} className="bg-white dark:bg-gray-800 p-3 rounded-md shadow-sm border border-blue-100 dark:border-blue-800">
-                                        <div className="flex justify-between items-start mb-1">
-                                          <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
-                                            {reply.giangvien?.nguoidung?.HODEM_VA_TEN || 'N/A'}
-                                            {reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT && (
-                                              <Badge variant="secondary" className="ml-2 text-xs">Tác giả</Badge>
-                                            )}
-                                          </span>
-                                          <span className="text-xs text-gray-500 dark:text-gray-400">
-                                            {new Date(reply.created_at).toLocaleString('vi-VN')}
-                                          </span>
-                                        </div>
-                                        <p className="text-gray-700 dark:text-gray-200">{reply.NOIDUNG}</p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-
-                                {(topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Chờ duyệt' || topic.TRANGTHAI === 'Yêu cầu chỉnh sửa') && (
-                                  <div className="mt-3">
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleReplyToSuggestion(suggestion)}
-                                      className="border-blue-300 dark:border-blue-600 text-blue-600 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                                    >
-                                      <MessageSquare className="w-4 h-4 mr-1" />
-                                      Phản hồi
-                                    </Button>
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-gray-500 dark:text-gray-400 text-center py-4 text-sm">Chưa có góp ý nào</p>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    {topic.phancongDetaiNhom && topic.phancongDetaiNhom.length > 0 && (
-                      <Card className="border border-blue-200 dark:border-blue-700 shadow-md bg-white dark:bg-gray-800">
-                        <CardHeader>
-                          <CardTitle className="text-lg font-semibold text-gray-800 dark:text-gray-100 flex items-center gap-2">
-                            <Users className="h-5 w-5 text-blue-500" /> Nhóm đã đăng ký
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                          {topic.phancongDetaiNhom.map((assignment) => (
-                            <div key={assignment.ID_PHANCONG} className="border border-blue-100 dark:border-blue-800 rounded-lg p-4 bg-blue-50/30 dark:bg-blue-900/10 shadow-sm">
-                              <div className="flex justify-between items-start mb-2">
-                                <span className="font-medium text-gray-900 dark:text-gray-100">
-                                  Nhóm: {assignment.nhom?.TEN_NHOM || 'N/A'}
-                                </span>
-                                <span className="text-xs text-gray-500 dark:text-gray-400">
-                                  {new Date(assignment.NGAY_PHANCONG).toLocaleDateString('vi-VN')}
-                                </span>
-                              </div>
-                              <div className="text-sm text-gray-600 dark:text-gray-300">
-                                <p>Trưởng nhóm: {assignment.nhom?.nhomtruong?.HODEM_VA_TEN || 'N/A'}</p>
-                                <p>Thành viên: {assignment.nhom?.thanhvienNhom?.map(tv => tv.nguoidung?.HODEM_VA_TEN).join(', ') || 'N/A'}</p>
-                              </div>
                             </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-                    )}
-                  </div>
-                </ScrollArea>
+                        </DialogHeader>
 
-                {showAdminActions && topic.TRANGTHAI === 'Chờ duyệt' && (
-                  <div className="flex-shrink-0 border-t border-blue-200 dark:border-blue-700 bg-white dark:bg-gray-800 p-4">
-                    <div className="flex flex-wrap gap-3 justify-center">
-                      <Button
-                        onClick={onPrevious}
-                        variant="outline"
-                        className="border-gray-300 text-gray-600 hover:bg-gray-50"
-                        size="sm"
-                      >
-                        <ArrowLeft className="w-4 h-4 mr-1" />
-                        Quay lại
-                      </Button>
-                      <Button
-                        onClick={() => onApprove(topic.ID_DETAI)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        size="sm"
-                      >
-                        <CheckCircle className="w-4 h-4 mr-1" />
-                        Duyệt đề tài
-                      </Button>
-                      <Button
-                        onClick={() => onRequestEdit(topic)}
-                        variant="outline"
-                        className="border-orange-300 text-orange-600 hover:bg-orange-50"
-                        size="sm"
-                      >
-                        <Edit className="w-4 h-4 mr-1" />
-                        Yêu cầu chỉnh sửa
-                      </Button>
-                      <Button
-                        onClick={() => onReject(topic)}
-                        variant="outline"
-                        className="border-red-300 text-red-600 hover:bg-red-50"
-                        size="sm"
-                      >
-                        <XCircle className="w-4 h-4 mr-1" />
-                        Từ chối
-                      </Button>
-                      <Button
-                        onClick={onNext}
-                        variant="outline"
-                        className="border-blue-300 text-blue-600 hover:bg-blue-50"
-                        size="sm"
-                      >
-                        <ArrowRight className="w-4 h-4 mr-1" />
-                        Tiếp theo
-                      </Button>
+                        {/* --- 2. BODY: SPLIT VIEW --- */}
+                        <div className="flex flex-1 overflow-hidden">
+
+                            {/* CỘT TRÁI: THÔNG TIN */}
+                            <ScrollArea className="flex-1 border-r border-border bg-card">
+                                <div className="p-6 space-y-8">
+                                    {/* Stats Cards - Simple Grid */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                                        <CompactInfoItem icon={User} label="Giảng viên" value={topic.ten_giang_vien} />
+                                        <CompactInfoItem icon={Layers} label="Chuyên ngành" value={topic.chuyennganh?.TEN_CHUYENNGANH} />
+                                        <CompactInfoItem icon={Users} label="Nhóm tối đa" value={topic.SO_NHOM_TOIDA} />
+                                        <CompactInfoItem icon={Clock} label="Đã đăng ký" value={`${topic.SO_NHOM_HIENTAI} nhóm`} />
+                                    </div>
+
+                                    {/* Yêu cầu & Kết quả */}
+                                    {(topic.YEUCAU || topic.KETQUA_MONGDOI) && (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {topic.YEUCAU && (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm uppercase tracking-wide">
+                                                        <Check className="w-4 h-4 text-primary" /> Yêu cầu
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground leading-relaxed bg-secondary/30 p-4 rounded-lg border border-border/50">
+                                                        {topic.YEUCAU}
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {topic.KETQUA_MONGDOI && (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm uppercase tracking-wide">
+                                                        <Target className="w-4 h-4 text-primary" /> Kết quả mong đợi
+                                                    </div>
+                                                    <div className="text-sm text-muted-foreground leading-relaxed bg-secondary/30 p-4 rounded-lg border border-border/50">
+                                                        {topic.KETQUA_MONGDOI}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Mô tả chi tiết */}
+                                    <div className="space-y-3">
+                                        <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                                            <Info className="w-4 h-4 text-muted-foreground" /> Mô tả chi tiết
+                                        </h3>
+                                        <div className="text-sm text-foreground leading-7 whitespace-pre-wrap bg-background p-4 border border-border rounded-lg shadow-sm">
+                                            {topic.MOTA}
+                                        </div>
+                                    </div>
+                                </div>
+                            </ScrollArea>
+
+                            {/* CỘT PHẢI: CHAT (Simpler) */}
+                            <div className="w-full lg:w-[400px] xl:w-[450px] flex flex-col border-l border-border bg-secondary/20">
+                                <div className="p-3 border-b border-border bg-background flex items-center justify-between shrink-0">
+                                    <span className="font-semibold text-sm flex items-center gap-2 text-foreground">
+                                        <MessageSquare className="w-4 h-4 text-primary" /> Thảo luận ({topic.goiyDetai?.length || 0})
+                                    </span>
+                                </div>
+
+                                <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+                                    <div className="space-y-6">
+                                        {(!topic.goiyDetai || topic.goiyDetai.length === 0) ? (
+                                            <div className="flex flex-col items-center justify-center py-12 text-center opacity-50">
+                                                <div className="p-4 rounded-full bg-secondary mb-3">
+                                                    <MessageSquare className="w-8 h-8 text-muted-foreground" />
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">Chưa có thảo luận nào</p>
+                                            </div>
+                                        ) : (
+                                            topic.goiyDetai.map((thread) => (
+                                                <div key={thread.ID_GOIY} className="space-y-3 relative group">
+                                                    <ChatBubble
+                                                        user={thread.giangvien?.nguoidung}
+                                                        message={thread.NOIDUNG_GOIY}
+                                                        isMe={thread.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN}
+                                                        time={thread.NGAYTAO}
+                                                        role="Người góp ý"
+                                                    />
+
+                                                    {/* Replies */}
+                                                    {thread.phanhois && thread.phanhois.map((reply) => (
+                                                        <div key={reply.ID_PHANHOI} className="pl-8 relative">
+                                                            {/* Đường nối đơn giản */}
+                                                            <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
+                                                            <ChatBubble
+                                                                user={reply.giangvien?.nguoidung}
+                                                                message={reply.NOIDUNG}
+                                                                isMe={reply.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN}
+                                                                time={reply.created_at}
+                                                                role={reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT ? "Tác giả" : null}
+                                                            />
+                                                        </div>
+                                                    ))}
+
+                                                    {/* Reply Input Inline */}
+                                                    {canComment && (
+                                                        <div className="pl-8 pt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                                                            <div className="flex gap-2">
+                                                                <input
+                                                                    type="text"
+                                                                    placeholder="Trả lời..."
+                                                                    className="flex-1 bg-background border border-input rounded-md text-xs px-3 py-1.5 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                                                    value={replyInputs[thread.ID_GOIY] || ''}
+                                                                    onChange={(e) => setReplyInputs(prev => ({ ...prev, [thread.ID_GOIY]: e.target.value }))}
+                                                                    onKeyDown={(e) => e.key === 'Enter' && handleSendReply(thread.ID_GOIY)}
+                                                                />
+                                                                <Button size="icon" className="h-7 w-7" variant="ghost" onClick={() => handleSendReply(thread.ID_GOIY)}>
+                                                                    <Send className="w-3 h-3 text-muted-foreground" />
+                                                                </Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))
+                                        )}
+                                        <div ref={chatEndRef} />
+                                    </div>
+                                </ScrollArea>
+
+                                {canComment && (
+                                    <div className="p-3 bg-background border-t border-border">
+                                        <div className="relative flex items-end gap-2">
+                                            <Textarea
+                                                placeholder="Nhập nội dung thảo luận mới..."
+                                                className="min-h-[44px] max-h-[120px] resize-none text-sm bg-secondary/30 focus:bg-background border-transparent focus:border-input pr-10 shadow-none"
+                                                value={newSuggestion}
+                                                onChange={(e) => setNewSuggestion(e.target.value)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                                        e.preventDefault();
+                                                        handleSendNewSuggestion();
+                                                    }
+                                                }}
+                                            />
+                                            <Button
+                                                size="icon"
+                                                className="absolute right-1 bottom-1 h-8 w-8"
+                                                disabled={!newSuggestion.trim() || sendingState['NEW']}
+                                                onClick={handleSendNewSuggestion}
+                                            >
+                                                {sendingState['NEW'] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* --- 3. FOOTER: Điều hướng & Hành động --- */}
+                        <div className="p-4 bg-background border-t border-border shrink-0">
+                            <div className="flex items-center justify-between">
+
+                                {/* Left: Hint */}
+                                <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
+                                    <div className="px-1.5 py-0.5 border border-border rounded bg-secondary font-mono">←</div>
+                                    <div className="px-1.5 py-0.5 border border-border rounded bg-secondary font-mono">→</div>
+                                    <span>Điều hướng</span>
+                                </div>
+
+                                {/* Center: Navigation */}
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={onPrevious}
+                                        disabled={!onPrevious || !hasPrevious}
+                                        className="w-28"
+                                    >
+                                        <ChevronLeft className="w-4 h-4 mr-1" /> Trước
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={onNext}
+                                        disabled={!onNext || !hasNext}
+                                        className="w-28"
+                                    >
+                                        Sau <ChevronRight className="w-4 h-4 ml-1" />
+                                    </Button>
+                                </div>
+
+                                {/* Right: Actions */}
+                                <div className="flex gap-2">
+                                    {showAdminActions && (
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => onReject(topic)}
+                                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                            >
+                                                <XCircle className="w-4 h-4 mr-2" /> Từ chối
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                onClick={() => onRequestEdit(topic)}
+                                                className="text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700 dark:text-orange-400 dark:border-orange-900 dark:hover:bg-orange-900/20"
+                                            >
+                                                <Edit className="w-4 h-4 mr-2" /> Yêu cầu sửa
+                                            </Button>
+                                            <Button
+                                                onClick={() => onApprove(topic.ID_DETAI)}
+                                                // Sử dụng màu Primary của bạn (Blue) hoặc màu Green đặc thù cho nút Duyệt
+                                                className="bg-primary text-primary-foreground hover:bg-primary/90"
+                                            >
+                                                <CheckCircle className="w-4 h-4 mr-2" /> Duyệt đề tài
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                  </div>
                 )}
-              </>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <SuggestionDialog
-        open={showSuggestionDialog}
-        onOpenChange={setShowSuggestionDialog}
-        onSubmit={handleSubmitSuggestion}
-        topic={topic}
-      />
-      <ReplyDialog
-        open={showReplyDialog}
-        onOpenChange={setShowReplyDialog}
-        suggestion={selectedSuggestion}
-        onReplySuccess={handleReplySuccess}
-      />
-    </>
-  );
+            </DialogContent>
+        </Dialog>
+    );
 };
 
 export default TopicDetailDialog;

@@ -5,6 +5,7 @@ import { getColumns } from './columns';
 import { AddStudentDialog } from './AddStudentDialog';
 import { GroupFormDialog } from './GroupFormDialog';
 import { DataTable } from '@/components/shared/data-table/DataTable';
+import { AssignTopicDialog } from './AssignTopicDialog';
 
 /**
  * Component hiển thị bảng dữ liệu các nhóm.
@@ -18,6 +19,7 @@ export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, o
 	const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
 	const [isFormOpen, setIsFormOpen] = useState(false);
 	const [selectedGroup, setSelectedGroup] = useState(null);
+	const [isAssignTopicOpen, setIsAssignTopicOpen] = useState(false);
 
 	/**
 	 * Mở dialog thêm sinh viên vào nhóm.
@@ -34,6 +36,11 @@ export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, o
 		setSelectedGroup(group);
 		setIsFormOpen(true);
 	};
+
+	const handleAssignTopic = (group) => {
+        setSelectedGroup(group);
+        setIsAssignTopicOpen(true);
+    };
 
 	/**
 	 * Lấy dữ liệu danh sách nhóm từ API.
@@ -90,6 +97,7 @@ export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, o
 	const columns = useMemo(() => getColumns({
 		onEdit: handleEdit,
 		onAddStudent: handleAddStudent,
+		onAssignTopic: handleAssignTopic,
 		onSuccess: () => { fetchData(); onSuccess(); },
 		onViewDetails
 	}), [onSuccess, onViewDetails, fetchData]);
@@ -162,6 +170,14 @@ export function GroupDataTable({ planId, onSuccess, onViewDetails, searchTerm, o
 				editingGroup={selectedGroup}
 				onSuccess={handleDialogSuccess}
 			/>
+			
+			<AssignTopicDialog 
+                isOpen={isAssignTopicOpen}
+                setIsOpen={setIsAssignTopicOpen}
+                group={selectedGroup}
+                planId={planId}
+                onSuccess={handleDialogSuccess}
+            />
 		</>
 	);
 }

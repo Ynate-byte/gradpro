@@ -15,7 +15,7 @@ const statusConfig = {
     'Không đạt': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700',
 };
 
-export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails }) => [
+export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails, onAssignTopic }) => [
     {
         accessorKey: "TEN_NHOM",
         header: ({ column }) => (
@@ -46,12 +46,23 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails }) =
     {
         accessorKey: "SO_THANHVIEN_HIENTAI",
         header: () => <div className="text-center">Thành viên</div>,
-        cell: ({ row }) => (
-            <div className="flex items-center justify-center gap-2 group-data-[state=full]:text-muted-foreground">
-                <Users className="h-4 w-4 text-muted-foreground" />
-                <span>{row.original.SO_THANHVIEN_HIENTAI} / {row.original.SO_THANHVIEN_TOIDA || 4}</span>
-            </div>
-        )
+        cell: ({ row }) => {
+            // [LOGIC MỚI] Lấy số lượng hiện tại và tối đa từ Kế hoạch
+            const current = row.original.SO_THANHVIEN_HIENTAI;
+            // Lấy từ quan hệ kehoach (cần đảm bảo Backend đã eager load 'kehoach')
+            const max = row.original.kehoach?.SO_THANHVIEN_TOIDA || 4;
+            
+            const isFull = current >= max;
+
+            return (
+                <div className="flex items-center justify-center gap-2 group-data-[state=full]:text-muted-foreground">
+                    <Users className={cn("h-4 w-4", isFull ? "text-red-500" : "text-muted-foreground")} />
+                    <span className={cn(isFull && "text-red-600 font-medium")}>
+                        {current} / {max}
+                    </span>
+                </div>
+            );
+        }
     },
 
     {
@@ -100,7 +111,13 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails }) =
 
     {
         id: "actions",
-        cell: ({ row }) => <GroupRowActions row={row} onEdit={onEdit} onAddStudent={onAddStudent} onSuccess={onSuccess} />,
+        cell: ({ row }) => <GroupRowActions 
+            row={row} 
+            onEdit={onEdit} 
+            onAddStudent={onAddStudent} 
+            onSuccess={onSuccess} 
+            onAssignTopic={onAssignTopic}
+        />,
     },
 
     {

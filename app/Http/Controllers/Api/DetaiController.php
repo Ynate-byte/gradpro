@@ -171,7 +171,7 @@ class DetaiController extends Controller
                         'giangvien.nguoidung', // Người góp ý
                         'phanhois.giangvien.nguoidung' // Những người phản hồi
                        ])
-                       ->orderBy('NGAYTAO', 'desc');
+                       ->orderBy('NGAYTAO', 'asc');
             },
             'phancongDetaiNhom.nhom.nhomtruong',
             'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung',
@@ -347,10 +347,10 @@ class DetaiController extends Controller
     {
         // Kiểm tra dữ liệu đầu vào
         $validator = Validator::make($request->all(), [
-            'NOIDUNG_GOIY' => 'required|string|min:10|max:1000',
+            'NOIDUNG_GOIY' => 'required|string|min:1|max:1000',
         ], [
             'NOIDUNG_GOIY.required' => 'Nội dung góp ý là bắt buộc',
-            'NOIDUNG_GOIY.min' => 'Nội dung góp ý phải có ít nhất 10 ký tự',
+            'NOIDUNG_GOIY.min' => 'Nội dung góp ý phải có ít nhất 1 ký tự',
             'NOIDUNG_GOIY.max' => 'Nội dung góp ý không được vượt quá 1000 ký tự',
         ]);
 
@@ -371,13 +371,8 @@ class DetaiController extends Controller
         }
 
         // Kiểm tra trạng thái đề tài
-        if (!in_array($topic->TRANGTHAI, ['Nháp', 'Chờ duyệt'])) {
-            return response()->json(['message' => 'Chỉ có thể góp ý cho đề tài ở trạng thái nháp hoặc chờ duyệt'], 403);
-        }
-
-        // Không thể góp ý cho đề tài của chính mình
-        if ($lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN) {
-            return response()->json(['message' => 'Không thể góp ý cho đề tài của chính mình'], 403);
+        if (!in_array($topic->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Đang chỉnh sửa', 'Yêu cầu chỉnh sửa'])) {
+            return response()->json(['message' => 'Không thể góp ý cho đề tài đã được duyệt hoặc đã khóa.'], 403);
         }
 
         // Tạo góp ý

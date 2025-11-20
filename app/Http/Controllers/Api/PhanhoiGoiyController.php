@@ -31,15 +31,14 @@ class PhanhoiGoiyController extends Controller
         }
 
         $currentUser = Auth::user();
-
         $lecturer = $currentUser->giangvien;
         
         if (!$lecturer) {
             return response()->json(['message' => 'Chỉ giảng viên mới có thể phản hồi góp ý'], 403);
         }
 
-        if (!in_array($goiy->detai->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa'])) {
-            return response()->json(['message' => 'Không thể phản hồi góp ý cho đề tài đã duyệt'], 403);
+        if (!in_array($goiy->detai->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'])) {
+            return response()->json(['message' => 'Không thể phản hồi góp ý cho đề tài đã duyệt hoặc đã khóa'], 403);
         }
                 
         $phanhoi = $goiy->phanhois()->create([

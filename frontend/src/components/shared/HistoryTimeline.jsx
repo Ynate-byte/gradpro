@@ -5,7 +5,7 @@ import {
     LogIn, LogOut, UserCog, KeyRound, Users, UserMinus, UserPlus, UserCheck,
     BookOpen, CheckSquare, Trello, UploadCloud, Calendar, Activity,
     FileText, Shield, Monitor, FileEdit, CheckCircle, XCircle, Star, MessageSquare, RefreshCw,
-    Mail, HandMetal // [UPDATED] Thêm icon
+    Mail, HandMetal, BookCheck
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +37,9 @@ const iconMap = {
     'Star': Star,
     'MessageSquare': MessageSquare,
     'RefreshCw': RefreshCw,
-    'Mail': Mail, // [NEW]
-    'HandMetal': HandMetal // [NEW]
+    'Mail': Mail,
+    'HandMetal': HandMetal,
+    'BookCheck': BookCheck,
 };
 
 const HistoryTimeline = ({ items, isLoading }) => {
@@ -194,6 +195,15 @@ const DetailRenderer = ({ type, details }) => {
              </div>
          );
     }
+
+    if (type === 'ASSIGN_TOPIC') {
+        return (
+             <div className="flex flex-col gap-1 mt-1 text-xs text-muted-foreground">
+                 <p><strong>Đề tài:</strong> {details.topic_name}</p>
+                 {details.supervisor && <p><strong>GVHD:</strong> {details.supervisor}</p>}
+             </div>
+        );
+    }
     
     // 3. Topic Actions
     if (type === 'PROPOSE_TOPIC') {
@@ -271,6 +281,9 @@ const getColorClass = (actionType) => {
         case actionType === 'INVITE_MEMBER': 
         case actionType === 'SEND_REQUEST': return 'text-indigo-500 border-indigo-200 bg-indigo-50';
         case actionType === 'TRANSFER_LEADER': return 'text-orange-500 border-orange-200 bg-orange-50';
+        case actionType === 'ASSIGN_TOPIC':
+        case actionType === 'REGISTER_TOPIC': 
+        case actionType === 'PROPOSE_TOPIC': return 'text-blue-600 border-blue-200 bg-blue-50';
 
         // Topic & Submission
         case actionType === 'REGISTER_TOPIC': 

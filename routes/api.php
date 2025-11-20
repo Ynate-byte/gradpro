@@ -30,6 +30,7 @@ use App\Http\Controllers\Api\LecturerDashboardController;
 use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\NewsController;
 use App\Http\Controllers\Api\HistoryController;
+use App\Http\Controllers\Api\Student\StudentDashboardController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -174,6 +175,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::delete('/{nhom}', [GroupAdminController::class, 'destroy']);
             Route::post('/{nhom}/mark-special', [GroupAdminController::class, 'markAsSpecial']);
             Route::post('/{nhom}/remove-member/{userId}', [GroupAdminController::class, 'removeMember']);
+            Route::post('/{nhom}/assign-topic', [GroupAdminController::class, 'assignTopic']);
         });
 
         Route::apiResource('thesis-plan-templates', AdminTemplateController::class)
@@ -360,6 +362,10 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/history/personal', [HistoryController::class, 'getPersonalHistory']);
     Route::get('/history/group/{groupId}', [HistoryController::class, 'getGroupHistory']);
     
+    Route::prefix('student/dashboard')->group(function () {
+        Route::get('/overview', [StudentDashboardController::class, 'getOverview']);
+        Route::get('/detail/{planId}', [StudentDashboardController::class, 'getDetail']);
+    });
 });
 
 Route::fallback(function () {

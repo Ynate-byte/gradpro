@@ -5,9 +5,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { toast } from "sonner"
 import { markGroupAsSpecial, deleteGroup } from '@/api/adminGroupService'
+import { BookPlus } from "lucide-react";
 
 // Hiển thị menu hành động cho một hàng trong bảng nhóm
-export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
+export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess, onAssignTopic }) {
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, type: null })
   const group = row.original
   const alertTitleId = useId()
@@ -77,6 +78,10 @@ export function GroupRowActions({ row, onEdit, onAddStudent, onSuccess }) {
           <DropdownMenuItem onClick={() => onAddStudent(group)}>
             <UserPlus className="mr-2 h-4 w-4" />
             Thêm thành viên
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => onAssignTopic(group)}>
+            <BookPlus className="mr-2 h-4 w-4" />
+            Gán đề tài
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => openConfirmation('special')}>

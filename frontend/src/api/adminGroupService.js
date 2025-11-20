@@ -143,3 +143,27 @@ export const createGroupWithMembers = (payload) => {
 export const removeGroupMember = (groupId, userId) => {
     return axiosClient.post(`/admin/groups/${groupId}/remove-member/${userId}`).then(res => res.data);
 };
+
+/**
+ * Gán đề tài cho nhóm.
+ * @param {number} groupId 
+ * @param {number} topicId 
+ */
+export const assignTopicToGroup = (groupId, topicId) => {
+    return axiosClient.post(`/admin/groups/${groupId}/assign-topic`, { ID_DETAI: topicId }).then(res => res.data);
+};
+
+/**
+ * Lấy danh sách đề tài đã duyệt trong kế hoạch (để gán).
+ * Có thể tái sử dụng API của detai nhưng cần filter gọn nhẹ.
+ */
+export const getAssignableTopics = (planId) => {
+    return axiosClient.get('/admin/detai', { 
+        params: { 
+            plan_id: planId, 
+            status: 'Đã duyệt',
+        } 
+    }).then(res => {
+        return Array.isArray(res.data) ? res.data : (res.data.data || []);
+    });
+};

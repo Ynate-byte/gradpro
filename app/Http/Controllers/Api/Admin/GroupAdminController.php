@@ -16,7 +16,11 @@ use Illuminate\Validation\Rule;
 use App\Exports\GroupsExport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Services\AutoGroupingService;
+use App\Models\PhancongDetaiNhom;
+use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 use Illuminate\Validation\ValidationException;
+
 
 class GroupAdminController extends Controller
 {
@@ -37,11 +41,9 @@ class GroupAdminController extends Controller
         $query = Nhom::with([
             'nhomtruong', 
             'chuyennganh', 
-            'khoabomon', 
-            
-            // Sửa lỗi N/A: Thêm eager loading cho sinhvien và chuyennganh của sinhvien
+            'khoabomon',
+            'kehoach',
             'thanhviens.nguoidung.sinhvien.chuyennganh', 
-
             'phancongDetaiNhom.detai',
             'phancongDetaiNhom.gvhd.nguoidung',
             'diemTongKet'
@@ -184,9 +186,13 @@ class GroupAdminController extends Controller
 
                     // 2d. Cập nhật số lượng và trạng thái nhóm
                     $newCount = count($newMemberIds);
+
+                    $plan = KehoachKhoaluan::find($planId);
+                    $maxMembers = $plan->SO_THANHVIEN_TOIDA ?? 3;
+
                     $nhom->update([
                         'SO_THANHVIEN_HIENTAI' => $newCount,
-                        'TRANGTHAI' => ($newCount >= 4) ? 'Đã đủ thành viên' : 'Đang mở',
+                        'TRANGTHAI' => ($newCount >= $maxMembers) ? 'Đã đủ thành viên' : 'Đang mở',
                     ]);
                 }
             });
@@ -334,7 +340,10 @@ class GroupAdminController extends Controller
             $member->delete();
             $nhom->decrement('SO_THANHVIEN_HIENTAI');
 
-            if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < 4) {
+            $plan = KehoachKhoaluan::find($nhom->ID_KEHOACH);
+            $maxMembers = $plan->SO_THANHVIEN_TOIDA ?? 3;
+
+            if ($nhom->TRANGTHAI === 'Đã đủ thành viên' && $nhom->SO_THANHVIEN_HIENTAI < $maxMembers) {
                 $nhom->TRANGTHAI = 'Đang mở';
                 $nhom->save();
             }
@@ -495,10 +504,14 @@ class GroupAdminController extends Controller
 
         $nhom = Nhom::find($validated['ID_NHOM']);
         $planId = $nhom->ID_KEHOACH;
+        
+        $plan = KehoachKhoaluan::find($planId);
+        $maxMembers = $plan->SO_THANHVIEN_TOIDA ?? 4;
+
         $countToAdd = count($validated['student_ids']);
 
-        if ($nhom->SO_THANHVIEN_HIENTAI + $countToAdd > 5) {
-            return response()->json(['message' => 'Số lượng thành viên thêm vào vượt quá giới hạn của nhóm.'], 400);
+        if ($nhom->SO_THANHVIEN_HIENTAI + $countToAdd > $maxMembers) {
+            return response()->json(['message' => "Số lượng thành viên thêm vào vượt quá giới hạn của nhóm ({$maxMembers} người)."], 400);
         }
 
         $existingMembers = ThanhvienNhom::whereIn('ID_NGUOIDUNG', $validated['student_ids'])
@@ -511,7 +524,7 @@ class GroupAdminController extends Controller
             return response()->json(['message' => 'Một hoặc nhiều sinh viên được chọn đã thuộc về một nhóm khác trong kế hoạch này.'], 409);
         }
 
-        DB::transaction(function () use ($validated, $nhom, $countToAdd, $planId) {
+        DB::transaction(function () use ($validated, $nhom, $countToAdd, $planId, $maxMembers) {
             $membersToInsert = collect($validated['student_ids'])->map(fn($id) => [
                 'ID_NHOM' => $nhom->ID_NHOM,
                 'ID_NGUOIDUNG' => $id,
@@ -520,8 +533,9 @@ class GroupAdminController extends Controller
 
             ThanhvienNhom::insert($membersToInsert);
             $newCount = $nhom->SO_THANHVIEN_HIENTAI + $countToAdd;
+            
             $nhom->SO_THANHVIEN_HIENTAI = $newCount;
-            if ($newCount >= 4) {
+            if ($newCount >= $maxMembers) {
                 $nhom->TRANGTHAI = 'Đã đủ thành viên';
             }
             $nhom->save();
@@ -726,5 +740,93 @@ class GroupAdminController extends Controller
 
             Log::info("Admin action: Automatically added " . $missingStudentIds->count() . " students to SINHVIEN_THAMGIA for plan $planId.");
         }
+    }
+
+    /**
+     * Gán một đề tài cụ thể cho nhóm (Admin/Giáo vụ thực hiện).
+     * [FIXED] Cập nhật lại logic tính SO_NHOM_HIENTAI khi đổi đề tài.
+     */
+    public function assignTopic(Request $request, Nhom $nhom)
+    {
+        $validated = $request->validate([
+            'ID_DETAI' => 'required|exists:DETAI,ID_DETAI',
+        ]);
+
+        // Eager load người đề xuất để lấy tên GVHD cho thông báo
+        $topic = \App\Models\Detai::with('nguoiDexuat.nguoidung')->findOrFail($validated['ID_DETAI']);
+
+        // 1. Kiểm tra tính hợp lệ
+        if ($topic->ID_KEHOACH != $nhom->ID_KEHOACH) {
+            return response()->json(['message' => 'Đề tài và Nhóm không thuộc cùng một kế hoạch.'], 400);
+        }
+
+        if ($topic->TRANGTHAI !== 'Đã duyệt') {
+            return response()->json(['message' => 'Chỉ có thể gán các đề tài đã được duyệt.'], 400);
+        }
+
+        DB::transaction(function () use ($nhom, $topic) {
+            // --- [START LOGIC FIX] ---
+            
+            // Kiểm tra xem nhóm này hiện tại đang có đề tài nào không
+            $oldAssignment = \App\Models\PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)->first();
+
+            if ($oldAssignment) {
+                // Nếu nhóm ĐÃ CÓ đề tài trước đó
+                if ($oldAssignment->ID_DETAI != $topic->ID_DETAI) {
+                    // 1. Giảm số lượng nhóm của đề tài CŨ
+                    \App\Models\Detai::where('ID_DETAI', $oldAssignment->ID_DETAI)
+                        ->where('SO_NHOM_HIENTAI', '>', 0) // Đảm bảo không âm
+                        ->decrement('SO_NHOM_HIENTAI');
+
+                    $topic->increment('SO_NHOM_HIENTAI');
+                }
+            } else {
+                $topic->increment('SO_NHOM_HIENTAI');
+            }
+            
+            // 3. Tạo hoặc cập nhật phân công
+            \App\Models\PhancongDetaiNhom::updateOrCreate(
+                ['ID_NHOM' => $nhom->ID_NHOM],
+                [
+                    'ID_DETAI' => $topic->ID_DETAI,
+                    'ID_GVHD' => $topic->ID_NGUOI_DEXUAT,
+                    'NGAY_PHANCONG' => now(),
+                    'TRANGTHAI' => 'Đang thực hiện'
+                ]
+            );
+
+            // 4. Cập nhật thông tin nhóm
+            $nhom->update([
+                'TEN_NHOM' => $topic->TEN_DETAI,
+                'TRANGTHAI' => 'Đang thực hiện'
+            ]);
+
+            // 5. Ghi log
+            ActivityLogger::log(
+                'ASSIGN_TOPIC',
+                "Đã gán đề tài: {$topic->TEN_DETAI}",
+                [
+                    'topic_id' => $topic->ID_DETAI,
+                    'topic_name' => $topic->TEN_DETAI,
+                    'supervisor' => $topic->nguoiDexuat->nguoidung->HODEM_VA_TEN ?? 'N/A',
+                    'old_topic_id' => $oldAssignment ? $oldAssignment->ID_DETAI : null // Log thêm ID cũ để tracking
+                ],
+                $nhom->ID_NHOM,
+                'BookCheck'
+            );
+
+            // 6. Gửi thông báo
+            if ($nhom->ID_NHOMTRUONG) {
+                NotificationService::send(
+                    $nhom->ID_NHOMTRUONG,
+                    "Nhóm được gán đề tài mới",
+                    "Giáo vụ đã gán đề tài '{$topic->TEN_DETAI}' cho nhóm của bạn. GVHD: {$topic->nguoiDexuat->nguoidung->HODEM_VA_TEN}.",
+                    'ACADEMIC',
+                    '/projects/my-group'
+                );
+            }
+        });
+
+        return response()->json(['message' => "Đã gán đề tài '{$topic->TEN_DETAI}' cho nhóm thành công."]);
     }
 }

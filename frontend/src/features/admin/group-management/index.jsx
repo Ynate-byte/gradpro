@@ -141,6 +141,11 @@ export default function GroupAdminPage() {
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
+    const currentPlan = useMemo(() => {
+        return allPlans.find(p => String(p.ID_KEHOACH) === String(selectedPlanId));
+    }, [allPlans, selectedPlanId]);
+    const maxMemberLimit = currentPlan?.SO_THANHVIEN_TOIDA || 3;
+
     useEffect(() => {
         getAllPlans()
             .then(data => {
@@ -342,6 +347,7 @@ export default function GroupAdminPage() {
                         setIsOpen={setIsAutoGroupOpen}
                         onSuccess={handleSuccess}
                         planId={selectedPlanId}
+                        maxAllowed={maxMemberLimit}
                     />
                 )}
                 {isCreateGroupOpen && (

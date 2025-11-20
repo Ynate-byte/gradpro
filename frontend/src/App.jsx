@@ -32,6 +32,8 @@ const MyPlansPage = lazy(() => import('./features/student/my-plans/index.jsx'));
 const StudentThesisTopicsPage = lazy(() => import('./features/student/thesis-topics/index.jsx'));
 const MeetingCalendarPage = lazy(() => import('./features/student/my-group/pages/MeetingCalendarPage.jsx'));
 const KanbanPage = lazy(() => import('./features/student/my-group/pages/KanbanPage.jsx'));
+const StudentOverviewDashboard = lazy(() => import('./features/student/dashboard/OverviewDashboard'));
+const StudentDetailDashboard = lazy(() => import('./features/student/dashboard/DetailDashboard'));
 
 // --- Import component Trưởng bộ môn ---
 const TopicReviewerAssignmentPage = lazy(() => import('./features/department-head/topic-reviewer-assignment/index.jsx'));
@@ -159,6 +161,9 @@ function App() {
           {/* Routes dành cho Sinh viên */}
           {isSinhVien && (
             <>
+              <Route path="student/dashboard" element={<StudentOverviewDashboard />} />
+              <Route path="student/dashboard/:planId" element={<StudentDetailDashboard />} />
+              
               <Route path="projects/topics" element={<StudentThesisTopicsPage />} />
               <Route path="projects/my-plans" element={<MyPlansPage />} />
               <Route path="projects/my-group" element={<MyGroupPage />} />

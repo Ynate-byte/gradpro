@@ -8,19 +8,19 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 // === Badge trạng thái (tái sử dụng) ===
 const getStatusBadge = (status) => {
     const statusConfig = {
-        'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700" },
+        'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700 border-gray-200" },
         'Chờ duyệt': { label: "Chờ duyệt", className: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300 border-yellow-200 dark:border-yellow-700" },
         'Đang chỉnh sửa': { label: "Đang chỉnh sửa", className: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 border-blue-200 dark:border-blue-700" },
         'Yêu cầu chỉnh sửa': { label: "Yêu cầu chỉnh sửa", className: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700" },
         'Đã duyệt': { label: "Đã duyệt", className: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700" },
-        'Đã đầy': { label: "Đã đầy", className: "bg-gray-200 text-gray-800" },
-        'Đã khóa': { label: "Đã khóa", className: "bg-red-200 text-red-800" },
+        'Đã đầy': { label: "Đã đầy", className: "bg-gray-200 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border-gray-300" },
+        'Đã khóa': { label: "Đã khóa", className: "bg-red-200 text-red-800 border-red-300" },
         'Từ chối': { label: "Từ chối", className: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300 border-red-200 dark:border-red-700" },
     };
 
     const config = statusConfig[status] || { label: status, className: "bg-gray-100 text-gray-700" };
     return (
-        <Badge variant="outline" className={cn("px-2 py-0.5 text-xs", config.className)}>
+        <Badge variant="outline" className={cn("px-2 py-0.5 text-xs font-medium", config.className)}>
             {config.label}
         </Badge>
     );
@@ -29,7 +29,7 @@ const getStatusBadge = (status) => {
 // === Icon sắp xếp ===
 const SortIndicator = ({ column }) => {
     const sorted = column.getIsSorted();
-    if (!sorted) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground" />;
+    if (!sorted) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground opacity-50" />;
     return sorted === "desc" ? (
         <ArrowDown className="ml-2 h-4 w-4 text-primary" />
     ) : (
@@ -47,7 +47,7 @@ export const getColumns = ({
     onAddSuggestion,
     onViewRegisteredGroups,
     isReviewTab = false,
-    canSubmitApproval = false, // [MỚI] Nhận biến quyền gửi duyệt
+    canSubmitApproval = false, // Nhận biến Feature Flag
 }) => [
     {
         accessorKey: "TEN_DETAI",
@@ -55,20 +55,24 @@ export const getColumns = ({
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-                className="h-8 px-0 font-medium"
+                className="h-8 px-0 font-medium hover:bg-transparent"
             >
                 Tên đề tài
                 <SortIndicator column={column} />
             </Button>
         ),
         cell: ({ row }) => (
-            <button
-                onClick={() => onViewDetails(row.original.ID_DETAI)}
-                className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none focus:underline"
-                title={row.original.TEN_DETAI}
-            >
-                {row.original.TEN_DETAI}
-            </button>
+            <div className="flex flex-col">
+                <button
+                    onClick={() => onViewDetails(row.original.ID_DETAI)}
+                    className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none"
+                    title={row.original.TEN_DETAI}
+                >
+                    {row.original.TEN_DETAI}
+                </button>
+                {/* Hiển thị mã đề tài nhỏ bên dưới nếu cần */}
+                <span className="text-[10px] text-muted-foreground">{row.original.MA_DETAI}</span>
+            </div>
         ),
     },
     {
@@ -101,7 +105,7 @@ export const getColumns = ({
         accessorKey: "chuyennganh.TEN_CHUYENNGANH",
         header: "Chuyên ngành",
         cell: ({ row }) => (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-xs text-muted-foreground max-w-[150px] truncate" title={row.original.chuyennganh?.TEN_CHUYENNGANH}>
                 {row.original.chuyennganh?.TEN_CHUYENNGANH || "N/A"}
             </div>
         ),
@@ -112,7 +116,7 @@ export const getColumns = ({
     },
     {
         accessorKey: "SO_NHOM_HIENTAI",
-        header: "Đã ĐK",
+        header: () => <div className="text-center">Đã ĐK</div>,
         cell: ({ row }) => {
             const current = row.original.SO_NHOM_HIENTAI || 0;
             const max = row.original.SO_NHOM_TOIDA || 0;
@@ -122,7 +126,7 @@ export const getColumns = ({
                     <span className={cn(isFull ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
                         {current}
                     </span>
-                    <span className="text-muted-foreground"> / {max}</span>
+                    <span className="text-muted-foreground text-xs"> / {max}</span>
                 </div>
             );
         },
@@ -132,7 +136,6 @@ export const getColumns = ({
         header: "Trạng thái góp ý",
         cell: ({ row }) => {
             const topic = row.original;
-            // [SỬA LỖI] Dùng đúng tên thuộc tính: goiyDetai
             const hasContributed = topic.goiyDetai?.some(g => g.ID_GIANGVIEN === currentUserId);
 
             return (
@@ -154,25 +157,33 @@ export const getColumns = ({
         id: "actions",
         cell: ({ row }) => {
             const topic = row.original;
-            // Logic hiển thị nút Gửi duyệt:
-            // 1. Phải là Nháp hoặc Đang chỉnh sửa
-            // 2. Phải là người tạo (đã check trong component cha, ở đây check state)
-            const showSubmit = (topic.TRANGTHAI === 'Nháp' || topic.TRANGTHAI === 'Đang chỉnh sửa');
+            
+            // Logic hiển thị nút Gửi duyệt (Quick Action)
+            // Cho phép gửi khi: Nháp, Yêu cầu chỉnh sửa, HOẶC Đang chỉnh sửa
+            const showSubmit = ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI) && topic.ID_NGUOI_DEXUAT === currentUserId;
 
             return (
-                <div className="flex items-center gap-1">
-                    {/* [MỚI] Nút gửi duyệt nhanh với Tooltip kiểm tra quyền */}
+                <div className="flex items-center gap-1 justify-end">
+                    {/* Nút gửi duyệt nhanh (Quick Action) */}
                     {showSubmit && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    {/* Dùng span để wrap button disabled để tooltip vẫn hiện */}
-                                    <span tabIndex={0}>
+                                    {/* Wrap trong span để tooltip hoạt động ngay cả khi button disabled */}
+                                    <span tabIndex={-1} className="inline-block">
                                         <Button
                                             size="icon"
                                             variant="ghost"
-                                            className={cn("h-8 w-8", !canSubmitApproval ? "opacity-50 cursor-not-allowed" : "text-blue-600 hover:text-blue-700 hover:bg-blue-50")}
-                                            onClick={() => canSubmitApproval && onSubmit(topic.ID_DETAI)}
+                                            className={cn(
+                                                "h-8 w-8",
+                                                !canSubmitApproval 
+                                                    ? "opacity-50 cursor-not-allowed text-muted-foreground" 
+                                                    : "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                            )}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (canSubmitApproval) onSubmit(topic.ID_DETAI);
+                                            }}
                                             disabled={!canSubmitApproval}
                                         >
                                             <Send className="h-4 w-4" />
@@ -180,7 +191,7 @@ export const getColumns = ({
                                     </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    <p>{canSubmitApproval ? "Gửi duyệt đề tài" : "Hết thời gian gửi duyệt"}</p>
+                                    <p>{canSubmitApproval ? "Gửi duyệt đề tài ngay" : "Hết thời gian gửi duyệt"}</p>
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
@@ -195,7 +206,7 @@ export const getColumns = ({
                         onViewDetails={onViewDetails}
                         onAddSuggestion={onAddSuggestion}
                         onViewRegisteredGroups={onViewRegisteredGroups}
-                        // canSubmitApproval={canSubmitApproval} // Truyền tiếp nếu cần dùng trong dropdown
+                        canSubmitApproval={canSubmitApproval}
                     />
                 </div>
             );

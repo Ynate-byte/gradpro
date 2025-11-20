@@ -9,6 +9,7 @@ use App\Models\Nhom;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class HistoryController extends Controller
 {

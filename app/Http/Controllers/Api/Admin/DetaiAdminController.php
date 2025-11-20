@@ -64,7 +64,14 @@ class DetaiAdminController extends Controller
             'nguoiDexuat.nguoidung',
             'chuyennganh',
             'kehoachKhoaluan',
-            'goiyDetai.nguoiGoiy.nguoidung',
+            
+            'goiyDetai' => function ($query) {
+                $query->with([
+                    'giangvien.nguoidung', 
+                    'phanhois.giangvien.nguoidung'
+                ])->orderBy('NGAYTAO', 'asc');
+            },
+
             'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung'
         ])->findOrFail($id);
 

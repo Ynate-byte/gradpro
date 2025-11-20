@@ -67,10 +67,11 @@ export function AppSidebar() {
                     icon: LayoutDashboard,
                     href: "/",
                     subItems: [
-                        { href: "/", title: "Trang chủ" },
+                        ...(isSinhVien ? [
+                             { href: "/student/dashboard", title: "Bảng điều khiển (SV)" }
+                        ] : []),
                         { href: "/notifications", title: "Thông báo" },
                         { href: "/history", title: "Lịch sử hoạt động" }, 
-                        { href: "/starred", title: "Đã lưu" },
                     ],
                 },
                 { title: "Tin tức", href: "/news", icon: Newspaper },
@@ -78,6 +79,7 @@ export function AppSidebar() {
                     title: "Đồ án",
                     icon: BookCopy,
                     href: "/projects",
+                    hidden: isAdmin,
                     subItems: [
                         { href: "/projects/topics", title: "Đề tài" },
                         // Menu cho Sinh viên

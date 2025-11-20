@@ -211,7 +211,7 @@ export default function AuthenticatedLayout() {
     }, [location.pathname]);
 
     // --- CHECK QUYỀN HẠN ---
-    const isLecturerOrHigher = ['Giảng viên', 'Trưởng khoa', 'Giáo vụ', 'Admin'].includes(user?.vaitro?.TEN_VAITRO);
+    const isLecturerOrHigher = ['Giảng viên', 'Trưởng khoa', 'Giáo vụ'].includes(user?.vaitro?.TEN_VAITRO);
 
     // --- RENDER ---
     if (authLoading) {

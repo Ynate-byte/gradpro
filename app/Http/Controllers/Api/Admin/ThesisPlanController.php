@@ -428,8 +428,7 @@ class ThesisPlanController extends Controller
     {
         $plans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đã phê duyệt', 'Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành'])
             ->orderBy('NGAYTAO', 'desc')
-            ->get(['ID_KEHOACH', 'TEN_DOT', 'NAMHOC', 'TRANGTHAI', 'KHOAHOC', 'NGAYTAO']);
-
+            ->get(['ID_KEHOACH', 'TEN_DOT', 'NAMHOC', 'TRANGTHAI', 'KHOAHOC', 'NGAYTAO', 'SO_THANHVIEN_TOIDA']);
         return response()->json($plans);
     }
 

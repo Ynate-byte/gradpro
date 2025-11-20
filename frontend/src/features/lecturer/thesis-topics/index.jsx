@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Plus, Eye, Edit, Trash2, Send, BookOpen, Loader2, Users, CheckCircle, AlertTriangle, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -12,7 +11,7 @@ import SuggestionDialog from './components/SuggestionDialog';
 import RegisteredGroupsDialog from './components/RegisteredGroupsDialog';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
-import { getThesisPlanById } from '@/api/thesisPlanService'; // [THÊM] API lấy chi tiết plan
+import { getThesisPlanById } from '@/api/thesisPlanService'; 
 import axios from '@/api/axiosConfig';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -22,7 +21,9 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import { getChuyenNganhs } from '@/api/userService';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag'; // [THÊM] Hook kiểm tra quyền
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+
+// ... (Giữ nguyên phần Component StatCard, các variants và columnVisibility như cũ)
 
 const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColorClass }) => (
     <motion.div
@@ -123,7 +124,7 @@ const ThesisTopicsPage = () => {
     const [contributionFilter, setContributionFilter] = useState('all');
 
     const [selectedPlan, setSelectedPlan] = useState('');
-    const [currentPlanData, setCurrentPlanData] = useState(null); // [THÊM] State lưu full plan data
+    const [currentPlanData, setCurrentPlanData] = useState(null); 
     const [plans, setPlans] = useState([]);
     const [specializations, setSpecializations] = useState([]);
     const [myQuota, setMyQuota] = useState(null);
@@ -132,7 +133,7 @@ const ThesisTopicsPage = () => {
     const [sorting, setSorting] = useState([{ id: 'TEN_DETAI', desc: false }]);
     const [rowSelection, setRowSelection] = useState({});
 
-    // [THÊM] Tính toán quyền gửi duyệt dựa trên settings
+    // Tính toán quyền gửi duyệt dựa trên settings
     const canSubmitApproval = useFeatureFlag(currentPlanData, 'GV_RA_DE');
 
     useEffect(() => {
@@ -183,10 +184,9 @@ const ThesisTopicsPage = () => {
         setLoadingStats(true);
         try {
             const params = { plan_id: planId };
-            // [SỬA] Đảm bảo chỉ gọi API 1 lần để lấy TẤT CẢ đề tài trong kế hoạch (API /detai KHÔNG NÊN có lecturer_id filter ở đây)
             const [topicsRes, supervisedRes, quotaRes, planDetailRes] = await Promise.all([
-                thesisTopicService.getTopics(params), // Giả định API này trả về TẤT CẢ đề tài đã được duyệt trong plan
-                thesisTopicService.getSupervisedTopics(params), // Chỉ dùng cho stats (nhóm đã nhận HD)
+                thesisTopicService.getTopics(params), 
+                thesisTopicService.getSupervisedTopics(params),
                 lecturerQuotaService.getMyQuota(params),
                 getThesisPlanById(planId)
             ]);
@@ -246,7 +246,6 @@ const ThesisTopicsPage = () => {
             loadPlanDependentData(selectedPlan);
         } catch (error) {
             console.error('Error submitting for approval:', error);
-            // [THÊM] Hiển thị lỗi chi tiết từ server nếu có (VD: 403 Forbidden)
             toast.error(error.response?.data?.message || "Lỗi khi gửi duyệt.");
             throw error;
         }
@@ -280,7 +279,7 @@ const ThesisTopicsPage = () => {
     };
 
     const processedData = useMemo(() => {
-        let filtered = topics; // Bắt đầu với TẤT CẢ đề tài
+        let filtered = topics; 
 
         if (activeTab === 'my') {
             filtered = filtered.filter(t => t.ID_NGUOI_DEXUAT === user?.giangvien?.ID_GIANGVIEN);
@@ -335,27 +334,25 @@ const ThesisTopicsPage = () => {
             (pagination.pageIndex + 1) * pagination.pageSize
         );
 
-        return { pagedData, pageCount };
-    }, [topics, activeTab, debouncedSearchTerm, columnFilters, sorting, pagination, user]);
+        // [SỬA] Trả về thêm allFiltered để dùng cho logic điều hướng
+        return { pagedData, pageCount, allFiltered: filtered }; 
+    }, [topics, activeTab, debouncedSearchTerm, columnFilters, sorting, pagination, user, contributionFilter]);
 
     const processedReviewData = useMemo(() => {
-        if (!topics) return { pagedData: [], pageCount: 0 };
+        if (!topics) return { pagedData: [], pageCount: 0, allFiltered: [] };
 
-        // [SỬA LỖI] Lọc các đề tài mà GV hiện tại được phân công góp ý
         let filtered = topics.filter(t =>
             t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
         );
 
-        if (filtered.length === 0) return { pagedData: [], pageCount: 0 };
+        if (filtered.length === 0) return { pagedData: [], pageCount: 0, allFiltered: [] };
 
         if (contributionFilter === 'contributed') {
             filtered = filtered.filter(t =>
-                // [FIX] Sử dụng đúng tên thuộc tính goiyDetai
                 t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
             );
         } else if (contributionFilter === 'not_contributed') {
             filtered = filtered.filter(t =>
-                // [FIX] Sử dụng đúng tên thuộc tính goiyDetai
                 !t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
             );
         }
@@ -409,7 +406,7 @@ const ThesisTopicsPage = () => {
             (pagination.pageIndex + 1) * pagination.pageSize
         );
 
-        return { pagedData, pageCount };
+        return { pagedData, pageCount, allFiltered: filtered }; 
     }, [topics, debouncedSearchTerm, columnFilters, sorting, pagination, user, contributionFilter]);
 
     useEffect(() => {
@@ -422,6 +419,29 @@ const ThesisTopicsPage = () => {
         }
     }, [activeTab]);
 
+    // --- [THÊM MỚI] LOGIC ĐIỀU HƯỚNG (NEXT/PREV) ---
+    // Xác định danh sách hiện tại dựa trên tab đang active
+    const currentFilteredList = (activeTab === 'review' ? processedReviewData.allFiltered : processedData.allFiltered) || [];
+    const currentIndex = currentFilteredList.findIndex(t => t.ID_DETAI === selectedTopicId);
+    
+    const hasNext = currentIndex !== -1 && currentIndex < currentFilteredList.length - 1;
+    const hasPrevious = currentIndex > 0;
+
+    const handleNextTopic = () => {
+        if (hasNext) {
+            const nextTopic = currentFilteredList[currentIndex + 1];
+            setSelectedTopicId(nextTopic.ID_DETAI);
+        }
+    };
+
+    const handlePreviousTopic = () => {
+        if (hasPrevious) {
+            const prevTopic = currentFilteredList[currentIndex - 1];
+            setSelectedTopicId(prevTopic.ID_DETAI);
+        }
+    };
+    // ---------------------------------------------------
+
     const columns = useMemo(() => getColumns({
         currentUserId: user?.giangvien?.ID_GIANGVIEN,
         onEdit: (topic) => { setEditingTopic(topic); setShowCreateDialog(true); },
@@ -431,7 +451,7 @@ const ThesisTopicsPage = () => {
         onAddSuggestion: handleAddSuggestion,
         onViewRegisteredGroups: handleViewRegisteredGroups,
         isReviewTab: activeTab === 'review',
-        canSubmitApproval: canSubmitApproval, // [THÊM] Truyền biến này vào getColumns
+        canSubmitApproval: canSubmitApproval,
     }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic, activeTab, canSubmitApproval]);
 
     return (
@@ -666,6 +686,16 @@ const ThesisTopicsPage = () => {
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}
                 topicId={selectedTopicId}
+
+                showAdminActions={false} 
+                onApprove={null}
+                onReject={null}
+                onRequestEdit={null}
+
+                onNext={handleNextTopic}
+                onPrevious={handlePreviousTopic}
+                hasNext={hasNext}
+                hasPrevious={hasPrevious}
             />
 
             <SuggestionDialog
