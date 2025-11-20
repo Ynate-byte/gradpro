@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'; // [MỚI] Import useReducedMotion
 import { getColumns } from './components/columns';
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getUsers, getChuyenNganhs, getKhoaBomons, getPositions } from '@/api/userService';
@@ -11,129 +11,112 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Users, GraduationCap, Briefcase, ShieldCheck, Circle, Loader2 } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
+import { useTheme } from "@/components/theme-provider"; // [MỚI] Để lấy setting reduceMotion thủ công nếu cần
 
-// Component StatCard với animation mượt mà
-const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot }) => (
-    <motion.div 
-        className="bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1"
-        whileHover={{ y: -4 }}
-        transition={{ type: "spring", stiffness: 300, damping: 20 }}
-    >
+// Component StatCard (Đã tối ưu cho Reduce Motion)
+const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot }) => {
+    const shouldReduceMotion = useReducedMotion();
+
+    return (
         <motion.div 
-            className={cn("p-3 rounded-lg", iconBgClass)}
-            initial={false}
-            animate={{ 
-                scale: value === 'loading' ? [1, 1.08, 1] : 1,
-                rotate: value === 'loading' ? [0, 5, -5, 0] : 0
-            }}
-            transition={{ 
-                duration: 2, 
-                repeat: value === 'loading' ? Infinity : 0,
-                ease: "easeInOut"
-            }}
+            className="bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1"
+            whileHover={shouldReduceMotion ? {} : { y: -4 }} // Tắt hover effect
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
-            <Icon className={cn("h-6 w-6", iconColorClass)} />
-        </motion.div>
-        <div className="flex-1">
-            <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-            <div className="flex items-center gap-2 h-8 overflow-hidden">
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={value}
-                        initial={{ opacity: 0, y: 20, scale: 0.8 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -20, scale: 0.8 }}
-                        transition={{ duration: 0.4, ease: "easeOut" }}
-                        className="flex items-center gap-2"
+            <motion.div 
+                className={cn("p-3 rounded-lg", iconBgClass)}
+                initial={false}
+                animate={shouldReduceMotion ? {} : { 
+                    scale: value === 'loading' ? [1, 1.08, 1] : 1,
+                    rotate: value === 'loading' ? [0, 5, -5, 0] : 0
+                }}
+                transition={{ 
+                    duration: 2, 
+                    repeat: value === 'loading' ? Infinity : 0,
+                    ease: "easeInOut"
+                }}
+            >
+                <Icon className={cn("h-6 w-6", iconColorClass)} />
+            </motion.div>
+            <div className="flex-1">
+                <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
+                <div className="flex items-center gap-2 h-8 overflow-hidden">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={value}
+                            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 20, scale: 0.8 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -20, scale: 0.8 }}
+                            transition={{ duration: shouldReduceMotion ? 0 : 0.4, ease: "easeOut" }}
+                            className="flex items-center gap-2"
+                        >
+                            {value === 'loading' ? (
+                                <Loader2 className={cn("h-6 w-6 text-muted-foreground", shouldReduceMotion ? "" : "animate-spin")}/>
+                            ) : (
+                                <>
+                                    <p className="text-2xl font-bold">{value}</p>
+                                    {hasStatusDot && (
+                                        <motion.div
+                                            initial={{ scale: 0 }}
+                                            animate={{ scale: 1 }}
+                                            transition={{ delay: 0.2, type: "spring" }}
+                                        >
+                                            <Circle className={cn("h-2.5 w-2.5 fill-green-500 text-green-500", !shouldReduceMotion && "animate-pulse")} />
+                                        </motion.div>
+                                    )}
+                                </>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
+                {description && (
+                    <motion.p 
+                        className="text-xs text-muted-foreground mt-0.5"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: shouldReduceMotion ? 0 : 0.1 }}
                     >
-                        {value === 'loading' ? (
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"/>
-                        ) : (
-                            <>
-                                <p className="text-2xl font-bold">{value}</p>
-                                {hasStatusDot && (
-                                    <motion.div
-                                        initial={{ scale: 0 }}
-                                        animate={{ scale: 1 }}
-                                        transition={{ delay: 0.2, type: "spring" }}
-                                    >
-                                        <Circle className="h-2.5 w-2.5 fill-green-500 text-green-500 animate-pulse" />
-                                    </motion.div>
-                                )}
-                            </>
-                        )}
-                    </motion.div>
-                </AnimatePresence>
+                        {description}
+                    </motion.p>
+                )}
             </div>
-            {description && (
-                <motion.p 
-                    className="text-xs text-muted-foreground mt-0.5"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.1 }}
-                >
-                    {description}
-                </motion.p>
-            )}
-        </div>
-    </motion.div>
-);
-
-// Animation variants nâng cao
-const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-        opacity: 1,
-        transition: {
-            staggerChildren: 0.1,
-            delayChildren: 0.05
-        }
-    }
+        </motion.div>
+    );
 };
 
-const itemVariants = {
-    hidden: { 
-        y: 30, 
-        opacity: 0,
-        scale: 0.95
-    },
-    visible: { 
-        y: 0, 
-        opacity: 1,
-        scale: 1,
-        transition: {
-            type: "spring",
-            stiffness: 100,
-            damping: 15
-        }
+// Animation variants (Đã tối ưu)
+const getVariants = (shouldReduce) => {
+    if (shouldReduce) {
+        return {
+            container: { visible: { opacity: 1 } },
+            item: { visible: { opacity: 1, y: 0, scale: 1 } },
+            table: { visible: { opacity: 1, y: 0, scale: 1 } }
+        };
     }
-};
-
-const tableVariants = {
-    hidden: { 
-        opacity: 0, 
-        y: 30,
-        scale: 0.98
-    },
-    visible: { 
-        opacity: 1, 
-        y: 0,
-        scale: 1,
-        transition: {
-            type: "spring",
-            stiffness: 80,
-            damping: 18,
-            duration: 0.5
+    return {
+        container: {
+            hidden: { opacity: 0 },
+            visible: {
+                opacity: 1,
+                transition: { staggerChildren: 0.1, delayChildren: 0.05 }
+            }
+        },
+        item: {
+            hidden: { y: 30, opacity: 0, scale: 0.95 },
+            visible: { 
+                y: 0, opacity: 1, scale: 1,
+                transition: { type: "spring", stiffness: 100, damping: 15 }
+            }
+        },
+        table: {
+            hidden: { opacity: 0, y: 30, scale: 0.98 },
+            visible: { 
+                opacity: 1, y: 0, scale: 1,
+                transition: { type: "spring", stiffness: 80, damping: 18, duration: 0.5 }
+            },
+            exit: { opacity: 0, y: -30, scale: 0.98, transition: { duration: 0.3 } }
         }
-    },
-    exit: { 
-        opacity: 0, 
-        y: -30,
-        scale: 0.98,
-        transition: {
-            duration: 0.3
-        }
-    }
+    };
 };
 
 // Cấu hình ẩn cột
@@ -167,6 +150,15 @@ export default function UserManagementPage() {
     const [rowSelection, setRowSelection] = useState({});
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
+    // [MỚI] Kiểm tra Reduce Motion
+    const shouldReduceMotion = useReducedMotion();
+    // Hoặc lấy từ ThemeContext nếu muốn đồng bộ chính xác với nút switch trong settings
+    const { reduceMotion } = useTheme(); 
+    // Ưu tiên setting của App hơn setting hệ điều hành
+    const isReduced = reduceMotion || shouldReduceMotion;
+
+    const variants = useMemo(() => getVariants(isReduced), [isReduced]);
+
     // Fetch Chuyên ngành, Khoa/Bộ môn và Chức vụ
     useEffect(() => {
         Promise.all([
@@ -176,7 +168,6 @@ export default function UserManagementPage() {
         ]).then(([chuyenNganhs, khoaBomons, positions]) => {
             setChuyenNganhOptions(chuyenNganhs);
             setKhoaBomonOptions(khoaBomons);
-            // Xử lý dữ liệu trả về của positions
             setPositionOptions(positions.map(p => ({ label: p.TEN_CHUCVU, value: String(p.ID_CHUCVU) })));
         })
         .catch(() => {
@@ -191,10 +182,7 @@ export default function UserManagementPage() {
         }
         setLoading(true);
 
-        // Lọc theo tên vai trò chính (TEN_VAITRO)
         let roleFilter = activeTab === "Tất cả" ? undefined : activeTab;
-
-        // Lọc theo ID chức vụ
         const positionFilter = columnFilters.find(f => f.id === 'chuc_vu_id')?.value; 
         
         const params = {
@@ -239,32 +227,18 @@ export default function UserManagementPage() {
         onViewDetails: handleOpenViewSheet
     }), [handleFormSuccess]);
 
-    // Reset phân trang khi filter/search/tab thay đổi
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters, debouncedSearchTerm]);
 
-    // Thống kê động từ dữ liệu
     const totalStudents = useMemo(() => loadingStats ? 'loading' : data.filter(u => u.vaitro.TEN_VAITRO === 'Sinh viên').length, [data, loadingStats]);
     const totalLecturers = useMemo(() => loadingStats ? 'loading' : data.filter(u => ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(u.vaitro.TEN_VAITRO)).length, [data, loadingStats]);
     const activeUsers = useMemo(() => loadingStats ? 'loading' : data.filter(u => u.TRANGTHAI_KICHHOAT).length, [data, loadingStats]);
 
-    // Options cho bộ lọc
-    const chuyenNganhFilterOptions = useMemo(() =>
-        (chuyenNganhOptions || []).map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) })),
-        [chuyenNganhOptions]
-    );
-    const khoaBomonFilterOptions = useMemo(() =>
-        (khoaBomonOptions || []).map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) })),
-        [khoaBomonOptions]
-    );
-    // Options cho bộ lọc chức vụ
-    const positionFilterOptions = useMemo(() =>
-        (positionOptions || []).map(p => ({ label: p.label, value: p.value })),
-        [positionOptions]
-    );
+    const chuyenNganhFilterOptions = useMemo(() => (chuyenNganhOptions || []).map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) })), [chuyenNganhOptions]);
+    const khoaBomonFilterOptions = useMemo(() => (khoaBomonOptions || []).map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) })), [khoaBomonOptions]);
+    const positionFilterOptions = useMemo(() => (positionOptions || []).map(p => ({ label: p.label, value: p.value })), [positionOptions]);
 
-    // Hàm render DataTable cho các tab với smooth reveal animation
     const renderDataTable = (tabName) => {
         const [tableHeight, setTableHeight] = useState('auto');
         const tableRef = React.useRef(null);
@@ -281,7 +255,7 @@ export default function UserManagementPage() {
                 initial={false}
                 animate={{ height: tableHeight }}
                 transition={{
-                    duration: 0.5,
+                    duration: isReduced ? 0 : 0.5, // Tắt animation height
                     ease: [0.4, 0, 0.2, 1]
                 }}
                 style={{ overflow: 'hidden' }}
@@ -305,10 +279,8 @@ export default function UserManagementPage() {
                         chuyenNganhFilterOptions={(tabName === 'Tất cả' || tabName === 'Sinh viên') ? chuyenNganhFilterOptions : undefined}
                         khoaBomonFilterColumnId="khoa_bomon_id"
                         khoaBomonFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? khoaBomonFilterOptions : undefined}
-                        // Thêm bộ lọc chức vụ
                         chucVuFilterColumnId="chuc_vu_id" 
                         chucVuFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? positionFilterOptions : undefined}
-                        // End bộ lọc chức vụ
                         searchColumnId="HODEM_VA_TEN"
                         searchPlaceholder="Tìm theo tên, email, mã..."
                         addBtnText="Thêm người dùng"
@@ -330,18 +302,18 @@ export default function UserManagementPage() {
         <>
             <motion.div 
                 className="flex-1 space-y-6 p-4 md:p-8"
-                initial={{ opacity: 0 }}
+                initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.3 }}
+                transition={{ duration: isReduced ? 0 : 0.3 }}
             >
                 {/* Stats Cards */}
                 <motion.div
                     className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                    variants={containerVariants}
+                    variants={variants.container}
                     initial="hidden"
                     animate="visible"
                 >
-                    <motion.div variants={itemVariants}>
+                    <motion.div variants={variants.item}>
                         <StatCard 
                             icon={Users} 
                             title="Tổng số" 
@@ -351,7 +323,7 @@ export default function UserManagementPage() {
                             iconColorClass="text-blue-600 dark:text-blue-400" 
                         />
                     </motion.div>
-                    <motion.div variants={itemVariants}>
+                    <motion.div variants={variants.item}>
                         <StatCard 
                             icon={GraduationCap} 
                             title="Sinh viên" 
@@ -361,7 +333,7 @@ export default function UserManagementPage() {
                             iconColorClass="text-sky-600 dark:text-sky-400"
                         />
                     </motion.div>
-                    <motion.div variants={itemVariants}>
+                    <motion.div variants={variants.item}>
                         <StatCard 
                             icon={Briefcase} 
                             title="Giảng viên & CV" 
@@ -371,7 +343,7 @@ export default function UserManagementPage() {
                             iconColorClass="text-indigo-600 dark:text-indigo-400"
                         />
                     </motion.div>
-                    <motion.div variants={itemVariants}>
+                    <motion.div variants={variants.item}>
                         <StatCard 
                             icon={ShieldCheck} 
                             title="Đang hoạt động" 
@@ -386,27 +358,27 @@ export default function UserManagementPage() {
 
                 {/* Tabs và DataTable */}
                 <motion.div
-                    initial={{ y: 30, opacity: 0 }}
+                    initial={isReduced ? { y: 0, opacity: 1 } : { y: 30, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     transition={{ 
                         duration: 0.5, 
-                        delay: 0.3,
+                        delay: isReduced ? 0 : 0.3,
                         type: "spring",
                         stiffness: 100
                     }}
                 >
                     <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                         <motion.div
-                            initial={{ x: -20, opacity: 0 }}
+                            initial={isReduced ? { x: 0, opacity: 1 } : { x: -20, opacity: 0 }}
                             animate={{ x: 0, opacity: 1 }}
-                            transition={{ delay: 0.4 }}
+                            transition={{ delay: isReduced ? 0 : 0.4 }}
                         >
-                            <TabsList className="transition-all duration-300">
-                                <TabsTrigger value="Tất cả" className="transition-all duration-200">Tất cả</TabsTrigger>
-                                <TabsTrigger value="Sinh viên" className="transition-all duration-200">Sinh viên</TabsTrigger>
-                                <TabsTrigger value="Giảng viên" className="transition-all duration-200">Giảng viên</TabsTrigger>
-                                <TabsTrigger value="Giáo vụ" className="transition-all duration-200">Giáo vụ</TabsTrigger>
-                                <TabsTrigger value="Trưởng khoa" className="transition-all duration-200">Trưởng khoa</TabsTrigger>
+                            <TabsList className={cn("transition-all duration-300", isReduced && "transition-none")}>
+                                <TabsTrigger value="Tất cả" className={cn("transition-all duration-200", isReduced && "transition-none")}>Tất cả</TabsTrigger>
+                                <TabsTrigger value="Sinh viên" className={cn("transition-all duration-200", isReduced && "transition-none")}>Sinh viên</TabsTrigger>
+                                <TabsTrigger value="Giảng viên" className={cn("transition-all duration-200", isReduced && "transition-none")}>Giảng viên</TabsTrigger>
+                                <TabsTrigger value="Giáo vụ" className={cn("transition-all duration-200", isReduced && "transition-none")}>Giáo vụ</TabsTrigger>
+                                <TabsTrigger value="Trưởng khoa" className={cn("transition-all duration-200", isReduced && "transition-none")}>Trưởng khoa</TabsTrigger>
                             </TabsList>
                         </motion.div>
                         <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
@@ -416,7 +388,7 @@ export default function UserManagementPage() {
                 </motion.div>
             </motion.div>
 
-            {/* Dialogs và Sheet với animation */}
+            {/* Dialogs và Sheet */}
             <AnimatePresence>
                 {isDialogOpen && (
                     <UserFormDialog

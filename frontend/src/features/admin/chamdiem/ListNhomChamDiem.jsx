@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"; // [MỚI] Import useReducedMotion
 import { getGroups } from "@/api/adminGroupService"; 
 import { getAllPlans } from "@/api/thesisPlanService"; 
 import { DataTable } from "@/components/shared/data-table/DataTable";
@@ -21,36 +21,31 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 
 import StatCard from "@/components/shared/StatCard"; 
+import { useTheme } from "@/components/theme-provider"; // [MỚI] Import useTheme
 
-// Biến thể cho container chính (các thẻ thống kê)
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
+// [MỚI] Hàm tạo variants động
+const getVariants = (shouldReduce) => {
+    if (shouldReduce) {
+        return {
+            container: { visible: { opacity: 1 } },
+            item: { visible: { opacity: 1, y: 0 } },
+            table: { visible: { opacity: 1, y: 0 } }
+        };
     }
-  }
-};
-
-// Biến thể cho từng thẻ thống kê
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: { 
-    y: 0, 
-    opacity: 1,
-    transition: { type: "spring", stiffness: 100 }
-  }
-};
-
-// Biến thể cho bảng (fade in và slide up)
-const tableVariants = {
-  hidden: { opacity: 0, y: 30 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, delay: 0.2, ease: "easeOut" }
-  }
+    return {
+        container: {
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+        },
+        item: {
+            hidden: { y: 20, opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } }
+        },
+        table: {
+            hidden: { opacity: 0, y: 30 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.5, delay: 0.2, ease: "easeOut" } }
+        }
+    };
 };
 
 // Định nghĩa các cột cho DataTable
@@ -136,6 +131,13 @@ const ListNhomChamDiem = () => {
   // State quản lý tìm kiếm
   const [searchTerm, setSearchTerm] = useState("");
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // [MỚI] Kiểm tra Reduce Motion
+  const shouldReduceMotion = useReducedMotion();
+  const { reduceMotion } = useTheme();
+  const isReduced = reduceMotion || shouldReduceMotion;
+  
+  const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
   // Lấy danh sách Kế hoạch
   const { data: plansData, isLoading: isLoadingPlans } = useQuery({
@@ -269,16 +271,26 @@ const ListNhomChamDiem = () => {
   // Memoize columns để tránh re-render không cần thiết
   const columns = useMemo(() => getColumns(handleGradeClick), [handleGradeClick]);
 
+  const [tableHeight, setTableHeight] = useState('auto');
+  const tableRef = useRef(null);
+
+  useLayoutEffect(() => {
+    if (tableRef.current) {
+      const height = tableRef.current.getBoundingClientRect().height;
+      setTableHeight(height);
+    }
+  }, [data, isLoadingGroups, pagination]);
+
   return (
-    <div className="p-4 md:p-8 space-y-6">      
+    <div className="p-4 md:p-8 space-y-6 h-full flex flex-col">       
       {/* Thẻ Thống Kê */}
       <motion.div
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-        variants={containerVariants}
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0"
+        variants={variants.container}
         initial="hidden"
         animate="visible"
       >
-        <motion.div variants={itemVariants}>
+        <motion.div variants={variants.item}>
           <StatCard 
             icon={Users} 
             title="Tổng số nhóm" 
@@ -289,7 +301,7 @@ const ListNhomChamDiem = () => {
             onClick={() => handleStatCardClick(null)} // Click để xóa lọc
           />
         </motion.div>
-        <motion.div variants={itemVariants}>
+        <motion.div variants={variants.item}>
           <StatCard 
             icon={CheckCircle} 
             title="Đã hoàn thành" 
@@ -300,7 +312,7 @@ const ListNhomChamDiem = () => {
             onClick={() => handleStatCardClick('Đã hoàn thành')}
           />
         </motion.div>
-        <motion.div variants={itemVariants}>
+        <motion.div variants={variants.item}>
           <StatCard 
             icon={BookMarked} 
             title="Đang thực hiện" 
@@ -311,7 +323,7 @@ const ListNhomChamDiem = () => {
             onClick={() => handleStatCardClick('Đang thực hiện')}
           />
         </motion.div>
-        <motion.div variants={itemVariants}>
+        <motion.div variants={variants.item}>
           <StatCard 
             icon={FileWarning} 
             title="Chưa có đề tài" 
@@ -325,7 +337,7 @@ const ListNhomChamDiem = () => {
       </motion.div>
 
       {/* Bộ lọc Kế hoạch */}
-      <div className="flex justify-start">
+      <div className="flex justify-start flex-shrink-0">
         <div className="max-w-xs w-full space-y-2">
           <Label htmlFor="plan-select" className="text-sm font-medium">Lọc theo Kế hoạch</Label>
           <Select
@@ -351,31 +363,37 @@ const ListNhomChamDiem = () => {
 
       {/* Bảng Dữ liệu */}
       <motion.div
-        className="flex-grow min-h-0"
-        variants={tableVariants}
-        initial="hidden"
-        animate="visible"
+        initial={false}
+        animate={{ height: tableHeight }}
+        transition={{
+            duration: isReduced ? 0 : 0.5,
+            ease: [0.4, 0, 0.2, 1]
+        }}
+        style={{ overflow: 'hidden' }}
+        className="flex-grow"
       >
-        <DataTable
-          columns={columns}
-          data={data}
-          pageCount={pageCount}
-          loading={isLoading}
-          pagination={pagination}
-          setPagination={setPagination}
-          columnFilters={columnFilters}
-          setColumnFilters={setColumnFilters}
-          sorting={sorting}
-          setSorting={setSorting}
-          
-          statusColumnId="trang_thai_cham"
-          statusOptions={statusOptions}
-          
-          searchColumnId="search"
-          searchPlaceholder="Tìm tên nhóm, đề tài..."
-          searchTerm={searchTerm}
-          onSearchChange={setSearchTerm}
-        />
+        <div ref={tableRef}>
+            <DataTable
+            columns={columns}
+            data={data}
+            pageCount={pageCount}
+            loading={isLoading}
+            pagination={pagination}
+            setPagination={setPagination}
+            columnFilters={columnFilters}
+            setColumnFilters={setColumnFilters}
+            sorting={sorting}
+            setSorting={setSorting}
+            
+            statusColumnId="trang_thai_cham"
+            statusOptions={statusOptions}
+            
+            searchColumnId="search"
+            searchPlaceholder="Tìm tên nhóm, đề tài..."
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+            />
+        </div>
       </motion.div>
     </div>
   );

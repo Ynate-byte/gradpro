@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion"; // [MỚI] Import useReducedMotion
 import axiosClient from "@/api/axiosConfig";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,9 +50,8 @@ import { cn } from "@/lib/utils";
 import * as hoiDongService from "@/api/adminHoiDongService";
 import { CreateHoiDongDialog } from "./CreateHoiDong";
 import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
-
-// [SỬA] Import StatCard mới
 import StatCard from "@/components/shared/StatCard";
+import { useTheme } from "@/components/theme-provider"; // [MỚI] Import useTheme
 
 const QUERY_KEY_HOIDONG = "adminHoiDong";
 const QUERY_KEY_STATS = "hoiDongStats";
@@ -69,126 +68,118 @@ const chamDiemOptions = [
   { label: "Chưa phân bổ nhóm", value: "chua_phan_bo" },
 ];
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1,
-      delayChildren: 0.05
+// [MỚI] Hàm tạo variants động dựa trên isReduced
+const getVariants = (shouldReduce) => {
+    if (shouldReduce) {
+        return {
+            container: { visible: { opacity: 1 } },
+            item: { visible: { opacity: 1, y: 0, scale: 1 } }
+        };
     }
-  }
+    return {
+        container: {
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.05 } }
+        },
+        item: {
+            hidden: { y: 30, opacity: 0, scale: 0.95 },
+            visible: { y: 0, opacity: 1, scale: 1, transition: { type: "spring", stiffness: 100, damping: 15 } }
+        }
+    };
 };
 
-const itemVariants = {
-  hidden: { 
-    y: 30, 
-    opacity: 0,
-    scale: 0.95
-  },
-  visible: { 
-    y: 0, 
-    opacity: 1,
-    scale: 1,
-    transition: {
-      type: "spring",
-      stiffness: 100,
-      damping: 15
-    }
-  }
-};
-
+// ... (Phần EditableTextCell giữ nguyên) ...
 const EditableTextCell = ({ getValue, row, colId }) => {
-  const initialValue = getValue() || "";
-  const [value, setValue] = useState(initialValue);
-  const [isEditing, setIsEditing] = useState(false);
-  const queryClient = useQueryClient();
-  const { mutate, isPending } = useMutation({
-    mutationFn: (newValue) => {
-      if (colId === "TEN_HOIDONG") {
-        return hoiDongService.updateHoiDongName(row.original.ID_HOIDONG, newValue);
-      } else if (colId === "PHONG") {
-        return hoiDongService.updateHoiDongPhong(row.original.ID_HOIDONG, newValue);
-      }
-      return Promise.reject(new Error("Unknown column"));
-    },
-    onSuccess: (data) => {
-      toast.success(data.message);
-      queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
-    },
-    onError: (err) => {
-      const errorMsg = err.response?.data?.errors?.TEN_HOIDONG?.[0] || err.response?.data?.error || "Cập nhật thất bại!";
-      toast.error(errorMsg);
-      setValue(initialValue);
-    },
-    onSettled: () => {
-      setIsEditing(false);
-    },
-  });
-
-  const onBlur = () => {
-    const trimmedValue = String(value).trim();
-    if (colId === "TEN_HOIDONG" && !trimmedValue) {
-      toast.error("Tên Hội đồng không được để trống.");
-      setValue(initialValue);
-      setIsEditing(false);
-      return;
+    const initialValue = getValue() || "";
+    const [value, setValue] = useState(initialValue);
+    const [isEditing, setIsEditing] = useState(false);
+    const queryClient = useQueryClient();
+    const { mutate, isPending } = useMutation({
+        mutationFn: (newValue) => {
+            if (colId === "TEN_HOIDONG") {
+                return hoiDongService.updateHoiDongName(row.original.ID_HOIDONG, newValue);
+            } else if (colId === "PHONG") {
+                return hoiDongService.updateHoiDongPhong(row.original.ID_HOIDONG, newValue);
+            }
+            return Promise.reject(new Error("Unknown column"));
+        },
+        onSuccess: (data) => {
+            toast.success(data.message);
+            queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
+        },
+        onError: (err) => {
+            const errorMsg = err.response?.data?.errors?.TEN_HOIDONG?.[0] || err.response?.data?.error || "Cập nhật thất bại!";
+            toast.error(errorMsg);
+            setValue(initialValue);
+        },
+        onSettled: () => {
+            setIsEditing(false);
+        },
+    });
+  
+    const onBlur = () => {
+        const trimmedValue = String(value).trim();
+        if (colId === "TEN_HOIDONG" && !trimmedValue) {
+            toast.error("Tên Hội đồng không được để trống.");
+            setValue(initialValue);
+            setIsEditing(false);
+            return;
+        }
+        if (trimmedValue !== initialValue) {
+            mutate(trimmedValue);
+        } else {
+            setIsEditing(false);
+        }
+    };
+  
+    const onKeyDown = (e) => {
+        if (e.key === "Enter") {
+            e.currentTarget.blur();
+        } else if (e.key === "Escape") {
+            setValue(initialValue);
+            e.currentTarget.blur();
+        }
+    };
+  
+    useEffect(() => {
+        setValue(initialValue);
+    }, [initialValue]);
+  
+    if (isPending) {
+        return (
+            <div className={cn("flex items-center justify-center h-8", colId === "TEN_HOIDONG" ? "justify-start" : "text-center")}>
+                <Loader2 className="h-4 w-4 animate-spin" />
+            </div>
+        );
     }
-    if (trimmedValue !== initialValue) {
-      mutate(trimmedValue);
-    } else {
-      setIsEditing(false);
+  
+    const displayValue = initialValue || <span className="text-muted-foreground italic">Trống</span>;
+  
+    if (isEditing) {
+        return (
+            <Input
+                autoFocus
+                value={value}
+                onChange={(e) => setValue(e.target.value)}
+                onBlur={onBlur}
+                onKeyDown={onKeyDown}
+                className={cn("h-8 min-w-[50px] p-2", colId === "TEN_HOIDONG" ? "w-full" : "w-16 text-center")}
+            />
+        );
     }
-  };
-
-  const onKeyDown = (e) => {
-    if (e.key === "Enter") {
-      e.currentTarget.blur();
-    } else if (e.key === "Escape") {
-      setValue(initialValue);
-      e.currentTarget.blur();
-    }
-  };
-
-  useEffect(() => {
-    setValue(initialValue);
-  }, [initialValue]);
-
-  if (isPending) {
+  
     return (
-      <div className={cn("flex items-center justify-center h-8", colId === "TEN_HOIDONG" ? "justify-start" : "text-center")}>
-        <Loader2 className="h-4 w-4 animate-spin" />
-      </div>
+        <div
+            className={cn(
+                "w-full min-h-[32px] px-3 py-2 text-sm rounded-md cursor-pointer",
+                "border border-transparent hover:bg-muted",
+                colId === "TEN_HOIDONG" ? "font-medium text-primary" : "text-center"
+            )}
+            onClick={() => setIsEditing(true)}
+        >
+            {displayValue}
+        </div>
     );
-  }
-
-  const displayValue = initialValue || <span className="text-muted-foreground italic">Trống</span>;
-
-  if (isEditing) {
-    return (
-      <Input
-        autoFocus
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={onBlur}
-        onKeyDown={onKeyDown}
-        className={cn("h-8 min-w-[50px] p-2", colId === "TEN_HOIDONG" ? "w-full" : "w-16 text-center")}
-      />
-    );
-  }
-
-  return (
-    <div
-      className={cn(
-        "w-full min-h-[32px] px-3 py-2 text-sm rounded-md cursor-pointer",
-        "border border-transparent hover:bg-muted",
-        colId === "TEN_HOIDONG" ? "font-medium text-primary" : "text-center"
-      )}
-      onClick={() => setIsEditing(true)}
-    >
-      {displayValue}
-    </div>
-  );
 };
 
 const ListHoiDong = () => {
@@ -209,6 +200,13 @@ const ListHoiDong = () => {
   const [isSingleUpgradeAlertOpen, setIsSingleUpgradeAlertOpen] = useState(false);
   const [upgradeTarget, setUpgradeTarget] = useState(null);
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
+
+  // [MỚI] Kiểm tra Reduce Motion
+  const shouldReduceMotion = useReducedMotion();
+  const { reduceMotion } = useTheme();
+  const isReduced = reduceMotion || shouldReduceMotion;
+  
+  const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
     queryKey: [QUERY_KEY_FILTERS],
@@ -511,16 +509,15 @@ const ListHoiDong = () => {
     </div>
   );
 
-  // [THÊM] Logic cho StatCard onClick
   const handleStatCardClick = (filterId, value) => {
-    setPagination(prev => ({ ...prev, pageIndex: 0 })); // Reset về trang 1
+    setPagination(prev => ({ ...prev, pageIndex: 0 }));
     
     setColumnFilters(prevFilters => {
       const otherFilters = prevFilters.filter(f => f.id !== filterId);
       if (value === undefined) {
-        return otherFilters; // Xóa bộ lọc này
+        return otherFilters;
       }
-      return [...otherFilters, { id: filterId, value: [value] }]; // Đặt bộ lọc này
+      return [...otherFilters, { id: filterId, value: [value] }];
     });
   };
 
@@ -539,11 +536,11 @@ const ListHoiDong = () => {
       <div className="p-4 md:p-8 space-y-4 h-full flex flex-col">
         <motion.div 
           className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 flex-shrink-0"
-          variants={containerVariants}
+          variants={variants.container}
           initial="hidden"
           animate="visible"
         >
-          <motion.div variants={itemVariants}>
+          <motion.div variants={variants.item}>
             <StatCard 
               icon={Users} 
               title="Tổng số Hội đồng" 
@@ -553,27 +550,27 @@ const ListHoiDong = () => {
               onClick={() => handleStatCardClick('loai', undefined)}
             />
           </motion.div>
-          <motion.div variants={itemVariants}>
+          <motion.div variants={variants.item}>
             <StatCard 
               icon={Shield} 
               title="HĐ Bảo Vệ" 
               value={isLoadingStats ? 'loading' : stats?.totalBaoVe} 
               iconBgClass="bg-green-100" 
               iconColorClass="text-green-600"
-              onClick={() => handleStatCardClick('loai', 'hoidong')}
+              onClick={() => handleStatCardClick('LOAI', 'hoidong')}
             />
           </motion.div>
-          <motion.div variants={itemVariants}>
+          <motion.div variants={variants.item}>
             <StatCard 
               icon={BookOpen} 
               title="HĐ Phản Biện" 
               value={isLoadingStats ? 'loading' : stats?.totalPhanBien} 
               iconBgClass="bg-yellow-100" 
               iconColorClass="text-yellow-600"
-              onClick={() => handleStatCardClick('loai', 'phanbien')}
+              onClick={() => handleStatCardClick('LOAI', 'phanbien')}
             />
           </motion.div>
-          <motion.div variants={itemVariants}>
+          <motion.div variants={variants.item}>
             <StatCard 
               icon={GraduationCap} 
               title="Tổng Thành viên" 
@@ -582,7 +579,7 @@ const ListHoiDong = () => {
               iconColorClass="text-indigo-600" 
             />
           </motion.div>
-          <motion.div variants={itemVariants}>
+          <motion.div variants={variants.item}>
             <StatCard 
               icon={Users2} 
               title="Nhóm đã phân bổ" 
@@ -636,11 +633,12 @@ const ListHoiDong = () => {
           </div>
         </div>
 
+        {/* [MỚI] Animation cho bảng */}
         <motion.div
           initial={false}
           animate={{ height: tableHeight }}
           transition={{
-              duration: 0.5,
+              duration: isReduced ? 0 : 0.5,
               ease: [0.4, 0, 0.2, 1]
           }}
           style={{ overflow: 'hidden' }}
