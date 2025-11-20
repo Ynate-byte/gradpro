@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle, Plus, Minus } from 'lucide-react';
+import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle, Plus, Minus, Save, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import quotaService from '@/api/quotaService';
 import axios from '@/api/axiosConfig';
@@ -75,6 +75,7 @@ const containerVariants = {
 const QuotaManager = () => {
   const [statistics, setStatistics] = useState({});
   const [departments, setDepartments] = useState([]);
+  const [originalDepartments, setOriginalDepartments] = useState([]); // Để so sánh thay đổi
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('');
   const [quotaAmount, setQuotaAmount] = useState('');
   const [note, setNote] = useState('');
@@ -82,6 +83,7 @@ const QuotaManager = () => {
   const [plans, setPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     loadPlans();
@@ -93,8 +95,20 @@ const QuotaManager = () => {
     } else {
       setStatistics({});
       setDepartments([]);
+      setOriginalDepartments([]);
+      setHasChanges(false);
     }
   }, [selectedPlan]);
+
+  // Kiểm tra thay đổi
+  useEffect(() => {
+    if (departments.length === 0 || originalDepartments.length === 0) {
+        setHasChanges(false);
+        return;
+    }
+    const isDifferent = JSON.stringify(departments) !== JSON.stringify(originalDepartments);
+    setHasChanges(isDifferent);
+  }, [departments, originalDepartments]);
 
   const loadPlans = async () => {
     setIsLoading(true);
@@ -122,7 +136,10 @@ const QuotaManager = () => {
         quotaService.getDepartments({ plan_id: selectedPlan })
       ]);
       setStatistics(statsRes.data);
+      
       setDepartments(departmentsRes.data);
+      setOriginalDepartments(JSON.parse(JSON.stringify(departmentsRes.data))); // Deep copy
+      setHasChanges(false);
     } catch (error) {
       toast.error('Lỗi khi tải dữ liệu thống kê');
       console.error(error);
@@ -138,6 +155,93 @@ const QuotaManager = () => {
     return (quota / lecturers).toFixed(2);
   };
 
+  // Cập nhật local state (dùng cho +/- và onChange input)
+  const handleLocalChange = (deptId, newValue) => {
+    setDepartments(prev => 
+        prev.map(dept => 
+            dept.ID_KHOA_BOMON === deptId 
+            ? { ...dept, quota_assigned: newValue } 
+            : dept
+        )
+    );
+  };
+
+  // [MỚI] Hàm lưu NGAY LẬP TỨC 1 dòng (dùng cho phím Enter)
+  const handleSaveSingleRow = async (deptId, newQuota) => {
+    setIsSubmitting(true);
+    try {
+        await quotaService.assignDepartmentQuota({
+            ID_KEHOACH: selectedPlan,
+            ID_KHOA_BOMON: deptId,
+            SO_DETAI_QUOTA: newQuota,
+            GHICHU: 'Cập nhật nhanh'
+        });
+
+        toast.success('Đã lưu quota cho bộ môn này.');
+        
+        // Cập nhật lại originalDepartments để nó khớp với giá trị vừa lưu
+        // Như vậy nút "Lưu thay đổi" sẽ không sáng lên vì dòng này nữa
+        setOriginalDepartments(prev => 
+            prev.map(dept => 
+                dept.ID_KHOA_BOMON === deptId 
+                ? { ...dept, quota_assigned: newQuota } 
+                : dept
+            )
+        );
+        
+        // Cập nhật lại Statistics để số liệu tổng chính xác
+        const statsRes = await quotaService.getStatistics({ plan_id: selectedPlan });
+        setStatistics(statsRes.data);
+
+    } catch (error) {
+        toast.error(error.response?.data?.message || 'Lỗi khi lưu quota');
+    } finally {
+        setIsSubmitting(false);
+    }
+  };
+
+  // Nút Reset
+  const handleResetChanges = () => {
+      setDepartments(JSON.parse(JSON.stringify(originalDepartments)));
+      setHasChanges(false);
+      toast.info("Đã hủy các thay đổi chưa lưu.");
+  };
+
+  // Nút Lưu tất cả
+  const handleSaveAll = async () => {
+      setIsSubmitting(true);
+      try {
+          const changedDepts = departments.filter((dept, index) => {
+              return dept.quota_assigned !== originalDepartments[index].quota_assigned;
+          });
+
+          if (changedDepts.length === 0) {
+              toast.info("Không có thay đổi nào để lưu.");
+              return;
+          }
+
+          const promises = changedDepts.map(dept => 
+              quotaService.assignDepartmentQuota({
+                  ID_KEHOACH: selectedPlan,
+                  ID_KHOA_BOMON: dept.ID_KHOA_BOMON,
+                  SO_DETAI_QUOTA: dept.quota_assigned,
+                  GHICHU: 'Cập nhật hàng loạt'
+              })
+          );
+
+          await Promise.all(promises);
+          toast.success(`Đã cập nhật thành công ${changedDepts.length} bộ môn.`);
+          loadData();
+          
+      } catch (error) {
+          console.error("Lỗi lưu hàng loạt:", error);
+          toast.error("Có lỗi xảy ra khi lưu dữ liệu.");
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
+
+  // (Phần code xử lý manual assign bên trái - giữ nguyên)
   const handleAssignQuota = async () => {
     if (!selectedDepartmentId || quotaAmount === '' || !selectedPlan) {
       toast.error('Vui lòng chọn khoa/bộ môn và nhập số lượng đề tài');
@@ -162,34 +266,6 @@ const QuotaManager = () => {
       setIsSubmitting(false);
     }
   };
-
-  const handleQuickUpdateQuota = async (departmentId, newQuota) => {
-    setIsSubmitting(true);
-    try {
-      await quotaService.assignDepartmentQuota({
-        ID_KEHOACH: selectedPlan,
-        ID_KHOA_BOMON: departmentId,
-        SO_DETAI_QUOTA: newQuota,
-        GHICHU: 'Cập nhật nhanh từ bảng'
-      });
-
-      // ✅ Cập nhật ngay trong state departments
-      setDepartments(prev =>
-        prev.map(dept =>
-          dept.ID_KHOA_BOMON === departmentId
-            ? { ...dept, quota_assigned: newQuota }
-            : dept
-        )
-      );
-
-      toast.success('Cập nhật quota thành công');
-    } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi khi cập nhật quota');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
 
   const handleAutoAssignQuotas = async () => {
     if (!selectedPlan) {
@@ -255,6 +331,7 @@ const QuotaManager = () => {
           initial="hidden"
           animate="visible"
         >
+          {/* Stat Cards (Giữ nguyên) */}
           <StatCard
             icon={Users}
             title="Tổng sinh viên"
@@ -315,98 +392,36 @@ const QuotaManager = () => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Điều chỉnh Thủ công (Ghim Quota)</CardTitle>
-            <CardDescription>
-              Cập nhật quota cho một Khoa/Bộ môn. Hệ thống sẽ tự động phân phối lại số quota còn lại cho các khoa khác.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-              <div>
-                <label className="block text-sm font-medium mb-1">Khoa/Bộ môn</label>
-                <Select
-                  value={selectedDepartmentId ? String(selectedDepartmentId) : ""}
-                  onValueChange={(value) => {
-                    setSelectedDepartmentId(value);
-                    const dept = departments.find(d => String(d.ID_KHOA_BOMON) === value);
-                    if (dept && dept.quota_assigned > 0) {
-                      setQuotaAmount(String(dept.quota_assigned));
-                    } else if (remainingQuota > 0) {
-                      setQuotaAmount(String(remainingQuota));
-                    } else {
-                      setQuotaAmount("0");
-                    }
-                  }}
-                  disabled={!selectedPlan || isLoadingData || departments.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn khoa/bộ môn" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {departments.map(dept => (
-                      <SelectItem key={dept.ID_KHOA_BOMON} value={String(dept.ID_KHOA_BOMON)}>
-                        {dept.TEN_KHOA_BOMON}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Quota (Số đề tài)</label>
-                <Input
-                  type="number"
-                  placeholder="Số lượng"
-                  value={quotaAmount}
-                  onChange={(e) => setQuotaAmount(e.target.value)}
-                  min="0"
-                  disabled={!selectedPlan || isLoadingData}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Ghi chú (tùy chọn)</label>
-                <Textarea
-                  placeholder="Lý do điều chỉnh (nếu có)"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  rows={1}
-                  disabled={!selectedPlan || isLoadingData}
-                />
-              </div>
-
-              <Button
-                onClick={handleAssignQuota}
-                disabled={!selectedDepartmentId || quotaAmount === '' || !selectedPlan || isLoadingData}
-              >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Cập nhật (Ghim)
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
           <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
             <div>
               <CardTitle className="text-xl font-bold">Bảng Chi tiết Quota Bộ môn</CardTitle>
-              <CardDescription>Tổng hợp quota đã được giao và tình trạng sử dụng đề tài của từng khoa/bộ môn.</CardDescription>
+              <CardDescription>
+                Điều chỉnh số lượng và nhấn <strong>Enter</strong> để lưu từng dòng, hoặc nhấn <strong>Lưu thay đổi</strong> để lưu tất cả.
+              </CardDescription>
             </div>
-            <motion.div
-              className="flex items-center gap-2 px-3 py-1 border rounded-lg bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700/50" // Đổi màu nền và viền
-              initial={{ x: 20, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Info className="h-4 w-4 text-blue-600 dark:text-blue-400" />  
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Đề tài đã giao:
-                <span className="text-lg font-bold text-blue-600 dark:text-blue-400 ml-1">  
-                  {totalAssigned}
-                </span>
-              </p>
-            </motion.div>
+            
+            <div className="flex items-center gap-2">
+                 {hasChanges && (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleResetChanges}
+                        disabled={isSubmitting}
+                        className="text-muted-foreground"
+                    >
+                        <RotateCcw className="h-4 w-4 mr-2" /> Hủy
+                    </Button>
+                )}
+
+                <Button 
+                    onClick={handleSaveAll}
+                    disabled={!hasChanges || isSubmitting}
+                    className={cn("transition-all", hasChanges ? "animate-pulse shadow-lg" : "opacity-50")}
+                >
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Lưu thay đổi
+                </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {departments.length === 0 ? (
@@ -432,59 +447,40 @@ const QuotaManager = () => {
                       <TableCell className="text-center">{dept.total_lecturers || 0}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
-                          {/* Nút giảm */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              handleQuickUpdateQuota(
-                                dept.ID_KHOA_BOMON,
-                                Math.max(0, (dept.quota_assigned || 0) - 1)
-                              )
-                            }
-                            disabled={(dept.quota_assigned || 0) <= 0 || isLoadingData}
+                            onClick={() => handleLocalChange(dept.ID_KHOA_BOMON, Math.max(0, (dept.quota_assigned || 0) - 1))}
+                            disabled={isLoadingData}
                             className="h-6 w-6 p-0"
                           >
                             -
                           </Button>
 
-                          {/* Ô nhập số quota */}
                           <input
                             type="number"
                             value={dept.quota_assigned || 0}
                             onChange={(e) => {
-                              // chỉ cập nhật tạm thời trong state (không gọi API)
-                              const newValue = parseInt(e.target.value, 10) || 0;
-                              setDepartments(prev =>
-                                prev.map(d =>
-                                  d.ID_KHOA_BOMON === dept.ID_KHOA_BOMON
-                                    ? { ...d, quota_assigned: newValue }
-                                    : d
-                                )
-                              );
+                              const val = parseInt(e.target.value, 10);
+                              handleLocalChange(dept.ID_KHOA_BOMON, isNaN(val) ? 0 : val);
                             }}
+                            // [MỚI] Bắt sự kiện Enter để lưu ngay
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
-                                const newValue = parseInt(e.target.value, 10) || 0;
-                                handleQuickUpdateQuota(dept.ID_KHOA_BOMON, newValue);
+                                const val = parseInt(e.target.value, 10) || 0;
+                                handleSaveSingleRow(dept.ID_KHOA_BOMON, val);
+                                e.target.blur(); // Bỏ focus sau khi lưu
                               }
                             }}
                             disabled={isLoadingData}
-                            className="w-16 text-center font-bold text-primary border rounded-md h-6 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                            className="w-16 text-center font-bold text-primary border rounded-md h-6 text-sm focus:outline-none focus:ring-1 focus:ring-primary bg-background"
                             min={0}
                           />
 
-
-                          {/* Nút tăng */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              handleQuickUpdateQuota(
-                                dept.ID_KHOA_BOMON,
-                                (dept.quota_assigned || 0) + 1
-                              )
-                            }
+                            onClick={() => handleLocalChange(dept.ID_KHOA_BOMON, (dept.quota_assigned || 0) + 1)}
                             disabled={isLoadingData}
                             className="h-6 w-6 p-0"
                           >

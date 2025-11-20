@@ -1,56 +1,89 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { toast } from 'sonner';
-import { getSubmissions } from '@/api/adminSubmissionService';
+import { getSubmissions, getSubmissionStatistics } from '@/api/adminSubmissionService';
 import { getAllPlans } from '@/api/thesisPlanService';
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getColumns } from './components/columns';
-// Đổi import sang Dialog mới
 import { SubmissionDetailDialog } from './components/SubmissionDetailDialog'; 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookCopy, CheckCircle } from 'lucide-react';
+import { BookCopy, CheckCircle, Clock, AlertCircle, FileCheck, FileWarning, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import StatCard from '@/components/shared/StatCard';
+import { useDebounce } from '@/hooks/useDebounce';
+import { Separator } from "@/components/ui/separator";
 
-const statusConfig = {
-  'Bản nháp': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  'Chờ phê duyệt': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-  'Chờ duyệt chỉnh sửa': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-  'Yêu cầu chỉnh sửa': 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
-  'Đã phê duyệt': 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
-  'Đang thực hiện': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-  'Đang chấm điểm': 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',
-  'Đã hoàn thành': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-  'Đã hủy': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
+const planStatusColors = {
+    'Bản nháp': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+    'Chờ phê duyệt': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    'Chờ duyệt chỉnh sửa': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+    'Yêu cầu chỉnh sửa': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
+    'Đã phê duyệt': 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
+    'Đang thực hiện': 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400',
+    'Đang chấm điểm': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+    'Đã hoàn thành': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    'Đã hủy': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
 };
 
 export default function SubmissionManagementPage() {
+  // --- State Quản lý dữ liệu ---
   const [submissions, setSubmissions] = useState([]);
   const [pageCount, setPageCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // --- State Bộ lọc & Phân trang ---
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState([]);
   const [allPlans, setAllPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState('all');
-  const [columnFilters, setColumnFilters] = useState([]);
   const [activeTab, setActiveTab] = useState('Chờ xác nhận');
+  const [columnFilters, setColumnFilters] = useState([]);
+  
+  // --- State Tìm kiếm ---
+  const [searchTerm, setSearchTerm] = useState(''); 
+  const debouncedSearch = useDebounce(searchTerm, 500);
 
+  // --- State Dialog Chi tiết ---
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [viewingSubmission, setViewingSubmission] = useState(null);
 
-  // Tính toán index để Next/Prev
+  // --- State Thống kê ---
+  const [stats, setStats] = useState({
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      not_submitted: 0 
+  });
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  // --- 1. Tính toán index của bài đang xem ---
   const viewingIndex = useMemo(() => {
-    if (!viewingSubmission) return -1;
+    if (!viewingSubmission || submissions.length === 0) return -1;
     return submissions.findIndex(s => s.ID_NOP_SANPHAM === viewingSubmission.ID_NOP_SANPHAM);
   }, [submissions, viewingSubmission]);
 
+  // --- 2. Load danh sách kế hoạch ---
   useEffect(() => {
     getAllPlans()
       .then(data => setAllPlans(data || []))
       .catch(() => toast.error("Không thể tải danh sách kế hoạch."));
   }, []);
 
+  // --- 3. Load thống kê ---
+  const fetchStats = useCallback(() => {
+    setLoadingStats(true);
+    getSubmissionStatistics(selectedPlanId)
+        .then(data => setStats(data))
+        .catch(err => console.error("Lỗi tải thống kê:", err))
+        .finally(() => setLoadingStats(false));
+  }, [selectedPlanId]);
+
+  useEffect(() => {
+      fetchStats();
+  }, [fetchStats]);
+
+  // --- 4. Load danh sách bài nộp ---
   const fetchData = useCallback(() => {
     setLoading(true);
     const params = {
@@ -59,6 +92,7 @@ export default function SubmissionManagementPage() {
       sort: sorting[0] ? `${sorting[0].id},${sorting[0].desc ? 'desc' : 'asc'}` : 'NGAY_NOP,asc',
       plan_id: selectedPlanId === 'all' ? undefined : selectedPlanId,
       trangthai: activeTab === 'Tất cả' ? undefined : activeTab,
+      search: debouncedSearch,
     };
 
     getSubmissions(params)
@@ -68,7 +102,7 @@ export default function SubmissionManagementPage() {
       })
       .catch(() => toast.error("Lỗi khi tải danh sách phiếu nộp."))
       .finally(() => setLoading(false));
-  }, [pagination, sorting, selectedPlanId, activeTab]);
+  }, [pagination, sorting, selectedPlanId, activeTab, debouncedSearch]);
 
   useEffect(() => {
     fetchData();
@@ -76,12 +110,12 @@ export default function SubmissionManagementPage() {
 
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
-  }, [selectedPlanId, activeTab]);
+  }, [selectedPlanId, activeTab, debouncedSearch]);
 
+  // --- 5. Handlers ---
   const handleSuccess = () => {
-    fetchData(); // Reload lại bảng dữ liệu sau khi duyệt
-    // Lưu ý: viewingSubmission sẽ tự động update nếu nó vẫn nằm trong danh sách data mới,
-    // nhưng để an toàn, ta giữ nguyên object cũ cho Dialog cho đến khi user bấm Next/Prev hoặc đóng.
+    fetchData(); 
+    fetchStats();
   };
 
   const handleViewDetails = (submission) => {
@@ -89,105 +123,162 @@ export default function SubmissionManagementPage() {
     setIsDialogOpen(true);
   };
 
-  // --- Logic Next/Prev ---
   const handleNext = () => {
     if (viewingIndex < submissions.length - 1) {
       setViewingSubmission(submissions[viewingIndex + 1]);
-    } else if (pagination.pageIndex < pageCount - 1) {
-       // (Nâng cao) Tự động load trang sau nếu đang ở cuối trang này - Chưa implement để tránh phức tạp
-       toast.info("Đã hết danh sách trang hiện tại.");
+    } else {
+      toast.info("Đã là bài cuối cùng trong trang danh sách này.");
     }
   };
 
   const handlePrevious = () => {
     if (viewingIndex > 0) {
       setViewingSubmission(submissions[viewingIndex - 1]);
+    } else {
+      toast.info("Đã là bài đầu tiên trong trang danh sách này.");
     }
   };
-  // -----------------------
 
   const columns = useMemo(() => getColumns({
     onViewDetails: handleViewDetails,
     onSuccess: handleSuccess,
   }), [handleSuccess]);
 
+  const compactStatCardClass = "p-3 shadow-sm border"; 
+
   return (
-    <div className="space-y-6 p-4 md:p-8">
-      <div className="flex items-center gap-3">
-        <CheckCircle className="w-8 h-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold">Duyệt Nộp Sản Phẩm</h1>
-          <p className="text-muted-foreground">Xác nhận các sản phẩm khóa luận do sinh viên nộp.</p>
-        </div>
+    <div className="flex flex-col h-[calc(100vh-4rem)] p-8 gap-0 bg-muted/10"> 
+      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 shrink-0">
+            <StatCard
+                title="Chờ xác nhận"
+                value={stats.pending}
+                icon={Clock}
+                description="Cần xử lý"
+                iconBgClass="bg-yellow-100 dark:bg-yellow-900/20"
+                iconColorClass="text-yellow-600 dark:text-yellow-400"
+                isLoading={loadingStats}
+                onClick={() => setActiveTab('Chờ xác nhận')}
+                className={compactStatCardClass} 
+            />
+             <StatCard
+                title="Đã duyệt"
+                value={stats.approved}
+                icon={FileCheck}
+                description="Hợp lệ"
+                iconBgClass="bg-green-100 dark:bg-green-900/20"
+                iconColorClass="text-green-600 dark:text-green-400"
+                isLoading={loadingStats}
+                onClick={() => setActiveTab('Đã xác nhận')}
+                className={compactStatCardClass}
+            />
+             <StatCard
+                title="Yêu cầu nộp lại"
+                value={stats.rejected}
+                icon={AlertCircle}
+                description="Chưa đạt"
+                iconBgClass="bg-red-100 dark:bg-red-900/20"
+                iconColorClass="text-red-600 dark:text-red-400"
+                isLoading={loadingStats}
+                onClick={() => setActiveTab('Yêu cầu nộp lại')}
+                className={compactStatCardClass}
+            />
+            <StatCard
+                title="Chưa nộp"
+                value={stats.not_submitted}
+                icon={FileWarning}
+                description="Đang chờ"
+                iconBgClass="bg-gray-100 dark:bg-gray-800"
+                iconColorClass="text-gray-600 dark:text-gray-400"
+                isLoading={loadingStats}
+                className={compactStatCardClass}
+            />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Lịch sử Nộp Sản Phẩm</CardTitle>
-          <CardDescription>
-            Lọc và xem lại tất cả các bài nộp của sinh viên.
-          </CardDescription>
-        </CardHeader>
+      <div className="flex-1 min-h-0 bg-background rounded-lg border shadow-sm flex flex-col overflow-hidden">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
+            <div className="px-4 py-2 border-b bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+                <TabsList className="h-9 p-0 bg-transparent gap-1 justify-start w-full sm:w-auto overflow-x-auto no-scrollbar shrink-0">
+                    {['Chờ xác nhận', 'Đã xác nhận', 'Yêu cầu nộp lại', 'Tất cả'].map((tab) => (
+                        <TabsTrigger 
+                            key={tab} 
+                            value={tab}
+                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-border text-xs h-8 px-3 rounded-md"
+                        >
+                            {tab}
+                        </TabsTrigger>
+                    ))}
+                </TabsList>
 
-        <CardContent>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <TabsList>
-                <TabsTrigger value="Chờ xác nhận">Chờ xác nhận</TabsTrigger>
-                <TabsTrigger value="Đã xác nhận">Đã xác nhận</TabsTrigger>
-                <TabsTrigger value="Yêu cầu nộp lại">Yêu cầu nộp lại</TabsTrigger>
-                <TabsTrigger value="Tất cả">Tất cả</TabsTrigger>
-              </TabsList>
-
-              <div className="max-w-sm">
-                <Select onValueChange={setSelectedPlanId} value={selectedPlanId || 'all'}>
-                  <SelectTrigger>
-                    <div className='flex items-center gap-2'>
-                      <BookCopy className='h-4 w-4 text-muted-foreground' />
-                      <SelectValue placeholder="Lọc theo kế hoạch..." />
-                    </div>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tất cả kế hoạch</SelectItem>
-                    {allPlans.map(plan => {
-                      const config = statusConfig[plan.TRANGTHAI] || 'bg-gray-100 text-gray-800';
-                      return (
-                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                          <div className="flex items-center justify-between w-full">
-                            <span>{plan.TEN_DOT}</span>
-                            <Badge variant="outline" className={cn('border-0 text-xs ml-4', config)}>
-                              {plan.TRANGTHAI}
-                            </Badge>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
+                <div className="flex items-center w-full sm:w-auto gap-2">
+                     <Select onValueChange={setSelectedPlanId} value={selectedPlanId || 'all'}>
+                        <SelectTrigger className="w-full sm:w-[350px] h-8 text-sm bg-background shadow-sm border-muted-foreground/20">
+                            <div className='flex items-center gap-2 truncate'>
+                                <BookCopy className='h-3.5 w-3.5 text-muted-foreground shrink-0' />
+                                <SelectValue placeholder="Tất cả kế hoạch" />
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                            <SelectItem value="all">
+                                <span className="font-medium">Tất cả kế hoạch</span>
+                            </SelectItem>
+                            {allPlans.map(plan => (
+                                <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                    <div className="flex items-center justify-between w-full gap-2">
+                                        <span className="font-medium truncate flex-1">{plan.TEN_DOT}</span>
+                                        {plan.TRANGTHAI && (
+                                            <Badge 
+                                                variant="outline" 
+                                                className={cn(
+                                                    "text-[10px] px-1.5 py-0 h-5 border-0 font-normal whitespace-nowrap shrink-0", 
+                                                    planStatusColors[plan.TRANGTHAI] || "bg-gray-100 text-gray-600"
+                                                )}
+                                            >
+                                                {plan.TRANGTHAI}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
-            <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
-              <DataTable
-                columns={columns}
-                data={submissions}
-                pageCount={pageCount}
-                loading={loading}
-                pagination={pagination}
-                setPagination={setPagination}
-                sorting={sorting}
-                setSorting={setSorting}
-                columnFilters={columnFilters}
-                setColumnFilters={setColumnFilters}
-                onAddUser={null}
-                addBtnText=""
-              />
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-      </Card>
+            {/* Table Content */}
+            <div className="flex-1 min-h-0 overflow-hidden">
+                <TabsContent value={activeTab} className="h-full mt-0 p-0 data-[state=active]:flex flex-col">
+                    <DataTable
+                        columns={columns}
+                        data={submissions}
+                        pageCount={pageCount}
+                        loading={loading}
+                        pagination={pagination}
+                        setPagination={setPagination}
+                        sorting={sorting}
+                        setSorting={setSorting}
+                        
+                        searchColumnId="search_generic" 
+                        searchPlaceholder="Tìm theo đề tài, nhóm, sinh viên..." 
+                        searchTerm={searchTerm}
+                        onSearchChange={setSearchTerm}
+                        
+                        columnFilters={columnFilters}
+                        setColumnFilters={setColumnFilters}
+                        
+                        onAddUser={null}
+                        onImportUser={null}
+                        addBtnText=""
+                        bulkActions={null}
+                        
+                        containerClassName="h-full border-0 rounded-none"
+                        className="h-full flex flex-col p-4" 
+                        flexLayout={true} 
+                    />
+                </TabsContent>
+            </div>
+        </Tabs>
+      </div>
 
-      {/* Dialog Chi tiết & Duyệt */}
       {viewingSubmission && (
         <SubmissionDetailDialog
           submission={viewingSubmission}

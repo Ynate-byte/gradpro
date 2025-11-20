@@ -48,7 +48,7 @@ export function DataTableToolbar({
   khoaBomonFilterOptions,
   khoaBomonFilterTitle,
   
-  // [MỚI] Nhận props bộ lọc chức vụ
+  // Nhận props bộ lọc chức vụ
   chucVuFilterColumnId,
   chucVuFilterOptions,
   
@@ -116,7 +116,7 @@ export function DataTableToolbar({
   const showStudentFilters = selectedRoles.includes('Sinh viên') || selectedRoles.length === 0;
   const showLecturerFilters = selectedRoles.includes('Giảng viên') || selectedRoles.length === 0;
 
-  // 3. Xây dựng danh sách các bộ lọc (THÊM BỘ LỌC CHỨC VỤ VÀO ĐÂY)
+  // 3. Xây dựng danh sách các bộ lọc
   const filterGroups = [
     (statusColumnId && statusOptions) ? (
         <DataTableFacetedFilterGroup
@@ -200,7 +200,6 @@ export function DataTableToolbar({
         />
     ) : null,
 
-    // [SỬA LỖI] THÊM BỘ LỌC CHỨC VỤ VÀO ĐÚNG VỊ TRÍ NÀY
     (chucVuFilterColumnId && chucVuFilterOptions && showLecturerFilters) ? (
         <DataTableFacetedFilterGroup
             key="chuc_vu_filter"
@@ -213,7 +212,8 @@ export function DataTableToolbar({
 
   ].filter(Boolean);
 
-  const activeFilterCount = table.getState().columnFilters.filter(
+  // [SỬA LỖI] Thêm "|| []" để tránh lỗi undefined reading 'filter'
+  const activeFilterCount = (table.getState().columnFilters || []).filter(
     f => f.id !== searchColumnId
   ).length;
   const isFiltered = activeFilterCount > 0;
@@ -228,7 +228,6 @@ export function DataTableToolbar({
       ...(namhocFilterOptions || []),
       ...(hockyFilterOptions || []),
       ...(hedaotaoFilterOptions || []),
-      // [THÊM] Map options chức vụ
       ...(chucVuFilterOptions || []), 
     ];
     return new Map(options.map(opt => [String(opt.value), opt.label]));
@@ -239,7 +238,8 @@ export function DataTableToolbar({
   ]);
 
   const selectedFilterLabels = useMemo(() => {
-    const filters = table.getState().columnFilters;
+    // [SỬA LỖI] Thêm "|| []" để tránh lỗi undefined
+    const filters = table.getState().columnFilters || [];
     const labels = [];
     
     for (const filter of filters) {

@@ -202,10 +202,11 @@ Route::middleware('auth:sanctum')->group(function () {
         
         // ----- DUYỆT NỘP BÀI -----
         Route::prefix('submissions')->group(function () {
-            Route::get('/', [AdminSubmissionController::class, 'index']); // Lấy danh sách chờ duyệt
-            Route::get('/{submission}', [AdminSubmissionController::class, 'show']); // Lấy chi tiết 1 lần nộp
-            Route::post('/{submission}/confirm', [AdminSubmissionController::class, 'confirmSubmission']); // Xác nhận
-            Route::post('/{submission}/reject', [AdminSubmissionController::class, 'rejectSubmission']); // Yêu cầu nộp lại
+            Route::get('/statistics', [AdminSubmissionController::class, 'getStatistics']);
+            Route::get('/', [AdminSubmissionController::class, 'index']); 
+            Route::get('/{submission}', [AdminSubmissionController::class, 'show']); 
+            Route::post('/{submission}/confirm', [AdminSubmissionController::class, 'confirmSubmission']); 
+            Route::post('/{submission}/reject', [AdminSubmissionController::class, 'rejectSubmission']); 
             Route::get('/phancong/{phancong}', [AdminSubmissionController::class, 'getSubmissionsForPhancong']);
         });
 

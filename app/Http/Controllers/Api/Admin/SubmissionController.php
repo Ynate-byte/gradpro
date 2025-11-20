@@ -23,7 +23,6 @@ class SubmissionController extends Controller
         $user = Auth::user();
         
         // 1. Quyền quản trị cấp cao (duyệt tất cả)
-        // Các hàm này đã được cập nhật trong Base Controller để check bảng GIANGVIEN_CHUCVU
         if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
             return true;
         }
@@ -41,7 +40,7 @@ class SubmissionController extends Controller
     }
 
     /**
-     * Lấy danh sách các phiếu nộp
+     * Lấy danh sách các phiếu nộp (có tìm kiếm & lọc)
      */
     public function index(Request $request)
     {
@@ -55,12 +54,13 @@ class SubmissionController extends Controller
             $submissionTable = (new NopSanpham)->getTable();
 
             $query = NopSanpham::query()->with([
-                'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN',
-                'phancong.nhom:ID_NHOM,TEN_NHOM',
+                'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH', // Lấy thêm MA_DINHDANH để search
+                'phancong.nhom:ID_NHOM,TEN_NHOM,ID_KEHOACH',
                 'phancong.detai:ID_DETAI,TEN_DETAI',
                 'phancong.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN' 
             ]);
 
+            // Phân quyền dữ liệu
             if (!($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa())) {
                 if ($user->giangvien) {
                     $gvId = $user->giangvien->ID_GIANGVIEN;
@@ -72,16 +72,39 @@ class SubmissionController extends Controller
                 }
             }
 
+            // Lọc theo trạng thái
             if ($request->filled('trangthai') && $request->trangthai !== 'Tất cả') {
                 $query->where("{$submissionTable}.TRANGTHAI", $request->trangthai);
             }
 
+            // Lọc theo kế hoạch
             if ($request->filled('plan_id')) {
                 $query->whereHas('phancong.nhom', function ($q) use ($request) {
                     $q->where('ID_KEHOACH', $request->plan_id);
                 });
             }
 
+            // [MỚI] Logic tìm kiếm (Search)
+            if ($request->filled('search')) {
+                $search = $request->search;
+                $query->where(function($q) use ($search) {
+                    // Tìm theo tên đề tài
+                    $q->whereHas('phancong.detai', function($subQ) use ($search) {
+                        $subQ->where('TEN_DETAI', 'like', '%' . $search . '%');
+                    })
+                    // Tìm theo tên nhóm
+                    ->orWhereHas('phancong.nhom', function($subQ) use ($search) {
+                        $subQ->where('TEN_NHOM', 'like', '%' . $search . '%');
+                    })
+                    // Tìm theo tên hoặc mã sinh viên nộp
+                    ->orWhereHas('nguoiNop', function($subQ) use ($search) {
+                        $subQ->where('HODEM_VA_TEN', 'like', '%' . $search . '%')
+                             ->orWhere('MA_DINHDANH', 'like', '%' . $search . '%');
+                    });
+                });
+            }
+
+            // Sắp xếp
             if ($request->filled('sort')) {
                 list($sortCol, $sortDir) = explode(',', $request->sort);
                 $sortDir = strtolower($sortDir) === 'desc' ? 'desc' : 'asc';
@@ -100,9 +123,63 @@ class SubmissionController extends Controller
             return response()->json($submissions);
 
         } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('Error in SubmissionController@index: ' . $e->getMessage());
+            Log::error('Error in SubmissionController@index: ' . $e->getMessage());
             return response()->json(['message' => 'Lỗi máy chủ nội bộ.'], 500);
         }
+    }
+
+    /**
+     * [MỚI] Lấy thống kê nộp bài (bao gồm số nhóm chưa nộp)
+     */
+    public function getStatistics(Request $request)
+    {
+        $planId = $request->plan_id;
+
+        // 1. Tính tổng số nhóm ĐANG THỰC HIỆN đề tài (Đây là những nhóm CẦN nộp bài)
+        $assignmentsQuery = PhancongDetaiNhom::query()
+            ->where('TRANGTHAI', 'Đang thực hiện'); // Chỉ tính nhóm đang làm, bỏ qua nhóm đã hủy/hoàn thành
+
+        if ($planId && $planId !== 'all') {
+            $assignmentsQuery->whereHas('nhom', function($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            });
+        }
+        
+        $totalActiveGroups = $assignmentsQuery->count();
+
+        // 2. Tính số nhóm ĐÃ NỘP (ít nhất 1 lần)
+        // Dùng distinct ID_PHANCONG vì một nhóm có thể nộp nhiều lần
+        $submittedQuery = NopSanpham::query()
+            ->whereIn('TRANGTHAI', ['Chờ xác nhận', 'Đã xác nhận', 'Yêu cầu nộp lại'])
+            ->distinct('ID_PHANCONG');
+
+        if ($planId && $planId !== 'all') {
+            $submittedQuery->whereHas('phancong.nhom', function($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            });
+        }
+        
+        $submittedGroupsCount = $submittedQuery->count('ID_PHANCONG');
+
+        // 3. Tính số lượng theo từng trạng thái cụ thể
+        $baseSubmissionQuery = NopSanpham::query();
+        if ($planId && $planId !== 'all') {
+            $baseSubmissionQuery->whereHas('phancong.nhom', function($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            });
+        }
+
+        $pendingCount = (clone $baseSubmissionQuery)->where('TRANGTHAI', 'Chờ xác nhận')->count();
+        $approvedCount = (clone $baseSubmissionQuery)->where('TRANGTHAI', 'Đã xác nhận')->count();
+        $rejectedCount = (clone $baseSubmissionQuery)->where('TRANGTHAI', 'Yêu cầu nộp lại')->count();
+
+        return response()->json([
+            'not_submitted' => max(0, $totalActiveGroups - $submittedGroupsCount), // Số nhóm chưa nộp
+            'pending' => $pendingCount,
+            'approved' => $approvedCount,
+            'rejected' => $rejectedCount,
+            'total_submissions' => $baseSubmissionQuery->count()
+        ]);
     }
 
     /**
