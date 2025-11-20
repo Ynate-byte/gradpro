@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext.jsx';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const queryClient = new QueryClient();
 
@@ -14,8 +15,10 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <AuthProvider>
         <QueryClientProvider client={queryClient}>
-          <App />
-          <Toaster richColors position="bottom-right" />
+          <ThemeProvider defaultTheme="system" storageKey="vite-ui-theme">
+            <App />
+            <Toaster richColors position="bottom-right" />
+          </ThemeProvider>
         </QueryClientProvider>
       </AuthProvider>
     </BrowserRouter>

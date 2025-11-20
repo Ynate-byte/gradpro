@@ -16,10 +16,11 @@ use App\Models\LoimoiNhom;
 use App\Models\YeucauVaoNhom;
 use App\Models\Notification;
 use App\Models\SinhvienThamgia;
-use App\Models\PhancongDetaiNhom; 
+use App\Models\PhancongDetaiNhom;
 use App\Models\NopSanpham;
 use App\Models\FileNopSanpham;
 use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 
 class NhomController extends Controller
 {
@@ -283,6 +284,8 @@ class NhomController extends Controller
         return response()->json($nhoms);
     }
 
+    // QUẢN lý YÊU CẦU VÀ LỜI MỜI
+
     /**
      * Gửi yêu cầu xin tham gia một nhóm.
      */
@@ -341,14 +344,14 @@ class NhomController extends Controller
                 'TRANGTHAI' => YeucauVaoNhom::STATUS_PENDING,
             ]);
 
-            Notification::create([
-                'user_id' => $nhom->ID_NHOMTRUONG,
-                'type' => 'JOIN_REQUEST_RECEIVED',
-                'data' => [
-                    'group_name' => $nhom->TEN_NHOM,
-                    'requester_name' => $user->HODEM_VA_TEN,
-                ]
-            ]);
+            NotificationService::send(
+                $nhom->ID_NHOMTRUONG,
+                "Yêu cầu tham gia nhóm",
+                "Sinh viên {$user->HODEM_VA_TEN} muốn tham gia nhóm {$nhom->TEN_NHOM}.",
+                'GROUP',
+                '/projects/my-group?tab=management',
+                ['requester_id' => $user->ID_NGUOIDUNG]
+            );
 
             // [LOG] Ghi nhận hành động xin vào nhóm
             ActivityLogger::log(
@@ -445,14 +448,14 @@ class NhomController extends Controller
                 'NGAYTAO' => now(),
             ]);
 
-            Notification::create([
-                'user_id' => $memberToInvite->ID_NGUOIDUNG,
-                'type' => 'GROUP_INVITATION',
-                'data' => [
-                    'group_name' => $nhom->TEN_NHOM,
-                    'inviter_name' => $user->HODEM_VA_TEN,
-                ]
-            ]);
+            NotificationService::send(
+                $memberToInvite->ID_NGUOIDUNG,
+                "Lời mời tham gia nhóm",
+                "{$user->HODEM_VA_TEN} đã mời bạn tham gia nhóm {$nhom->TEN_NHOM}.",
+                'GROUP',
+                '/projects/find-group?plan_id=' . $nhom->ID_KEHOACH,
+                ['group_id' => $nhom->ID_NHOM]
+            );
 
             // [LOG] Ghi log mời thành viên
             ActivityLogger::log(
@@ -522,8 +525,9 @@ class NhomController extends Controller
             ->whereIn('ID_NGUOI_DUOCMOI', $userIds)
             ->pluck('ID_NGUOI_DUOCMOI');
 
+        // [FIX 1] Khai báo $invitesToCreate và $realUserIds
         $invitesToCreate = [];
-        $notificationsToCreate = [];
+        $realUserIds = []; // Mảng lưu ID người được mời để gửi thông báo sau
 
         foreach ($userIds as $userId) {
             if ($pendingInvites->contains($userId)) {
@@ -540,29 +544,31 @@ class NhomController extends Controller
                 'NGAYTAO' => $now,
             ];
             
-            $notificationsToCreate[] = [
-                'user_id' => $userId,
-                'type' => 'GROUP_INVITATION',
-                'data' => json_encode([
-                    'group_name' => $nhom->TEN_NHOM,
-                    'inviter_name' => $user->HODEM_VA_TEN,
-                ]),
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
+            $realUserIds[] = $userId;
         }
         
         if (empty($invitesToCreate)) {
             return response()->json(['message' => 'Các sinh viên này đã được mời trước đó và đang chờ phản hồi.'], 409);
         }
 
-        // [FIX] Log mời nhiều người
-        DB::transaction(function () use ($invitesToCreate, $notificationsToCreate, $nhom, $userIds) {
+        // [FIX 2] Sử dụng đúng biến $invitesToCreate và $realUserIds trong transaction
+        DB::transaction(function () use ($invitesToCreate, $nhom, $realUserIds, $user) {
             LoimoiNhom::insert($invitesToCreate);
-            Notification::insert($notificationsToCreate);
+            
+            // Gửi thông báo
+            foreach ($realUserIds as $uid) {
+                NotificationService::send(
+                    $uid, 
+                    "Lời mời tham gia nhóm", 
+                    "{$user->HODEM_VA_TEN} đã mời bạn vào nhóm {$nhom->TEN_NHOM}.", 
+                    'GROUP', 
+                    '/projects/find-group?plan_id=' . $nhom->ID_KEHOACH,
+                    ['group_id' => $nhom->ID_NHOM]
+                );
+            }
 
             // Lấy danh sách tên để log
-            $invitedNames = Nguoidung::whereIn('ID_NGUOIDUNG', $userIds)->pluck('HODEM_VA_TEN')->toArray();
+            $invitedNames = Nguoidung::whereIn('ID_NGUOIDUNG', $realUserIds)->pluck('HODEM_VA_TEN')->toArray();
 
             ActivityLogger::log(
                 'INVITE_MEMBER',
@@ -603,15 +609,30 @@ class NhomController extends Controller
 
         $validated = $request->validate(['action' => 'required|in:accept,decline']);
 
+        // Trường hợp TỪ CHỐI
         if ($validated['action'] === 'decline') {
-            $yeucau->update(['TRANGTHAI' => YeucauVaoNhom::STATUS_DECLINED, 'NGAY_PHANHOI' => now(), 'ID_NGUOI_PHANHOI' => $user->ID_NGUOIDUNG]);
+            $yeucau->update([
+                'TRANGTHAI' => YeucauVaoNhom::STATUS_DECLINED, 
+                'NGAY_PHANHOI' => now(), 
+                'ID_NGUOI_PHANHOI' => $user->ID_NGUOIDUNG
+            ]);
+            
+            NotificationService::send(
+                $yeucau->ID_NGUOIDUNG,
+                "Yêu cầu bị từ chối",
+                "Yêu cầu tham gia nhóm {$nhom->TEN_NHOM} của bạn đã bị từ chối.",
+                'GROUP',
+                '/projects/find-group?plan_id=' . $nhom->ID_KEHOACH
+            );
+            
             return response()->json(['message' => 'Đã từ chối yêu cầu.']);
         }
 
+        // Trường hợp CHẤP NHẬN
         return DB::transaction(function () use ($nhom, $yeucau, $user) {
             $nhom = Nhom::where('ID_NHOM', $nhom->ID_NHOM)->lockForUpdate()->first();
 
-            // [FIX] Check dynamic max members
+            // Check dynamic max members
             $nhom->load('kehoach');
             $maxMembers = $nhom->kehoach->SO_THANHVIEN_TOIDA ?? 4;
 
@@ -637,49 +658,53 @@ class NhomController extends Controller
 
             $nhom->increment('SO_THANHVIEN_HIENTAI');
             
-            // [FIX] Check max dynamic
             if($nhom->SO_THANHVIEN_HIENTAI >= $maxMembers) {
                 $nhom->TRANGTHAI = 'Đã đủ thành viên';
                 $nhom->save();
 
-                // --- TỰ ĐỘNG HỦY/TỪ CHỐI CÁC YÊU CẦU KHÁC CỦA NHÓM ---
                 LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
                     ->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)
-                    ->update(['TRANGTHAI' => LoimoiNhom::STATUS_EXPIRED]); // Hết hạn
+                    ->update(['TRANGTHAI' => LoimoiNhom::STATUS_EXPIRED]); 
 
                 YeucauVaoNhom::where('ID_NHOM', $nhom->ID_NHOM)
                     ->where('ID_YEUCAU', '!=', $yeucau->ID_YEUCAU)
                     ->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)
-                    ->update(['TRANGTHAI' => YeucauVaoNhom::STATUS_DECLINED]); // Từ chối
+                    ->update(['TRANGTHAI' => YeucauVaoNhom::STATUS_DECLINED]); 
             }
 
-            $yeucau->update(['TRANGTHAI' => YeucauVaoNhom::STATUS_ACCEPTED, 'NGAY_PHANHOI' => now(), 'ID_NGUOI_PHANHOI' => $user->ID_NGUOIDUNG]);
+            $yeucau->update([
+                'TRANGTHAI' => YeucauVaoNhom::STATUS_ACCEPTED, 
+                'NGAY_PHANHOI' => now(), 
+                'ID_NGUOI_PHANHOI' => $user->ID_NGUOIDUNG
+            ]);
 
-            // Hủy lời mời nhóm này gửi cho user này
             LoimoiNhom::where('ID_NGUOI_DUOCMOI', $yeucau->ID_NGUOIDUNG)
                         ->where('TRANGTHAI', LoimoiNhom::STATUS_PENDING)
-                        ->whereHas('nhom', function($q) use ($nhom) {
-                             $q->where('ID_KEHOACH', $nhom->ID_KEHOACH);
-                        })
+                        ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $nhom->ID_KEHOACH))
                         ->update(['TRANGTHAI' => LoimoiNhom::STATUS_DECLINED]);
 
-            // Hủy request user này gửi nhóm khác
             YeucauVaoNhom::where('ID_NGUOIDUNG', $yeucau->ID_NGUOIDUNG)
                         ->where('ID_YEUCAU', '!=', $yeucau->ID_YEUCAU)
                         ->where('TRANGTHAI', YeucauVaoNhom::STATUS_PENDING)
-                        ->whereHas('nhom', function($q) use ($nhom) {
-                             $q->where('ID_KEHOACH', $nhom->ID_KEHOACH);
-                        })
+                        ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $nhom->ID_KEHOACH))
                         ->update(['TRANGTHAI' => YeucauVaoNhom::STATUS_CANCELLED]);
 
-            // [LOG] Ghi log chấp nhận thành viên
+            NotificationService::send(
+                $yeucau->ID_NGUOIDUNG,
+                "Yêu cầu được chấp nhận",
+                "Bạn đã chính thức trở thành thành viên của nhóm {$nhom->TEN_NHOM}.",
+                'GROUP',
+                '/projects/my-group'
+            );
+
             $requester = Nguoidung::find($yeucau->ID_NGUOIDUNG);
             ActivityLogger::log(
                 'APPROVE_MEMBER',
                 "Đã duyệt thành viên: {$requester->HODEM_VA_TEN}",
                 [
                     'mssv' => $requester->MA_DINHDANH,
-                    'role' => 'Thành viên'
+                    'role' => 'Thành viên',
+                    'request_id' => $yeucau->ID_YEUCAU
                 ],
                 $nhom->ID_NHOM,
                 'UserCheck'
@@ -688,7 +713,6 @@ class NhomController extends Controller
             return response()->json(['message' => 'Đã thêm thành viên mới vào nhóm.']);
         });
     }
-
     /**
      * Hủy lời mời (do nhóm trưởng)
      */

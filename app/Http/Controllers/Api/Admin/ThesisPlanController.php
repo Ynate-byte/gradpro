@@ -569,6 +569,19 @@ class ThesisPlanController extends Controller
 
         SinhvienThamgia::insert($dataToInsert);
 
+        $count = count($dataToInsert);
+        ActivityLogger::log(
+            'ADD_PARTICIPANT',
+            "Thêm {$count} sinh viên vào kế hoạch: {$plan->TEN_DOT}",
+            [
+                'plan_id' => $plan->ID_KEHOACH,
+                'count' => $count,
+                'student_ids' => count($validated['student_ids']) <= 5 ? $validated['student_ids'] : 'List too long'
+            ],
+            null,
+            'UserPlus'
+        );
+
         return response()->json(['message' => 'Đã thêm thành công ' . count($dataToInsert) . ' sinh viên vào kế hoạch.'], 201);
     }
 
@@ -666,13 +679,30 @@ class ThesisPlanController extends Controller
 
         try {
             DB::beginTransaction();
+            
             SinhvienThamgia::whereIn('ID_THAMGIA', $participantIds)->delete();
+            
             DB::commit();
+            
             Log::info("Admin user ID {$request->user()->ID_NGUOIDUNG} bulk removed {$count} participants from plan ID {$plan->ID_KEHOACH}.");
+            
+            ActivityLogger::log(
+                'REMOVE_PARTICIPANT',
+                "Xóa {$count} sinh viên khỏi kế hoạch: {$plan->TEN_DOT}",
+                [
+                    'plan_id' => $plan->ID_KEHOACH,
+                    'count' => $count
+                ],
+                null,
+                'UserMinus'
+            );
             return response()->json(['message' => "Đã xóa thành công {$count} sinh viên khỏi kế hoạch."]);
+
         } catch (\Exception $e) {
             DB::rollBack();
+
             Log::error("Failed to bulk remove participants from plan ID {$plan->ID_KEHOACH}: " . $e->getMessage());
+            
             return response()->json(['message' => 'Xóa hàng loạt thất bại. Vui lòng thử lại.'], 500);
         }
     }
@@ -950,6 +980,19 @@ class ThesisPlanController extends Controller
             }
     
             DB::commit();
+
+            ActivityLogger::log(
+            'IMPORT_PARTICIPANTS',
+            "Import Excel sinh viên vào kế hoạch: {$plan->TEN_DOT}",
+            [
+                'plan_id' => $plan->ID_KEHOACH,
+                'linked_count' => $countLinked,  
+                'created_count' => $countCreated, 
+                'total' => $countLinked + $countCreated
+            ],
+            null,
+            'Database'
+        );
     
             return response()->json([
                 'message' => "Import hoàn tất!",

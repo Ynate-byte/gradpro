@@ -250,6 +250,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::put('/{assignmentId}/status', [TopicAssignmentController::class, 'updateAssignmentStatus']);
             Route::delete('/{assignmentId}', [TopicAssignmentController::class, 'removeAssignment']);
         });
+
+        Route::get('/history', [HistoryController::class, 'getSystemHistory']);
+        Route::post('/history/cleanup', [HistoryController::class, 'cleanup']);
     });
 
     Route::prefix('department-head')->group(function () {

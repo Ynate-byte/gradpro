@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 
 class SubmissionController extends Controller
 {
@@ -146,6 +147,14 @@ class SubmissionController extends Controller
             $submission->phancong()->update(['TRANGTHAI' => 'Đã hoàn thành']);
         });
 
+        NotificationService::send(
+            $submission->ID_NGUOI_NOP,
+            "Bài nộp đã được duyệt",
+            "GVHD đã xác nhận bài nộp của nhóm bạn.",
+            'ACADEMIC',
+            '/projects/my-group'
+        );
+
         $submission->load('phancong.nhom');
         ActivityLogger::log(
             'CONFIRM_SUBMISSION', 
@@ -184,6 +193,14 @@ class SubmissionController extends Controller
             'NGAY_XACNHAN' => now(),
             'PHANHOI_ADMIN' => $validated['ly_do'],
         ]);
+
+        NotificationService::send(
+            $submission->ID_NGUOI_NOP,
+            "Yêu cầu nộp lại sản phẩm",
+            "Bài nộp bị từ chối. Lý do: {$request->ly_do}",
+            'ACADEMIC',
+            '/projects/my-group'
+        );
 
         $submission->load('phancong.nhom');
         ActivityLogger::log(

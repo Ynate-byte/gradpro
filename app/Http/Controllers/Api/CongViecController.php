@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Log;
 use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 
 class CongViecController extends Controller
 {
@@ -174,6 +175,17 @@ class CongViecController extends Controller
             // Gán người thực hiện ngay khi tạo (cho phép ở bước tạo)
             if (!empty($validated['assignee_ids'])) {
                 $task->nguoiDuocPhanCong()->sync($validated['assignee_ids']);
+
+                foreach ($validated['assignee_ids'] as $uid) {
+                    if ($uid == Auth::id()) continue;
+                    NotificationService::send(
+                        $uid, 
+                        "Bạn được giao công việc mới", 
+                        "Bạn được gán vào công việc: {$task->TEN_CONGVIEC}", 
+                        'TASK', 
+                        "/projects/my-group/kanban/{$nhom->ID_NHOM}"
+                    );
+                }
             }
         });
 
@@ -366,6 +378,17 @@ class CongViecController extends Controller
         ]);
         
         $congviec->nguoiDuocPhanCong()->sync($validated['user_ids']);
+
+        foreach ($validated['user_ids'] as $userId) {
+            if ($userId == Auth::id()) continue;
+            NotificationService::send(
+                $userId,
+                "Bạn được giao công việc",
+                "Bạn đã được gán vào công việc: {$congviec->TEN_CONGVIEC}",
+                'TASK',
+                "/projects/my-group/kanban/{$congviec->ID_NHOM}"
+            );
+        }
 
         return response()->json($congviec->load('nguoiDuocPhanCong:ID_NGUOIDUNG,HODEM_VA_TEN'));
     }

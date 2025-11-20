@@ -11,8 +11,8 @@ const Login = lazy(() => import('./features/auth/Login'));
 const HomePage = lazy(() => import('./features/home/HomePage'));
 const NewsManagementPage = lazy(() => import('./features/news-management/index.jsx'));
 const NewsDetail = lazy(() => import('./features/news-management/NewsDetail'));
-// Đảm bảo file này tồn tại tại: src/features/history/PersonalHistoryPage.jsx
 const PersonalHistoryPage = lazy(() => import('./features/history/PersonalHistoryPage'));
+const AppearancePage = lazy(() => import('./features/admin/settings/AppearancePage.jsx'));
 
 // --- Import components Giảng viên (bao gồm Dashboard) ---
 const LecturerDashboard = lazy(() => import('./features/lecturer/dashboard/LecturerDashboard.jsx'));
@@ -51,6 +51,8 @@ const AdminQuotaManager = lazy(() => import('./features/admin/thesis-topic-manag
 const ListNhomChamDiem = lazy(() => import('./features/admin/chamdiem/ListNhomChamDiem.jsx'));
 const ChamDiemChiTiet = lazy(() => import('./features/admin/chamdiem/ChamDiemChiTiet.jsx'));
 const GeneralSettingsPage = lazy(() => import('./features/admin/settings/GeneralSettingsPage.jsx'));
+const AdminActivityLog = lazy(() => import('./features/admin/activity-log/index.jsx'));
+const NotificationPage = lazy(() => import('./features/notifications/index.jsx'));
 
 // Component placeholder cho các trang chưa có nội dung
 const PlaceholderPage = ({ title }) => (
@@ -82,15 +84,14 @@ function PublicRoute({ children }) {
 function App() {
   const { user } = useAuth();
 
-  // ----- Logic kiểm tra quyền (Đã cập nhật cho N-N Relation) -----
   const role = user?.vaitro?.TEN_VAITRO;
   
-  // Lấy danh sách mã chức vụ (nếu có)
+  // Lấy danh sách mã chức vụ
   const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
 
   const isAdmin = role === 'Admin';
   
-  // Kiểm tra quyền dựa trên Role HOẶC Mã Chức vụ
+  // Phân quyền chi tiết
   const isTruongKhoa = isAdmin || role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
   const isGiaoVu = isAdmin || role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
   const isTruongBoMon = isAdmin || positionCodes.includes('TRUONG_BOMON');
@@ -98,13 +99,8 @@ function App() {
   const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
   const isSinhVien = role === 'Sinh viên';
 
-  // Quyền xem menu Admin (Admin, Trưởng khoa, Giáo vụ)
   const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu;
-  
-  // Quyền xem các mục của Giảng viên (GV, TK, GVụ, Admin)
   const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
-  
-  // Quyền chấm điểm (GV, TK, GVụ, Admin)
   const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
   return (
@@ -140,22 +136,21 @@ function App() {
             index 
             element={
               canViewGiangVienRoutes && !isSinhVien 
-                ? <LecturerDashboard />  // Trang chủ của Giảng viên
-                : <HomePage />           // Trang chủ của Sinh viên (hoặc mặc định)
+                ? <LecturerDashboard />  
+                : <HomePage />           
             } 
           />
 
           {/* Các Routes chung */}
-          <Route path="notifications" element={<PlaceholderPage title="Thông báo" />} />
+          <Route path="notifications" element={<NotificationPage />} />
           <Route path="starred" element={<PlaceholderPage title="Đã lưu" />} />
           <Route path="students" element={<PlaceholderPage title="Sinh viên" />} />
           <Route path="/profile" element={<ProfilePage />} />
           
-          {/* [ĐÃ SỬA] Chỉ giữ lại 1 route cho History và trỏ đúng component */}
           <Route path="history" element={<PersonalHistoryPage />} />
 
           <Route path="settings/account" element={<PlaceholderPage title="Tài khoản" />} />
-          <Route path="settings/appearance" element={<PlaceholderPage title="Giao diện" />} />
+          <Route path="settings/appearance" element={<AppearancePage />} />
 
           {/* Các Routes chung tin tức */}
           <Route path="news" element={<NewsManagementPage />} />
@@ -237,6 +232,9 @@ function App() {
               {/* Routes Cài đặt & Quota */}
               <Route path="admin/settings/general" element={<GeneralSettingsPage />} />
               <Route path="admin/quota-management" element={<AdminQuotaManager />} />
+              
+              {/*Route Nhật ký hệ thống */}
+              <Route path="admin/system-logs" element={<AdminActivityLog />} />
             </>
           )}
         </Route>

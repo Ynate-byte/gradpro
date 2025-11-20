@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Services\NotificationService;
 
 class TopicAssignmentController extends Controller
 {
@@ -191,6 +192,17 @@ class TopicAssignmentController extends Controller
                     'TRANGTHAI' => 'Đang phân công',
                 ]);
             }
+
+            $lecturer = \App\Models\Giangvien::find($request->ID_GIANGVIEN);
+            if ($lecturer) {
+                NotificationService::send(
+                    $lecturer->ID_NGUOIDUNG,
+                    "Phân công chỉ tiêu hướng dẫn",
+                    "Bạn được phân công hướng dẫn tối đa {$request->SO_DETAI_PHANCONG} đề tài.",
+                    'ACADEMIC',
+                    '/lecturer/quota-management'
+                );
+            }
         });
 
         return response()->json(['message' => 'Cập nhật phân công đề tài thành công']);
@@ -361,6 +373,19 @@ class TopicAssignmentController extends Controller
                 $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
             }
         });
+
+        $lecturer = \App\Models\Giangvien::find($request->ID_GIANGVIEN);
+        $topic = \App\Models\Detai::find($request->ID_DETAI);
+        
+        if ($lecturer && $topic) {
+            NotificationService::send(
+                $lecturer->ID_NGUOIDUNG,
+                "Phân công giám sát đề tài",
+                "Bạn được chỉ định làm GVHD cho đề tài: {$topic->TEN_DETAI}",
+                'ACADEMIC',
+                '/lecturer/thesis-topics'
+            );
+        }
 
         return response()->json(['message' => "Đề tài '{$topic->TEN_DETAI}' đã được gán GVHD thành công."]);
     }

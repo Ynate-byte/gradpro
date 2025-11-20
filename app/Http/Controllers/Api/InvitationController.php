@@ -100,6 +100,13 @@ class InvitationController extends Controller
                 ->where('TRANGTHAI', 'Đang chờ')
                 ->update(['TRANGTHAI' => 'Từ chối']); // Tự động từ chối các nhóm khác
             
+            ActivityLogger::log(
+                'JOIN_GROUP', 
+                "Đã tham gia nhóm {$nhom->TEN_NHOM}", 
+                ['group_id' => $nhom->ID_NHOM],
+                $nhom->ID_NHOM,
+                'UserPlus'
+            );
             return response()->json(['message' => 'Chào mừng bạn đến với nhóm mới!']);
         });
     }

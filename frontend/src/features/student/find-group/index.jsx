@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { findGroups, requestToJoin, cancelJoinRequest, getMyActivePlans } from '@/api/groupService';
+import { findGroups, requestToJoin, cancelJoinRequest, getMyActivePlans, getMyGroup } from '@/api/groupService'; // [MỚI] Thêm getMyGroup
 import { getChuyenNganhs } from '@/api/userService';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
+
+// UI Components
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,31 +15,38 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-    Search, Users, Filter, ArrowLeft, UserPlus,
-    Loader2, AlertCircle, Undo2, Info, GraduationCap, Crown
+import { 
+    Search, Users, Filter, ArrowLeft, UserPlus, 
+    Loader2, AlertCircle, Undo2, Info, GraduationCap, Crown, Lock 
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"; // [MỚI]
 
 const getInitials = (name) => name ? name.charAt(0).toUpperCase() : '?';
 
-const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
+// --- Component: Group List Item ---
+const GroupListItem = ({ group, onRequestJoin, onCancelRequest, hasGroup }) => { // [MỚI] Nhận prop hasGroup
     const maxMembers = group.kehoach?.SO_THANHVIEN_TOIDA || 4;
     const currentMembers = group.SO_THANHVIEN_HIENTAI;
     const progress = (currentMembers / maxMembers) * 100;
     const isFull = currentMembers >= maxMembers;
     const progressColor = isFull ? "bg-red-500" : (progress >= 75 ? "bg-yellow-500" : "bg-green-500");
 
+    // [MỚI] Kiểm tra xem người dùng có phải là thành viên của nhóm này không
+    // (Logic này cần thiết nếu API findGroups trả về cả nhóm mình đang tham gia - tùy backend)
+    // Tuy nhiên, quan trọng hơn là disable nút nếu hasGroup = true
+    
     return (
         <div className="flex flex-col md:flex-row items-center justify-between py-2 px-4 border rounded-lg bg-card hover:shadow-sm hover:bg-accent/5 transition-all gap-3 group relative">
+             
+            {/* 1. CỘT TRÁI */}
             <div className="w-full md:w-[30%] flex flex-col justify-center shrink-0 min-w-0">
                 <div className="flex items-center gap-2">
                     <Popover>
@@ -46,7 +55,7 @@ const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
                                 {group.TEN_NHOM}
                             </h3>
                         </PopoverTrigger>
-
+                        
                         <PopoverContent className="w-96 p-0" align="start">
                             <div className="p-4 border-b bg-muted/30">
                                 <h4 className="font-semibold text-sm flex items-center gap-2">
@@ -117,11 +126,12 @@ const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
                 </div>
             </div>
 
+            {/* 2. CỘT GIỮA */}
             <div className="hidden md:flex flex-1 items-center justify-between px-4 border-l border-r border-dashed border-gray-200 dark:border-gray-800 h-full min-h-[40px]">
                 <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-1 italic flex-1 mr-4">
                     {group.MOTA || "Chưa có mô tả..."}
                 </p>
-
+                
                 <div className="flex items-center shrink-0">
                     <div className="flex -space-x-1.5 overflow-hidden mr-2">
                         {group.thanhviens?.slice(0, 4).map((tv) => (
@@ -143,9 +153,10 @@ const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
                 </div>
             </div>
 
+            {/* 3. CỘT PHẢI: HÀNH ĐỘNG */}
             <div className="w-full md:w-auto flex items-center justify-between md:justify-end gap-3 shrink-0">
                 <div className="flex md:hidden flex-1 flex-col items-start mr-2">
-                    <Progress value={progress} className="h-1.5 w-full" indicatorClassName={progressColor} />
+                     <Progress value={progress} className="h-1.5 w-full" indicatorClassName={progressColor} />
                 </div>
 
                 <div className="hidden md:block w-16 mr-2">
@@ -154,7 +165,7 @@ const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
 
                 <div className="w-[100px] flex justify-end">
                     {group.da_gui_yeu_cau ? (
-                        <Button
+                        <Button 
                             variant="outline" size="sm"
                             className="w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 h-8 text-xs px-2"
                             onClick={(e) => { e.stopPropagation(); onCancelRequest(group.id_yeu_cau_da_gui); }}
@@ -162,14 +173,18 @@ const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
                             <Undo2 className="w-3 h-3 mr-1.5" /> Hủy
                         </Button>
                     ) : (
-                        <Button
+                        <Button 
                             size="sm"
-                            className="w-full h-8 text-xs px-2"
-                            disabled={isFull}
+                            className={`w-full h-8 text-xs px-2 ${hasGroup ? "bg-gray-100 text-gray-400 hover:bg-gray-100 border-gray-200" : ""}`}
+                            // [MỚI] Disable nếu đã có nhóm (hasGroup) HOẶC nhóm đầy
+                            disabled={isFull || hasGroup}
                             onClick={(e) => { e.stopPropagation(); onRequestJoin(group); }}
-                            variant={isFull ? "secondary" : "default"}
+                            variant={isFull || hasGroup ? "secondary" : "default"}
                         >
-                            {isFull ? (
+                            {hasGroup ? (
+                                // [MỚI] Trạng thái Đã có nhóm
+                                <span className="flex items-center"><Lock className="w-3 h-3 mr-1.5" /> Khóa</span>
+                            ) : isFull ? (
                                 <span className="flex items-center text-muted-foreground"><AlertCircle className="w-3 h-3 mr-1.5" /> Đầy</span>
                             ) : (
                                 <span className="flex items-center"><UserPlus className="w-3 h-3 mr-1.5" /> Xin vào</span>
@@ -182,11 +197,12 @@ const GroupListItem = ({ group, onRequestJoin, onCancelRequest }) => {
     );
 };
 
+// --- Main Component ---
 export default function FindGroupPage() {
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const queryClient = useQueryClient();
-
+    
     const planId = searchParams.get('plan_id');
     const [search, setSearch] = useState('');
     const [debouncedSearch] = useDebounce(search, 500);
@@ -194,12 +210,23 @@ export default function FindGroupPage() {
     const [page, setPage] = useState(1);
     const [requestDialog, setRequestDialog] = useState({ open: false, group: null, message: '' });
 
+    // 1. Fetch danh sách kế hoạch
     const { data: activePlans, isLoading: loadingPlans } = useQuery({
         queryKey: ['myActivePlans'],
         queryFn: getMyActivePlans,
         staleTime: 5 * 60 * 1000,
     });
 
+    // 2. [MỚI] Kiểm tra xem sinh viên ĐÃ CÓ NHÓM trong kế hoạch này chưa
+    const { data: myGroupData, isLoading: loadingMyGroup } = useQuery({
+        queryKey: ['myGroupDetails', planId],
+        queryFn: () => getMyGroup({ plan_id: planId }),
+        enabled: !!planId,
+    });
+
+    const hasGroup = myGroupData?.has_group || false; // Biến quan trọng để disable nút
+
+    // Tự động chọn kế hoạch
     useEffect(() => {
         if (!loadingPlans && activePlans?.length > 0 && !planId) {
             const defaultPlanId = String(activePlans[0].ID_KEHOACH);
@@ -207,18 +234,20 @@ export default function FindGroupPage() {
         }
     }, [loadingPlans, activePlans, planId, setSearchParams]);
 
+    // 3. Fetch Chuyên ngành
     const { data: majors } = useQuery({
         queryKey: ['chuyenNganhs'],
         queryFn: getChuyenNganhs,
         staleTime: Infinity
     });
 
+    // 4. Fetch Danh sách nhóm
     const { data: groupsData, isLoading: loadingGroups } = useQuery({
         queryKey: ['findGroups', planId, debouncedSearch, selectedMajor, page],
-        queryFn: () => findGroups({
-            search: debouncedSearch,
+        queryFn: () => findGroups({ 
+            search: debouncedSearch, 
             ID_CHUYENNGANH: selectedMajor === 'all' ? null : selectedMajor,
-            page
+            page 
         }, planId),
         enabled: !!planId,
         keepPreviousData: true,
@@ -255,6 +284,7 @@ export default function FindGroupPage() {
         setPage(1);
     };
 
+    // --- Loading & Empty States ---
     if (loadingPlans || (!planId && activePlans?.length > 0)) {
         return (
             <div className="p-4 md:p-8 space-y-6 container mx-auto max-w-7xl">
@@ -287,9 +317,9 @@ export default function FindGroupPage() {
                         <Users className="h-6 w-6 text-primary" /> Tìm kiếm Nhóm
                     </h1>
                 </div>
-
+                
                 <div className="w-full md:w-auto">
-                    <Select value={planId} onValueChange={handlePlanChange}>
+                     <Select value={planId} onValueChange={handlePlanChange}>
                         <SelectTrigger className="w-full md:w-[280px] bg-background">
                             <SelectValue />
                         </SelectTrigger>
@@ -304,11 +334,23 @@ export default function FindGroupPage() {
                 </div>
             </div>
 
+            {/* [MỚI] Alert thông báo nếu đã có nhóm */}
+            {hasGroup && (
+                <Alert className="bg-blue-50 border-blue-200 text-blue-800">
+                    <Info className="h-4 w-4 text-blue-600" />
+                    <AlertTitle>Thông báo</AlertTitle>
+                    <AlertDescription>
+                        Bạn đã là thành viên của nhóm <strong>{myGroupData.group_data.TEN_NHOM}</strong> trong đợt này. 
+                        Bạn không thể xin vào nhóm khác trừ khi thoát nhóm hiện tại.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             <div className="bg-card p-4 rounded-lg border shadow-sm grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
                 <div className="md:col-span-2 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Tìm tên nhóm, tên thành viên..."
+                    <Input 
+                        placeholder="Tìm tên nhóm, tên thành viên..." 
                         className="pl-9 h-11"
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -344,11 +386,12 @@ export default function FindGroupPage() {
                                 Tìm thấy {groupsData.total} nhóm
                             </div>
                             {groupsData.data.map(group => (
-                                <GroupListItem
-                                    key={group.ID_NHOM}
-                                    group={group}
+                                <GroupListItem 
+                                    key={group.ID_NHOM} 
+                                    group={group} 
                                     onRequestJoin={handleOpenRequestDialog}
                                     onCancelRequest={(reqId) => cancelMutation.mutate(reqId)}
+                                    hasGroup={hasGroup} 
                                 />
                             ))}
                         </>
@@ -375,11 +418,15 @@ export default function FindGroupPage() {
                     <DialogHeader>
                         <DialogTitle>Gửi yêu cầu tham gia</DialogTitle>
                         <DialogDescription>
-                            Gửi lời nhắn đến trưởng nhóm <strong>{requestDialog.group?.TEN_NHOM}</strong>.
+                            Gửi lời nhắn đến trưởng nhóm <strong>{requestDialog.group?.TEN_NHOM}</strong>.<br />
+                            <span class="text-red-600 font-semibold mt-2">
+                                Lưu ý là một khi vào nhóm thì không thể rời nhóm đâu nha.
+                            </span>
                         </DialogDescription>
+
                     </DialogHeader>
                     <div className="py-2">
-                        <Textarea
+                        <Textarea 
                             placeholder="Chào bạn, mình muốn tham gia nhóm..."
                             value={requestDialog.message}
                             onChange={(e) => setRequestDialog(prev => ({ ...prev, message: e.target.value }))}

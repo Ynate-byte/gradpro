@@ -134,4 +134,147 @@ class HistoryController extends Controller
 
         return response()->json($history);
     }
+
+    /**
+     * (Admin) Lấy lịch sử hệ thống
+     * Logic: Mặc định hiện log của Admin + Giảng viên. Ẩn log của Sinh viên.
+     */
+    public function getSystemHistory(Request $request)
+    {
+        // 1. Kiểm tra quyền truy cập API
+        if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $query = LichSuHoatDong::with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH,ID_VAITRO')
+            ->orderBy('NGAY_TAO', 'desc');
+
+        // --- LOGIC LỌC CHÍNH ---
+
+        if ($request->filled('user_id')) {
+            // CASE A: Đang tìm kiếm/lọc một người cụ thể
+            // -> Hiển thị TẤT CẢ lịch sử của người đó (Kể cả Sinh viên)
+            $query->where('ID_NGUOIDUNG', $request->user_id);
+
+        } else {
+            // CASE B: Màn hình chính (Mặc định)
+            // -> Hiển thị: Admin, Giáo vụ, Trưởng khoa, Giảng viên.
+            // -> Ẩn: Sinh viên.
+            
+            $query->whereHas('nguoidung', function($q) {
+                $q->whereHas('vaitro', function($vq) {
+                    // Chỉ lấy những người KHÔNG PHẢI là 'Sinh viên'
+                    $vq->where('TEN_VAITRO', '!=', 'Sinh viên');
+                });
+            });
+
+            // Vẫn ẩn Login/Logout để danh sách gọn gàng (trừ khi admin chọn lọc loại Login)
+            if (!$request->filled('type') || $request->type === 'ALL') {
+                $query->whereNotIn('LOAI_HANH_DONG', ['LOGIN', 'LOGOUT']);
+            }
+        }
+
+        // --- CÁC BỘ LỌC PHỤ (Giữ nguyên) ---
+
+        // Lọc theo Loại hành động
+        if ($request->filled('type') && $request->type !== 'ALL') {
+            $query->where('LOAI_HANH_DONG', 'like', "%{$request->type}%");
+        }
+
+        // Lọc theo từ khóa
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('TIEU_DE', 'like', "%{$search}%")
+                  ->orWhereHas('nguoidung', function($subQ) use ($search) {
+                      $subQ->where('HODEM_VA_TEN', 'like', "%{$search}%")
+                           ->orWhere('MA_DINHDANH', 'like', "%{$search}%");
+                  });
+            });
+        }
+
+        // Lọc theo thời gian
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            try {
+                $start = Carbon::parse($request->start_date)->startOfDay();
+                $end = Carbon::parse($request->end_date)->endOfDay();
+                $query->whereBetween('NGAY_TAO', [$start, $end]);
+            } catch (\Exception $e) {}
+        }
+
+        $logs = $query->paginate($request->per_page ?? 20);
+
+        return response()->json($logs);
+    }
+
+    public function cleanup(Request $request)
+    {
+        // Chỉ Admin cấp cao mới được dọn dẹp
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Chỉ Quản trị viên mới có quyền xóa dữ liệu hệ thống.'], 403);
+        }
+
+        $validated = $request->validate([
+            'mode' => 'required|in:time,plan,auth',
+            'value' => 'required' // Số tháng hoặc ID kế hoạch (nếu cần mở rộng)
+        ]);
+
+        $deletedCount = 0;
+        $mode = $validated['mode'];
+        $value = $validated['value'];
+
+        DB::transaction(function () use ($mode, $value, &$deletedCount) {
+            if ($mode === 'time') {
+                // Xóa log cũ hơn X tháng
+                $date = \Carbon\Carbon::now()->subMonths($value);
+                $deletedCount = LichSuHoatDong::where('NGAY_TAO', '<', $date)->delete();
+                
+                $logMessage = "Đã dọn dẹp nhật ký cũ hơn {$value} tháng.";
+            } 
+            elseif ($mode === 'auth') {
+                // Xóa log Login/Logout cũ hơn X tháng
+                $date = \Carbon\Carbon::now()->subMonths($value);
+                $deletedCount = LichSuHoatDong::whereIn('LOAI_HANH_DONG', ['LOGIN', 'LOGOUT'])
+                    ->where('NGAY_TAO', '<', $date)
+                    ->delete();
+
+                $logMessage = "Đã dọn dẹp lịch sử truy cập cũ hơn {$value} tháng.";
+            } 
+            elseif ($mode === 'plan') {
+                // Xóa log của các NHÓM thuộc các Kế hoạch đã "Đã hoàn thành"
+                // Bước 1: Lấy ID các kế hoạch đã đóng
+                $finishedPlanIds = \App\Models\KehoachKhoaluan::where('TRANGTHAI', 'Đã hoàn thành')->pluck('ID_KEHOACH');
+                
+                if ($finishedPlanIds->isEmpty()) {
+                    $deletedCount = 0;
+                } else {
+                    // Bước 2: Lấy ID các nhóm thuộc kế hoạch đó
+                    $groupIds = \App\Models\Nhom::whereIn('ID_KEHOACH', $finishedPlanIds)->pluck('ID_NHOM');
+                    
+                    // Bước 3: Xóa log thuộc các nhóm đó
+                    if ($groupIds->isNotEmpty()) {
+                        $deletedCount = LichSuHoatDong::whereIn('ID_NHOM', $groupIds)->delete();
+                    }
+                }
+
+                $logMessage = "Đã dọn dẹp nhật ký của các Kế hoạch đã kết thúc.";
+            }
+
+            // Ghi log hành động dọn dẹp (Log này không bị xóa vì nó vừa được tạo mới nhất)
+            if ($deletedCount > 0) {
+                \App\Services\ActivityLogger::log(
+                    'SYSTEM_CLEANUP',
+                    $logMessage,
+                    ['mode' => $mode, 'deleted_rows' => $deletedCount],
+                    null,
+                    'Eraser'
+                );
+            }
+        });
+
+        return response()->json([
+            'message' => "Dọn dẹp thành công. Đã xóa {$deletedCount} bản ghi.",
+            'deleted_count' => $deletedCount
+        ]);
+    }
 }

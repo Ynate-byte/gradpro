@@ -20,3 +20,11 @@ export const getPersonalHistoryStats = () => {
 export const getGroupHistory = (groupId, params) => {
     return axiosClient.get(`/history/group/${groupId}`, { params }).then(res => res.data);
 };
+
+export const getSystemHistory = (params) => {
+    return axiosClient.get('/admin/history', { params }).then(res => res.data);
+};
+
+export const cleanupLogs = (data) => {
+    return axiosClient.post('/admin/history/cleanup', data).then(res => res.data);
+};

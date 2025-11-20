@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 
 class LichHopController extends Controller
 {
@@ -118,6 +119,25 @@ class LichHopController extends Controller
             $validated,
             ['ID_NGUOITAO' => $user->ID_NGUOIDUNG]
         ));
+
+        $memberIds = \App\Models\ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
+        ->where('ID_NGUOIDUNG', '!=', $user->ID_NGUOIDUNG)
+        ->pluck('ID_NGUOIDUNG')
+        ->toArray();
+
+        if ($nhom->phancongDetaiNhom && $nhom->phancongDetaiNhom->ID_GVHD != $user->ID_NGUOIDUNG) {
+        $memberIds[] = $nhom->phancongDetaiNhom->ID_GVHD;
+        }
+
+        foreach ($memberIds as $mid) {
+            NotificationService::send(
+                $mid,
+                "Lịch họp mới: {$lichHop->TIEUDE_LICHHOP}",
+                "Thời gian: " . \Carbon\Carbon::parse($lichHop->THOIGIAN_BATDAU)->format('H:i d/m/Y'),
+                'TASK',
+                "/projects/my-group/schedule/{$nhom->ID_NHOM}"
+            );
+        }
 
         ActivityLogger::log(
             'CREATE_MEETING', 

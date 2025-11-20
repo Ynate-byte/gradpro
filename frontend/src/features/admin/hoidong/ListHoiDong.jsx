@@ -263,7 +263,7 @@ const ListHoiDong = () => {
         search: debouncedSearch,
         kehoach: selectedPlanId,
         chuyennganh: columnFilters.find((f) => f.id === "chuyennganh")?.value,
-        loai: columnFilters.find((f) => f.id === "loai")?.value,
+        loai: columnFilters.find((f) => f.id === "LOAI")?.value,
         trang_thai_cham_diem: columnFilters.find((f) => f.id === "trang_thai_cham_diem")?.value,
       }),
     placeholderData: (prev) => prev,
@@ -666,7 +666,7 @@ const ListHoiDong = () => {
               onSearchChange={setSearchTerm}
               chuyenNganhFilterColumnId="chuyennganh"
               chuyenNganhFilterOptions={filterOptions?.chuyennganh}
-              khoaBomonFilterColumnId="loai" 
+              khoaBomonFilterColumnId="LOAI" 
               khoaBomonFilterTitle="Loại Hội đồng"
               khoaBomonFilterOptions={loaiOptions}
               statusColumnId="trang_thai_cham_diem"
