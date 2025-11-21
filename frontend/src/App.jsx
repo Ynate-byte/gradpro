@@ -39,6 +39,7 @@ const StudentDetailDashboard = lazy(() => import('./features/student/dashboard/D
 const TopicReviewerAssignmentPage = lazy(() => import('./features/department-head/topic-reviewer-assignment/index.jsx'));
 
 // --- Import các components Quản trị ---
+const AdminDashboard = lazy(() => import('./features/admin/dashboard/AdminDashboard.jsx')); // [MỚI] Import Dashboard Admin
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
 const GroupAdminPage = lazy(() => import('./features/admin/group-management/index.jsx'));
 const ThesisPlanManagementPage = lazy(() => import('./features/admin/thesis-plan-management/index.jsx'));
@@ -139,7 +140,7 @@ function App() {
             element={
               canViewGiangVienRoutes && !isSinhVien 
                 ? <LecturerDashboard />  
-                : <HomePage />           
+                : <HomePage />          
             } 
           />
 
@@ -209,6 +210,9 @@ function App() {
           {/* Routes dành cho Admin, Trưởng Khoa, Giáo Vụ */}
           {canViewAdminRoutes && (
             <>
+              {/* [MỚI] Route Dashboard Admin */}
+              <Route path="admin/dashboard" element={<AdminDashboard />} />
+
               <Route path="admin/users" element={<UserManagementPage />} />
               <Route path="admin/groups" element={<GroupAdminPage />} />
               <Route path="admin/news" element={<NewsManagementPage />} />

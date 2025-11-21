@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight,
     LogOut, CircleUserRound, Newspaper, Shield, CheckCircle, GraduationCap, PenSquare,
-    Layers, History, FileText, Activity // [QUAN TRỌNG] Đảm bảo đã import Activity
+    Layers, History, FileText, Activity, Star, PieChart // [THÊM] Import PieChart
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -67,11 +67,25 @@ export function AppSidebar() {
                     icon: LayoutDashboard,
                     href: "/",
                     subItems: [
+                        // [1] Dashboard cho Admin/Giáo vụ
+                        ...(canViewAdminMenu ? [
+                             { href: "/admin/dashboard", title: "Bảng điều khiển (Admin)" }
+                        ] : []),
+
+                        // [2] Dashboard cho Sinh viên
                         ...(isSinhVien ? [
                              { href: "/student/dashboard", title: "Bảng điều khiển (SV)" }
                         ] : []),
+
+                        // [3] Dashboard cho Giảng viên
+                        // LecturerDashboard được render tại trang chủ "/"
+                        ...(canViewGiangVienRoutes && !isSinhVien ? [
+                             { href: "/", title: "Bảng điều khiển (GV)" } 
+                        ] : []),
+
                         { href: "/notifications", title: "Thông báo" },
                         { href: "/history", title: "Lịch sử hoạt động" }, 
+                        { href: "/starred", title: "Mục đã lưu" },
                     ],
                 },
                 { title: "Tin tức", href: "/news", icon: Newspaper },
@@ -125,6 +139,9 @@ export function AppSidebar() {
         {
             label: "Quản trị",
             items: [
+                // [MỚI] Thêm Dashboard vào đầu danh sách quản trị
+                { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart },
+                
                 { title: "Người dùng", href: "/admin/users", icon: Shield },
                 { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
                 { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
@@ -132,7 +149,6 @@ export function AppSidebar() {
                 { title: "Phân công Quota", href: "/admin/quota-management", icon: Layers },
                 { title: "Đề tài Khóa luận", href: "/admin/thesis-topics", icon: BookCopy }, 
                 { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
-                // [MỚI] Thêm menu Nhật ký hệ thống
                 { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity },
                 { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
             ],

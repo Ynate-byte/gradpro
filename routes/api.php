@@ -31,6 +31,7 @@ use App\Http\Controllers\Api\ProfileController;
 use App\Http\Controllers\Api\NewsController;
 use App\Http\Controllers\Api\HistoryController;
 use App\Http\Controllers\Api\Student\StudentDashboardController;
+use App\Http\Controllers\Api\Admin\AdminDashboardController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -256,6 +257,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::get('/history', [HistoryController::class, 'getSystemHistory']);
         Route::post('/history/cleanup', [HistoryController::class, 'cleanup']);
+        Route::get('/dashboard/stats', [AdminDashboardController::class, 'getStats']);
     });
 
     Route::prefix('department-head')->group(function () {

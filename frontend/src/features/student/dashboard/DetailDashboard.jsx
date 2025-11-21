@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getStudentDashboardDetail } from '@/api/studentDashboardService';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,269 +11,219 @@ import { Separator } from '@/components/ui/separator';
 import { 
     ArrowLeft, Calendar, Users, BookOpen, 
     CheckCircle2, Clock, AlertTriangle, ArrowRight, 
-    LayoutDashboard, ChevronRight, User
+    LayoutDashboard, ChevronRight, User, FileText, Mail, Phone
 } from 'lucide-react';
-import { format, isWithinInterval, parseISO } from 'date-fns';
+import { format, isWithinInterval, parseISO, formatDistance } from 'date-fns';
 import { vi } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 
-// --- COMPONENT: TIMELINE ---
-const PlanTimeline = ({ milestones }) => {
+// --- COMPONENT: COMPACT TIMELINE ---
+const CompactTimeline = ({ milestones }) => {
     const now = new Date();
-
     return (
-        <div className="relative">
-            <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-800" />
-            <div className="space-y-8 pl-0">
-                {milestones.map((moc, index) => {
-                    const start = parseISO(moc.NGAY_BATDAU);
-                    const end = parseISO(moc.NGAY_KETTHUC);
-                    const isActive = isWithinInterval(now, { start, end });
-                    const isPast = now > end;
+        <div className="relative space-y-0">
+            <div className="absolute left-[7px] top-2 bottom-2 w-[1px] bg-border" />
+            {milestones.map((moc) => {
+                const start = parseISO(moc.NGAY_BATDAU);
+                const end = parseISO(moc.NGAY_KETTHUC);
+                const isActive = isWithinInterval(now, { start, end });
+                const isPast = now > end;
 
-                    return (
-                        <div key={moc.ID} className="relative flex items-start gap-4 group">
-                            {/* Dot Indicator */}
-                            <div className={`absolute left-[-5px] mt-1.5 h-3 w-3 rounded-full border-2 z-10 transition-all
-                                ${isActive 
-                                    ? 'bg-blue-600 border-blue-600 scale-125 ring-4 ring-blue-100 dark:ring-blue-900' 
-                                    : isPast 
-                                        ? 'bg-green-500 border-green-500' 
-                                        : 'bg-white border-gray-300 dark:bg-gray-950 dark:border-gray-600'
-                                }`} 
-                            />
-                            
-                            <div className={`flex-1 ml-8 p-4 rounded-lg border transition-all
-                                ${isActive 
-                                    ? 'bg-white dark:bg-gray-900 border-blue-200 dark:border-blue-800 shadow-md' 
-                                    : 'bg-transparent border-transparent opacity-70 hover:opacity-100'
-                                }`}>
-                                <div className="flex justify-between items-start mb-1">
-                                    <h4 className={`font-bold text-sm ${isActive ? 'text-blue-700 dark:text-blue-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                                        {moc.TEN_SUKIEN}
-                                    </h4>
-                                    {isActive && <Badge className="bg-blue-600 text-[10px]">Đang diễn ra</Badge>}
-                                </div>
-                                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-2">
-                                    <Calendar className="w-3 h-3" />
-                                    {format(start, 'dd/MM')} - {format(end, 'dd/MM/yyyy')}
-                                </div>
-                                {moc.MOTA && (
-                                    <p className="text-xs text-gray-600 dark:text-gray-400 line-clamp-2">
-                                        {moc.MOTA}
-                                    </p>
-                                )}
-                            </div>
+                return (
+                    <div key={moc.ID} className="relative pl-6 py-3 group">
+                        <div className={cn(
+                            "absolute left-0 top-4 w-3.5 h-3.5 rounded-full border-2 z-10 bg-background",
+                            isActive ? "border-blue-600 ring-2 ring-blue-100" : 
+                            isPast ? "border-green-500 bg-green-50" : "border-gray-300"
+                        )}>
+                            {isActive && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full m-0.5" />}
                         </div>
-                    );
-                })}
-            </div>
+                        <div>
+                            <p className={cn("text-xs font-bold leading-none mb-1", isActive ? "text-blue-700" : "text-foreground")}>
+                                {moc.TEN_SUKIEN}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground font-mono">
+                                {format(end, 'dd/MM')}
+                            </p>
+                        </div>
+                    </div>
+                );
+            })}
         </div>
     );
 };
 
+// --- COMPONENT: INFO ROW ---
+const InfoRow = ({ icon: Icon, label, value, subValue }) => (
+    <div className="flex items-start gap-3 p-3 rounded-md hover:bg-accent/50 transition-colors">
+        <Icon className="w-4 h-4 text-muted-foreground mt-0.5" />
+        <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted-foreground font-medium uppercase">{label}</p>
+            <p className="text-sm font-semibold truncate" title={value}>{value}</p>
+            {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
+        </div>
+    </div>
+);
+
 export default function DetailDashboard() {
     const { planId } = useParams();
     const navigate = useNavigate();
-
-    const { data, isLoading, isError } = useQuery({
+    const { data, isLoading } = useQuery({
         queryKey: ['studentDashboardDetail', planId],
         queryFn: () => getStudentDashboardDetail(planId),
         enabled: !!planId
     });
 
-    if (isLoading) return <div className="p-8"><Skeleton className="h-[500px] w-full rounded-xl" /></div>;
-    if (isError || !data) return <div className="p-8 text-center">Không tìm thấy dữ liệu kế hoạch.</div>;
+    if (isLoading) return <div className="p-6"><Skeleton className="h-32 mb-4"/><Skeleton className="h-96"/></div>;
+    if (!data) return <div className="p-6">Không tìm thấy dữ liệu.</div>;
 
     const { plan, group, my_stats } = data;
     const hasGroup = !!group;
     const hasTopic = group?.phancong_detai_nhom?.detai;
+    const gvhd = group?.phancong_detai_nhom?.gvhd?.nguoidung;
 
     return (
-        <div className="min-h-screen bg-gray-50/50 dark:bg-background p-4 md:p-8 space-y-8">
-            
-            {/* 1. HEADER & NAVIGATION */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div className="space-y-1">
-                    <Button 
-                        variant="ghost" 
-                        className="pl-0 text-muted-foreground hover:text-foreground -ml-2 h-8" 
-                        onClick={() => navigate('/student/dashboard')}
-                    >
-                        <ArrowLeft className="w-4 h-4 mr-1" /> Quay lại Tổng quan
+        <div className="h-screen flex flex-col bg-gray-50/30 dark:bg-background overflow-hidden">
+            {/* 1. COMPACT HEADER */}
+            <div className="h-14 border-b bg-background flex items-center justify-between px-6 shrink-0">
+                <div className="flex items-center gap-4">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/student/dashboard')}>
+                        <ArrowLeft className="w-4 h-4" />
                     </Button>
-                    <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                        <BookOpen className="w-6 h-6 text-blue-600" />
-                        {plan.name}
-                    </h1>
+                    <Separator orientation="vertical" className="h-6" />
+                    <div>
+                        <h1 className="text-sm font-bold leading-tight">{plan.name}</h1>
+                        <p className="text-[10px] text-muted-foreground">
+                            Giai đoạn: <span className="text-blue-600 font-medium">{plan.current_phase?.TEN_SUKIEN || 'N/A'}</span>
+                        </p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="text-sm py-1 px-3 bg-white dark:bg-gray-800">
-                        {plan.current_phase ? `Giai đoạn: ${plan.current_phase.TEN_SUKIEN}` : 'Chưa bắt đầu'}
-                    </Badge>
+                    {hasGroup && (
+                        <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-700" onClick={() => navigate(`/projects/my-group/kanban/${group.ID_NHOM}`)}>
+                            <LayoutDashboard className="w-3.5 h-3.5 mr-2" /> Vào Kanban
+                        </Button>
+                    )}
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                {/* 2. LEFT COLUMN: MAIN ACTIONS & STATUS (8/12) */}
-                <div className="lg:col-span-8 space-y-6">
+            {/* 2. MAIN CONTENT - 3 COLUMNS */}
+            <div className="flex-1 overflow-hidden p-4 md:p-6">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
                     
-                    {/* SECTION A: TRẠNG THÁI NHÓM & ĐỀ TÀI (CTA CENTER) */}
-                    <Card className="border-l-4 border-l-indigo-500 shadow-md">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-lg">
-                                <Users className="w-5 h-5 text-indigo-600" /> 
-                                Trạng thái Nhóm & Đề tài
-                            </CardTitle>
+                    {/* LEFT COLUMN: CONTEXT (2.5/12) */}
+                    <Card className="lg:col-span-3 flex flex-col h-full border-none shadow-md bg-white dark:bg-card">
+                        <CardHeader className="pb-2 border-b px-4 py-3">
+                            <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Thông tin chung</CardTitle>
                         </CardHeader>
-                        <CardContent>
-                            {!hasGroup ? (
-                                // CASE 1: Chưa có nhóm
-                                <div className="flex flex-col items-center justify-center py-6 text-center space-y-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-lg border border-dashed border-indigo-200">
-                                    <div className="p-3 bg-white dark:bg-gray-800 rounded-full shadow-sm">
-                                        <Users className="w-8 h-8 text-indigo-400" />
-                                    </div>
-                                    <div>
-                                        <h3 className="font-semibold text-lg">Bạn chưa tham gia nhóm nào</h3>
-                                        <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                                            Để bắt đầu thực hiện khóa luận, bạn cần tham gia vào một nhóm hoặc tự tạo nhóm mới.
-                                        </p>
-                                    </div>
-                                    <div className="flex gap-3">
-                                        <Button onClick={() => navigate('/projects/find-group', { state: { planId } })}>
-                                            Tìm nhóm
-                                        </Button>
-                                        <Button variant="outline" onClick={() => navigate('/projects/my-group', { state: { planId } })}>
-                                            Tạo nhóm mới
-                                        </Button>
-                                    </div>
-                                </div>
-                            ) : (
-                                // CASE 2: Đã có nhóm -> Hiển thị thông tin nhóm
-                                <div className="space-y-6">
-                                    <div className="flex flex-col sm:flex-row justify-between gap-4 p-4 bg-white dark:bg-gray-900 rounded-lg border shadow-sm">
-                                        <div>
-                                            <p className="text-xs text-muted-foreground font-semibold uppercase">Nhóm của bạn</p>
-                                            <h3 className="text-xl font-bold text-indigo-700 dark:text-indigo-400">
-                                                {group.TEN_NHOM}
-                                            </h3>
-                                            <p className="text-sm text-gray-600 mt-1">
-                                                Trưởng nhóm: <span className="font-medium">{group.nhomtruong?.HODEM_VA_TEN}</span>
-                                            </p>
-                                        </div>
-                                        <div className="flex items-center">
-                                            <Button variant="outline" size="sm" onClick={() => navigate(`/projects/my-group`)}>
-                                                Quản lý nhóm <ChevronRight className="w-4 h-4 ml-1" />
-                                            </Button>
-                                        </div>
-                                    </div>
-
-                                    {/* Kiểm tra Đề tài */}
-                                    {!hasTopic ? (
-                                        // CASE 2a: Chưa có đề tài
-                                        <div className="flex items-center justify-between p-4 bg-orange-50 dark:bg-orange-900/10 border border-orange-200 rounded-lg">
-                                            <div className="flex items-center gap-3">
-                                                <AlertTriangle className="w-5 h-5 text-orange-500" />
-                                                <div>
-                                                    <p className="font-semibold text-orange-800 dark:text-orange-200">Chưa đăng ký đề tài</p>
-                                                    <p className="text-xs text-orange-600 dark:text-orange-400">Vui lòng chọn đề tài để được phân công GVHD.</p>
-                                                </div>
-                                            </div>
-                                            <Button 
-                                                size="sm" 
-                                                className="bg-orange-600 hover:bg-orange-700 text-white"
-                                                onClick={() => navigate('/projects/topics', { state: { planId } })}
-                                            >
-                                                Đăng ký ngay
+                        <CardContent className="p-0 flex-1 overflow-hidden">
+                            <ScrollArea className="h-full">
+                                <div className="p-2 space-y-1">
+                                    {!hasGroup ? (
+                                        <div className="p-4 text-center">
+                                            <p className="text-sm mb-3">Chưa có nhóm</p>
+                                            <Button size="sm" variant="outline" className="w-full" onClick={() => navigate('/projects/find-group', { state: { planId } })}>
+                                                Tìm nhóm ngay
                                             </Button>
                                         </div>
                                     ) : (
-                                        // CASE 2b: Đã có đề tài & GVHD
-                                        <div className="space-y-4">
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100">
-                                                    <p className="text-xs text-blue-600 font-semibold mb-1 flex items-center gap-1">
-                                                        <BookOpen className="w-3 h-3" /> ĐỀ TÀI
-                                                    </p>
-                                                    <p className="font-medium line-clamp-2 text-sm" title={group.phancong_detai_nhom.detai.TEN_DETAI}>
-                                                        {group.phancong_detai_nhom.detai.TEN_DETAI}
-                                                    </p>
-                                                </div>
-                                                <div className="p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-100">
-                                                    <p className="text-xs text-green-600 font-semibold mb-1 flex items-center gap-1">
-                                                        <User className="w-3 h-3" /> GVHD
-                                                    </p>
-                                                    <p className="font-medium text-sm">
-                                                        {group.phancong_detai_nhom.gvhd?.nguoidung?.HODEM_VA_TEN || 'Chưa phân công'}
-                                                    </p>
-                                                </div>
+                                        <>
+                                            <InfoRow icon={Users} label="Nhóm" value={group.TEN_NHOM} subValue={`${group.thanhviens?.length || 0} thành viên`} />
+                                            <Separator className="my-1 opacity-50" />
+                                            <InfoRow 
+                                                icon={FileText} 
+                                                label="Đề tài" 
+                                                value={hasTopic ? group.phancong_detai_nhom.detai.TEN_DETAI : "Chưa đăng ký"} 
+                                                subValue={!hasTopic && <span className="text-orange-500 cursor-pointer hover:underline" onClick={() => navigate('/projects/topics')}>Đăng ký ngay</span>}
+                                            />
+                                            <Separator className="my-1 opacity-50" />
+                                            <InfoRow 
+                                                icon={User} 
+                                                label="GVHD" 
+                                                value={gvhd ? gvhd.HODEM_VA_TEN : "Chưa phân công"}
+                                                subValue={gvhd?.EMAIL}
+                                            />
+                                             <div className="mt-4 px-2">
+                                                <Button variant="secondary" size="sm" className="w-full text-xs" onClick={() => navigate('/projects/my-group')}>
+                                                    Xem chi tiết nhóm
+                                                </Button>
                                             </div>
-
-                                            <Button className="w-full py-6 text-lg shadow-lg shadow-blue-500/20" onClick={() => navigate(`/projects/my-group/kanban/${group.ID_NHOM}`)}>
-                                                <LayoutDashboard className="w-5 h-5 mr-2" />
-                                                Vào Không Gian Làm Việc (Kanban)
-                                            </Button>
-                                        </div>
+                                        </>
                                     )}
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* SECTION B: THỐNG KÊ CÁ NHÂN (Chỉ hiện nếu đã có nhóm) */}
-                    {hasGroup && (
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                            <Card className="bg-white dark:bg-gray-900">
-                                <CardContent className="p-4 flex items-center gap-4">
-                                    <div className="p-3 rounded-full bg-blue-100 text-blue-600">
-                                        <CheckCircle2 className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">{my_stats.total}</p>
-                                        <p className="text-xs text-muted-foreground">Tổng công việc</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                            <Card className="bg-white dark:bg-gray-900">
-                                <CardContent className="p-4 flex items-center gap-4">
-                                    <div className="p-3 rounded-full bg-red-100 text-red-600">
-                                        <AlertTriangle className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">{my_stats.overdue}</p>
-                                        <p className="text-xs text-muted-foreground">Quá hạn</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                            <Card className="bg-white dark:bg-gray-900">
-                                <CardContent className="p-4 flex items-center gap-4">
-                                    <div className="p-3 rounded-full bg-orange-100 text-orange-600">
-                                        <Clock className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <p className="text-2xl font-bold">{my_stats.today}</p>
-                                        <p className="text-xs text-muted-foreground">Hạn hôm nay</p>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-                    )}
-                </div>
-
-                {/* 3. RIGHT COLUMN: TIMELINE (4/12) */}
-                <div className="lg:col-span-4">
-                    <Card className="h-full border-none shadow-none bg-transparent">
-                        <CardHeader className="px-0 pt-0">
-                            <CardTitle className="text-lg flex items-center gap-2">
-                                <Clock className="w-5 h-5 text-gray-500" /> Tiến độ Kế hoạch
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="px-0">
-                            <ScrollArea className="h-[calc(100vh-200px)] pr-4">
-                                <PlanTimeline milestones={plan.timeline} />
                             </ScrollArea>
                         </CardContent>
                     </Card>
+
+                    {/* CENTER COLUMN: ACTION & STATS (7/12) */}
+                    <div className="lg:col-span-7 flex flex-col gap-4 h-full overflow-hidden">
+                        {/* Top Stats Row */}
+                        <div className="grid grid-cols-3 gap-4 shrink-0">
+                             <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 shadow-sm">
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                    <CheckCircle2 className="w-6 h-6 text-blue-600 mb-1" />
+                                    <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">{my_stats.total}</span>
+                                    <span className="text-xs text-blue-600/80">Việc của tôi</span>
+                                </CardContent>
+                             </Card>
+                             <Card className="bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900 shadow-sm">
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                    <AlertTriangle className="w-6 h-6 text-red-600 mb-1" />
+                                    <span className="text-2xl font-bold text-red-700 dark:text-red-400">{my_stats.overdue}</span>
+                                    <span className="text-xs text-red-600/80">Quá hạn</span>
+                                </CardContent>
+                             </Card>
+                             <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm">
+                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
+                                    <Clock className="w-6 h-6 text-orange-600 mb-1" />
+                                    <span className="text-2xl font-bold text-orange-700 dark:text-orange-400">{my_stats.today}</span>
+                                    <span className="text-xs text-orange-600/80">Hạn hôm nay</span>
+                                </CardContent>
+                             </Card>
+                        </div>
+
+                        {/* Main Action Area */}
+                        <Card className="flex-1 border-none shadow-md flex flex-col min-h-0">
+                            <CardHeader className="py-3 px-5 border-b bg-muted/10">
+                                <CardTitle className="text-base flex justify-between items-center">
+                                    <span>Hoạt động & Sự kiện</span>
+                                    {plan.current_phase && (
+                                        <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">
+                                            Đang diễn ra: {plan.current_phase.TEN_SUKIEN}
+                                        </Badge>
+                                    )}
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="p-0 flex-1 flex flex-col justify-center items-center text-center text-muted-foreground">
+                                {/* Placeholder for Calendar/Activity Feed */}
+                                <Calendar className="w-12 h-12 mb-3 opacity-20" />
+                                <p>Khu vực này sẽ hiển thị Lịch chi tiết và Hoạt động gần đây</p>
+                                <p className="text-xs mt-1">(Đang phát triển)</p>
+                                <div className="mt-4 flex gap-3">
+                                    <Button variant="outline" size="sm" onClick={() => navigate(`/projects/my-group/schedule/${group?.ID_NHOM}`)}>
+                                        Xem lịch họp
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* RIGHT COLUMN: TIMELINE (2.5/12) */}
+                    <Card className="lg:col-span-2 flex flex-col h-full border-none shadow-md bg-white dark:bg-card">
+                        <CardHeader className="pb-2 border-b px-4 py-3 bg-muted/5">
+                            <CardTitle className="text-sm font-bold uppercase text-muted-foreground flex items-center gap-2">
+                                <Clock className="w-3.5 h-3.5" /> Mốc thời gian
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0 flex-1 overflow-hidden">
+                            <ScrollArea className="h-full">
+                                <div className="p-4">
+                                    <CompactTimeline milestones={plan.timeline} />
+                                </div>
+                            </ScrollArea>
+                        </CardContent>
+                    </Card>
+
                 </div>
             </div>
         </div>
