@@ -12,7 +12,7 @@ return new class extends Migration
         Schema::create('HOIDONG', function (Blueprint $table) {
             $table->id('ID_HOIDONG');
             $table->string('TEN_HOIDONG', 100);
-            $table->enum('LOAI', ['phanbien', 'hoidong']); // 'phanbien' cho 1 GV, 'hoidong' cho 3 GV
+            $table->enum('LOAI', ['phanbien', 'hoidong']);
             $table->unsignedBigInteger('ID_KEHOACH')->nullable();
             $table->unsignedBigInteger('ID_CHUYENNGANH')->nullable();
             $table->date('NGAY_BAOCAO')->nullable();

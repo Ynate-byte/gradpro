@@ -82,6 +82,12 @@ export const saveCombinedScores = (nhomId, payload) => {
     return axiosClient.post(`/chamdiem/combined/${nhomId}`, payload).then(res => res.data);
 }
 
+export const getGradingStatistics = (planId) => {
+    return axiosClient.get('/chamdiem/statistics', { 
+        params: { plan_id: planId } 
+    }).then(res => res.data);
+};
+
 export const getGroupsForGradingList = (params) => {
     return axiosClient.get('/chamdiem/groups-grading', { params }).then(res => res.data);
 };

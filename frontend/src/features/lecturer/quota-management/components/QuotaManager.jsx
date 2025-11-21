@@ -536,7 +536,7 @@ const QuotaManager = () => {
           <div>
             <CardTitle className="flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-100">
               <Layers className="h-5 w-5 text-blue-500" />
-              Phân công Đề tài (Trưởng Bộ môn)
+              Phân công Đề tài
             </CardTitle>
             <CardDescription className="mt-1">
               Phân bổ quota đề tài của bộ môn cho các giảng viên.

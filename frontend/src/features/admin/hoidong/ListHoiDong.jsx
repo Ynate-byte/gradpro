@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import axiosClient from "@/api/axiosConfig";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { motion, useReducedMotion } from "framer-motion";
 import { useDebounce } from "use-debounce";
 import { toast } from "sonner";
 import { DataTable } from "@/components/shared/data-table/DataTable";
@@ -30,17 +29,15 @@ import {
   Loader2,
   PlusCircle,
   Trash2,
-  Users2,
   Pen,
-  ShieldAlert,
-  Users,
-  BookOpen,
   Shield,
   Shuffle,
   ArrowUp,
   BarChart3,
   AlertCircle,
-  LayoutTemplate // Fix missing import
+  Users,
+  BookOpen,
+  Users2 // Import Users2 cho nút Phân bổ nhóm
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -53,6 +50,7 @@ import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
 import { WorkloadStatsDialog } from "./WorkloadStatsDialog";
 import StatCard from "@/components/shared/StatCard";
 import { useTheme } from "@/components/theme-provider";
+import { Label } from "@/components/ui/label";
 
 const QUERY_KEY_HOIDONG = "adminHoiDong";
 const QUERY_KEY_STATS = "hoiDongStats";
@@ -189,11 +187,10 @@ const ListHoiDong = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // --- 1. KHAI BÁO STATE TRƯỚC ---
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState([]);
-  const [columnFilters, setColumnFilters] = useState([]); // Khai báo ở đây
+  const [columnFilters, setColumnFilters] = useState([]); 
   const [rowSelection, setRowSelection] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch] = useDebounce(searchTerm, 300);
@@ -244,11 +241,10 @@ const ListHoiDong = () => {
     }
   }, [filterOptions, isInitialPlanSet]);
 
-  // Query Stats
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: [QUERY_KEY_STATS, selectedPlanId],
     queryFn: () => hoiDongService.getHoiDongStatistics(selectedPlanId || null),
-    enabled: !!isLoadingFilters,
+    enabled: !!selectedPlanId,
   });
 
   // Query Data
@@ -275,7 +271,7 @@ const ListHoiDong = () => {
         trang_thai_cham_diem: columnFilters.find((f) => f.id === "trang_thai_cham_diem")?.value,
       }),
     placeholderData: (prev) => prev,
-    enabled: !isLoadingFilters,
+    enabled: !!selectedPlanId,
   });
 
   // Mutations
@@ -482,7 +478,7 @@ const ListHoiDong = () => {
     [navigate, queryClient]
   );
 
-  const isLoading = isLoadingFilters || isLoadingData;
+  const isLoading = isLoadingData || (isLoadingFilters && !filterOptions);
   const pageCount = data?.meta?.last_page ?? 0;
   const selectedIds = useMemo(
     () => Object.keys(rowSelection).map((key) => data?.data[key]?.ID_HOIDONG).filter(Boolean),
@@ -506,7 +502,6 @@ const ListHoiDong = () => {
     });
   };
 
-  // Nút thao tác hàng loạt (được truyền vào DataTable)
   const bulkActions = (
     <div className="flex items-center gap-2">
       {Object.keys(rowSelection).length > 0 && (
@@ -726,16 +721,43 @@ const ListHoiDong = () => {
              </AlertDialogContent>
         </AlertDialog>
 
+        {/* Dialog Nâng cấp hàng loạt */}
         <AlertDialog open={isUpgradeAlertOpen} onOpenChange={setIsUpgradeAlertOpen}>
             <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Nâng cấp?</AlertDialogTitle></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>OK</AlertDialogAction></AlertDialogFooter>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Xác nhận nâng cấp hàng loạt</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Bạn có chắc chắn muốn nâng cấp <b>{Object.keys(rowSelection).length}</b> hội đồng phản biện đã chọn lên thành Hội đồng bảo vệ không?
+                    <br className="my-2"/>
+                    <span className="text-sm text-muted-foreground italic">Lưu ý: Loại hội đồng sẽ chuyển từ "Phản biện" sang "Hội đồng" (yêu cầu 3 thành viên).</span>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Hủy</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>
+                    Xác nhận
+                  </AlertDialogAction>
+                </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+
+        {/* Dialog Nâng cấp đơn lẻ */}
         <AlertDialog open={isSingleUpgradeAlertOpen} onOpenChange={setIsSingleUpgradeAlertOpen}>
              <AlertDialogContent>
-                <AlertDialogHeader><AlertDialogTitle>Nâng cấp?</AlertDialogTitle></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogAction onClick={() => upgradeTarget && singleUpgradeMutation.mutate(upgradeTarget.ID_HOIDONG)}>OK</AlertDialogAction></AlertDialogFooter>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Nâng cấp lên Hội đồng Bảo vệ</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Hội đồng <b>{upgradeTarget?.TEN_HOIDONG}</b> sẽ được chuyển từ loại <b>Phản biện</b> sang <b>Hội đồng bảo vệ</b>.
+                    <br className="my-2"/>
+                    <span className="text-sm text-muted-foreground">Giảng viên phản biện hiện tại sẽ được giữ lại với vai trò "Thành viên". Bạn cần bổ sung thêm Chủ tịch và Thư ký sau khi nâng cấp.</span>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Hủy</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => upgradeTarget && singleUpgradeMutation.mutate(upgradeTarget.ID_HOIDONG)}>
+                    Xác nhận nâng cấp
+                  </AlertDialogAction>
+                </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
 

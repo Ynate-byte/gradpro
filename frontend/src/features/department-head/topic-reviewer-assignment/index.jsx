@@ -400,7 +400,7 @@ const TopicReviewerAssignmentPage = () => {
                     <div>
                         <CardTitle className="flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-100">
                             <Users className="h-5 w-5 text-blue-500" />
-                            Phân công Người Góp ý (Trưởng Bộ môn)
+                            Phân công Người Góp ý
                         </CardTitle>
                         <CardDescription className="mt-1">
                             Phân công giảng viên góp ý cho các đề tài trong bộ môn.

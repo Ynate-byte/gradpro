@@ -105,6 +105,39 @@ class ChamDiemController extends Controller
         }
     }
 
+    public function getGradingStatistics(Request $request)
+    {
+        $planId = $request->input('plan_id');
+
+        // Query cơ bản: Các nhóm thuộc kế hoạch (nếu có) và ĐÃ ĐƯỢC DUYỆT nộp bài
+        $baseQuery = Nhom::query()
+            ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                $q->where('TRANGTHAI', 'Đã xác nhận');
+            });
+
+        if ($planId) {
+            $baseQuery->where('ID_KEHOACH', $planId);
+        }
+
+        $total = (clone $baseQuery)->count();
+
+        // Số nhóm đã có điểm tổng kết
+        $daCham = (clone $baseQuery)
+            ->whereHas('diemTongKet', function($q) {
+                $q->whereNotNull('DIEM_TONG');
+            })
+            ->count();
+
+        // Số nhóm chưa có điểm tổng kết
+        $chuaCham = $total - $daCham;
+
+        return response()->json([
+            'total' => $total,
+            'daCham' => $daCham,
+            'chuaCham' => $chuaCham
+        ]);
+    }
+
     public function getGroupsForGrading(Request $request)
     {
         $planId = $request->input('plan_id');

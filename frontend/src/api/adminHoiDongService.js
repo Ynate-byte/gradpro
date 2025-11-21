@@ -89,6 +89,10 @@ export const getLecturerWorkload = (planId) => {
     return axiosClient.get('/admin/hoidong/workload-stats', { params: { plan_id: planId } }).then(res => res.data);
 };
 
+export const updateHoiDongDetails = (id, data) => {
+    return axiosClient.put(`/admin/hoidong/${id}`, data).then(res => res.data);
+};
+
 export const autoAssignGroups = (planId, type = 'hoidong') => {
     return axiosClient.post('/admin/hoidong/auto-assign-groups', { 
         ID_KEHOACH: planId,

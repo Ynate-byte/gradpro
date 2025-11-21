@@ -17,9 +17,6 @@ use Illuminate\Validation\ValidationException;
 
 class HoiDongController extends Controller
 {
-    /**
-     * Lấy danh sách hội đồng (có tìm kiếm, phân trang, lọc)
-     */
     public function index(Request $request)
     {
         $query = Hoidong::with(['kehoach', 'chuyennganh'])
@@ -29,9 +26,8 @@ class HoiDongController extends Controller
             ->withCount('giangviens')
             ->orderBy($request->input('sort', 'NGAY_BAOCAO'), $request->input('dir', 'desc'));
 
-        // Lọc hội đồng theo trạng thái kế hoạch
         $query->whereHas('kehoach', function ($q) {
-            $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa']);
+            $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa', 'Đang chấm điểm']);
         });
 
         if ($request->filled('search')) {
@@ -50,9 +46,8 @@ class HoiDongController extends Controller
             $query->whereIn('LOAI', $request->input('loai'));
         }
 
-        // Hàm helper để tính trạng thái chấm
         $calculateStatus = function ($hd) {
-            $hd->so_thanh_vien = $hd->giangviens_count; 
+            $hd->so_thanh_vien = $hd->giangviens_count;
             $hd->so_nhom = $hd->nhoms->count();
 
             if ($hd->so_nhom === 0) {
@@ -60,9 +55,9 @@ class HoiDongController extends Controller
             } else {
                 $allGraded = true;
                 $totalMembers = $hd->so_thanh_vien;
-                if ($totalMembers == 0) { 
-                      $hd->trang_thai_cham_diem = 'chua_cham_diem';
-                      return $hd;
+                if ($totalMembers == 0) {
+                    $hd->trang_thai_cham_diem = 'chua_cham_diem';
+                    return $hd;
                 }
 
                 foreach ($hd->nhoms as $nhom) {
@@ -78,15 +73,15 @@ class HoiDongController extends Controller
             }
             return $hd;
         };
-        
+
         if ($request->boolean('all')) {
             $hoidongs = $query->get();
-            $hoidongs->transform($calculateStatus); 
-            
+            $hoidongs->transform($calculateStatus);
+
             if ($request->filled('trang_thai_cham_diem')) {
                 $hoidongs = $hoidongs->whereIn('trang_thai_cham_diem', $request->input('trang_thai_cham_diem'));
             }
-            return response()->json($hoidongs->values()); 
+            return response()->json($hoidongs->values());
         }
 
         $allMatchingHoidongs = $query->get();
@@ -99,7 +94,7 @@ class HoiDongController extends Controller
         $perPage = $request->per_page ?? 10;
         $page = $request->page ?? 1;
         $paginatedItems = $allMatchingHoidongs->slice(($page - 1) * $perPage, $perPage)->values();
-        
+
         $hoidongs = new \Illuminate\Pagination\LengthAwarePaginator(
             $paginatedItems,
             $allMatchingHoidongs->count(),
@@ -107,13 +102,10 @@ class HoiDongController extends Controller
             $page,
             ['path' => $request->url(), 'query' => $request->query()]
         );
-        
+
         return response()->json($hoidongs);
     }
 
-    /**
-     * Lấy dữ liệu thống kê cho StatCards
-     */
     public function getStatistics(Request $request)
     {
         $validated = $request->validate([
@@ -121,7 +113,7 @@ class HoiDongController extends Controller
         ]);
 
         $planId = $validated['kehoach'] ?? null;
-        
+
         $queryHoiDong = Hoidong::query();
         if ($planId) {
             $queryHoiDong->where('ID_KEHOACH', $planId);
@@ -131,25 +123,22 @@ class HoiDongController extends Controller
             });
         }
 
-        // 2. Thống kê Hội đồng
         $totalHoiDong = (clone $queryHoiDong)->count();
         $totalPhanBien = (clone $queryHoiDong)->where('LOAI', 'phanbien')->count();
         $totalBaoVe = (clone $queryHoiDong)->where('LOAI', 'hoidong')->count();
 
         $hoidongIds = (clone $queryHoiDong)->pluck('ID_HOIDONG');
-        
-        $totalThanhVien = DB::table('HOIDONG_GIANGVIEN')
-                ->whereIn('ID_HOIDONG', $hoidongIds)
-                ->distinct('ID_GIANGVIEN')
-                ->count('ID_GIANGVIEN');
 
-        // a. Nhóm đã phân bổ (đã có trong bảng HOIDONG_NHOM thuộc các hội đồng đang lọc)
+        $totalThanhVien = DB::table('HOIDONG_GIANGVIEN')
+            ->whereIn('ID_HOIDONG', $hoidongIds)
+            ->distinct('ID_GIANGVIEN')
+            ->count('ID_GIANGVIEN');
+
         $nhomDaPhanBo = DB::table('HOIDONG_NHOM')
             ->whereIn('ID_HOIDONG', $hoidongIds)
             ->distinct('ID_NHOM')
             ->count('ID_NHOM');
 
-        // b. [MỚI] Nhóm CẦN phân bổ (Đã nộp bài & được duyệt, chưa có hội đồng)
         $queryGroupsNeed = Nhom::query();
         if ($planId) {
             $queryGroupsNeed->where('ID_KEHOACH', $planId);
@@ -161,8 +150,8 @@ class HoiDongController extends Controller
 
         $nhomCanPhanBo = $queryGroupsNeed
             ->whereDoesntHave('hoidongs')
-            ->whereHas('phancongDetaiNhom.submissions', function($q) {
-                $q->where('TRANGTHAI', 'Đã xác nhận'); // Đã nộp và được duyệt
+            ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                $q->where('TRANGTHAI', 'Đã xác nhận');
             })
             ->count();
 
@@ -176,9 +165,6 @@ class HoiDongController extends Controller
         ]);
     }
 
-    /**
-     * Tạo hội đồng (tự động hoặc thủ công)
-     */
     public function create(Request $request)
     {
         $validated = $request->validate([
@@ -240,9 +226,6 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Cập nhật hội đồng
-     */
     public function update(Request $request, $id)
     {
         $hoidong = Hoidong::find($id);
@@ -266,7 +249,7 @@ class HoiDongController extends Controller
         $newPlanId = $validated['ID_KEHOACH'] ?? $hoidong->ID_KEHOACH;
         $newType = $validated['LOAI'] ?? $hoidong->LOAI;
         if ($newPlanId != $hoidong->ID_KEHOACH || $newType != $hoidong->LOAI) {
-             $this->validateCouncilTypeAllowed($newPlanId, $newType);
+            $this->validateCouncilTypeAllowed($newPlanId, $newType);
         }
 
         DB::beginTransaction();
@@ -327,14 +310,11 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Cập nhật nhanh tên hội đồng (Inline Edit)
-     */
     public function updateTenHoiDong(Request $request, $id)
     {
         $hoidong = Hoidong::find($id);
         if (!$hoidong) return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
-        
+
         $validated = $request->validate([
             'TEN_HOIDONG' => 'required|string|max:255',
         ]);
@@ -352,22 +332,19 @@ class HoiDongController extends Controller
             }
 
             $hoidong->update(['TEN_HOIDONG' => $validated['TEN_HOIDONG']]);
-            
+
             return response()->json([
-                'message' => 'Cập nhật tên hội đồng thành công!', 
+                'message' => 'Cập nhật tên hội đồng thành công!',
                 'TEN_HOIDONG' => $hoidong->TEN_HOIDONG
             ]);
-            
+
         } catch (ValidationException $e) {
-             return response()->json(['errors' => $e->errors()], 422);
+            return response()->json(['errors' => $e->errors()], 422);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Cập nhật thất bại: ' . $e->getMessage()], 500);
         }
     }
 
-    /**
-     * Cập nhật nhanh phòng (Inline Edit)
-     */
     public function updatePhong(Request $request, $id)
     {
         $hoidong = Hoidong::find($id);
@@ -381,9 +358,6 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Xóa hội đồng
-     */
     public function destroy($id)
     {
         $hoidong = Hoidong::find($id);
@@ -400,10 +374,7 @@ class HoiDongController extends Controller
             return response()->json(['error' => 'Lỗi xóa hội đồng'], 500);
         }
     }
-    
-    /**
-     * Nâng cấp Hội đồng Phản biện (1 thành viên) lên Hội đồng Bảo vệ (3 thành viên).
-     */
+
     public function upgradePhanBienToHoiDong(Request $request, $id)
     {
         $hoidong = Hoidong::with(['giangviens', 'nhoms.diemPhanBien'])->find($id);
@@ -483,12 +454,12 @@ class HoiDongController extends Controller
                     $failedMessages[] = "ID $id ({$hoidong->TEN_HOIDONG}): HĐ Phản biện không có thành viên.";
                     continue;
                 }
-                
+
                 $hoidong->update(['LOAI' => 'hoidong']);
                 $hoidong->giangviens()->sync([
                     $currentReviewer->ID_GIANGVIEN => ['VAITRO' => 'thanhvien']
                 ]);
-                
+
                 $upgradedCount++;
             }
 
@@ -513,12 +484,9 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Lấy các tùy chọn (Kế hoạch)
-     */
     public function getKeHoachOptions()
     {
-        $statuses = ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'];
+        $statuses = ['Đang thực hiện', 'Chờ duyệt chỉnh sửa', 'Đang chấm điểm'];
         $globalSetting = TyTrongDiem::getCurrent();
         $defaultPhanBien = $globalSetting ? (float)$globalSetting->PHANBIEN : 0.3;
 
@@ -536,26 +504,30 @@ class HoiDongController extends Controller
         return response()->json($plans);
     }
 
-    /**
-     * Lấy các tùy chọn (Chuyên ngành)
-     */
     public function getChuyenNganhOptions()
     {
         return response()->json(Chuyennganh::select('ID_CHUYENNGANH', 'TEN_CHUYENNGANH')->where('TRANGTHAI_KICHHOAT', true)->get());
     }
 
-    /**
-     * Lấy chi tiết 1 hội đồng
-     */
     public function show($id)
     {
-        $hoidong = Hoidong::with(['giangviens.nguoidung', 'giangviens.khoabomon', 'kehoach', 'chuyennganh', 'nhoms.phancongDetaiNhom.detai', 'nhoms.phancongDetaiNhom.gvhd.nguoidung'])->find($id);
+        $hoidong = Hoidong::with([
+            'giangviens.nguoidung',
+            'giangviens.khoabomon',
+            'kehoach',
+            'chuyennganh',
+            'nhoms' => function($q) {
+                $q->with([
+                    'phancongDetaiNhom.detai',
+                    'phancongDetaiNhom.gvhd.nguoidung',
+                    'thanhviens.nguoidung' // Load thành viên nhóm để hiển thị trong dialog
+                ]);
+            }
+        ])->find($id);
+
         return $hoidong ? response()->json($hoidong) : response()->json(['error' => 'Không tìm thấy'], 404);
     }
 
-    /**
-     * XÓA PHÂN BỔ NHÓM KHỎI HỘI ĐỒNG
-     */
     public function xoaPhanBoNhom($idHoiDong, $idNhom)
     {
         $hoidong = Hoidong::find($idHoiDong);
@@ -575,9 +547,6 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Lấy danh sách nhóm theo kế hoạch
-     */
     public function getNhomTheoKeHoach($idKeHoach)
     {
         try {
@@ -586,7 +555,7 @@ class HoiDongController extends Controller
                     $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Đã hoàn thành']);
                 })
                 ->whereHas('phancongDetaiNhom.submissions', function ($q) {
-                    $q->where('TRANGTHAI', 'Đã xác nhận'); 
+                    $q->where('TRANGTHAI', 'Đã xác nhận');
                 })
                 ->with([
                     'hoidongs:ID_HOIDONG,TEN_HOIDONG',
@@ -616,9 +585,6 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Lưu phân bổ nhóm vào hội đồng
-     */
     public function phanBoNhom(Request $request)
     {
         $items = $request->all();
@@ -647,9 +613,6 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Lấy danh sách hội đồng của 1 giảng viên (Dùng cho giảng viên)
-     */
     public function getHoiDongByGiangVien()
     {
         try {
@@ -659,6 +622,7 @@ class HoiDongController extends Controller
             $id_gv = $giangvien->ID_GIANGVIEN;
             $hoidongs = Hoidong::whereHas('giangviens', fn($q) => $q->where('GIANGVIEN.ID_GIANGVIEN', $id_gv))
                 ->with(['kehoach', 'chuyennganh', 'giangviens.nguoidung'])
+                ->orderBy('ID_KEHOACH', 'desc')
                 ->get();
 
             $result = $hoidongs->map(fn($hd) => [
@@ -668,6 +632,11 @@ class HoiDongController extends Controller
                 'NGAY_BAOCAO' => $hd->NGAY_BAOCAO,
                 'GIO_BAOCAO' => $hd->GIO_BAOCAO,
                 'PHONG' => $hd->PHONG,
+                
+                // Thêm 2 trường này để Frontend lọc được
+                'ID_KEHOACH' => $hd->ID_KEHOACH,
+                'ID_CHUYENNGANH' => $hd->ID_CHUYENNGANH,
+
                 'TEN_KEHOACH' => $hd->kehoach->TEN_DOT ?? 'N/A',
                 'TEN_CHUYENNGANH' => $hd->chuyennganh->TEN_CHUYENNGANH ?? 'N/A',
                 'giangviens' => $hd->giangviens->map(fn($gv) => [
@@ -683,10 +652,6 @@ class HoiDongController extends Controller
         }
     }
 
-
-    /**
-     * Helper: Kiểm tra loại hội đồng có hợp lệ với kế hoạch không
-     */
     private function validateCouncilTypeAllowed($planId, $type)
     {
         if ($type !== 'phanbien') return;
@@ -701,9 +666,6 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Helper: Validate giảng viên trong hội đồng
-     */
     private function validateHoiDongGiangviens(string $loai, array $giangviens): void
     {
         $count = count($giangviens);
@@ -747,44 +709,36 @@ class HoiDongController extends Controller
         return $hoidong;
     }
 
-    /**
-     * Tự động phân công thành viên vào các Hội đồng (Chủ tịch, Thư ký, Thành viên).
-     */
     public function autoAssignMembers(Request $request)
     {
         $validated = $request->validate([
             'ID_KEHOACH' => 'required|integer|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
             'LOAI' => 'required|in:phanbien,hoidong',
-            'replaceExisting' => 'boolean', 
+            'replaceExisting' => 'boolean',
         ]);
 
         $planId = $validated['ID_KEHOACH'];
         $councilType = $validated['LOAI'];
         $replaceExisting = $validated['replaceExisting'] ?? false;
-        
+
         $councils = Hoidong::where('ID_KEHOACH', $planId)
             ->where('LOAI', $councilType)
-            ->with(['nhoms.phancongDetaiNhom', 'chuyennganh']) // Chỉ cần chuyennganh để lấy ID_KHOA_BOMON
+            ->with(['nhoms.phancongDetaiNhom', 'chuyennganh'])
             ->get();
 
         if ($councils->isEmpty()) {
             return response()->json(['message' => 'Không có Hội đồng nào để phân công.'], 400);
         }
 
-        // Load tất cả giảng viên cùng thông tin
-        $allLecturers = Giangvien::with(['nguoidung', 'chucvus'])->get(); 
-        
-        // Tính tải hiện tại (số hội đồng đã tham gia trong kế hoạch này)
+        $allLecturers = Giangvien::with(['nguoidung', 'chucvus'])->get();
+
         $currentLoads = DB::table('HOIDONG_GIANGVIEN')
             ->join('HOIDONG', 'HOIDONG_GIANGVIEN.ID_HOIDONG', '=', 'HOIDONG.ID_HOIDONG')
             ->where('HOIDONG.ID_KEHOACH', $planId)
-            // [FIX] Tính tải chung cho cả 2 loại hội đồng để công bằng hơn
-            // ->where('HOIDONG.LOAI', $councilType) 
             ->groupBy('ID_GIANGVIEN')
             ->select('ID_GIANGVIEN', DB::raw('COUNT(HOIDONG_GIANGVIEN.ID_HOIDONG) as load_count'))
             ->pluck('load_count', 'ID_GIANGVIEN');
 
-        // Cache thành viên hiện tại của các hội đồng đang xét
         $allCouncilIdsInPlan = $councils->pluck('ID_HOIDONG');
         $currentCouncilMembers = DB::table('HOIDONG_GIANGVIEN')
             ->whereIn('ID_HOIDONG', $allCouncilIdsInPlan)
@@ -792,46 +746,42 @@ class HoiDongController extends Controller
             ->groupBy('ID_HOIDONG')
             ->map(fn($group) => $group->pluck('ID_GIANGVIEN'));
 
-        $requiredMemberCount = $councilType === 'hoidong' ? 3 : 1; 
+        $requiredMemberCount = $councilType === 'hoidong' ? 3 : 1;
         $totalAssignmentsMade = 0;
 
         DB::beginTransaction();
         try {
             foreach ($councils as $council) {
-                
+
                 $conflictLecturers = $this->getConflictLecturers($council);
-                $availableLecturers = $allLecturers->filter(function($gv) use ($conflictLecturers) {
+                $availableLecturers = $allLecturers->filter(function ($gv) use ($conflictLecturers) {
                     return !$conflictLecturers->contains($gv->ID_GIANGVIEN);
                 });
-                
-                // [FIX 1] Lọc bộ môn chặt chẽ hơn
+
                 $filteredLecturers = $this->filterLecturersByMajor($council, $availableLecturers);
-                
+
                 if ($filteredLecturers->isEmpty()) {
-                    // Nếu không có ai trong bộ môn, log warning và bỏ qua hội đồng này
-                    // Không fallback bừa bãi để tránh gán sai chuyên môn
-                    Log::warning("Không tìm thấy giảng viên phù hợp cho HĐ: " . $council->TEN_HOIDONG);
-                    continue; 
+                    Log::warning("Skipping Council {$council->ID_HOIDONG}: No suitable lecturers found.");
+                    continue;
                 }
 
-                // Lấy ID thành viên cũ (nếu không chọn ghi đè)
                 $existingMemberIds = collect();
                 if (!$replaceExisting) {
                     $existingMemberIds = $currentCouncilMembers->get($council->ID_HOIDONG, collect());
                 }
 
                 $finalAssignmentsMap = $this->runGreedyAssignment(
-                    $council, 
-                    $filteredLecturers, 
-                    $currentLoads, 
+                    $council,
+                    $filteredLecturers,
+                    $currentLoads,
                     $requiredMemberCount,
                     $existingMemberIds
                 );
-        
+
                 if (!empty($finalAssignmentsMap)) {
                     $syncData = [];
-                    $newlyAssignedIds = collect(); 
-                    
+                    $newlyAssignedIds = collect();
+
                     foreach ($finalAssignmentsMap as $member) {
                         $syncData[$member['id']] = ['VAITRO' => $member['role']];
                         $newlyAssignedIds->push($member['id']);
@@ -841,7 +791,6 @@ class HoiDongController extends Controller
                     $removedIds = $oldIds->diff($newlyAssignedIds);
                     $addedIds = $newlyAssignedIds->diff($oldIds);
 
-                    // Cập nhật tải (Load) ngay lập tức để vòng lặp sau dùng số liệu mới
                     foreach ($removedIds as $id) {
                         if ($currentLoads->has($id) && $currentLoads[$id] > 0) {
                             $currentLoads[$id]--;
@@ -851,9 +800,9 @@ class HoiDongController extends Controller
                         $currentLoads[$id] = ($currentLoads[$id] ?? 0) + 1;
                         $totalAssignmentsMade++;
                     }
-                    
+
                     $currentCouncilMembers[$council->ID_HOIDONG] = $newlyAssignedIds;
-                    $council->giangviens()->sync($syncData); 
+                    $council->giangviens()->sync($syncData);
                 }
             }
 
@@ -870,43 +819,37 @@ class HoiDongController extends Controller
         }
     }
 
-    /**
-     * Helper: Lọc Giảng viên theo Khoa/Bộ môn - Xử lý Strict Mode
-     */
     private function filterLecturersByMajor(Hoidong $council, Collection $availableLecturers): Collection
     {
-        $chuyennganh = $council->chuyennganh; 
-        
-        // 1. Ưu tiên lấy ID Khoa/Bộ môn từ Chuyên ngành của Hội đồng
-        $requiredKhoaBomonId = $chuyennganh?->ID_KHOA_BOMON; 
+        $chuyennganh = $council->chuyennganh;
+        $requiredKhoaBomonId = $chuyennganh?->ID_KHOA_BOMON;
 
         if (!$requiredKhoaBomonId) {
-             // [CHANGE] Nếu chuyên ngành chưa gán bộ môn, KHÔNG TRẢ VỀ TẤT CẢ
-             // Mà trả về rỗng để tránh gán sai người
-             return collect([]);
+            Log::warning("AutoAssignMembers: Chuyên ngành ID {$council->ID_CHUYENNGANH} chưa gán Bộ môn. Sử dụng tất cả giảng viên khả dụng.");
+            return $availableLecturers;
         }
-        
-        // 2. Lọc cứng: Chỉ lấy GV thuộc đúng Bộ môn đó
-        return $availableLecturers->filter(function($gv) use ($requiredKhoaBomonId) {
+
+        $filtered = $availableLecturers->filter(function ($gv) use ($requiredKhoaBomonId) {
             return $gv->ID_KHOA_BOMON === $requiredKhoaBomonId;
         });
+
+        if ($filtered->isEmpty()) {
+            Log::info("AutoAssignMembers: Không tìm thấy GV thuộc bộ môn {$requiredKhoaBomonId} đang rảnh. Mở rộng tìm kiếm.");
+            return $availableLecturers;
+        }
+
+        return $filtered;
     }
 
-    /**
-     * Helper: Lấy danh sách GV xung đột (HD/PB của nhóm thuộc Hội đồng)
-     */
     private function getConflictLecturers(Hoidong $council)
     {
         $conflictIds = collect();
         foreach ($council->nhoms as $nhom) {
             $assignment = $nhom->phancongDetaiNhom;
             if ($assignment) {
-                // Thêm GVHD vào danh sách xung đột
                 if ($assignment->ID_GVHD) {
                     $conflictIds->push($assignment->ID_GVHD);
                 }
-                
-                // Thêm GVPB vào danh sách xung đột 
                 $phanBien = $nhom->hoidongs->firstWhere('LOAI', 'phanbien');
                 if ($phanBien) {
                     $phanBien->giangviens->pluck('ID_GIANGVIEN')->each(fn($id) => $conflictIds->push($id));
@@ -915,31 +858,26 @@ class HoiDongController extends Controller
         }
         return $conflictIds->unique()->filter();
     }
-    
-    /**
-     * Helper: Thuật toán Greedy để gán thành viên cho 1 Hội đồng
-     */
+
     private function runGreedyAssignment(Hoidong $council, Collection $availableLecturers, Collection $currentLoads, int $requiredMemberCount, Collection $existingMemberIds): array
     {
-        // 1. Map ứng viên hiện có
         $finalAssignments = collect();
         if ($existingMemberIds->isNotEmpty()) {
             $existingLecturers = Giangvien::with(['nguoidung', 'chucvus'])
-                                        ->whereIn('ID_GIANGVIEN', $existingMemberIds)
-                                        ->get()
-                                        ->keyBy('ID_GIANGVIEN');
+                ->whereIn('ID_GIANGVIEN', $existingMemberIds)
+                ->get()
+                ->keyBy('ID_GIANGVIEN');
 
             $existingRoles = DB::table('HOIDONG_GIANGVIEN')
-                                ->where('ID_HOIDONG', $council->ID_HOIDONG)
-                                ->whereIn('ID_GIANGVIEN', $existingMemberIds)
-                                ->pluck('VAITRO', 'ID_GIANGVIEN');
+                ->where('ID_HOIDONG', $council->ID_HOIDONG)
+                ->whereIn('ID_GIANGVIEN', $existingMemberIds)
+                ->pluck('VAITRO', 'ID_GIANGVIEN');
 
             foreach ($existingMemberIds as $id) {
                 if (isset($existingLecturers[$id])) {
                     $gv = $existingLecturers[$id];
-                    // Tính điểm rank có tính đến tải (để hiển thị hoặc debug nếu cần)
                     $load = $currentLoads->get($id, 0);
-                    $rank = $this->getLecturerRank($gv, $load); 
+                    $rank = $this->getLecturerRank($gv, $load);
 
                     $finalAssignments->push([
                         'id' => $id,
@@ -951,32 +889,25 @@ class HoiDongController extends Controller
                 }
             }
         }
-        
-        // 2. Chuẩn bị pool ứng viên mới
-        // [FIX 3] Tính Rank Score có trừ điểm dựa trên Load
+
         $newCandidates = $availableLecturers
             ->whereNotIn('ID_GIANGVIEN', $existingMemberIds)
-            ->map(function($gv) use ($currentLoads) {
+            ->map(function ($gv) use ($currentLoads) {
                 $load = $currentLoads->get($gv->ID_GIANGVIEN, 0);
                 return [
                     'id' => $gv->ID_GIANGVIEN,
                     'lecturer' => $gv,
                     'load' => $load,
-                    // Rank mới = Rank gốc - (Load * 3). 
-                    // Ví dụ: Trưởng khoa (14 điểm) mà ôm 5 hội đồng => 14 - 15 = -1. 
-                    // TS (5 điểm) ôm 0 hội đồng => 5 - 0 = 5. => TS được chọn làm Chủ tịch.
-                    'rank' => $this->getLecturerRank($gv, $load), 
+                    'rank' => $this->getLecturerRank($gv, $load),
                 ];
             });
 
-        // Xử lý cho Hội đồng Bảo vệ (3 người)
         if ($council->LOAI === 'hoidong' && $requiredMemberCount === 3) {
-            
-            $candidatesPool = $finalAssignments
-                                ->whereNotIn('role', ['chutich', 'thuky']) // Chỉ lấy người chưa có vai trò cứng
-                                ->merge($newCandidates);
 
-            // 2a. Chọn Chủ tịch (Rank cao nhất sau khi đã trừ tải)
+            $candidatesPool = $finalAssignments
+                ->whereNotIn('role', ['chutich', 'thuky'])
+                ->merge($newCandidates);
+
             $chutich = $finalAssignments->firstWhere('role', 'chutich');
             if (!$chutich) {
                 $bestCandidate = $candidatesPool->sortByDesc('rank')->first();
@@ -987,8 +918,7 @@ class HoiDongController extends Controller
                     $candidatesPool = $candidatesPool->where('id', '!=', $chutich['id']);
                 }
             }
-            
-            // 2b. Chọn Thư ký (Rank cao nhì)
+
             $thuky = $finalAssignments->firstWhere('role', 'thuky');
             if (!$thuky) {
                 $bestCandidate = $candidatesPool->sortByDesc('rank')->first();
@@ -1000,15 +930,13 @@ class HoiDongController extends Controller
                 }
             }
 
-            // 2c. Gán vai trò 'thanhvien' cho người còn lại
-            $finalAssignments = $finalAssignments->map(function($item) {
+            $finalAssignments = $finalAssignments->map(function ($item) {
                 if (!in_array($item['role'], ['chutich', 'thuky'])) {
                     $item['role'] = 'thanhvien';
                 }
                 return $item;
             });
 
-            // 2d. Lấp đầy vị trí thành viên còn thiếu (ưu tiên tải thấp nhất)
             $membersNeeded = $requiredMemberCount - $finalAssignments->count();
             if ($membersNeeded > 0) {
                 $lowestLoadCandidates = $candidatesPool->sortBy('load')->take($membersNeeded);
@@ -1018,18 +946,14 @@ class HoiDongController extends Controller
             }
 
             return $finalAssignments->map(fn($item) => ['id' => $item['id'], 'role' => $item['role']])
-                        ->unique('id')
-                        ->take($requiredMemberCount)
-                        ->values()
-                        ->all();
+                ->unique('id')
+                ->take($requiredMemberCount)
+                ->values()
+                ->all();
 
-        } 
-        // Xử lý cho Hội đồng Phản biện (1 người)
-        elseif ($council->LOAI === 'phanbien' && $requiredMemberCount === 1) {
-            // Ưu tiên người cũ
+        } elseif ($council->LOAI === 'phanbien' && $requiredMemberCount === 1) {
             $candidate = $finalAssignments->first();
             if (!$candidate) {
-                // Nếu không có, lấy người mới tải thấp nhất
                 $candidate = $newCandidates->sortBy('load')->first();
             }
 
@@ -1038,21 +962,17 @@ class HoiDongController extends Controller
             }
         }
 
-        return []; // Rỗng nếu không xử lý được
+        return [];
     }
-    
-    /**
-     * Helper: Xếp hạng giảng viên cho vai trò Chủ tịch/Thư ký
-     */
+
     private function getLecturerRank($lecturer, $currentLoad = 0): int
     {
         $rank = 0;
-        // Học vị cao sẽ có rank cao hơn
         if (str_contains($lecturer->HOCVI, 'Giáo sư')) $rank += 10;
         elseif (str_contains($lecturer->HOCVI, 'Phó giáo sư')) $rank += 8;
         elseif (str_contains($lecturer->HOCVI, 'Tiến sĩ')) $rank += 5;
         elseif (str_contains($lecturer->HOCVI, 'Thạc sĩ')) $rank += 3;
-        
+
         if ($lecturer->hasChucVu('TRUONG_KHOA')) $rank += 4;
         elseif ($lecturer->hasChucVu('TRUONG_BOMON')) $rank += 2;
 
@@ -1066,43 +986,33 @@ class HoiDongController extends Controller
         $planId = $request->input('plan_id');
         if (!$planId) return response()->json([]);
 
-        // Lấy tất cả giảng viên, eager load các quan hệ trong kế hoạch này
         $lecturers = \App\Models\Giangvien::with([
             'nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH',
             'khoabomon:ID_KHOA_BOMON,TEN_KHOA_BOMON',
-            // Lọc hội đồng thuộc kế hoạch này
             'hoidongs' => function ($q) use ($planId) {
                 $q->where('HOIDONG.ID_KEHOACH', $planId);
             },
-            // Lấy quota đề tài (đã gán)
-            // Lưu ý: Bạn cần định nghĩa relation 'quotas' trong Giangvien model hoặc query thủ công như dưới
         ])->get();
 
-        // Lấy quota riêng (vì quan hệ QuotaGiangvien hơi phức tạp để eager load thẳng 1-1 nếu chưa define)
         $quotas = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)->pluck('SO_DETAI_QUOTA', 'ID_GIANGVIEN');
 
         $stats = $lecturers->map(function ($gv) use ($quotas) {
             $hoidongs = $gv->hoidongs;
-            
+
             return [
                 'id' => $gv->ID_GIANGVIEN,
                 'ma_gv' => $gv->nguoidung->MA_DINHDANH,
                 'ho_ten' => $gv->nguoidung->HODEM_VA_TEN,
                 'don_vi' => $gv->khoabomon->TEN_KHOA_BOMON,
-                
-                // Thống kê Hội đồng
                 'total_hoidong' => $hoidongs->count(),
                 'role_chutich' => $hoidongs->where('pivot.VAITRO', 'chutich')->count(),
                 'role_thuky' => $hoidongs->where('pivot.VAITRO', 'thuky')->count(),
                 'role_thanhvien' => $hoidongs->where('pivot.VAITRO', 'thanhvien')->count(),
-                'role_phanbien' => $hoidongs->where('pivot.VAITRO', 'phanbien')->count(), // HĐ Phản biện riêng
-
-                // Thống kê Hướng dẫn
+                'role_phanbien' => $hoidongs->where('pivot.VAITRO', 'phanbien')->count(),
                 'quota_huongdan' => $quotas[$gv->ID_GIANGVIEN] ?? 0,
             ];
         });
 
-        // Sắp xếp theo tổng số việc giảm dần để dễ nhìn ai làm nhiều nhất
         $sortedStats = $stats->sortByDesc('total_hoidong')->values();
 
         return response()->json($sortedStats);
@@ -1114,21 +1024,22 @@ class HoiDongController extends Controller
             'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
             'LOAI' => 'nullable|in:hoidong,phanbien'
         ]);
-        
+
         $planId = $request->ID_KEHOACH;
         $loai = $request->input('LOAI', 'hoidong');
 
         $unassignedGroups = Nhom::where('ID_KEHOACH', $planId)
             ->whereDoesntHave('hoidongs')
             ->where('TRANGTHAI', '!=', 'Đã hủy')
+            ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                $q->where('TRANGTHAI', 'Đã xác nhận');
+            })
             ->get();
 
         if ($unassignedGroups->isEmpty()) {
-            return response()->json(['message' => 'Tất cả các nhóm đã được phân bổ.'], 200);
+            return response()->json(['message' => 'Không còn nhóm nào đủ điều kiện (đã nộp bài & được duyệt) để phân bổ.'], 200);
         }
 
-        // 2. Lấy danh sách hội đồng trong kế hoạch (chỉ lấy loại 'hoidong' bảo vệ)
-        // Kèm theo số lượng nhóm hiện tại để cân bằng tải
         $councils = Hoidong::where('ID_KEHOACH', $planId)
             ->where('LOAI', $loai)
             ->withCount('nhoms')
@@ -1144,28 +1055,21 @@ class HoiDongController extends Controller
             $countAssigned = 0;
 
             foreach ($unassignedGroups as $group) {
-                // A. Tìm các hội đồng phù hợp (Cùng chuyên ngành)
                 $matchingCouncils = $councils->where('ID_CHUYENNGANH', $group->ID_CHUYENNGANH);
 
-                // B. Nếu không có hội đồng cùng chuyên ngành, xét tất cả hội đồng (Fallback)
                 if ($matchingCouncils->isEmpty()) {
                     $candidateCouncils = $councils;
                 } else {
                     $candidateCouncils = $matchingCouncils;
                 }
 
-                // C. Chọn hội đồng có số lượng nhóm ít nhất (Load Balancing)
                 $bestCouncil = $candidateCouncils->sortBy('nhoms_count')->first();
 
                 if ($bestCouncil) {
-                    // Gán nhóm vào hội đồng
                     $bestCouncil->nhoms()->attach($group->ID_NHOM);
-                    
-                    // Cập nhật số lượng tạm thời để vòng lặp sau tính toán đúng
-                    $bestCouncil->nhoms_count++; 
-                    
-                    // Cập nhật trong collection gốc để các vòng lặp sau nhìn thấy sự thay đổi
-                    $councils = $councils->map(function($c) use ($bestCouncil) {
+                    $bestCouncil->nhoms_count++;
+
+                    $councils = $councils->map(function ($c) use ($bestCouncil) {
                         if ($c->ID_HOIDONG == $bestCouncil->ID_HOIDONG) {
                             $c->nhoms_count = $bestCouncil->nhoms_count;
                         }

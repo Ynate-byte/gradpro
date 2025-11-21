@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "re
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
-import { getGroupsForGradingList } from "@/api/chamDiemService";
+import { getGroupsForGradingList, getGradingStatistics } from "@/api/chamDiemService";
 import { getAllPlans } from "@/api/thesisPlanService";
 import { DataTable } from "@/components/shared/data-table/DataTable";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Loader2, PenSquare, Users, CheckCircle, BookMarked } from "lucide-react";
+import { PenSquare, Users, CheckCircle, BookMarked } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import StatCard from "@/components/shared/StatCard";
 import { useTheme } from "@/components/theme-provider";
@@ -124,11 +123,13 @@ const ListNhomChamDiem = () => {
   const isReduced = reduceMotion || shouldReduceMotion;
   const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
+  // 1. Lấy danh sách kế hoạch để hiển thị dropdown
   const { data: plansData, isLoading: isLoadingPlans } = useQuery({
     queryKey: ["allThesisPlans"],
     queryFn: getAllPlans,
   });
 
+  // Tự động chọn kế hoạch mới nhất khi load trang
   useEffect(() => {
     if (!isInitialPlanSet && plansData && plansData.length > 0) {
       setSelectedPlanId(plansData[0].ID_KEHOACH.toString());
@@ -136,8 +137,15 @@ const ListNhomChamDiem = () => {
     }
   }, [plansData, isInitialPlanSet]);
 
-  const queryKey = ["adminGroupsForGrading", pagination, columnFilters, selectedPlanId, debouncedSearchTerm];
+  // 2. [FIX] Lấy thống kê từ Server (StatCards) thay vì tính từ client
+  const { data: statsData, isLoading: isLoadingStats } = useQuery({
+    queryKey: ["adminGradingStats", selectedPlanId],
+    queryFn: () => getGradingStatistics(selectedPlanId),
+    enabled: !!selectedPlanId, // Chỉ chạy khi đã chọn plan
+  });
 
+  // 3. Lấy danh sách nhóm (Bảng dữ liệu - Có phân trang)
+  const queryKey = ["adminGroupsForGrading", pagination, columnFilters, selectedPlanId, debouncedSearchTerm];
   const { data: groupsData, isLoading: isLoadingGroups } = useQuery({
     queryKey: queryKey,
     queryFn: async () => {
@@ -147,7 +155,6 @@ const ListNhomChamDiem = () => {
         page: pagination.pageIndex + 1,
         per_page: pagination.pageSize,
       };
-
       const response = await getGroupsForGradingList(filters);
       return response;
     },
@@ -159,22 +166,16 @@ const ListNhomChamDiem = () => {
   const data = groupsData?.data ?? [];
   const pageCount = groupsData?.last_page ?? 0;
 
+  // Xử lý dữ liệu thống kê để hiển thị
   const stats = useMemo(() => {
-    if (isLoading) return { total: 'loading', daCham: 'loading', chuaCham: 'loading' };
-    if (!groupsData) return { total: 0, daCham: 0, chuaCham: 0 };
-
-    const totalGroups = groupsData.total ?? 0;
-    const groups = groupsData.data || [];
-
-    const daChamDiem = groups.filter(g => g.diem_tong_ket?.DIEM_TONG !== null).length;
-    const chuaChamDiem = groups.filter(g => g.diem_tong_ket?.DIEM_TONG === null).length;
-
+    if (isLoadingStats || !statsData) return { total: 'loading', daCham: 'loading', chuaCham: 'loading' };
+    
     return {
-      total: totalGroups,
-      daCham: daChamDiem,
-      chuaCham: chuaChamDiem,
+      total: statsData.total,
+      daCham: statsData.daCham,
+      chuaCham: statsData.chuaCham,
     };
-  }, [groupsData, isLoading]);
+  }, [statsData, isLoadingStats]);
 
   const planOptions = useMemo(() => {
     if (!plansData) return [];
@@ -194,9 +195,9 @@ const ListNhomChamDiem = () => {
 
   const columns = useMemo(() => getColumns(handleGradeClick), [handleGradeClick]);
 
+  // Animation height cho bảng
   const [tableHeight, setTableHeight] = useState('auto');
   const tableRef = useRef(null);
-
   useLayoutEffect(() => {
     if (tableRef.current) {
       const height = tableRef.current.getBoundingClientRect().height;
@@ -206,6 +207,7 @@ const ListNhomChamDiem = () => {
 
   return (
     <div className="p-4 md:p-8 space-y-6 h-full flex flex-col">
+      {/* Stat Cards Section */}
       <motion.div
         className="grid gap-4 md:grid-cols-3 flex-shrink-0"
         variants={variants.container}
@@ -217,7 +219,7 @@ const ListNhomChamDiem = () => {
             icon={Users}
             title="Nhóm cần chấm (Đã nộp)"
             value={stats.total}
-            isLoading={isLoading}
+            isLoading={isLoadingStats}
             iconBgClass="bg-blue-100"
             iconColorClass="text-blue-600"
           />
@@ -227,7 +229,7 @@ const ListNhomChamDiem = () => {
             icon={CheckCircle}
             title="Đã có điểm tổng kết"
             value={stats.daCham}
-            isLoading={isLoading}
+            isLoading={isLoadingStats}
             iconBgClass="bg-green-100"
             iconColorClass="text-green-600"
           />
@@ -237,13 +239,14 @@ const ListNhomChamDiem = () => {
             icon={BookMarked}
             title="Chưa có điểm tổng kết"
             value={stats.chuaCham}
-            isLoading={isLoading}
+            isLoading={isLoadingStats}
             iconBgClass="bg-yellow-100"
             iconColorClass="text-yellow-600"
           />
         </motion.div>
       </motion.div>
 
+      {/* Filter Section */}
       <div className="flex justify-start flex-shrink-0">
         <div className="max-w-xs w-full space-y-2">
           <Label htmlFor="plan-select" className="text-sm font-medium">Lọc theo Kế hoạch</Label>
@@ -254,7 +257,7 @@ const ListNhomChamDiem = () => {
               setSelectedPlanId(value === "all" ? "" : value);
               setPagination({ pageIndex: 0, pageSize: 10 });
             }}
-            disabled={isLoadingPlans}
+            disabled={!plansData}
           >
             <SelectTrigger className="h-10 bg-background">
               <SelectValue placeholder="Tất cả kế hoạch" />
@@ -271,6 +274,7 @@ const ListNhomChamDiem = () => {
         </div>
       </div>
 
+      {/* Data Table Section */}
       <motion.div
         initial={false}
         animate={{ height: tableHeight }}

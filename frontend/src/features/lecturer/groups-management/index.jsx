@@ -1,113 +1,182 @@
 import React, { useState, useEffect } from 'react';
-import axiosClient from "@/api/axiosConfig";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
-  CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Loader2, Eye, Star, Users, GraduationCap } from "lucide-react";
+import { Loader2, Eye, Star, Users, GraduationCap, Calendar, BookOpen, Clock, CheckCircle, AlertCircle, UserCheck, Crown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-
 import { thesisTopicService } from '@/api/thesisTopicService';
+import { cn } from '@/lib/utils';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
-// Hàm helper hiển thị Badge trạng thái
-const getStatusBadge = (status) => {
-  const statusConfig = {
-    'Đang thực hiện': { label: 'Đang thực hiện', className: 'bg-blue-500 text-white' },
-    'Đã hoàn thành': { label: 'Đã hoàn thành', className: 'bg-green-600 text-white' },
-    'Không đạt': { label: 'Không đạt', className: 'bg-red-600 text-white' },
-    'Chưa bắt đầu': { label: 'Chưa bắt đầu', className: 'bg-gray-400 text-white' },
-  };
-  const config = statusConfig[status] || { label: status, className: 'bg-gray-300 text-black' };
-  return <Badge className={config.className}>{config.label}</Badge>;
+// --- HELPER COMPONENTS ---
+
+const getStatusConfig = (status) => {
+    switch (status) {
+      case 'Đang thực hiện':
+        return { 
+          color: 'text-blue-700 bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+          icon: Clock
+        };
+      case 'Đã hoàn thành':
+        return { 
+          color: 'text-green-700 bg-green-50 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800',
+          icon: CheckCircle
+        };
+      case 'Không đạt':
+        return { 
+          color: 'text-red-700 bg-red-50 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+          icon: AlertCircle
+        };
+      default:
+        return { 
+          color: 'text-gray-700 bg-gray-50 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+          icon: Users
+        };
+    }
 };
 
-// Component Dialog hiển thị danh sách thành viên
-const MemberListDialog = ({ members, teamName, teamLeaderId }) => {
-  if (!members || members.length === 0) return null;
+const GroupCard = ({ group, onViewDetails }) => {
+    const { nhom, detai, TRANGTHAI, NGAY_PHANCONG } = group;
+    const statusConfig = getStatusConfig(TRANGTHAI);
+    const StatusIcon = statusConfig.icon;
 
-  // Xử lý danh sách thành viên để xác định trưởng nhóm
-  const formattedMembers = members.map(member => ({
-    ...member.nguoidung,
-    ID_NGUOIDUNG: member.ID_NGUOIDUNG, // Đảm bảo ID người dùng có sẵn
-    isLeader: member.ID_NGUOIDUNG === teamLeaderId,
-  }));
+    // Sử dụng danh sách thành viên từ API (có thể là thanhviens hoặc thanhvienNhom tùy response)
+    const members = nhom?.thanhviens || nhom?.thanhvienNhom || [];
 
-  // Tách trưởng nhóm ra khỏi danh sách thành viên khác
-  const teamLeader = formattedMembers.find(m => m.isLeader);
-  const nonLeaderMembers = formattedMembers.filter(m => !m.isLeader);
+    return (
+        <Card className="group relative flex flex-col overflow-hidden border-border/60 hover:border-primary/50 hover:shadow-md transition-all duration-300">
+            {/* Header */}
+            <CardHeader className="p-5 pb-3 bg-muted/5">
+                <div className="flex justify-between items-start gap-4">
+                    <div className="space-y-1 flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <CardTitle className="text-lg font-bold text-foreground truncate" title={nhom?.TEN_NHOM}>
+                                {nhom?.TEN_NHOM || "Nhóm chưa đặt tên"}
+                            </CardTitle>
+                        </div>
+                        <p className="text-xs font-mono text-muted-foreground">#{nhom?.MA_NHOM || 'N/A'}</p>
+                    </div>
+                    <Badge variant="outline" className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 transition-colors", statusConfig.color)}>
+                        <StatusIcon className="w-3.5 h-3.5" />
+                        {TRANGTHAI}
+                    </Badge>
+                </div>
+            </CardHeader>
 
-  return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="h-7 px-2 text-xs">
-          <Users className="w-3 h-3 mr-1" />
-          Xem ({members.length})
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Thành viên nhóm: {teamName}</DialogTitle>
-          <DialogDescription>
-            Danh sách chi tiết các thành viên tham gia đề tài.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4">
-          <h4 className="font-semibold mb-2 flex items-center text-blue-600">
-            <GraduationCap className="w-4 h-4 mr-2" /> Trưởng nhóm
-          </h4>
+            <CardContent className="p-5 pt-4 space-y-5 flex-1">
+                {/* Đề tài */}
+                <div className="space-y-2">
+                    <h4 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+                        <BookOpen className="w-4 h-4" /> Đề tài đang thực hiện
+                    </h4>
+                    <div className="p-3 bg-secondary/30 rounded-lg border border-border/50">
+                        <p className="text-sm font-medium text-foreground line-clamp-2" title={detai?.TEN_DETAI}>
+                            {detai?.TEN_DETAI || "Chưa đăng ký đề tài"}
+                        </p>
+                    </div>
+                </div>
 
-          {/* Nổi bật trưởng nhóm */}
-          <p className="border-l-4 border-blue-500 pl-3 py-1 bg-blue-50 text-blue-800 font-bold text-base rounded-sm flex items-center">
-            <span className="mr-2">👑</span>
-            {teamLeader?.HODEM_VA_TEN || 'N/A'}
-          </p>
+                <div className="grid grid-cols-2 gap-4">
+                     {/* Ngày phân công */}
+                     <div className="flex items-start gap-3 text-sm">
+                        <div className="p-1.5 rounded-md bg-muted text-muted-foreground shrink-0 mt-0.5">
+                           <Calendar className="w-4 h-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ngày bắt đầu</p>
+                            <p className="font-medium text-foreground break-words">
+                                {NGAY_PHANCONG ? format(new Date(NGAY_PHANCONG), 'dd/MM/yyyy', { locale: vi }) : '---'}
+                            </p>
+                        </div>
+                     </div>
 
-          <h4 className="font-semibold mt-4 mb-2 flex items-center">
-            <Users className="w-4 h-4 mr-2" /> Thành viên khác ({nonLeaderMembers.length})
-          </h4>
-          {nonLeaderMembers.length > 0 ? (
-            <ul className="space-y-2">
-              {nonLeaderMembers.map((member, index) => (
-                <li key={index} className="border-b pb-1 text-sm">
-                  {member.HODEM_VA_TEN}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-gray-500 text-sm">Hiện chưa có thành viên khác.</p>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
+                     {/* Thành viên - Click để mở Popover */}
+                     <Popover>
+                        <PopoverTrigger asChild>
+                             <div className="flex items-start gap-3 text-sm cursor-pointer group/member hover:bg-muted/50 rounded-md -m-2 p-2 transition-colors">
+                                <div className="p-1.5 rounded-md bg-muted text-muted-foreground shrink-0 mt-0.5 group-hover/member:bg-primary/10 group-hover/member:text-primary transition-colors">
+                                   <Users className="w-4 h-4" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide group-hover/member:text-primary">Thành viên</p>
+                                    <p className="font-medium text-foreground break-words underline decoration-dotted underline-offset-4 decoration-muted-foreground/50">
+                                        {members.length} sinh viên
+                                    </p>
+                                </div>
+                             </div>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-72 p-0" align="end">
+                            <div className="p-3 border-b bg-muted/30">
+                                <h4 className="font-semibold text-sm flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-primary"/> Danh sách thành viên
+                                </h4>
+                            </div>
+                            <div className="p-2 max-h-[200px] overflow-y-auto custom-scrollbar">
+                                {members.length > 0 ? (
+                                    <ul className="space-y-1">
+                                        {members.map((mem, idx) => (
+                                            <li key={mem.ID_NGUOIDUNG || idx} className="flex items-center gap-3 p-2 hover:bg-muted/50 rounded-md transition-colors">
+                                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                                                    {mem.nguoidung?.HODEM_VA_TEN?.charAt(0)}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="text-sm font-medium truncate">{mem.nguoidung?.HODEM_VA_TEN}</p>
+                                                        {mem.ID_NGUOIDUNG === nhom.ID_NHOMTRUONG && (
+                                                            <Crown className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-muted-foreground font-mono">{mem.nguoidung?.MA_DINHDANH}</p>
+                                                </div>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground text-center py-4">Chưa có thành viên</p>
+                                )}
+                            </div>
+                        </PopoverContent>
+                     </Popover>
+                </div>
+
+                {/* Đã xóa phần Avatar Stack ở đây */}
+
+            </CardContent>
+
+            <CardFooter className="p-4 bg-muted/10 border-t flex gap-3">
+                <Button 
+                    variant="outline" 
+                    className="flex-1 bg-background hover:bg-accent" 
+                    onClick={() => onViewDetails(nhom?.ID_NHOM)}
+                >
+                    <Eye className="w-4 h-4 mr-2 text-muted-foreground" /> Chi tiết
+                </Button>
+                <Button 
+                    variant="default" 
+                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                >
+                    <Star className="w-4 h-4 mr-2" /> Đánh giá
+                </Button>
+            </CardFooter>
+        </Card>
+    );
 };
 
-// Component chính
+// --- MAIN COMPONENT ---
+
 const GroupsManagementPage = () => {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -131,89 +200,56 @@ const GroupsManagementPage = () => {
   };
 
   const handleViewDetails = (nhomId) => {
-    navigate(`/lecturer/groups-management/${nhomId}/details`);
+    // Điều hướng đến trang chi tiết nhóm
+    if (nhomId) {
+        navigate(`/lecturer/groups-management/${nhomId}/details`);
+    } else {
+        toast.error("Không tìm thấy ID nhóm");
+    }
   };
 
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64 text-lg font-medium">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        Đang tải...
-      </div>
-    );
-  }
-
   return (
-    <div className="container mx-auto p-6">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Quản lý Nhóm</h1>
-        <p className="text-gray-600">Danh sách các nhóm sinh viên bạn đang hướng dẫn</p>
+    <div className="p-4 md:p-8 space-y-8 max-w-[1600px] mx-auto">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 className="text-3xl font-bold tracking-tight text-foreground">Quản lý Nhóm hướng dẫn</h1>
+            <p className="text-muted-foreground mt-1">Theo dõi tiến độ và đánh giá các nhóm sinh viên.</p>
+        </div>
+        <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800">
+             <Users className="w-5 h-5 text-blue-600" />
+             <span className="font-semibold text-blue-800 dark:text-blue-300">{groups.length}</span>
+             <span className="text-blue-600/80 dark:text-blue-400 text-sm">nhóm đang hướng dẫn</span>
+        </div>
       </div>
 
-      {/* Danh sách nhóm dạng bảng */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
-        {groups.length === 0 ? (
-          <div className="text-center py-10 text-gray-500">
-            Chưa có nhóm nào đăng ký đề tài của bạn
+      {/* Main Content */}
+      {loading ? (
+        <div className="flex flex-col justify-center items-center h-[60vh] text-muted-foreground">
+          <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
+          <p className="text-lg font-medium">Đang tải danh sách nhóm...</p>
+        </div>
+      ) : groups.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-[60vh] border-2 border-dashed border-muted-foreground/20 rounded-xl bg-muted/5">
+          <div className="p-6 bg-muted rounded-full mb-4">
+             <GraduationCap className="h-16 w-16 text-muted-foreground/50" />
           </div>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gray-100">
-                <TableHead className="w-[60px] text-center">STT</TableHead>
-                <TableHead>Tên nhóm</TableHead>
-                <TableHead>Trưởng nhóm</TableHead>
-                <TableHead>Đề tài</TableHead>
-                <TableHead>Ngày phân công</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="text-center">Thành viên</TableHead>
-                <TableHead className="text-center w-[200px]">Thao tác</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {groups.map((assignment, index) => (
-                <TableRow key={assignment.ID_PHANCONG} className="hover:bg-gray-50">
-                  <TableCell className="text-center font-medium">{index + 1}</TableCell>
-                  <TableCell className="font-semibold">{assignment.nhom?.TEN_NHOM}</TableCell>
-                  <TableCell>{assignment.nhom?.nhomtruong?.HODEM_VA_TEN || 'N/A'}</TableCell>
-                  <TableCell>{assignment.detai?.TEN_DETAI || 'N/A'}</TableCell>
-                  <TableCell>
-                    {assignment.NGAY_PHANCONG
-                      ? format(new Date(assignment.NGAY_PHANCONG), 'dd/MM/yyyy', { locale: vi })
-                      : '-'}
-                  </TableCell>
-                  <TableCell>{getStatusBadge(assignment.TRANGTHAI)}</TableCell>
-                  {/* Sử dụng MemberListDialog */}
-                  <TableCell className="text-center">
-                    <MemberListDialog
-                      members={assignment.nhom?.thanhviens}
-                      teamName={assignment.nhom?.TEN_NHOM}
-                      teamLeaderId={assignment.nhom?.ID_NHOMTRUONG} // Truyền ID trưởng nhóm
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewDetails(assignment.nhom?.ID_NHOM)}
-                      >
-                        <Eye className="w-4 h-4 mr-1" />
-                        Quản lý
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Star className="w-4 h-4 mr-1" />
-                        Đánh giá
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </div>
+          <h3 className="text-xl font-semibold text-foreground">Chưa có nhóm nào</h3>
+          <p className="text-muted-foreground mt-2 max-w-md text-center">
+            Hiện tại bạn chưa được phân công hướng dẫn nhóm nào. Khi sinh viên đăng ký đề tài, danh sách sẽ hiển thị tại đây.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+            {groups.map((group) => (
+                <GroupCard 
+                    key={group.ID_PHANCONG} 
+                    group={group} 
+                    onViewDetails={handleViewDetails} 
+                />
+            ))}
+        </div>
+      )}
     </div>
   );
 };
