@@ -19,7 +19,6 @@ const LecturerDashboard = lazy(() => import('./features/lecturer/dashboard/Lectu
 const LecturerThesisTopicsPage = lazy(() => import('./features/lecturer/thesis-topics/index.jsx'));
 const LecturerGroupsManagementPage = lazy(() => import('./features/lecturer/groups-management/index.jsx'));
 const GiangVienHoiDong = lazy(() => import('./features/lecturer/council/index.jsx'));
-const GiangVienChinhSua = lazy(() => import('./features/lecturer/council/EditCouncilPage.jsx'));
 const LecturerGradingPage = lazy(() => import('./features/lecturer/grading/index.jsx'));
 const LecturerGroupDetailPage = lazy(() => import('./features/lecturer/groups-management/pages/LecturerGroupDetailPage.jsx'));
 const LecturerQuotaManagementPage = lazy(() => import('./features/lecturer/quota-management/index.jsx'));
@@ -184,7 +183,6 @@ function App() {
               <Route path="lecturer/groups-management/:nhomId/schedule" element={<MeetingCalendarPage />} />
               <Route path="lecturer/quota-management" element={<LecturerQuotaManagementPage />} />
               <Route path="lecturer/council" element={<GiangVienHoiDong />} />
-              <Route path="lecturer/council/:id" element={<GiangVienChinhSua />} />
               <Route path="lecturer/grading" element={<LecturerGradingPage />} />
               <Route path="lecturer/calendar" element={<LecturerCalendarPage />} />
               <Route path="lecturer/submissions" element={<SubmissionManagementPage />} />
