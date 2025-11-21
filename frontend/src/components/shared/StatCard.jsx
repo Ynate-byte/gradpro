@@ -4,7 +4,7 @@ import { Loader2, Circle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from "@/components/theme-provider";
 
-const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot, onClick, isLoading }) => {
+const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot, onClick, isLoading, isActive }) => {
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
@@ -12,14 +12,17 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-pri
     return (
         <motion.div 
             className={cn(
-                // [SỬA] Thêm h-full để thẻ tự giãn chiều cao bằng nhau
-                "bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 h-full",
-                onClick && "cursor-pointer hover:shadow-md hover:border-primary/50"
+                "bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 h-full relative overflow-hidden",
+                onClick && "cursor-pointer hover:shadow-md",
+                isActive ? "border-primary ring-1 ring-primary bg-primary/5" : "hover:border-primary/50"
             )}
             whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
             onClick={onClick}
         >
+            {/* [THÊM] Dải màu trang trí khi Active */}
+            {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary" />}
+
             <motion.div 
                 className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
                 initial={false}
@@ -35,7 +38,7 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-pri
                 {Icon && <Icon className={cn("h-6 w-6", iconColorClass)} />}
             </motion.div>
             <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-muted-foreground truncate">{title}</h3>
+                <h3 className={cn("text-sm font-medium truncate", isActive ? "text-primary font-bold" : "text-muted-foreground")}>{title}</h3>
                 <div className="flex items-baseline gap-2 h-8 overflow-hidden">
                     <AnimatePresence mode="wait">
                         <motion.div

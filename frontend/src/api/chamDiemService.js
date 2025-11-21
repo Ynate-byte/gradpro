@@ -1,14 +1,6 @@
 import axiosClient from './axiosConfig';
 
 /**
- * 🧩 Nhóm API cho chức năng Chấm Điểm
- */
-
-// ===========================================
-// === API CHO GIẢNG VIÊN (TỰ CHẤM) ===
-// ===========================================
-
-/**
  * Lấy danh sách tất cả các nhóm Giảng viên cần chấm (HD, PB, HĐ).
  * @returns {Promise<{huongdan: Array, phanbien: Array, hoidong: Array}>}
  */
@@ -34,7 +26,6 @@ export const submitPhanBien = (nhomId, data) => {
     return axiosClient.post(`/chamdiem/phanbien/${nhomId}`, data).then(res => res.data);
 };
 
-// [THÊM MỚI] Giảng viên Phản biện điền 0 điểm (Không chấp thuận)
 /**
  * [GV Phản biện] Tự động điền 0 điểm và nhận xét là "Không chấp thuận".
  * @param {number} nhomId
@@ -51,10 +42,6 @@ export const submitZeroPhanBien = (nhomId) => {
 export const submitHoiDong = (nhomId, data) => {
     return axiosClient.post(`/chamdiem/hoidong/${nhomId}`, data).then(res => res.data);
 };
-
-// ===========================================
-// === API CHO ADMIN (NHẬP ĐIỂM HỘ) ===
-// ===========================================
 
 /**
  * [ADMIN] Lấy thông tin nhóm chi tiết để chấm điểm (bao gồm GVHD, GVPB, HĐ).
@@ -94,3 +81,7 @@ export const updateTyTrongDiem = (data) => {
 export const saveCombinedScores = (nhomId, payload) => {
     return axiosClient.post(`/chamdiem/combined/${nhomId}`, payload).then(res => res.data);
 }
+
+export const getGroupsForGradingList = (params) => {
+    return axiosClient.get('/chamdiem/groups-grading', { params }).then(res => res.data);
+};

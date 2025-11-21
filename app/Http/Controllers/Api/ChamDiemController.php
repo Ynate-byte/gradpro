@@ -105,6 +105,40 @@ class ChamDiemController extends Controller
         }
     }
 
+    public function getGroupsForGrading(Request $request)
+    {
+        $planId = $request->input('plan_id');
+        $search = $request->input('search');
+
+        $query = Nhom::query()
+            ->with([
+                'phancongDetaiNhom.detai', 
+                'phancongDetaiNhom.gvhd.nguoidung',
+                'diemTongKet'
+            ]);
+
+        if ($planId) {
+            $query->where('ID_KEHOACH', $planId);
+        }
+
+        $query->whereHas('phancongDetaiNhom.submissions', function ($q) {
+            $q->where('TRANGTHAI', 'Đã xác nhận');
+        });
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('TEN_NHOM', 'like', '%' . $search . '%')
+                  ->orWhereHas('phancongDetaiNhom.detai', function ($subQ) use ($search) {
+                      $subQ->where('TEN_DETAI', 'like', '%' . $search . '%');
+                  });
+            });
+        }
+
+        $groups = $query->orderBy('TEN_NHOM', 'asc')
+                        ->paginate($request->input('per_page', 10));
+
+        return response()->json($groups);
+    }
 
     /**
      * Lấy tỷ trọng điểm hiện hành (Global)

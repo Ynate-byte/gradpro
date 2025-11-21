@@ -324,6 +324,7 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     Route::prefix('chamdiem')->group(function () {
+        Route::get('/groups-grading', [ChamDiemController::class, 'getGroupsForGrading']);
         Route::get('/my-tasks', [ChamDiemController::class, 'getMyGradingTasks']);
         Route::get('/nhom/{id}', [ChamDiemController::class, 'getNhom']);
         Route::get('/tytrong', [ChamDiemController::class, 'getTyTrong']);

@@ -16,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Label } from "@/components/ui/label";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,12 +35,12 @@ import {
   ShieldAlert,
   Users,
   BookOpen,
-  GraduationCap,
   Shield,
   Shuffle,
   ArrowUp,
   BarChart3,
-  AlertCircle
+  AlertCircle,
+  LayoutTemplate // Fix missing import
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -190,11 +189,11 @@ const ListHoiDong = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  // State
+  // --- 1. KHAI BÁO STATE TRƯỚC ---
   const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState([]);
-  const [columnFilters, setColumnFilters] = useState([]);
+  const [columnFilters, setColumnFilters] = useState([]); // Khai báo ở đây
   const [rowSelection, setRowSelection] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch] = useDebounce(searchTerm, 300);
@@ -208,6 +207,8 @@ const ListHoiDong = () => {
   const [isSingleUpgradeAlertOpen, setIsSingleUpgradeAlertOpen] = useState(false);
   const [upgradeTarget, setUpgradeTarget] = useState(null);
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
+
+  const currentLoaiFilter = columnFilters.find(f => f.id === "LOAI")?.value?.[0];
 
   const shouldReduceMotion = useReducedMotion();
   const { reduceMotion } = useTheme();
@@ -481,7 +482,6 @@ const ListHoiDong = () => {
     [navigate, queryClient]
   );
 
-  // === [FIX] ĐỊNH NGHĨA BIẾN THIẾU ===
   const isLoading = isLoadingFilters || isLoadingData;
   const pageCount = data?.meta?.last_page ?? 0;
   const selectedIds = useMemo(
@@ -585,6 +585,7 @@ const ListHoiDong = () => {
               value={isLoadingStats ? 'loading' : stats?.totalBaoVe} 
               iconBgClass="bg-green-100" 
               iconColorClass="text-green-600"
+              isActive={currentLoaiFilter === 'hoidong'}
               onClick={() => handleStatCardClick('LOAI', 'hoidong')}
             />
           </motion.div>
@@ -597,6 +598,7 @@ const ListHoiDong = () => {
               value={isLoadingStats ? 'loading' : stats?.totalPhanBien} 
               iconBgClass="bg-yellow-100" 
               iconColorClass="text-yellow-600"
+              isActive={currentLoaiFilter === 'phanbien'}
               onClick={() => handleStatCardClick('LOAI', 'phanbien')}
             />
           </motion.div>
@@ -609,7 +611,8 @@ const ListHoiDong = () => {
               value={isLoadingStats ? 'loading' : stats?.totalHoiDong} 
               iconBgClass="bg-blue-100" 
               iconColorClass="text-blue-600"
-              onClick={() => handleStatCardClick('loai', undefined)}
+              isActive={!currentLoaiFilter}
+              onClick={() => handleStatCardClick('LOAI', undefined)}
             />
           </motion.div>
         </motion.div>

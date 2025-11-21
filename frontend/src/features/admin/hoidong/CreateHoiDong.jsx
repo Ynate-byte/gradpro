@@ -14,8 +14,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  Loader2, UserPlus, Search, Info, Calendar, 
-  MapPin, Users, Sparkles, PenTool, Briefcase 
+  Loader2, Search, Info, Calendar, 
+  MapPin, Sparkles, PenTool, Briefcase 
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
@@ -31,7 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 
 export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
-  const [activeTab, setActiveTab] = useState("auto"); // 'auto' | 'manual'
+  const [activeTab, setActiveTab] = useState("auto"); 
   const [loading, setLoading] = useState(true);
   const [loadingGV, setLoadingGV] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +39,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
   const [form, setForm] = useState({
     soLuong: 1,
     TEN_HOIDONG: "",
-    LOAI: "hoidong", // [SỬA] Đổi 'loai' thành 'LOAI' để khớp với Backend
+    LOAI: "hoidong", 
     ID_KEHOACH: "",
     ID_CHUYENNGANH: "",
     NGAY_BAOCAO: "",
@@ -59,7 +59,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
     if (isOpen) {
       fetchOptions();
     } else {
-      // Delay reset để tránh flash UI khi đóng
       setTimeout(() => {
         setForm(prev => ({
             ...prev,
@@ -95,14 +94,12 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
     }
   };
 
-  // Logic kiểm tra loại hội đồng
   const isPhanBienAllowed = useMemo(() => {
     if (!form.ID_KEHOACH) return true;
     const selectedPlan = kehoach.find(k => String(k.ID_KEHOACH) === form.ID_KEHOACH);
     return selectedPlan?.allow_phanbien !== false;
   }, [form.ID_KEHOACH, kehoach]);
 
-  // Tải giảng viên khi chọn kế hoạch
   useEffect(() => {
     const fetchGiangVien = async () => {
       if (!form.ID_KEHOACH || !isOpen) return;
@@ -127,13 +124,11 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
     [giangvien, searchGV]
   );
 
-  // Handlers
   const handleChange = (e) => setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   
   const handleSelectChange = (name, value) => {
       setForm((prev) => ({ ...prev, [name]: value }));
-      // Reset danh sách chọn nếu đổi loại hội đồng
-      if (name === 'LOAI') { // [SỬA] name='LOAI'
+      if (name === 'LOAI') { 
           setSelectedGV([]);
           setGvRoles({});
       }
@@ -141,24 +136,22 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
   const handleToggleGV = (id) => {
     const isSelected = selectedGV.includes(id);
-    // Validate số lượng
-    if (form.LOAI === "phanbien" && !isSelected && selectedGV.length >= 1) { // [SỬA] form.LOAI
+    if (form.LOAI === "phanbien" && !isSelected && selectedGV.length >= 1) { 
       return toast.warning("Hội đồng phản biện chỉ được chọn 1 người.");
     }
-    if (form.LOAI === "hoidong" && !isSelected && selectedGV.length >= 3) { // [SỬA] form.LOAI
+    if (form.LOAI === "hoidong" && !isSelected && selectedGV.length >= 3) { 
       return toast.warning("Hội đồng bảo vệ tối đa 3 người.");
     }
 
     setSelectedGV((prev) => {
       const updated = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
       if (!updated.includes(id)) {
-        // Xóa role nếu bỏ chọn
         setGvRoles((roles) => {
             const newRoles = { ...roles };
             delete newRoles[id];
             return newRoles;
         });
-      } else if (form.LOAI === "phanbien") { // [SỬA] form.LOAI
+      } else if (form.LOAI === "phanbien") { 
           setGvRoles((roles) => ({ ...roles, [id]: "phanbien" }));
       }
       return updated;
@@ -166,14 +159,21 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
   };
 
   const handleRoleChange = (id, role) => {
-    // Validate trùng vai trò (Chủ tịch/Thư ký)
-    if (form.LOAI === "hoidong") { // [SỬA] form.LOAI
+    if (form.LOAI === "hoidong") { 
       const otherRoles = Object.keys(gvRoles).filter((gvId) => gvId != id).map((gvId) => gvRoles[gvId]);
       if ((role === "chutich" && otherRoles.includes("chutich")) || (role === "thuky" && otherRoles.includes("thuky"))) {
         return toast.warning(`Vai trò này đã có người đảm nhiệm.`);
       }
     }
     setGvRoles((prev) => ({ ...prev, [id]: role }));
+  };
+
+  // Hàm helper tính màu sắc dựa trên tải công việc
+  const getWorkloadColor = (count) => {
+      if (count === 0) return "bg-muted text-muted-foreground border-muted-foreground/20";
+      if (count <= 2) return "bg-blue-50 text-blue-600 border-blue-200";
+      if (count <= 5) return "bg-orange-50 text-orange-600 border-orange-200";
+      return "bg-red-50 text-red-600 border-red-200";
   };
 
   const handleSubmit = async (e) => {
@@ -190,7 +190,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
       }
 
       const payload = {
-        ...form, // Giờ đây form chứa LOAI (uppercase), nên payload sẽ đúng
+        ...form, 
         ID_KEHOACH: Number(form.ID_KEHOACH),
         ID_CHUYENNGANH: Number(form.ID_CHUYENNGANH),
         NGAY_BAOCAO: form.NGAY_BAOCAO || null,
@@ -202,10 +202,9 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
       if (isManual) {
         payload.giangviens = selectedGV.map((id) => ({
           id,
-          vaitro: form.LOAI === "phanbien" ? "phanbien" : gvRoles[id] || "thanhvien", // [SỬA] form.LOAI
+          vaitro: form.LOAI === "phanbien" ? "phanbien" : gvRoles[id] || "thanhvien", 
         }));
       } else {
-        // Auto mode
         payload.soLuong = Number(form.soLuong) || 1;
         payload.giangviens = [];
       }
@@ -245,10 +244,10 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
         {/* BODY SCROLLABLE */}
         <div className="flex-1 overflow-y-auto bg-muted/10">
-            <div className="p-6 space-y-6">
+            <div className="p-6">
                 
                 {/* PHẦN CHUNG */}
-                <div className="bg-card rounded-xl border shadow-sm p-5 space-y-5">
+                <div className="bg-card rounded-xl border shadow-sm p-5">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div className="space-y-2">
                             <Label className="text-xs text-muted-foreground uppercase font-bold">Kế hoạch áp dụng <span className="text-destructive">*</span></Label>
@@ -282,7 +281,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                         <div className="col-span-2 md:col-span-1 space-y-2">
                             <Label className="text-xs font-semibold">Loại Hội đồng</Label>
-                            <Select value={form.LOAI} onValueChange={(v) => handleSelectChange("LOAI", v)}> {/* [SỬA] value={form.LOAI} */}
+                            <Select value={form.LOAI} onValueChange={(v) => handleSelectChange("LOAI", v)}> 
                                 <SelectTrigger className="h-9 bg-muted/30 border-muted-foreground/20 focus:bg-background transition-colors">
                                     <SelectValue />
                                 </SelectTrigger>
@@ -348,7 +347,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
                     {/* MODE THỦ CÔNG */}
                     <TabsContent value="manual" className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                         <div className="space-y-2">
+                          <div className="space-y-2">
                             <Label className="text-sm font-semibold">Tên hội đồng cụ thể</Label>
                             <Input name="TEN_HOIDONG" value={form.TEN_HOIDONG} onChange={handleChange} placeholder="VD: HĐ Bảo vệ Nhóm 1" className="h-10" />
                         </div>
@@ -383,7 +382,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                     <div className="divide-y">
                                         {filteredGV.map((gv) => {
                                             const isSelected = selectedGV.includes(gv.ID_GIANGVIEN);
-                                            const isAssigned = gv.HOIDONGS && gv.HOIDONGS.length > 0;
+                                            const hoidongCount = gv.HOIDONGS ? gv.HOIDONGS.length : 0;
                                             
                                             return (
                                                 <div 
@@ -402,14 +401,22 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                                         <div className="flex flex-col min-w-0">
                                                             <label 
                                                                 htmlFor={`gv-${gv.ID_GIANGVIEN}`} 
-                                                                className="text-sm font-medium truncate cursor-pointer"
+                                                                className="text-sm font-medium truncate cursor-pointer flex items-center gap-2"
                                                             >
-                                                                {/* Hiển thị học vị */}
                                                                 {gv.HOCVI ? `${gv.HOCVI}. ` : ''}{gv.HO_TEN}
+                                                                
+                                                                {/* [SỬA ĐỔI]: HIỂN THỊ SỐ LƯỢNG HỘI ĐỒNG BẰNG BADGE */}
+                                                                {hoidongCount > 0 && (
+                                                                    <Badge 
+                                                                        variant="outline" 
+                                                                        className={cn("text-[10px] px-1 py-0 h-4", getWorkloadColor(hoidongCount))}
+                                                                    >
+                                                                        {hoidongCount} HĐ
+                                                                    </Badge>
+                                                                )}
                                                             </label>
                                                             <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                                                                 {gv.MA_GIANGVIEN} • {gv.KHOA || 'N/A'}
-                                                                {isAssigned && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 ml-1 border-orange-200 text-orange-600 bg-orange-50">Bận</Badge>}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -418,15 +425,15 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                                     {isSelected && (
                                                         <div className="w-[110px] flex-shrink-0 animate-in zoom-in-95 duration-200">
                                                             <Select 
-                                                                value={form.LOAI === 'phanbien' ? 'phanbien' : (gvRoles[gv.ID_GIANGVIEN] || 'thanhvien')} // [SỬA] form.LOAI
+                                                                value={form.LOAI === 'phanbien' ? 'phanbien' : (gvRoles[gv.ID_GIANGVIEN] || 'thanhvien')}
                                                                 onValueChange={(v) => handleRoleChange(gv.ID_GIANGVIEN, v)}
-                                                                disabled={form.LOAI === 'phanbien'} // [SỬA] form.LOAI
+                                                                disabled={form.LOAI === 'phanbien'}
                                                             >
                                                                 <SelectTrigger className="h-7 text-xs">
                                                                     <SelectValue />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    {form.LOAI === 'hoidong' ? ( // [SỬA] form.LOAI
+                                                                    {form.LOAI === 'hoidong' ? (
                                                                         <>
                                                                             <SelectItem value="chutich">Chủ tịch</SelectItem>
                                                                             <SelectItem value="thuky">Thư ký</SelectItem>

@@ -3,9 +3,7 @@ import axiosClient from "@/api/axiosConfig";
 import { useParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -17,20 +15,9 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
-  Loader2,
-  ArrowLeft,
-  Search,
-  Save,
-  Trash2,
-  ShieldAlert,
-  Users,
-  Settings,
-  GraduationCap,
-  Calendar,
-  MapPin,
-  BookCopy,
-  LayoutTemplate,
-  Briefcase
+  Loader2, ArrowLeft, Search, Save, Trash2, ShieldAlert,
+  Users, Settings, GraduationCap, Calendar, MapPin, BookCopy,
+  LayoutTemplate, Briefcase, Info, User
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -54,6 +41,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 const EditHoiDong = () => {
   const { id } = useParams();
@@ -245,6 +237,13 @@ const EditHoiDong = () => {
     setGvRoles((prev) => ({ ...prev, [idGV]: role }));
   };
 
+  const getWorkloadColor = (count) => {
+      if (count === 0) return "bg-muted text-muted-foreground border-muted-foreground/20";
+      if (count <= 2) return "bg-blue-50 text-blue-600 border-blue-200";
+      if (count <= 5) return "bg-orange-50 text-orange-600 border-orange-200";
+      return "bg-red-50 text-red-600 border-red-200";
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsSubmitting(true);
@@ -362,7 +361,7 @@ const EditHoiDong = () => {
         </div>
       </div>
 
-      {/* 2. MAIN CONTENT WRAPPER - Thêm overflow-hidden */}
+      {/* 2. MAIN CONTENT WRAPPER */}
       <div className="flex-1 flex overflow-hidden">
           
           {/* CỘT TRÁI: Sidebar */}
@@ -422,7 +421,7 @@ const EditHoiDong = () => {
                       <div className="space-y-4">
                         <div className="flex items-center gap-2 pb-2 border-b border-border/60">
                             <div className="p-1.5 rounded bg-blue-100 text-blue-600 dark:bg-blue-900/20"><LayoutTemplate className="h-4 w-4" /></div>
-                            <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">Ngữ cảnh</h3>
+                            <h3 className="text-sm font-bold text-foreground uppercase tracking-wide">Hệ</h3>
                         </div>
                         <div className="space-y-4">
                              <div className="space-y-2">
@@ -453,7 +452,7 @@ const EditHoiDong = () => {
              </ScrollArea>
           </aside>
 
-          {/* CỘT PHẢI: Content - Thêm overflow-hidden */}
+          {/* CỘT PHẢI: Content */}
           <main className="flex-1 flex flex-col min-w-0 bg-muted/10 overflow-hidden">
              <Tabs defaultValue="members" className="flex-1 flex flex-col h-full overflow-hidden">
                 {/* [Header Tabs] */}
@@ -469,7 +468,6 @@ const EditHoiDong = () => {
                 </div>
 
                 {/* Tab 2: Thành viên */}
-                {/* [FIX] Thêm hidden và chỉ dùng flex khi data-[state=active] để tránh bị chiếm chỗ */}
                 <TabsContent value="members" className="hidden flex-1 flex-col min-h-0 p-6 mt-0 data-[state=active]:flex overflow-hidden">
                     <Card className="flex-1 flex flex-col border-none shadow-sm min-h-0 overflow-hidden">
                         <div className="p-4 border-b flex items-center gap-3 shrink-0">
@@ -490,11 +488,9 @@ const EditHoiDong = () => {
                             </div>
                         </div>
 
-                        {/* [UPDATE] ScrollArea Wrapper với relative/absolute để đảm bảo full height */}
                         <div className="flex-1 min-h-0 relative">
                             <ScrollArea className="h-full w-full absolute inset-0">
                                 <Table>
-                                    {/* [UPDATE] Đổi background header thành solid (bg-background) để không bị trong suốt chồng chữ */}
                                     <TableHeader className="bg-background sticky top-0 z-10 shadow-sm border-b">
                                         <TableRow className="hover:bg-transparent border-b-muted-foreground/10">
                                             <TableHead className="w-[60px] text-center font-bold">Chọn</TableHead>
@@ -518,7 +514,9 @@ const EditHoiDong = () => {
                                         ) : combinedFilteredGV.length > 0 ? (
                                             combinedFilteredGV.map((gv) => {
                                                 const isOriginalMember = originalAssignedGV.some((oGv) => oGv.ID_GIANGVIEN === gv.ID_GIANGVIEN);
-                                                const isAssignedToOther = gv.HOIDONGS && gv.HOIDONGS.length > 0 && !isOriginalMember;
+                                                // Không disable giảng viên đã có hội đồng khác
+                                                // Chỉ hiển thị badge thông báo số lượng
+                                                const hoidongCount = gv.HOIDONGS ? gv.HOIDONGS.length : 0;
                                                 const isSelected = selectedGV.includes(gv.ID_GIANGVIEN);
 
                                                 return (
@@ -533,22 +531,26 @@ const EditHoiDong = () => {
                                                             <Checkbox 
                                                                 checked={isSelected}
                                                                 onCheckedChange={() => handleToggleGiangVien(gv.ID_GIANGVIEN)}
-                                                                disabled={isAssignedToOther}
+                                                                // Đã bỏ disable
                                                                 className="data-[state=checked]:bg-primary data-[state=checked]:border-primary w-5 h-5 rounded"
                                                             />
                                                         </TableCell>
                                                         <TableCell className="py-2">
-                                                            <div className={cn("flex flex-col gap-0.5", isAssignedToOther && "opacity-50")}>
+                                                            <div className={cn("flex flex-col gap-0.5")}>
                                                                 <span className="font-semibold text-sm text-foreground">
                                                                     {gv.HOCVI ? <span className="text-primary/80 mr-1">{gv.HOCVI}.</span> : ''}
                                                                     {gv.HO_TEN}
                                                                 </span>
                                                                 <div className="flex items-center gap-2">
                                                                     <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-mono text-muted-foreground border-muted-foreground/30">{gv.MA_GIANGVIEN}</Badge>
-                                                                    {isAssignedToOther && (
-                                                                        <span className="text-[10px] text-destructive flex items-center gap-1 bg-destructive/10 px-1.5 rounded">
-                                                                            <Briefcase className="h-3 w-3"/> Bận
-                                                                        </span>
+                                                                    {/* [SỬA ĐỔI]: HIỂN THỊ SỐ LƯỢNG HỘI ĐỒNG BẰNG BADGE */}
+                                                                    {hoidongCount > 0 && (
+                                                                        <Badge 
+                                                                            variant="outline" 
+                                                                            className={cn("text-[10px] px-1 py-0 h-4", getWorkloadColor(hoidongCount))}
+                                                                        >
+                                                                            {hoidongCount} HĐ
+                                                                        </Badge>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -595,8 +597,7 @@ const EditHoiDong = () => {
                     </Card>
                 </TabsContent>
 
-                {/* Tab 3: Các nhóm */}
-                {/* [FIX] Thêm hidden và chỉ dùng flex khi data-[state=active] */}
+                {/* Tab 3: Các nhóm - [SỬA ĐỔI: DÙNG TABLE + POPOVER] */}
                 <TabsContent value="groups" className="hidden flex-1 flex-col min-h-0 p-6 mt-0 data-[state=active]:flex overflow-hidden">
                     {assignedNhoms.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4 bg-background rounded-xl border border-dashed shadow-sm">
@@ -612,51 +613,89 @@ const EditHoiDong = () => {
                             </Button>
                         </div>
                     ) : (
-                        <div className="flex-1 min-h-0 relative">
-                             {/* [UPDATE] ScrollArea với absolute fill */}
+                        <div className="flex-1 min-h-0 relative rounded-md border bg-background shadow-sm">
                              <ScrollArea className="h-full w-full absolute inset-0">
-                                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4 pb-4">
-                                    {assignedNhoms.map((nhom) => {
-                                        const detai = nhom.phancong_detai_nhom?.detai;
-                                        return (
-                                            <Card key={nhom.ID_NHOM} className="overflow-hidden border hover:border-primary/40 hover:shadow-md transition-all group">
-                                                <div className="p-3.5 border-b bg-muted/10 flex justify-between items-start gap-3">
-                                                    <div className="flex-1 min-w-0">
-                                                        <h4 className="font-bold text-sm truncate text-foreground" title={nhom.TEN_NHOM}>{nhom.TEN_NHOM}</h4>
-                                                    </div>
-                                                    <Button 
-                                                        variant="ghost" 
-                                                        size="icon" 
-                                                        className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-1 opacity-0 group-hover:opacity-100 transition-all"
-                                                        onClick={() => handleXoaNhom(nhom.ID_NHOM)}
-                                                        disabled={deletingGroupId === nhom.ID_NHOM}
-                                                        title="Gỡ nhóm"
-                                                    >
-                                                        {deletingGroupId === nhom.ID_NHOM ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <Trash2 className="h-3.5 w-3.5" />}
-                                                    </Button>
-                                                </div>
-                                                <div className="p-3.5 space-y-3">
-                                                    <div className="flex items-start gap-2.5">
-                                                        <BookCopy className="h-4 w-4 text-primary/70 mt-0.5 shrink-0" />
-                                                        <span className="text-xs leading-snug line-clamp-2 font-medium text-muted-foreground" title={detai?.TEN_DETAI}>
-                                                            {detai?.TEN_DETAI || <span className="italic opacity-70">Chưa có đề tài</span>}
-                                                        </span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between pt-1">
-                                                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                                            <Users className="h-3.5 w-3.5" /> 
-                                                            <span>{nhom.SO_THANHVIEN_HIENTAI} SV</span>
-                                                        </div>
-                                                        <Badge variant="secondary" className="text-[10px] font-normal h-5 px-1.5 bg-muted text-muted-foreground">
+                                <Table>
+                                    <TableHeader className="bg-muted/20 sticky top-0 z-10">
+                                        <TableRow>
+                                            <TableHead className="w-[50px] text-center">#</TableHead>
+                                            <TableHead>Tên Nhóm</TableHead>
+                                            <TableHead>Đề tài</TableHead>
+                                            <TableHead>GVHD</TableHead>
+                                            <TableHead>Trạng thái</TableHead>
+                                            <TableHead className="text-right">Thao tác</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {assignedNhoms.map((nhom, index) => {
+                                            const detai = nhom.phancong_detai_nhom?.detai;
+                                            const gvhd = nhom.phancong_detai_nhom?.gvhd?.nguoidung;
+                                            
+                                            return (
+                                                <TableRow key={nhom.ID_NHOM}>
+                                                    <TableCell className="text-center text-muted-foreground text-xs">{index + 1}</TableCell>
+                                                    <TableCell className="font-medium text-primary">{nhom.TEN_NHOM}</TableCell>
+                                                    <TableCell>
+                                                        {detai ? (
+                                                            <Popover>
+                                                                <PopoverTrigger asChild>
+                                                                    <div className="flex items-center gap-2 cursor-pointer hover:text-primary transition-colors">
+                                                                        <Info className="w-4 h-4 text-muted-foreground" />
+                                                                        <span className="truncate max-w-[200px]" title={detai.TEN_DETAI}>
+                                                                            {detai.TEN_DETAI}
+                                                                        </span>
+                                                                    </div>
+                                                                </PopoverTrigger>
+                                                                <PopoverContent className="w-80">
+                                                                    <div className="space-y-2">
+                                                                        <h4 className="font-medium leading-none text-primary">{detai.TEN_DETAI}</h4>
+                                                                        <p className="text-sm text-muted-foreground">
+                                                                            {detai.MOTA || "Không có mô tả."}
+                                                                        </p>
+                                                                    </div>
+                                                                </PopoverContent>
+                                                            </Popover>
+                                                        ) : (
+                                                            <span className="text-muted-foreground italic text-sm">Chưa có đề tài</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {gvhd ? (
+                                                            <div className="flex items-center gap-2">
+                                                                <User className="w-4 h-4 text-muted-foreground" />
+                                                                <span className="text-sm">{gvhd.HODEM_VA_TEN}</span>
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">Chưa phân công</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="secondary" className="text-[10px] font-normal bg-muted text-muted-foreground">
                                                             {nhom.phancong_detai_nhom?.TRANGTHAI || 'N/A'}
                                                         </Badge>
-                                                    </div>
-                                                </div>
-                                            </Card>
-                                        );
-                                    })}
-                                </div>
-                            </ScrollArea>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button 
+                                                            variant="ghost" 
+                                                            size="icon" 
+                                                            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                            onClick={() => handleXoaNhom(nhom.ID_NHOM)}
+                                                            disabled={deletingGroupId === nhom.ID_NHOM}
+                                                            title="Gỡ nhóm khỏi hội đồng"
+                                                        >
+                                                            {deletingGroupId === nhom.ID_NHOM ? (
+                                                                <Loader2 className="h-4 w-4 animate-spin"/>
+                                                            ) : (
+                                                                <Trash2 className="h-4 w-4" />
+                                                            )}
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            );
+                                        })}
+                                    </TableBody>
+                                </Table>
+                             </ScrollArea>
                         </div>
                     )}
                 </TabsContent>

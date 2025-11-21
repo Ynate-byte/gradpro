@@ -1112,14 +1112,15 @@ class HoiDongController extends Controller
     {
         $request->validate([
             'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'LOAI' => 'nullable|in:hoidong,phanbien'
         ]);
         
         $planId = $request->ID_KEHOACH;
+        $loai = $request->input('LOAI', 'hoidong');
 
-        // 1. Lấy danh sách nhóm chưa có hội đồng trong kế hoạch
         $unassignedGroups = Nhom::where('ID_KEHOACH', $planId)
-            ->whereDoesntHave('hoidongs') // Chưa thuộc hội đồng nào
-            ->where('TRANGTHAI', '!=', 'Đã hủy') // Chỉ lấy nhóm còn hoạt động
+            ->whereDoesntHave('hoidongs')
+            ->where('TRANGTHAI', '!=', 'Đã hủy')
             ->get();
 
         if ($unassignedGroups->isEmpty()) {
@@ -1129,12 +1130,13 @@ class HoiDongController extends Controller
         // 2. Lấy danh sách hội đồng trong kế hoạch (chỉ lấy loại 'hoidong' bảo vệ)
         // Kèm theo số lượng nhóm hiện tại để cân bằng tải
         $councils = Hoidong::where('ID_KEHOACH', $planId)
-            ->where('LOAI', 'hoidong')
+            ->where('LOAI', $loai)
             ->withCount('nhoms')
             ->get();
 
         if ($councils->isEmpty()) {
-            return response()->json(['message' => 'Chưa có Hội đồng bảo vệ nào được tạo.'], 400);
+            $loaiText = $loai === 'phanbien' ? 'Phản biện' : 'Bảo vệ';
+            return response()->json(['message' => "Chưa có Hội đồng $loaiText nào được tạo."], 400);
         }
 
         DB::beginTransaction();
