@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion"; // [MỚI] Import useReducedMotion
+import { motion, useReducedMotion } from "framer-motion";
 import axiosClient from "@/api/axiosConfig";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +27,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Loader2,
   PlusCircle,
@@ -41,6 +40,8 @@ import {
   Shield,
   Shuffle,
   ArrowUp,
+  BarChart3,
+  AlertCircle
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -50,8 +51,9 @@ import { cn } from "@/lib/utils";
 import * as hoiDongService from "@/api/adminHoiDongService";
 import { CreateHoiDongDialog } from "./CreateHoiDong";
 import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
+import { WorkloadStatsDialog } from "./WorkloadStatsDialog";
 import StatCard from "@/components/shared/StatCard";
-import { useTheme } from "@/components/theme-provider"; // [MỚI] Import useTheme
+import { useTheme } from "@/components/theme-provider";
 
 const QUERY_KEY_HOIDONG = "adminHoiDong";
 const QUERY_KEY_STATS = "hoiDongStats";
@@ -68,7 +70,7 @@ const chamDiemOptions = [
   { label: "Chưa phân bổ nhóm", value: "chua_phan_bo" },
 ];
 
-// [MỚI] Hàm tạo variants động dựa trên isReduced
+// Variants animation
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -88,12 +90,13 @@ const getVariants = (shouldReduce) => {
     };
 };
 
-// ... (Phần EditableTextCell giữ nguyên) ...
+// Inline Edit Cell
 const EditableTextCell = ({ getValue, row, colId }) => {
     const initialValue = getValue() || "";
     const [value, setValue] = useState(initialValue);
     const [isEditing, setIsEditing] = useState(false);
     const queryClient = useQueryClient();
+    
     const { mutate, isPending } = useMutation({
         mutationFn: (newValue) => {
             if (colId === "TEN_HOIDONG") {
@@ -182,9 +185,13 @@ const EditableTextCell = ({ getValue, row, colId }) => {
     );
 };
 
+// === COMPONENT CHÍNH ===
 const ListHoiDong = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  // State
+  const [isStatsOpen, setIsStatsOpen] = useState(false);
   const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]);
@@ -192,6 +199,7 @@ const ListHoiDong = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch] = useDebounce(searchTerm, 300);
   const [selectedPlanId, setSelectedPlanId] = useState("");
+  
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -201,13 +209,12 @@ const ListHoiDong = () => {
   const [upgradeTarget, setUpgradeTarget] = useState(null);
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
 
-  // [MỚI] Kiểm tra Reduce Motion
   const shouldReduceMotion = useReducedMotion();
   const { reduceMotion } = useTheme();
   const isReduced = reduceMotion || shouldReduceMotion;
-  
   const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
+  // Query Filters
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
     queryKey: [QUERY_KEY_FILTERS],
     queryFn: async () => {
@@ -236,12 +243,14 @@ const ListHoiDong = () => {
     }
   }, [filterOptions, isInitialPlanSet]);
 
+  // Query Stats
   const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: [QUERY_KEY_STATS, selectedPlanId],
     queryFn: () => hoiDongService.getHoiDongStatistics(selectedPlanId || null),
     enabled: !!isLoadingFilters,
   });
 
+  // Query Data
   const queryKey = [
     QUERY_KEY_HOIDONG,
     pagination,
@@ -268,6 +277,7 @@ const ListHoiDong = () => {
     enabled: !isLoadingFilters,
   });
 
+  // Mutations
   const deleteMutation = useMutation({
     mutationFn: (ids) => Promise.all(ids.map((id) => hoiDongService.deleteHoiDong(id))),
     onSuccess: () => {
@@ -316,6 +326,7 @@ const ListHoiDong = () => {
     },
   });
 
+  // Column Definitions
   const columns = useMemo(
     () => [
       {
@@ -470,6 +481,7 @@ const ListHoiDong = () => {
     [navigate, queryClient]
   );
 
+  // === [FIX] ĐỊNH NGHĨA BIẾN THIẾU ===
   const isLoading = isLoadingFilters || isLoadingData;
   const pageCount = data?.meta?.last_page ?? 0;
   const selectedIds = useMemo(
@@ -483,35 +495,8 @@ const ListHoiDong = () => {
     queryClient.invalidateQueries({ queryKey: [QUERY_KEY_FILTERS] });
   };
 
-  const bulkActions = (
-    <div className="flex gap-2">
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => setIsUpgradeAlertOpen(true)}
-        disabled={upgradeMutation.isPending || deleteMutation.isPending}
-      >
-        <ArrowUp className="mr-2 h-4 w-4" />
-        Nâng cấp HĐ Phản Biện
-      </Button>
-      <Button
-        variant="destructive"
-        size="sm"
-        onClick={() => {
-          setDeleteTarget("bulk");
-          setIsAlertOpen(true);
-        }}
-        disabled={deleteMutation.isPending}
-      >
-        <Trash2 className="mr-2 h-4 w-4" />
-        Xóa mục đã chọn
-      </Button>
-    </div>
-  );
-
   const handleStatCardClick = (filterId, value) => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
-    
     setColumnFilters(prevFilters => {
       const otherFilters = prevFilters.filter(f => f.id !== filterId);
       if (value === undefined) {
@@ -520,6 +505,43 @@ const ListHoiDong = () => {
       return [...otherFilters, { id: filterId, value: [value] }];
     });
   };
+
+  // Nút thao tác hàng loạt (được truyền vào DataTable)
+  const bulkActions = (
+    <div className="flex items-center gap-2">
+      {Object.keys(rowSelection).length > 0 && (
+        <>
+           <Button
+              variant="outline"
+              size="sm"
+              className="h-8"
+              onClick={() => setIsUpgradeAlertOpen(true)}
+              disabled={upgradeMutation.isPending || deleteMutation.isPending}
+          >
+              <ArrowUp className="mr-2 h-4 w-4" />
+              Nâng cấp
+          </Button>
+          <Button
+              variant="destructive"
+              size="sm"
+              className="h-8"
+              onClick={() => {
+              setDeleteTarget("bulk");
+              setIsAlertOpen(true);
+              }}
+              disabled={deleteMutation.isPending}
+          >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Xóa
+          </Button>
+        </>
+      )}
+
+      <Button size="sm" className="h-8 ml-2" onClick={() => setIsCreateOpen(true)}>
+          <PlusCircle className="mr-2 h-4 w-4" /> Thêm hội đồng
+      </Button>
+    </div>
+  );
 
   const [tableHeight, setTableHeight] = useState('auto');
   const tableRef = useRef(null);
@@ -533,23 +555,29 @@ const ListHoiDong = () => {
 
   return (
     <>
-      <div className="p-4 md:p-8 space-y-4 h-full flex flex-col">
+      <div className="p-4 md:p-8 space-y-6 h-full flex flex-col">
+        
+        {/* 1. STAT CARDS SECTION */}
         <motion.div 
-          className="grid gap-4 md:grid-cols-3 lg:grid-cols-5 flex-shrink-0"
+          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0"
           variants={variants.container}
           initial="hidden"
           animate="visible"
         >
+          {/* Card 1 */}
           <motion.div variants={variants.item}>
             <StatCard 
-              icon={Users} 
-              title="Tổng số Hội đồng" 
-              value={isLoadingStats ? 'loading' : stats?.totalHoiDong} 
-              iconBgClass="bg-blue-100" 
-              iconColorClass="text-blue-600"
-              onClick={() => handleStatCardClick('loai', undefined)}
+              icon={AlertCircle} 
+              title="Nhóm chờ phân bổ" 
+              value={isLoadingStats ? 'loading' : stats?.nhomCanPhanBo} 
+              iconBgClass="bg-red-100" 
+              iconColorClass="text-red-600"
+              description="Đã nộp bài, chưa có HĐ"
+              onClick={() => navigate('/admin/hoidong/phanbo')}
             />
           </motion.div>
+
+          {/* Card 2 */}
           <motion.div variants={variants.item}>
             <StatCard 
               icon={Shield} 
@@ -560,6 +588,8 @@ const ListHoiDong = () => {
               onClick={() => handleStatCardClick('LOAI', 'hoidong')}
             />
           </motion.div>
+
+          {/* Card 3 */}
           <motion.div variants={variants.item}>
             <StatCard 
               icon={BookOpen} 
@@ -570,81 +600,80 @@ const ListHoiDong = () => {
               onClick={() => handleStatCardClick('LOAI', 'phanbien')}
             />
           </motion.div>
+
+          {/* Card 4 */}
           <motion.div variants={variants.item}>
             <StatCard 
-              icon={GraduationCap} 
-              title="Tổng Thành viên" 
-              value={isLoadingStats ? 'loading' : stats?.totalThanhVien} 
-              iconBgClass="bg-indigo-100" 
-              iconColorClass="text-indigo-600" 
-            />
-          </motion.div>
-          <motion.div variants={variants.item}>
-            <StatCard 
-              icon={Users2} 
-              title="Nhóm đã phân bổ" 
-              value={isLoadingStats ? 'loading' : stats?.nhomDaPhanBo} 
-              iconBgClass="bg-orange-100" 
-              iconColorClass="text-orange-600" 
+              icon={Users} 
+              title="Tổng Hội đồng" 
+              value={isLoadingStats ? 'loading' : stats?.totalHoiDong} 
+              iconBgClass="bg-blue-100" 
+              iconColorClass="text-blue-600"
+              onClick={() => handleStatCardClick('loai', undefined)}
             />
           </motion.div>
         </motion.div>
 
+        {/* 2. ACTION BAR */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <Button variant="default" onClick={() => setIsAutoAssignOpen(true)} disabled={!selectedPlanId}>
-              <Shuffle className="mr-2 h-4 w-4" /> Phân công thành viên tự động
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="w-full md:w-[300px]">
+                {isLoadingFilters ? (
+                  <Skeleton className="h-10 w-full" />
+                ) : (
+                  <Select
+                    id="plan-select"
+                    value={selectedPlanId}
+                    onValueChange={(value) => {
+                      setSelectedPlanId(value === "all" ? "" : value);
+                      setPagination({ pageIndex: 0, pageSize: 10 });
+                    }}
+                  >
+                    <SelectTrigger className="h-10 bg-background">
+                      <SelectValue placeholder="Chọn kế hoạch..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Tất cả kế hoạch</SelectItem>
+                      {filterOptions?.kehoach.map((plan) => (
+                        <SelectItem key={plan.value} value={plan.value}>
+                          {plan.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+            <Button variant="outline" onClick={() => setIsStatsOpen(true)} disabled={!selectedPlanId} className="bg-background">
+                <BarChart3 className="mr-2 h-4 w-4" /> Thống kê tải
             </Button>
-            <Button asChild variant="outline">
+            
+            <Button variant="secondary" onClick={() => setIsAutoAssignOpen(true)} disabled={!selectedPlanId} className="bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800">
+              <Shuffle className="mr-2 h-4 w-4" /> Phân công thành viên
+            </Button>
+
+            <Button asChild variant="default" className="bg-blue-600 hover:bg-blue-700">
               <Link to="/admin/hoidong/phanbo">
                 <Users2 className="mr-2 h-4 w-4" /> Phân bổ nhóm
               </Link>
             </Button>
-            <Button onClick={() => setIsCreateOpen(true)}>
-              <PlusCircle className="mr-2 h-4 w-4" /> Thêm hội đồng
-            </Button>
-          </div>
-          <div className="space-y-2 w-full md:w-[400px]">
-            <Label htmlFor="plan-select" className="sr-only">Chọn Kế Hoạch</Label>
-            {isLoadingFilters ? (
-              <Skeleton className="h-10 w-full" />
-            ) : (
-              <Select
-                id="plan-select"
-                value={selectedPlanId}
-                onValueChange={(value) => {
-                  setSelectedPlanId(value === "all" ? "" : value);
-                  setPagination({ pageIndex: 0, pageSize: 10 });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn kế hoạch..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Tất cả kế hoạch</SelectItem>
-                  {filterOptions?.kehoach.map((plan) => (
-                    <SelectItem key={plan.value} value={plan.value}>
-                      {plan.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           </div>
         </div>
 
-        {/* [MỚI] Animation cho bảng */}
-        <motion.div
+        {/* 3. DATA TABLE */}
+        <motion.div 
           initial={false}
           animate={{ height: tableHeight }}
-          transition={{
+          transition={{ 
               duration: isReduced ? 0 : 0.5,
-              ease: [0.4, 0, 0.2, 1]
+              ease: [0.4, 0, 0.2, 1] 
           }}
           style={{ overflow: 'hidden' }}
-          className="flex-grow"
+          className="flex-grow flex flex-col"
         >
-          <div ref={tableRef}>
+          <div ref={tableRef} className="h-full flex flex-col">
             <DataTable
               columns={columns}
               data={data?.data ?? []}
@@ -669,114 +698,48 @@ const ListHoiDong = () => {
               khoaBomonFilterOptions={loaiOptions}
               statusColumnId="trang_thai_cham_diem"
               statusOptions={chamDiemOptions}
+              
               bulkActions={bulkActions}
+              onAddUser={() => setIsCreateOpen(true)}
+              addBtnText="Thêm hội đồng"
             />
           </div>
         </motion.div>
-
+        
+        {/* Dialogs */}
         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <ShieldAlert className="h-6 w-6 text-destructive" />
-                Xác nhận Xóa Hội đồng?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {deleteTarget === "bulk"
-                  ? `Bạn có chắc chắn muốn xóa vĩnh viễn ${selectedIds.length} hội đồng đã chọn?`
-                  : "Bạn có chắc chắn muốn xóa vĩnh viễn hội đồng này?"}
-                <br />
-                Hành động này không thể hoàn tác.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleteMutation.isPending}>Hủy</AlertDialogCancel>
-              <AlertDialogAction
-                className="bg-destructive hover:bg-destructive/90"
-                disabled={deleteMutation.isPending}
-                onClick={() => {
-                  const ids = deleteTarget === "bulk" ? selectedIds : [deleteTarget];
-                  deleteMutation.mutate(ids);
-                }}
-              >
-                {deleteMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Xác nhận Xóa
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
+                  <AlertDialogDescription>Hành động này không thể hoàn tác.</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Hủy</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => {
+                      const ids = deleteTarget === "bulk" ? selectedIds : [deleteTarget];
+                      deleteMutation.mutate(ids);
+                  }}>Xóa</AlertDialogAction>
+                </AlertDialogFooter>
+             </AlertDialogContent>
         </AlertDialog>
 
         <AlertDialog open={isUpgradeAlertOpen} onOpenChange={setIsUpgradeAlertOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <ArrowUp className="h-6 w-6 text-primary" />
-                Xác nhận Nâng cấp Hội đồng?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                Bạn có chắc chắn muốn nâng cấp {selectedIds.length} HĐ Phản Biện đã chọn lên HĐ Bảo Vệ không?
-                <br />
-                Hệ thống sẽ chỉ nâng cấp các HĐ hợp lệ (loại "phản biện" và có 1 thành viên).
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={upgradeMutation.isPending}>Hủy</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={upgradeMutation.isPending}
-                onClick={() => {
-                  upgradeMutation.mutate(selectedIds);
-                }}
-              >
-                {upgradeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Xác nhận Nâng cấp
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
+            <AlertDialogContent>
+                <AlertDialogHeader><AlertDialogTitle>Nâng cấp?</AlertDialogTitle></AlertDialogHeader>
+                <AlertDialogFooter><AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>OK</AlertDialogAction></AlertDialogFooter>
+            </AlertDialogContent>
         </AlertDialog>
-
         <AlertDialog open={isSingleUpgradeAlertOpen} onOpenChange={setIsSingleUpgradeAlertOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="flex items-center gap-2">
-                <ArrowUp className="h-6 w-6 text-primary" />
-                Xác nhận Nâng cấp Hội đồng?
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                Bạn có chắc chắn muốn nâng cấp HĐ Phản Biện "{upgradeTarget?.TEN_HOIDONG}" lên Hội đồng Bảo vệ (3 thành viên)?
-                <br /><br />
-                Quy trình này sẽ giữ lại 1 GV Phản biện làm Thành viên và yêu cầu bạn bổ sung 2 GV (Chủ tịch, Thư ký).
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={singleUpgradeMutation.isPending}>Hủy</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={singleUpgradeMutation.isPending}
-                onClick={() => {
-                  if (upgradeTarget) {
-                    singleUpgradeMutation.mutate(upgradeTarget.ID_HOIDONG);
-                  }
-                }}
-              >
-                {singleUpgradeMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Xác nhận Nâng cấp
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
+             <AlertDialogContent>
+                <AlertDialogHeader><AlertDialogTitle>Nâng cấp?</AlertDialogTitle></AlertDialogHeader>
+                <AlertDialogFooter><AlertDialogAction onClick={() => upgradeTarget && singleUpgradeMutation.mutate(upgradeTarget.ID_HOIDONG)}>OK</AlertDialogAction></AlertDialogFooter>
+            </AlertDialogContent>
         </AlertDialog>
 
-        <CreateHoiDongDialog
-          isOpen={isCreateOpen}
-          setIsOpen={setIsCreateOpen}
-          onSuccess={handleCreateSuccess}
-        />
+        <CreateHoiDongDialog isOpen={isCreateOpen} setIsOpen={setIsCreateOpen} onSuccess={handleCreateSuccess} />
+        <AutoAssignMemberDialog isOpen={isAutoAssignOpen} setIsOpen={setIsAutoAssignOpen} selectedPlanId={selectedPlanId} planOptions={filterOptions?.kehoach} onSuccess={handleCreateSuccess} />
+        <WorkloadStatsDialog isOpen={isStatsOpen} setIsOpen={setIsStatsOpen} planId={selectedPlanId} />
 
-        <AutoAssignMemberDialog
-          isOpen={isAutoAssignOpen}
-          setIsOpen={setIsAutoAssignOpen}
-          selectedPlanId={selectedPlanId}
-          planOptions={filterOptions?.kehoach}
-          onSuccess={handleCreateSuccess}
-        />
       </div>
     </>
   );

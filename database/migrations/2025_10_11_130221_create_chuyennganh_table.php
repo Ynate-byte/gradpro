@@ -12,9 +12,13 @@ return new class extends Migration
             $table->id('ID_CHUYENNGANH');
             $table->string('MA_CHUYENNGANH', 20)->unique();
             $table->string('TEN_CHUYENNGANH', 100);
+            
+            $table->unsignedBigInteger('ID_KHOA_BOMON')->nullable(); 
+            
             $table->text('MOTA')->nullable();
             $table->boolean('TRANGTHAI_KICHHOAT')->default(true);
             $table->timestamp('NGAYTAO')->useCurrent();
+            
         });
     }
 

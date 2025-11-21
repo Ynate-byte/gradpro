@@ -224,23 +224,23 @@ Route::middleware('auth:sanctum')->group(function () {
         // ----- QUẢN LÝ HỘI ĐỒNG (ADMIN) -----
         Route::prefix('hoidong')->group(function () {
             Route::get('/statistics', [HoiDongController::class, 'getStatistics']);
+            Route::get('/workload-stats', [HoiDongController::class, 'getLecturerWorkload']); 
             Route::get('/kehoach-options', [HoiDongController::class, 'getKeHoachOptions']);
             Route::get('/chuyennganh-options', [HoiDongController::class, 'getChuyenNganhOptions']);
             Route::get('/{idKeHoach}/nhoms', [HoiDongController::class, 'getNhomTheoKeHoach']);
             Route::post('/phanbo-nhom', [HoiDongController::class, 'phanBoNhom']);
             Route::get('/', [HoiDongController::class, 'index']);
             Route::post('/', [HoiDongController::class, 'create']);
-            Route::get('/{id}', [HoiDongController::class, 'show']);
+            Route::get('/{id}', [HoiDongController::class, 'show']); 
             Route::put('/{id}', [HoiDongController::class, 'update']);
             Route::delete('/{id}', [HoiDongController::class, 'destroy']);
-            // Routes cập nhật inline (sử dụng PATCH)
             Route::patch('/{id}/update-phong', [HoiDongController::class, 'updatePhong']);
-            Route::patch('/{id}/update-name', [HoiDongController::class, 'updateTenHoiDong']); 
-            // Route phân công thành viên tự động
+            Route::patch('/{id}/update-name', [HoiDongController::class, 'updateTenHoiDong']);
             Route::post('/auto-assign-members', [HoiDongController::class, 'autoAssignMembers']);
             Route::post('/bulk-upgrade', [HoiDongController::class, 'bulkUpgrade']);
             Route::post('/{id}/upgrade-to-hoidong', [HoiDongController::class, 'upgradePhanBienToHoiDong']);
             Route::delete('/{idHoiDong}/nhom/{idNhom}', [HoiDongController::class, 'xoaPhanBoNhom']);
+            Route::post('/auto-assign-groups', [HoiDongController::class, 'autoAssignGroups']);
         });
         
         // ----- PHÂN CÔNG ĐỀ TÀI (ADMIN) -----

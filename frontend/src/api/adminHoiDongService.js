@@ -84,3 +84,11 @@ export const bulkUpgradeHoiDong = (ids) => {
 export const autoAssignMembers = (payload) => {
     return axiosClient.post('/admin/hoidong/auto-assign-members', payload).then(res => res.data);
 };
+
+export const getLecturerWorkload = (planId) => {
+    return axiosClient.get('/admin/hoidong/workload-stats', { params: { plan_id: planId } }).then(res => res.data);
+};
+
+export const autoAssignGroups = (planId) => {
+    return axiosClient.post('/admin/hoidong/auto-assign-groups', { ID_KEHOACH: planId }).then(res => res.data);
+};

@@ -12,7 +12,8 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-pri
     return (
         <motion.div 
             className={cn(
-                "bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300",
+                // [SỬA] Thêm h-full để thẻ tự giãn chiều cao bằng nhau
+                "bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 h-full",
                 onClick && "cursor-pointer hover:shadow-md hover:border-primary/50"
             )}
             whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}

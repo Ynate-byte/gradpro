@@ -17,12 +17,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Save, Search, Shuffle } from "lucide-react";
+import { Loader2, ArrowLeft, Save, Search, Sparkles } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { autoAssignGroups } from "@/api/adminHoiDongService";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"; // Đảm bảo đã import các component này
 
 // ----- Component Item Nhóm (Click để chuyển) -----
 const GroupSelectItem = ({ group, onMove }) => {
@@ -117,6 +127,10 @@ const PhanboHoiDong = () => {
 
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // [MỚI] State cho Dialog xác nhận phân bổ tự động
+  const [isAutoAssignDialogOpen, setIsAutoAssignDialogOpen] = useState(false);
+
   const navigate = useNavigate();
 
   const [leftSearch, setLeftSearch] = useState("");
@@ -151,7 +165,7 @@ const PhanboHoiDong = () => {
     try {
       const [nhomRes, hoidongRes] = await Promise.all([
         axiosClient.get(`/admin/hoidong/${chonKehoach}/nhoms`),
-        // [ĐÃ SỬA] Thêm params 'all: true' để lấy TẤT CẢ hội đồng
+        // Lấy tất cả hội đồng để hiển thị dropdown
         axiosClient.get("/admin/hoidong", {
           params: {
             kehoach: chonKehoach,
@@ -162,25 +176,25 @@ const PhanboHoiDong = () => {
 
       setAllGroups(nhomRes.data || []);
 
-      // [ĐÃ SỬA] hoidongRes.data bây giờ là một MẢNG
       const hoidongData = hoidongRes.data || [];
       setHoidongList(hoidongData);
 
-      // [ĐÃ SỬA] Lấy ID từ mảng hoidongData
-      const firstHd = hoidongData?.[0]?.ID_HOIDONG;
-      setChonHoiDong(firstHd ? String(firstHd) : "");
+      // Nếu chưa chọn hội đồng nào, chọn cái đầu tiên
+      if (!chonHoiDong && hoidongData.length > 0) {
+        setChonHoiDong(String(hoidongData[0].ID_HOIDONG));
+      }
     } catch (error) {
       toast.error("Không thể tải dữ liệu nhóm/hội đồng!");
     } finally {
       setLoading(false);
     }
-  }, [chonKehoach]);
+  }, [chonKehoach, chonHoiDong]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Tính toán dữ liệu phân bổ
+  // Tính toán dữ liệu phân bổ (Client-side state)
   const { hoidongGroupCounts, unassignedGroups, assignedGroups } = useMemo(() => {
     const counts = new Map();
     const unassigned = [];
@@ -190,12 +204,12 @@ const PhanboHoiDong = () => {
     allGroups.forEach((group) => {
       const groupIdNum = group.ID_HOIDONG;
 
-      // Đếm số nhóm theo hội đồng
+      // Đếm số nhóm theo hội đồng (để hiển thị trong dropdown)
       if (groupIdNum) {
         counts.set(groupIdNum, (counts.get(groupIdNum) || 0) + 1);
       }
 
-      // Phân loại nhóm
+      // Phân loại nhóm vào cột trái/phải
       const groupIdStr = groupIdNum ? String(groupIdNum) : null;
 
       if (groupIdStr === null) {
@@ -212,7 +226,7 @@ const PhanboHoiDong = () => {
     };
   }, [allGroups, chonHoiDong]);
 
-  // Lọc cột trái
+  // Lọc tìm kiếm cột trái
   const filteredLeft = useMemo(() => {
     if (!leftSearch) return unassignedGroups;
     const term = leftSearch.toLowerCase();
@@ -223,7 +237,7 @@ const PhanboHoiDong = () => {
     );
   }, [unassignedGroups, leftSearch]);
 
-  // Lọc cột phải
+  // Lọc tìm kiếm cột phải
   const filteredRight = useMemo(() => {
     if (!rightSearch) return assignedGroups;
     const term = rightSearch.toLowerCase();
@@ -234,7 +248,7 @@ const PhanboHoiDong = () => {
     );
   }, [assignedGroups, rightSearch]);
 
-  // Di chuyển sang phải
+  // Di chuyển thủ công sang phải (Gán vào hội đồng đang chọn)
   const handleMoveRight = useCallback(
     (groupId) => {
       const councilId = Number(chonHoiDong);
@@ -252,37 +266,7 @@ const PhanboHoiDong = () => {
     [chonHoiDong]
   );
 
-  // Phân bổ ngẫu nhiên
-  const handleRandomAssign = () => {
-    if (!hoidongList || hoidongList.length === 0) {
-      toast.warning("Không có hội đồng nào để phân bổ.");
-      return;
-    }
-
-    const groupsToAssign = unassignedGroups.map((g) => g.ID_NHOM);
-    if (groupsToAssign.length === 0) {
-      toast.info("Không có nhóm nào cần phân bổ.");
-      return;
-    }
-
-    const councilIds = hoidongList.map((hd) => hd.ID_HOIDONG);
-
-    const updatedGroups = allGroups.map((group) => {
-      if (groupsToAssign.includes(group.ID_NHOM)) {
-        const randomCouncilId =
-          councilIds[Math.floor(Math.random() * councilIds.length)];
-        return { ...group, ID_HOIDONG: randomCouncilId };
-      }
-      return group;
-    });
-
-    setAllGroups(updatedGroups);
-    toast.success(
-      `Đã phân bổ ngẫu nhiên ${groupsToAssign.length} nhóm. Hãy nhấn "Lưu phân bổ".`
-    );
-  };
-
-  // Di chuyển sang trái
+  // Di chuyển thủ công sang trái (Gỡ khỏi hội đồng)
   const handleMoveLeft = useCallback((groupId) => {
     setAllGroups((prev) =>
       prev.map((g) =>
@@ -291,7 +275,40 @@ const PhanboHoiDong = () => {
     );
   }, []);
 
-  // Lưu phân bổ
+  // 1. Hàm kiểm tra điều kiện mở Dialog
+  const onOpenAutoAssignDialog = () => {
+    if (!chonKehoach) {
+        toast.warning("Vui lòng chọn kế hoạch trước!");
+        return;
+    }
+
+    if (unassignedGroups.length === 0) {
+        toast.info("Tất cả các nhóm đã được phân bổ.");
+        return;
+    }
+    
+    // Mở dialog thay vì window.confirm
+    setIsAutoAssignDialogOpen(true);
+  };
+
+  // 2. Hàm thực thi logic khi bấm "Xác nhận" trong Dialog
+  const handleConfirmAutoAssign = async () => {
+    setLoading(true);
+    try {
+        const res = await autoAssignGroups(chonKehoach);
+        toast.success(res.message);
+        // Tải lại dữ liệu mới nhất từ server sau khi phân bổ xong
+        await fetchData(); 
+    } catch (err) {
+        console.error(err);
+        toast.error(err.response?.data?.message || "Phân bổ thất bại.");
+    } finally {
+        setLoading(false);
+        setIsAutoAssignDialogOpen(false); // Đóng dialog
+    }
+  };
+
+  // Lưu phân bổ (Cho các thao tác thủ công)
   const handleSave = async () => {
     if (!chonKehoach) {
       toast.warning("Vui lòng chọn kế hoạch!");
@@ -316,7 +333,7 @@ const PhanboHoiDong = () => {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-full mx-auto space-y-6">
+    <div className="p-4 md:p-8 max-w-full mx-auto">
       <Button
         type="button"
         variant="outline"
@@ -325,22 +342,10 @@ const PhanboHoiDong = () => {
       >
         <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
       </Button>
-
       <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-2xl font-bold text-foreground">
-            Phân Bổ Hội Đồng
-          </CardTitle>
-          <CardDescription>
-            Nhấn vào nhóm để chuyển qua lại giữa hai cột.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-6">
-          {/* Hàng 1: Chọn kế hoạch + Lưu */}
+        <CardContent className="space-y-6 pt-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             <div className="space-y-2">
-              <Label>Chọn kế hoạch khóa luận *</Label>
               <Select value={chonKehoach} onValueChange={setChonKehoach}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="-- Chọn kế hoạch --" />
@@ -357,12 +362,14 @@ const PhanboHoiDong = () => {
                 </SelectContent>
               </Select>
             </div>
+            
             <div className="space-y-2 md:text-right">
+              {/* Nút phân bổ tự động (Server-side) */}
               <Button
                 type="button"
-                variant="outline"
-                className="mr-2"
-                onClick={handleRandomAssign}
+                variant="default"
+                className="mr-2 bg-purple-600 hover:bg-purple-700 text-white"
+                onClick={onOpenAutoAssignDialog} // Gọi hàm mở dialog
                 disabled={
                   isSaving ||
                   loading ||
@@ -371,9 +378,11 @@ const PhanboHoiDong = () => {
                   hoidongList.length === 0
                 }
               >
-                <Shuffle className="mr-2 h-4 w-4" />
-                Phân bổ ngẫu nhiên
+                <Sparkles className="mr-2 h-4 w-4" />
+                Phân bổ tự động
               </Button>
+
+              {/* Nút Lưu (cho thao tác thủ công) */}
               <Button
                 onClick={handleSave}
                 disabled={isSaving || loading || !chonKehoach}
@@ -388,7 +397,7 @@ const PhanboHoiDong = () => {
             </div>
           </div>
 
-          {/* Hàng 2: 2 cột */}
+          {/* Hàng 2: Giao diện 2 cột */}
           {loading ? (
             <div className="text-center p-8">
               <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
@@ -468,6 +477,37 @@ const PhanboHoiDong = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* DIALOG XÁC NHẬN PHÂN BỔ TỰ ĐỘNG */}
+      <AlertDialog open={isAutoAssignDialogOpen} onOpenChange={setIsAutoAssignDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-purple-600" />
+                Xác nhận Phân bổ Tự động?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Hệ thống sẽ tự động phân bổ <strong>{unassignedGroups.length} nhóm</strong> chưa có hội đồng vào các hội đồng phù hợp nhất.
+              <br /><br />
+              <ul className="list-disc list-inside text-sm space-y-1">
+                  <li>Ưu tiên gán vào Hội đồng có <strong>cùng chuyên ngành</strong>.</li>
+                  <li>Cân bằng số lượng nhóm giữa các hội đồng.</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={loading}>Hủy</AlertDialogCancel>
+            <AlertDialogAction 
+                onClick={handleConfirmAutoAssign} 
+                disabled={loading}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+            >
+              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Tiến hành phân bổ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
