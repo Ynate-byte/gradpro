@@ -2,29 +2,28 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Send, BookOpen, Loader2, Users, CheckCircle, AlertTriangle, FileSignature, MessageSquare } from 'lucide-react';
+import { 
+    Plus, Send, BookOpen, Loader2, Users, CheckCircle, AlertTriangle, 
+    FileSignature, MessageSquare, Upload 
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
-import CreateTopicDialog from './components/CreateTopicDialog';
-import TopicDetailDialog from './components/TopicDetailDialog';
-import SuggestionDialog from './components/SuggestionDialog';
-import RegisteredGroupsDialog from './components/RegisteredGroupsDialog';
+import { useDebounce } from '@/hooks/useDebounce';
+import { cn } from '@/lib/utils';
+import { useTheme } from "@/components/theme-provider";
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
+
+// API Services
 import { thesisTopicService } from '@/api/thesisTopicService';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
 import { getThesisPlanById } from '@/api/thesisPlanService'; 
-import axios from '@/api/axiosConfig';
+import { getChuyenNganhs } from '@/api/userService';
+import axios from '@/api/axiosConfig'; // Import đúng axiosConfig
 
+// UI Components
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
-import { getColumns } from './components/columns';
-import { useDebounce } from '@/hooks/useDebounce';
-import { cn } from '@/lib/utils';
-import { getChuyenNganhs } from '@/api/userService';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag';
-import { useTheme } from "@/components/theme-provider";
-
-// [ĐÃ SỬA] Thêm import Dialog và các thành phần con
-import { 
+import {
     Dialog, 
     DialogContent, 
     DialogHeader, 
@@ -33,27 +32,35 @@ import {
     DialogFooter 
 } from '@/components/ui/dialog';
 
-// --- StatCard với logic giảm chuyển động ---
+// Custom Components
+import CreateTopicDialog from './components/CreateTopicDialog';
+import TopicDetailDialog from './components/TopicDetailDialog';
+import SuggestionDialog from './components/SuggestionDialog';
+import RegisteredGroupsDialog from './components/RegisteredGroupsDialog';
+import ImportTopicDialog from './components/ImportTopicDialog';
+import { getColumns } from './components/columns';
+
+// --- Internal Component: StatCard ---
 const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColorClass }) => {
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
 
     return (
-        <motion.div
+        <motion.div 
             className="bg-card text-card-foreground p-4 rounded-xl shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-md hover:border-primary/20"
             whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
-            <motion.div
+            <motion.div 
                 className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
-                animate={isReduced ? {} : {
+                animate={isReduced ? {} : { 
                     scale: value === 'loading' ? [1, 1.05, 1] : 1,
                 }}
-                transition={{
-                    duration: 2,
-                    repeat: value === 'loading' ? Infinity : 0,
-                    ease: "easeInOut"
+                transition={{ 
+                    duration: 2, 
+                    repeat: value === 'loading' ? Infinity : 0, 
+                    ease: "easeInOut" 
                 }}
             >
                 <Icon className={cn("h-6 w-6", iconColorClass)} />
@@ -65,7 +72,7 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColo
                         {value === 'loading' ? (
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         ) : (
-                            <motion.div
+                            <motion.div 
                                 key={value}
                                 initial={isReduced ? { opacity: 1 } : { opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -86,7 +93,7 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColo
     );
 };
 
-// --- Variants với logic giảm chuyển động ---
+// --- Animation Variants ---
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -116,6 +123,7 @@ const columnVisibility = {
     "chuyen_nganh_id": false,
 };
 
+// === MAIN COMPONENT ===
 const ThesisTopicsPage = () => {
     const { user } = useAuth();
     const [topics, setTopics] = useState([]);
@@ -125,6 +133,7 @@ const ThesisTopicsPage = () => {
 
     // Dialog States
     const [showCreateDialog, setShowCreateDialog] = useState(false);
+    const [showImportDialog, setShowImportDialog] = useState(false); // Dialog Import
     const [showTopicDetailDialog, setShowTopicDetailDialog] = useState(false);
     const [showSuggestionDialog, setShowSuggestionDialog] = useState(false);
     const [showSubmitApprovalDialog, setShowSubmitApprovalDialog] = useState(false);
@@ -158,9 +167,10 @@ const ThesisTopicsPage = () => {
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // Feature Flag
+    // Feature Flag: Kiểm tra quyền GV_RA_DE
     const canSubmitApproval = useFeatureFlag(currentPlanData, 'GV_RA_DE');
 
+    // --- Load dữ liệu ban đầu ---
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -178,6 +188,7 @@ const ThesisTopicsPage = () => {
             setPlans(plansData);
             setSpecializations(specRes || []);
 
+            // Tự động chọn kế hoạch đang hoạt động
             if (plansData.length > 0 && !selectedPlan) {
                 const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
                 setSelectedPlan(String(activePlan.ID_KEHOACH));
@@ -209,6 +220,7 @@ const ThesisTopicsPage = () => {
         setLoadingStats(true);
         try {
             const params = { plan_id: planId };
+            // Gọi song song các API cần thiết
             const [topicsRes, supervisedRes, quotaRes, planDetailRes] = await Promise.all([
                 thesisTopicService.getTopics(params), 
                 thesisTopicService.getSupervisedTopics(params),
@@ -232,6 +244,7 @@ const ThesisTopicsPage = () => {
         }
     }, []);
 
+    // Reload khi người dùng đổi kế hoạch
     useEffect(() => {
         if (selectedPlan) {
             loadPlanDependentData(selectedPlan);
@@ -301,17 +314,24 @@ const ThesisTopicsPage = () => {
         setShowRegisteredGroupsDialog(true);
     };
 
-    // --- Data Processing ---
+    // --- Data Processing (Filter & Sort) ---
     const processedData = useMemo(() => {
         let filtered = topics; 
         if (activeTab === 'my') {
             filtered = filtered.filter(t => t.ID_NGUOI_DEXUAT === user?.giangvien?.ID_GIANGVIEN);
         }
-        filtered = filtered.filter(t =>
-            t.TEN_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-            t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-            t.MA_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-        );
+        
+        // Tìm kiếm
+        if (debouncedSearchTerm) {
+            const lowerTerm = debouncedSearchTerm.toLowerCase();
+            filtered = filtered.filter(t =>
+                t.TEN_DETAI?.toLowerCase().includes(lowerTerm) ||
+                t.ten_giang_vien?.toLowerCase().includes(lowerTerm) ||
+                t.MA_DETAI?.toLowerCase().includes(lowerTerm)
+            );
+        }
+
+        // Faceted Filters
         filtered = filtered.filter(t => {
             return columnFilters.every(filter => {
                 if (filter.id === 'chuyen_nganh_id') {
@@ -359,29 +379,35 @@ const ThesisTopicsPage = () => {
         return { pagedData, pageCount, allFiltered: filtered }; 
     }, [topics, activeTab, debouncedSearchTerm, columnFilters, sorting, pagination, user, contributionFilter]);
 
-    // Process Review Data
+    // Process Review Data (Tab: Cần góp ý)
     const processedReviewData = useMemo(() => {
         if (!topics) return { pagedData: [], pageCount: 0, allFiltered: [] };
-        let filtered = topics.filter(t =>
+        // Chỉ lấy đề tài mình được phân công góp ý
+        let filtered = topics.filter(t => 
             t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
         );
         if (filtered.length === 0) return { pagedData: [], pageCount: 0, allFiltered: [] };
 
         if (contributionFilter === 'contributed') {
-            filtered = filtered.filter(t =>
+            filtered = filtered.filter(t => 
                 t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
             );
         } else if (contributionFilter === 'not_contributed') {
-            filtered = filtered.filter(t =>
+            filtered = filtered.filter(t => 
                 !t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
             );
         }
         
-         filtered = filtered.filter(t =>
-            t.TEN_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-            t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-            t.MA_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
-        );
+         // Tìm kiếm & Filter chung
+         if (debouncedSearchTerm) {
+            const lowerTerm = debouncedSearchTerm.toLowerCase();
+            filtered = filtered.filter(t =>
+                t.TEN_DETAI?.toLowerCase().includes(lowerTerm) ||
+                t.ten_giang_vien?.toLowerCase().includes(lowerTerm) ||
+                t.MA_DETAI?.toLowerCase().includes(lowerTerm)
+            );
+        }
+
         const pageCount = Math.ceil(filtered.length / pagination.pageSize);
         const pagedData = filtered.slice(
             pagination.pageIndex * pagination.pageSize,
@@ -390,12 +416,12 @@ const ThesisTopicsPage = () => {
         return { pagedData, pageCount, allFiltered: filtered }; 
     }, [topics, debouncedSearchTerm, columnFilters, sorting, pagination, user, contributionFilter]);
 
-    // Reset pagination
+    // Reset pagination khi filter thay đổi
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters, debouncedSearchTerm, contributionFilter]);
 
-    // Logic điều hướng
+    // Logic điều hướng Prev/Next trong Dialog Detail
     const currentFilteredList = (activeTab === 'review' ? processedReviewData.allFiltered : processedData.allFiltered) || [];
     const currentIndex = currentFilteredList.findIndex(t => t.ID_DETAI === selectedTopicId);
     const hasNext = currentIndex !== -1 && currentIndex < currentFilteredList.length - 1;
@@ -413,7 +439,6 @@ const ThesisTopicsPage = () => {
     ).length;
     const pendingReviewCount = assignedReviewTopics.length - contributedTopicsCount;
 
-
     const columns = useMemo(() => getColumns({
         currentUserId: user?.giangvien?.ID_GIANGVIEN,
         onEdit: (topic) => { setEditingTopic(topic); setShowCreateDialog(true); },
@@ -427,7 +452,7 @@ const ThesisTopicsPage = () => {
     }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic, activeTab, canSubmitApproval]);
 
     return (
-        <motion.div
+        <motion.div 
             className="flex-1 space-y-6 p-4 md:p-8"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -453,71 +478,69 @@ const ThesisTopicsPage = () => {
                         </SelectContent>
                     </Select>
 
-                    <Button
-                        onClick={() => { setEditingTopic(null); setShowCreateDialog(true); }}
-                        disabled={loading}
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Tạo đề tài
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button 
+                            variant="outline" 
+                            onClick={() => setShowImportDialog(true)}
+                            disabled={loading || !selectedPlan}
+                        >
+                            <Upload className="w-4 h-4 mr-2" /> Import Excel
+                        </Button>
+
+                        <Button
+                            onClick={() => { setEditingTopic(null); setShowCreateDialog(true); }}
+                            disabled={loading || !selectedPlan}
+                        >
+                            <Plus className="w-4 h-4 mr-2" />
+                            Tạo đề tài
+                        </Button>
+                    </div>
                 </div>
             </div>
 
-
             {/* --- STAT CARDS --- */}
-            <motion.div
+            <motion.div 
                 className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
                 variants={variants.container}
                 initial="hidden"
                 animate="visible"
             >
-                {/* 1. Quota được giao */}
-                <StatCard
-                    icon={Users}
-                    title="Quota được giao"
-                    value={loadingStats ? 'loading' : myQuota?.quota_assigned ?? 0}
-                    description="Số lượng tối thiểu"
-                    iconBgClass="bg-blue-100 dark:bg-blue-900/30"
-                    iconColorClass="text-blue-600 dark:text-blue-400"
+                <StatCard 
+                    icon={Users} 
+                    title="Quota được giao" 
+                    value={loadingStats ? 'loading' : myQuota?.quota_assigned ?? 0} 
+                    description="Số lượng tối thiểu" 
+                    iconBgClass="bg-blue-100 dark:bg-blue-900/30" 
+                    iconColorClass="text-blue-600 dark:text-blue-400" 
                 />
-
-                {/* 2. Tiến độ ra đề (Đã tạo / Cần tạo thêm) */}
-                <StatCard
-                    icon={FileSignature}
-                    title="Tiến độ ra đề"
-                    value={loadingStats ? 'loading' : `${myQuota?.topics_created ?? 0} / ${myQuota?.quota_assigned ?? 0}`}
-                    description={loadingStats ? "..." : `Cần tạo thêm: ${myQuota?.topics_needed ?? 0}`}
-                    iconBgClass="bg-green-100 dark:bg-green-900/30"
-                    iconColorClass="text-green-600 dark:text-green-400"
+                <StatCard 
+                    icon={FileSignature} 
+                    title="Tiến độ ra đề" 
+                    value={loadingStats ? 'loading' : `${myQuota?.topics_created ?? 0} / ${myQuota?.quota_assigned ?? 0}`} 
+                    description={loadingStats ? "..." : `Cần tạo thêm: ${myQuota?.topics_needed ?? 0}`} 
+                    iconBgClass="bg-green-100 dark:bg-green-900/30" 
+                    iconColorClass="text-green-600 dark:text-green-400" 
                 />
-
-                {/* 3. Nhóm đã nhận HD */}
-                <StatCard
-                    icon={CheckCircle}
-                    title="Nhóm đã nhận HD"
-                    value={loadingStats ? 'loading' : myQuota?.actual_assigned ?? 0}
-                    description="Số nhóm thực tế"
-                    iconBgClass="bg-indigo-100 dark:bg-indigo-900/30"
-                    iconColorClass="text-indigo-600 dark:text-indigo-400"
+                <StatCard 
+                    icon={CheckCircle} 
+                    title="Nhóm đã nhận HD" 
+                    value={loadingStats ? 'loading' : myQuota?.actual_assigned ?? 0} 
+                    description="Số nhóm thực tế" 
+                    iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" 
+                    iconColorClass="text-indigo-600 dark:text-indigo-400" 
                 />
-
-                {/* 4. Góp ý phản biện (Đã xong / Tổng) */}
-                <StatCard
-                    icon={MessageSquare}
-                    title="Góp ý phản biện"
-                    value={loadingStats ? 'loading' : `${contributedTopicsCount} / ${assignedReviewTopics.length}`}
-                    description={loadingStats ? "..." : `Chưa góp ý: ${pendingReviewCount}`}
-                    iconBgClass="bg-purple-100 dark:bg-purple-900/30"
-                    iconColorClass="text-purple-600 dark:text-purple-400"
+                <StatCard 
+                    icon={MessageSquare} 
+                    title="Góp ý phản biện" 
+                    value={loadingStats ? 'loading' : `${contributedTopicsCount} / ${assignedReviewTopics.length}`} 
+                    description={loadingStats ? "..." : `Chưa góp ý: ${pendingReviewCount}`} 
+                    iconBgClass="bg-purple-100 dark:bg-purple-900/30" 
+                    iconColorClass="text-purple-600 dark:text-purple-400" 
                 />
             </motion.div>
 
             {/* Tabs & DataTable */}
-            <motion.div
-                variants={variants.table}
-                initial="hidden"
-                animate="visible"
-            >
+            <motion.div variants={variants.table} initial="hidden" animate="visible">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
                     <TabsList>
                         <TabsTrigger value="my">Đề tài của tôi</TabsTrigger>
@@ -526,11 +549,11 @@ const ThesisTopicsPage = () => {
                     </TabsList>
 
                     <AnimatePresence mode="wait">
-                        <motion.div
-                            key={activeTab}
-                            variants={variants.table}
-                            initial="hidden"
-                            animate="visible"
+                        <motion.div 
+                            key={activeTab} 
+                            variants={variants.table} 
+                            initial="hidden" 
+                            animate="visible" 
                             exit="exit"
                         >
                             <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
@@ -572,10 +595,7 @@ const ThesisTopicsPage = () => {
 
                             <TabsContent value="review" className="mt-0 outline-none ring-0">
                                 <div className="flex items-center gap-4 mb-4">
-                                    <Select
-                                        value={contributionFilter}
-                                        onValueChange={setContributionFilter}
-                                    >
+                                    <Select value={contributionFilter} onValueChange={setContributionFilter}>
                                         <SelectTrigger className="w-[200px] bg-background">
                                             <SelectValue placeholder="Lọc theo góp ý" />
                                         </SelectTrigger>
@@ -624,6 +644,7 @@ const ThesisTopicsPage = () => {
                 </Tabs>
             </motion.div>
 
+            {/* Dialogs */}
             <CreateTopicDialog
                 open={showCreateDialog}
                 onOpenChange={(open) => {
@@ -634,7 +655,6 @@ const ThesisTopicsPage = () => {
                 topic={editingTopic}
             />
 
-            {/* [ĐÃ SỬA LỖI] Import Dialog đã có ở đầu file, đảm bảo component hoạt động */}
             <Dialog open={showSubmitApprovalDialog} onOpenChange={setShowSubmitApprovalDialog}>
                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
@@ -668,12 +688,10 @@ const ThesisTopicsPage = () => {
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}
                 topicId={selectedTopicId}
-
                 showAdminActions={false} 
                 onApprove={null}
                 onReject={null}
                 onRequestEdit={null}
-
                 onNext={handleNextTopic}
                 onPrevious={handlePreviousTopic}
                 hasNext={hasNext}
@@ -701,6 +719,13 @@ const ThesisTopicsPage = () => {
                 open={showRegisteredGroupsDialog}
                 onOpenChange={setShowRegisteredGroupsDialog}
                 topic={selectedTopicForGroups}
+            />
+
+            <ImportTopicDialog 
+                open={showImportDialog}
+                onOpenChange={setShowImportDialog}
+                planId={selectedPlan}
+                onSuccess={() => loadPlanDependentData(selectedPlan)}
             />
         </motion.div>
     );

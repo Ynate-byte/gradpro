@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
 import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Circle } from "lucide-react";
@@ -15,7 +15,9 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 
+// ... (Giữ nguyên phần StatCard và getVariants không đổi) ...
 const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasStatusDot }) => {
+    // ... (Giữ nguyên code cũ của StatCard)
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
@@ -73,6 +75,7 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
 };
 
 const getVariants = (shouldReduce) => {
+    // ... (Giữ nguyên code cũ của getVariants)
     if (shouldReduce) {
         return {
             container: { visible: { opacity: 1 } },
@@ -96,7 +99,6 @@ const getVariants = (shouldReduce) => {
         }
     };
 };
-// --- [END] Animation & Styles ---
 
 const columnVisibility = {
     "chuyen_nganh_id": false,
@@ -122,10 +124,11 @@ const TopicManagementTabs = () => {
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [actionType, setActionType] = useState("");
-    const [pendingTopics, setPendingTopics] = useState([]);
+    
+    // [SỬA 1]: Thay pendingTopics bằng navigationList để tổng quát hóa việc điều hướng
+    const [navigationList, setNavigationList] = useState([]);
     const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
 
-    // [MỚI] Hook Theme & Reduced Motion
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
@@ -160,80 +163,7 @@ const TopicManagementTabs = () => {
         }
     };
 
-    const handleViewTopicDetails = (topicId) => {
-        setSelectedTopicId(topicId);
-        setShowTopicDetailDialog(true);
-
-        const pending = allTopics.filter(t => t.TRANGTHAI === 'Chờ duyệt');
-        setPendingTopics(pending);
-        const currentIndex = pending.findIndex(t => t.ID_DETAI === topicId);
-        setCurrentTopicIndex(currentIndex >= 0 ? currentIndex : 0);
-    };
-
-    const handleApprove = async (topicId) => {
-        try {
-            await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
-            toast.success("Đề tài đã được duyệt thành công!");
-            loadAllData();
-
-            if (showTopicDetailDialog && pendingTopics.length > 0) {
-                const nextIndex = (currentTopicIndex + 1) % pendingTopics.length;
-                if (nextIndex !== currentTopicIndex) {
-                    setCurrentTopicIndex(nextIndex);
-                    setSelectedTopicId(pendingTopics[nextIndex].ID_DETAI);
-                } else {
-                    setShowTopicDetailDialog(false);
-                }
-            }
-        } catch (error) {
-            console.error("Error approving topic:", error);
-            toast.error("Có lỗi xảy ra khi duyệt đề tài.");
-            throw error;
-        }
-    };
-
-    const handleReject = (topic) => {
-        setSelectedTopic(topic);
-        setActionType("reject");
-        setShowRejectDialog(true);
-    };
-
-    const handleRequestEdit = (topic) => {
-        setSelectedTopic(topic);
-        setActionType("request_edit");
-        setShowRejectDialog(true);
-    };
-
-    const handleRejectSubmit = async (reason) => {
-        try {
-            const action = actionType === "reject" ? "reject" : "request_edit";
-            await thesisTopicService.adminApproveOrReject(selectedTopic.ID_DETAI, {
-                action,
-                reason,
-            });
-            const message = actionType === "reject"
-                ? "Đề tài đã bị từ chối."
-                : "Đã yêu cầu chỉnh sửa đề tài.";
-            toast.success(message);
-            setShowRejectDialog(false);
-            loadAllData();
-
-            if (showTopicDetailDialog && pendingTopics.length > 0) {
-                const nextIndex = (currentTopicIndex + 1) % pendingTopics.length;
-                if (nextIndex !== currentTopicIndex) {
-                    setCurrentTopicIndex(nextIndex);
-                    setSelectedTopicId(pendingTopics[nextIndex].ID_DETAI);
-                } else {
-                    setShowTopicDetailDialog(false);
-                }
-            }
-        } catch (error) {
-            console.error("Error processing topic:", error);
-            toast.error("Có lỗi xảy ra khi xử lý yêu cầu.");
-            throw error;
-        }
-    };
-
+    // [SỬA 2]: processedData trả về thêm allFiltered (danh sách đầy đủ đã lọc)
     const processedData = useMemo(() => {
         let filtered = allTopics.filter(t => {
             const matchesSearch =
@@ -286,8 +216,109 @@ const TopicManagementTabs = () => {
             (pagination.pageIndex + 1) * pagination.pageSize
         );
 
-        return { pagedData, pageCount, stats };
+        // [QUAN TRỌNG]: Trả về allFiltered để dùng cho navigation
+        return { pagedData, pageCount, stats, allFiltered: filtered };
     }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
+
+    // [SỬA 3]: Cập nhật logic khi click xem chi tiết
+    const handleViewTopicDetails = (topicId) => {
+        setSelectedTopicId(topicId);
+        setShowTopicDetailDialog(true);
+
+        // Lấy danh sách hiện tại đang hiển thị (đã lọc/sort)
+        const currentList = processedData.allFiltered;
+        setNavigationList(currentList);
+        
+        const currentIndex = currentList.findIndex(t => t.ID_DETAI === topicId);
+        setCurrentTopicIndex(currentIndex >= 0 ? currentIndex : 0);
+    };
+
+    // [SỬA 4]: Các hàm điều hướng Next/Previous
+    const handleNext = () => {
+        if (navigationList.length > 0 && currentTopicIndex < navigationList.length - 1) {
+            const nextIndex = currentTopicIndex + 1;
+            setCurrentTopicIndex(nextIndex);
+            setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
+        }
+    };
+
+    const handlePrevious = () => {
+        if (navigationList.length > 0 && currentTopicIndex > 0) {
+            const prevIndex = currentTopicIndex - 1;
+            setCurrentTopicIndex(prevIndex);
+            setSelectedTopicId(navigationList[prevIndex].ID_DETAI);
+        }
+    };
+
+    // [SỬA 5]: Logic tự động chuyển sau khi duyệt (dùng navigationList thay vì pendingTopics)
+    const handleApprove = async (topicId) => {
+        try {
+            await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
+            toast.success("Đề tài đã được duyệt thành công!");
+            loadAllData(); // Reload lại dữ liệu tổng
+
+            if (showTopicDetailDialog && navigationList.length > 0) {
+                // Tự động chuyển sang đề tài kế tiếp nếu có
+                if (currentTopicIndex < navigationList.length - 1) {
+                    // Logic: Giữ nguyên index (vì item hiện tại sẽ bị loại khỏi list lọc nếu đang ở tab Chờ duyệt)
+                    // Hoặc tăng index nếu ở tab Tất cả.
+                    // Đơn giản nhất: Chuyển sang item kế tiếp trong list CŨ
+                    const nextIndex = currentTopicIndex + 1;
+                    setCurrentTopicIndex(nextIndex);
+                    setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
+                } else {
+                    setShowTopicDetailDialog(false);
+                }
+            }
+        } catch (error) {
+            console.error("Error approving topic:", error);
+            toast.error("Có lỗi xảy ra khi duyệt đề tài.");
+            throw error;
+        }
+    };
+
+    // [SỬA 6]: Logic Reject cũng tương tự
+    const handleRejectSubmit = async (reason) => {
+        try {
+            const action = actionType === "reject" ? "reject" : "request_edit";
+            await thesisTopicService.adminApproveOrReject(selectedTopic.ID_DETAI, {
+                action,
+                reason,
+            });
+            const message = actionType === "reject"
+                ? "Đề tài đã bị từ chối."
+                : "Đã yêu cầu chỉnh sửa đề tài.";
+            toast.success(message);
+            setShowRejectDialog(false);
+            loadAllData();
+
+            if (showTopicDetailDialog && navigationList.length > 0) {
+                 if (currentTopicIndex < navigationList.length - 1) {
+                    const nextIndex = currentTopicIndex + 1;
+                    setCurrentTopicIndex(nextIndex);
+                    setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
+                } else {
+                    setShowTopicDetailDialog(false);
+                }
+            }
+        } catch (error) {
+            console.error("Error processing topic:", error);
+            toast.error("Có lỗi xảy ra khi xử lý yêu cầu.");
+            throw error;
+        }
+    };
+
+    const handleReject = (topic) => {
+        setSelectedTopic(topic);
+        setActionType("reject");
+        setShowRejectDialog(true);
+    };
+
+    const handleRequestEdit = (topic) => {
+        setSelectedTopic(topic);
+        setActionType("request_edit");
+        setShowRejectDialog(true);
+    };
 
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
@@ -300,7 +331,6 @@ const TopicManagementTabs = () => {
         onRequestEdit: handleRequestEdit
     }), [handleApprove, handleReject, handleRequestEdit, handleViewTopicDetails]);
 
-    // [MỚI] Hàm render DataTable với animation chiều cao
     const renderDataTable = (tabName) => {
         const [tableHeight, setTableHeight] = useState('auto');
         const tableRef = React.useRef(null);
@@ -352,6 +382,10 @@ const TopicManagementTabs = () => {
             </motion.div>
         );
     };
+
+    // [SỬA 7]: Tính toán hasNext/hasPrevious để truyền xuống Dialog
+    const hasNext = currentTopicIndex < navigationList.length - 1;
+    const hasPrevious = currentTopicIndex > 0;
 
     return (
         <motion.div
@@ -448,6 +482,7 @@ const TopicManagementTabs = () => {
                 </Tabs>
             </motion.div>
 
+            {/* [SỬA 8]: Truyền đúng Props cho TopicDetailDialog */}
             <TopicDetailDialog
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}
@@ -456,24 +491,10 @@ const TopicManagementTabs = () => {
                 onApprove={handleApprove}
                 onReject={handleReject}
                 onRequestEdit={handleRequestEdit}
-                onNext={() => {
-                    if (pendingTopics.length > 0) {
-                        const nextIndex = (currentTopicIndex + 1) % pendingTopics.length;
-                        if (nextIndex !== currentTopicIndex) {
-                            setCurrentTopicIndex(nextIndex);
-                            setSelectedTopicId(pendingTopics[nextIndex].ID_DETAI);
-                        } else {
-                            setShowTopicDetailDialog(false);
-                        }
-                    }
-                }}
-                onPrevious={() => {
-                    if (pendingTopics.length > 0) {
-                        const prevIndex = currentTopicIndex === 0 ? pendingTopics.length - 1 : currentTopicIndex - 1;
-                        setCurrentTopicIndex(prevIndex);
-                        setSelectedTopicId(pendingTopics[prevIndex].ID_DETAI);
-                    }
-                }}
+                onNext={handleNext}
+                onPrevious={handlePrevious}
+                hasNext={hasNext}
+                hasPrevious={hasPrevious}
             />
 
             <RejectDialog
