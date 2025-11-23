@@ -110,8 +110,8 @@ class TopicSingleSheetImport implements ToCollection
                     'MUCTIEU' => $this->getValue($rowArray, $headerMap['MUC_TIEU']),
                     'KETQUA_MONGDOI' => $this->getValue($rowArray, $headerMap['KET_QUA']),
                     'SO_NHOM_TOIDA' => $soLuong > 0 ? $soLuong : 1,
-                    //'TRANGTHAI' => 'Đã duyệt',
-                    'TRANGTHAI' => 'Chờ duyệt',
+                    'TRANGTHAI' => 'Đã duyệt',
+                    //'TRANGTHAI' => 'Chờ duyệt',
                 ],
                 'errors' => []
             ];
