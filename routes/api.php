@@ -124,6 +124,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/suggestions', [DetaiController::class, 'addSuggestion']);
         Route::post('/goiy/{goiy}/reply', [PhanhoiGoiyController::class, 'store']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
+        Route::get('/approved/topics', [DetaiController::class, 'getApprovedTopicsOfLecturer']);
+        Route::post('/reuse', [DetaiController::class, 'reuseApprovedTopic']);
     });
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);

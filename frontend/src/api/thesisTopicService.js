@@ -13,6 +13,18 @@ const thesisTopicService = {
         return response;
     },
 
+    // New API: Get approved topics of logged-in lecturer
+    getApprovedTopicsOfLecturer: async (params = {}) => {
+        const response = await axiosConfig.get('/detai/approved/topics', { params });
+        return response.data;
+    },
+
+    // New API: Reuse approved topic for a new plan
+    reuseApprovedTopic: async ({ existing_topic_id, new_plan_id }) => {
+        const response = await axiosConfig.post('/detai/reuse', { existing_topic_id, new_plan_id });
+        return response.data;
+    },
+
     // Get topic by ID
     getTopicById: async (id) => {
         const response = await axiosConfig.get(`/detai/${id}`);

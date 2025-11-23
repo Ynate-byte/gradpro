@@ -137,7 +137,7 @@ export const getColumns = ({
         cell: ({ row }) => {
             const topic = row.original;
             const hasContributed = topic.goiyDetai?.some(g => g.ID_GIANGVIEN === currentUserId);
-
+            console.log("Topic ID:", topic.ID_DETAI, "Has Contributed:", hasContributed);
             return (
                 <Badge
                     variant="outline"

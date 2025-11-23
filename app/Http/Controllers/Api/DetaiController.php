@@ -55,19 +55,19 @@ class DetaiController extends Controller
             // 2. Đề tài của chính họ (bất kể trạng thái)
             // 3. Đề tài họ được phân công góp ý
             if ($lecturerId) {
-                $query->where(function ($q) use ($lecturerId, $request) {
-                    $q->where('TRANGTHAI', 'Đã duyệt') // 1. Tất cả đề tài đã duyệt
-                      ->orWhere('ID_NGUOI_DEXUAT', $lecturerId) // 2. Đề tài của chính họ
-                      ->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) { // 3. Đề tài họ được phân công góp ý
-                          $subQ->where('ID_GIANGVIEN', $lecturerId);
-                      });
-                    
-                    // Nếu có bộ lọc trạng thái (status filter), áp dụng nó
-                    if ($request->has('status') && $request->status !== 'Tất cả') {
-                         $q->where('TRANGTHAI', $request->status);
-                    }
-                });
-            } else {
+    $query->where(function ($q) use ($lecturerId) {
+        $q->where('TRANGTHAI', 'Đã duyệt')
+          ->orWhere('ID_NGUOI_DEXUAT', $lecturerId)
+          ->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
+              $subQ->where('ID_GIANGVIEN', $lecturerId);
+          });
+    });
+
+    // Di chuyển filter status ra ngoài where() để không bị ảnh hưởng bởi OR
+    if ($request->has('status') && $request->status !== 'Tất cả') {
+        $query->where('TRANGTHAI', $request->status);
+    }
+}else {
                  // Admin/Quản trị viên cấp cao: chỉ cần lọc trạng thái nếu có
                 if ($request->has('status') && $request->status !== 'Tất cả') {
                     $query->where('TRANGTHAI', $request->status);
@@ -99,6 +99,85 @@ class DetaiController extends Controller
         });
 
         return response()->json($topics);
+    }
+
+    /**
+     * Lấy danh sách đề tài đã duyệt của giảng viên đang đăng nhập
+     */
+    public function getApprovedTopicsOfLecturer(Request $request)
+{
+    $currentUser = Auth::user();
+    $lecturer = $currentUser->giangvien;
+
+    if (!$lecturer) {
+        return response()->json(['message' => 'Không được phép'], 403);
+    }
+
+    $query = Detai::with(['kehoachKhoaluan', 'chuyennganh'])
+        ->where('TRANGTHAI', 'Đã duyệt')
+        ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
+        ->select('DETAI.*') // cần select để groupBy hoạt động đúng
+        ->groupBy('DETAI.ID_DETAI'); // Quan trọng: chỉ lấy mỗi đề tài 1 lần
+
+    $topics = $query->orderBy('TEN_DETAI', 'asc')->get();
+
+    return response()->json($topics);
+}
+
+    /**
+     * Tái sử dụng đề tài đã duyệt cho một kế hoạch khác
+     * Body params: existing_topic_id, new_plan_id
+     */
+    public function reuseApprovedTopic(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'existing_topic_id' => 'required|integer|exists:DETAI,ID_DETAI',
+            'new_plan_id' => 'required|integer|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+        ]);
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $currentUser = Auth::user();
+        $lecturer = $currentUser->giangvien;
+
+        if (!$lecturer) {
+            return response()->json(['message' => 'Không được phép'], 403);
+        }
+
+        $existingTopic = Detai::findOrFail($request->existing_topic_id);
+
+        // Chỉ được reuse nếu trạng thái đề tài là Đã duyệt và thuộc giảng viên hiện tại
+        if ($existingTopic->TRANGTHAI !== 'Đã duyệt' || $existingTopic->ID_NGUOI_DEXUAT != $lecturer->ID_GIANGVIEN) {
+            return response()->json(['message' => 'Chỉ có thể tái sử dụng đề tài đã duyệt của chính bạn'], 403);
+        }
+
+        // Tạo đề tài mới copy dữ liệu từ đề tài cũ nhưng kế hoạch mới và trạng thái Đã duyệt
+        $newTopic = Detai::create([
+            'ID_KEHOACH' => $request->new_plan_id,
+            'MA_DETAI' => 'DT' . date('Y') . strtoupper(substr(md5(uniqid()), 0, 6)),
+            'TEN_DETAI' => $existingTopic->TEN_DETAI,
+            'MOTA' => $existingTopic->MOTA,
+            'ID_CHUYENNGANH' => $existingTopic->ID_CHUYENNGANH,
+            'YEUCAU' => $existingTopic->YEUCAU,
+            'MUCTIEU' => $existingTopic->MUCTIEU,
+            'KETQUA_MONGDOI' => $existingTopic->KETQUA_MONGDOI,
+            'ID_NGUOI_DEXUAT' => $lecturer->ID_GIANGVIEN,
+            'SO_NHOM_TOIDA' => $existingTopic->SO_NHOM_TOIDA,
+            'TRANGTHAI' => 'Đã duyệt',
+            'NGAY_DUYET' => now(),
+            'ID_NGUOI_DUYET' => $currentUser->ID_NGUOIDUNG,
+        ]);
+
+        ActivityLogger::log(
+            'REUSE_TOPIC',
+            "Tái sử dụng đề tài: {$existingTopic->TEN_DETAI} sang kế hoạch ID: {$request->new_plan_id}",
+            ['original_topic_id' => $existingTopic->ID_DETAI, 'new_topic_id' => $newTopic->ID_DETAI],
+            null,
+            'FileText'
+        );
+
+        return response()->json($newTopic, 201);
     }
 
     /**
