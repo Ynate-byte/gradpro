@@ -111,6 +111,9 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::prefix('detai')->group(function () {
         Route::get('/', [DetaiController::class, 'index']);
         Route::post('/', [DetaiController::class, 'store']);
+        Route::get('/import/template', [DetaiController::class, 'downloadImportTemplate']);
+        Route::post('/import/preview', [DetaiController::class, 'previewImport']);
+        Route::post('/import/process', [DetaiController::class, 'processImport']);
         Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
         Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); // GV xem nhóm đăng ký đề tài của mình
         Route::get('/supervised', [DetaiController::class, 'getSupervisedTopics']);
@@ -124,8 +127,6 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{id}/suggestions', [DetaiController::class, 'addSuggestion']);
         Route::post('/goiy/{goiy}/reply', [PhanhoiGoiyController::class, 'store']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
-        Route::get('/approved/topics', [DetaiController::class, 'getApprovedTopicsOfLecturer']);
-        Route::post('/reuse', [DetaiController::class, 'reuseApprovedTopic']);
     });
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);
