@@ -45,11 +45,11 @@ export function DataTable({
   onRowSelectionChange,
   getRowProps = () => ({}),
   containerClassName,
+  
   flexLayout = false, 
   className,
   bulkActions,
   
-  // [SỬA LỖI] Thêm 2 props này vào đây
   chucVuFilterColumnId,
   chucVuFilterOptions,
 }) {
@@ -80,53 +80,58 @@ export function DataTable({
   return (
     <div className={cn(
       "space-y-4",
+      flexLayout && "h-full flex flex-col space-y-2", 
       className
     )}>
 
-      <DataTableToolbar
-        table={table}
-        onAddUser={onAddUser}
-        onImportUser={onImportUser}
-        onSuccess={onSuccess}
-        searchColumnId={searchColumnId}
-        searchPlaceholder={searchPlaceholder}
-        statusColumnId={statusColumnId}
-        statusOptions={statusOptions}
-        typeFilterColumnId={typeFilterColumnId}
-        typeFilterOptions={typeFilterOptions}
-        addBtnText={addBtnText}
-        searchTerm={searchTerm}
-        onSearchChange={onSearchChange}
-        khoahocFilterOptions={khoahocFilterOptions}
-        namhocFilterOptions={namhocFilterOptions}
-        hockyFilterOptions={hockyFilterOptions}
-        hedaotaoFilterOptions={hedaotaoFilterOptions}
-        chuyenNganhFilterColumnId={chuyenNganhFilterColumnId}
-        chuyenNganhFilterOptions={chuyenNganhFilterOptions}
-        khoaBomonFilterColumnId={khoaBomonFilterColumnId}
-        khoaBomonFilterTitle={khoaBomonFilterTitle}
-        khoaBomonFilterOptions={khoaBomonFilterOptions}
-        bulkActions={bulkActions}
-
-        // [SỬA LỖI] Truyền xuống Toolbar
-        chucVuFilterColumnId={chucVuFilterColumnId}
-        chucVuFilterOptions={chucVuFilterOptions}
-      />
+      <div className="shrink-0">
+        <DataTableToolbar
+          table={table}
+          onAddUser={onAddUser}
+          onImportUser={onImportUser}
+          onSuccess={onSuccess}
+          searchColumnId={searchColumnId}
+          searchPlaceholder={searchPlaceholder}
+          statusColumnId={statusColumnId}
+          statusOptions={statusOptions}
+          typeFilterColumnId={typeFilterColumnId}
+          typeFilterOptions={typeFilterOptions}
+          addBtnText={addBtnText}
+          searchTerm={searchTerm}
+          onSearchChange={onSearchChange}
+          khoahocFilterOptions={khoahocFilterOptions}
+          namhocFilterOptions={namhocFilterOptions}
+          hockyFilterOptions={hockyFilterOptions}
+          hedaotaoFilterOptions={hedaotaoFilterOptions}
+          chuyenNganhFilterColumnId={chuyenNganhFilterColumnId}
+          chuyenNganhFilterOptions={chuyenNganhFilterOptions}
+          khoaBomonFilterColumnId={khoaBomonFilterColumnId}
+          khoaBomonFilterTitle={khoaBomonFilterTitle}
+          khoaBomonFilterOptions={khoaBomonFilterOptions}
+          bulkActions={bulkActions}
+          chucVuFilterColumnId={chucVuFilterColumnId}
+          chucVuFilterOptions={chucVuFilterOptions}
+        />
+      </div>
       
       <div
         className={cn(
-          "rounded-md border overflow-y-auto relative",
+          // [SỬA LẠI]: Luôn giữ rounded-md và border để có viền sát bảng
+          "rounded-md border relative",
+          
           containerClassName,
           !containerClassName && (
             flexLayout
-              ? "flex-1 min-h-0" 
-              : "max-h-[calc(100vh-25rem)]"
+              // flex-1 để giãn chiều cao, overflow để cuộn bên trong viền
+              ? "flex-1 min-h-0 w-full overflow-y-auto" 
+              : "max-h-[calc(100vh-25rem)] overflow-y-auto"
           )
         )}
       >
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
             {table.getHeaderGroups().map((headerGroup) => (
+              // [SỬA LẠI]: Bỏ border-t-0 để giữ style mặc định của shadcn
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   return (
@@ -184,7 +189,10 @@ export function DataTable({
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination table={table} />
+      
+      <div className="shrink-0 py-1">
+         <DataTablePagination table={table} />
+      </div>
     </div>
   )
 }

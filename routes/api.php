@@ -263,6 +263,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/history', [HistoryController::class, 'getSystemHistory']);
         Route::post('/history/cleanup', [HistoryController::class, 'cleanup']);
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'getStats']);
+        Route::get('/dashboard/reminders', [AdminDashboardController::class, 'getReminders']);
     });
 
     Route::prefix('department-head')->group(function () {

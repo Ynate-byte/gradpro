@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Circle } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
@@ -15,16 +15,15 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 
-// ... (Giữ nguyên phần StatCard và getVariants không đổi) ...
+// ... (StatCard Component giữ nguyên)
 const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasStatusDot }) => {
-    // ... (Giữ nguyên code cũ của StatCard)
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
 
     return (
         <motion.div
-            className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-md"
+            className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-md h-full"
             whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
         >
@@ -57,14 +56,7 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
                             {value === 'loading' ? (
                                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                             ) : (
-                                <>
-                                    <p className="text-2xl font-bold">{value}</p>
-                                    {hasStatusDot && (
-                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1, type: "spring" }}>
-                                            <Circle className="h-2.5 w-2.5 fill-green-500 text-green-500" />
-                                        </motion.div>
-                                    )}
-                                </>
+                                <p className="text-2xl font-bold">{value}</p>
                             )}
                         </motion.div>
                     </AnimatePresence>
@@ -74,8 +66,8 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
     );
 };
 
+// ... (getVariants giữ nguyên)
 const getVariants = (shouldReduce) => {
-    // ... (Giữ nguyên code cũ của getVariants)
     if (shouldReduce) {
         return {
             container: { visible: { opacity: 1 } },
@@ -93,9 +85,9 @@ const getVariants = (shouldReduce) => {
             visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100, damping: 12 } }
         },
         table: {
-            hidden: { opacity: 0, y: 30 },
-            visible: { opacity: 1, y: 0, transition: { duration: 0.5, delay: 0.2, ease: "easeOut" } },
-            exit: { opacity: 0, y: -30, transition: { duration: 0.3 } }
+            hidden: { opacity: 0, y: 20 },
+            visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
+            exit: { opacity: 0, y: -20, transition: { duration: 0.2 } }
         }
     };
 };
@@ -113,9 +105,10 @@ const TopicManagementTabs = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
     const [columnFilters, setColumnFilters] = useState([]);
+    
     const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
 
-    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
     const [sorting, setSorting] = useState([]);
     const [rowSelection, setRowSelection] = useState({});
 
@@ -124,8 +117,7 @@ const TopicManagementTabs = () => {
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [actionType, setActionType] = useState("");
-    
-    // [SỬA 1]: Thay pendingTopics bằng navigationList để tổng quát hóa việc điều hướng
+
     const [navigationList, setNavigationList] = useState([]);
     const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
 
@@ -163,7 +155,6 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // [SỬA 2]: processedData trả về thêm allFiltered (danh sách đầy đủ đã lọc)
     const processedData = useMemo(() => {
         let filtered = allTopics.filter(t => {
             const matchesSearch =
@@ -216,24 +207,18 @@ const TopicManagementTabs = () => {
             (pagination.pageIndex + 1) * pagination.pageSize
         );
 
-        // [QUAN TRỌNG]: Trả về allFiltered để dùng cho navigation
         return { pagedData, pageCount, stats, allFiltered: filtered };
     }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
 
-    // [SỬA 3]: Cập nhật logic khi click xem chi tiết
     const handleViewTopicDetails = (topicId) => {
         setSelectedTopicId(topicId);
         setShowTopicDetailDialog(true);
-
-        // Lấy danh sách hiện tại đang hiển thị (đã lọc/sort)
         const currentList = processedData.allFiltered;
         setNavigationList(currentList);
-        
         const currentIndex = currentList.findIndex(t => t.ID_DETAI === topicId);
         setCurrentTopicIndex(currentIndex >= 0 ? currentIndex : 0);
     };
 
-    // [SỬA 4]: Các hàm điều hướng Next/Previous
     const handleNext = () => {
         if (navigationList.length > 0 && currentTopicIndex < navigationList.length - 1) {
             const nextIndex = currentTopicIndex + 1;
@@ -250,19 +235,13 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // [SỬA 5]: Logic tự động chuyển sau khi duyệt (dùng navigationList thay vì pendingTopics)
     const handleApprove = async (topicId) => {
         try {
             await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
             toast.success("Đề tài đã được duyệt thành công!");
-            loadAllData(); // Reload lại dữ liệu tổng
-
+            loadAllData();
             if (showTopicDetailDialog && navigationList.length > 0) {
-                // Tự động chuyển sang đề tài kế tiếp nếu có
                 if (currentTopicIndex < navigationList.length - 1) {
-                    // Logic: Giữ nguyên index (vì item hiện tại sẽ bị loại khỏi list lọc nếu đang ở tab Chờ duyệt)
-                    // Hoặc tăng index nếu ở tab Tất cả.
-                    // Đơn giản nhất: Chuyển sang item kế tiếp trong list CŨ
                     const nextIndex = currentTopicIndex + 1;
                     setCurrentTopicIndex(nextIndex);
                     setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
@@ -273,11 +252,9 @@ const TopicManagementTabs = () => {
         } catch (error) {
             console.error("Error approving topic:", error);
             toast.error("Có lỗi xảy ra khi duyệt đề tài.");
-            throw error;
         }
     };
 
-    // [SỬA 6]: Logic Reject cũng tương tự
     const handleRejectSubmit = async (reason) => {
         try {
             const action = actionType === "reject" ? "reject" : "request_edit";
@@ -293,7 +270,7 @@ const TopicManagementTabs = () => {
             loadAllData();
 
             if (showTopicDetailDialog && navigationList.length > 0) {
-                 if (currentTopicIndex < navigationList.length - 1) {
+                if (currentTopicIndex < navigationList.length - 1) {
                     const nextIndex = currentTopicIndex + 1;
                     setCurrentTopicIndex(nextIndex);
                     setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
@@ -304,7 +281,6 @@ const TopicManagementTabs = () => {
         } catch (error) {
             console.error("Error processing topic:", error);
             toast.error("Có lỗi xảy ra khi xử lý yêu cầu.");
-            throw error;
         }
     };
 
@@ -331,158 +307,149 @@ const TopicManagementTabs = () => {
         onRequestEdit: handleRequestEdit
     }), [handleApprove, handleReject, handleRequestEdit, handleViewTopicDetails]);
 
-    const renderDataTable = (tabName) => {
-        const [tableHeight, setTableHeight] = useState('auto');
-        const tableRef = React.useRef(null);
+    const hasNext = currentTopicIndex < navigationList.length - 1;
+    const hasPrevious = currentTopicIndex > 0;
 
-        React.useLayoutEffect(() => {
-            if (tableRef.current) {
-                const height = tableRef.current.getBoundingClientRect().height;
-                setTableHeight(height);
-            }
-        }, [processedData.pagedData, loading, tabName]);
-
+    const renderDataTable = () => {
         return (
             <motion.div
-                initial={false}
-                animate={{ height: tableHeight }}
-                transition={{
-                    duration: isReduced ? 0 : 0.5,
-                    ease: [0.4, 0, 0.2, 1]
-                }}
-                style={{ overflow: 'hidden' }}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="h-full flex flex-col" 
             >
-                <div ref={tableRef}>
-                    <DataTable
-                        columns={columns}
-                        data={processedData.pagedData}
-                        pageCount={processedData.pageCount}
-                        loading={loading}
-                        pagination={pagination}
-                        setPagination={setPagination}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        sorting={sorting}
-                        setSorting={setSorting}
-                        onAddUser={() => { }}
-                        addBtnText={null}
-                        onImportUser={null}
-                        onSuccess={loadAllData}
-                        searchColumnId="TEN_DETAI"
-                        searchPlaceholder="Tìm theo tên, GV, mã..."
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                        chuyenNganhFilterColumnId="chuyen_nganh_id"
-                        chuyenNganhFilterOptions={chuyenNganhOptions}
-                        columnVisibility={columnVisibility}
-                        state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
-                        onRowSelectionChange={setRowSelection}
-                    />
-                </div>
+                <DataTable
+                    columns={columns}
+                    data={processedData.pagedData}
+                    pageCount={processedData.pageCount}
+                    loading={loading}
+                    pagination={pagination}
+                    setPagination={setPagination}
+                    columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    sorting={sorting}
+                    setSorting={setSorting}
+                    
+                    // --- [XÓA HOẶC COMMENT CÁC DÒNG NÀY ĐỂ ẨN NÚT XANH DƯƠNG] ---
+                    // onAddUser={() => { }} 
+                    // addBtnText={null}
+                    // onImportUser={null}
+                    // -------------------------------------------------------------
+
+                    onSuccess={loadAllData}
+                    searchColumnId="TEN_DETAI"
+                    searchPlaceholder="Tìm theo tên, GV, mã..."
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    chuyenNganhFilterColumnId="chuyen_nganh_id"
+                    
+                    chuyenNganhFilterOptions={chuyenNganhOptions}
+                    
+                    columnVisibility={columnVisibility}
+                    state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
+                    onRowSelectionChange={setRowSelection}
+                    
+                    flexLayout={true}
+                    className="h-full"
+                />
             </motion.div>
         );
     };
 
-    // [SỬA 7]: Tính toán hasNext/hasPrevious để truyền xuống Dialog
-    const hasNext = currentTopicIndex < navigationList.length - 1;
-    const hasPrevious = currentTopicIndex > 0;
-
     return (
         <motion.div
-            className="flex-1 space-y-6 p-4 md:p-0"
             initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
+            className="flex flex-col h-[calc(100vh-8.7rem)] space-y-4 p-4 md:p-0 overflow-hidden"
         >
-            <motion.div
-                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                variants={variants.container}
-                initial="hidden"
-                animate="visible"
-            >
-                <motion.div variants={variants.item}>
-                    <StatCard
-                        icon={BookOpen}
-                        title="Tổng số Đề tài"
-                        value={loadingStats ? 'loading' : processedData.stats.total}
-                        iconBgClass="bg-blue-100 dark:bg-blue-900/30"
-                        iconColorClass="text-blue-600 dark:text-blue-400"
-                    />
-                </motion.div>
-                <motion.div variants={variants.item}>
-                    <StatCard
-                        icon={Clock}
-                        title="Chờ duyệt"
-                        value={loadingStats ? 'loading' : processedData.stats.pending}
-                        iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
-                        iconColorClass="text-yellow-600 dark:text-yellow-400"
-                        hasStatusDot={processedData.stats.pending > 0}
-                    />
-                </motion.div>
-                <motion.div variants={variants.item}>
-                    <StatCard
-                        icon={CheckCircle}
-                        title="Đã duyệt"
-                        value={loadingStats ? 'loading' : processedData.stats.approved}
-                        iconBgClass="bg-green-100 dark:bg-green-900/30"
-                        iconColorClass="text-green-600 dark:text-green-400"
-                    />
-                </motion.div>
-                <motion.div variants={variants.item}>
-                    <StatCard
-                        icon={AlertTriangle}
-                        title="Cần xử lý"
-                        value={loadingStats ? 'loading' : processedData.stats.editRequest}
-                        iconBgClass="bg-orange-100 dark:bg-orange-900/30"
-                        iconColorClass="text-orange-600 dark:text-orange-400"
-                    />
-                </motion.div>
-            </motion.div>
-
-            <motion.div
-                initial={isReduced ? { y: 0, opacity: 1 } : { y: 30, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{
-                    duration: 0.5,
-                    delay: isReduced ? 0 : 0.3,
-                    type: "spring",
-                    stiffness: 100
-                }}
-            >
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                    <motion.div
-                        initial={isReduced ? { x: 0, opacity: 1 } : { x: -20, opacity: 0 }}
-                        animate={{ x: 0, opacity: 1 }}
-                        transition={{ delay: isReduced ? 0 : 0.4 }}
-                    >
-                        <TabsList className={cn("transition-all duration-300", isReduced && "transition-none")}>
-                            <TabsTrigger value="Tất cả" className={cn("transition-all duration-200", isReduced && "transition-none")}>Tất cả</TabsTrigger>
-                            <TabsTrigger value="Chờ duyệt" className={cn("transition-all duration-200", isReduced && "transition-none")}>Chờ duyệt</TabsTrigger>
-                            <TabsTrigger value="Đang chỉnh sửa" className={cn("transition-all duration-200", isReduced && "transition-none")}>Đang chỉnh sửa</TabsTrigger>
-                            <TabsTrigger value="Đã duyệt" className={cn("transition-all duration-200", isReduced && "transition-none")}>Đã duyệt</TabsTrigger>
-                            <TabsTrigger value="Yêu cầu chỉnh sửa" className={cn("transition-all duration-200", isReduced && "transition-none")}>Yêu cầu chỉnh sửa</TabsTrigger>
-                            <TabsTrigger value="Từ chối" className={cn("transition-all duration-200", isReduced && "transition-none")}>Từ chối</TabsTrigger>
-                            <TabsTrigger value="Nháp" className={cn("transition-all duration-200", isReduced && "transition-none")}>Nháp</TabsTrigger>
-                        </TabsList>
+            <div className="shrink-0">
+                <motion.div
+                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                    variants={variants.container}
+                    initial="hidden"
+                    animate="visible"
+                >
+                    <motion.div variants={variants.item}>
+                        <StatCard
+                            icon={BookOpen}
+                            title="Tổng số Đề tài"
+                            value={loadingStats ? 'loading' : processedData.stats.total}
+                            iconBgClass="bg-blue-100 dark:bg-blue-900/30"
+                            iconColorClass="text-blue-600 dark:text-blue-400"
+                        />
                     </motion.div>
+                    <motion.div variants={variants.item}>
+                        <StatCard
+                            icon={Clock}
+                            title="Chờ duyệt"
+                            value={loadingStats ? 'loading' : processedData.stats.pending}
+                            iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
+                            iconColorClass="text-yellow-600 dark:text-yellow-400"
+                            hasStatusDot={processedData.stats.pending > 0}
+                        />
+                    </motion.div>
+                    <motion.div variants={variants.item}>
+                        <StatCard
+                            icon={CheckCircle}
+                            title="Đã duyệt"
+                            value={loadingStats ? 'loading' : processedData.stats.approved}
+                            iconBgClass="bg-green-100 dark:bg-green-900/30"
+                            iconColorClass="text-green-600 dark:text-green-400"
+                        />
+                    </motion.div>
+                    <motion.div variants={variants.item}>
+                        <StatCard
+                            icon={AlertTriangle}
+                            title="Cần xử lý"
+                            value={loadingStats ? 'loading' : processedData.stats.editRequest}
+                            iconBgClass="bg-orange-100 dark:bg-orange-900/30"
+                            iconColorClass="text-orange-600 dark:text-orange-400"
+                        />
+                    </motion.div>
+                </motion.div>
+            </div>
 
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={activeTab}
-                            variants={variants.table}
-                            initial="hidden"
-                            animate="visible"
-                            exit="exit"
-                        >
-                            <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
-                                {renderDataTable(activeTab)}
-                            </TabsContent>
-                        </motion.div>
-                    </AnimatePresence>
+            <div className="flex-1 min-h-0 flex flex-col">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full space-y-4">
+                    <div className="shrink-0">
+                        <TabsList className={cn("transition-all duration-300 w-full justify-start bg-transparent p-0 h-auto gap-2", isReduced && "transition-none")}>
+                            {["Tất cả", "Chờ duyệt", "Đang chỉnh sửa", "Đã duyệt", "Yêu cầu chỉnh sửa", "Từ chối", "Nháp"].map(tab => (
+                                <TabsTrigger
+                                    key={tab}
+                                    value={tab}
+                                    className={cn(
+                                        "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow rounded-md px-4 py-2 transition-all duration-200 border border-transparent data-[state=inactive]:border-border/50 data-[state=inactive]:bg-background",
+                                        isReduced && "transition-none"
+                                    )}
+                                >
+                                    {tab}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </div>
+
+                    {/* [SỬA LỖI 4]: Loại bỏ các class tạo khung (border, shadow, bg) */}
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeTab}
+                                variants={variants.table}
+                                initial="hidden"
+                                animate="visible"
+                                exit="exit"
+                                className="h-full flex flex-col"
+                            >
+                                <TabsContent value={activeTab} className="mt-0 h-full outline-none ring-0 flex flex-col">
+                                    {renderDataTable()}
+                                </TabsContent>
+                            </motion.div>
+                        </AnimatePresence>
+                    </div>
                 </Tabs>
-            </motion.div>
+            </div>
 
-            {/* [SỬA 8]: Truyền đúng Props cho TopicDetailDialog */}
             <TopicDetailDialog
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}

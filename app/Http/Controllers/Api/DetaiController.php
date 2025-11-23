@@ -59,19 +59,25 @@ class DetaiController extends Controller
             // 2. Đề tài của chính họ (bất kể trạng thái)
             // 3. Đề tài họ được phân công góp ý
                 if ($lecturerId) {
-                        $query->where(function ($q) use ($lecturerId) {
-                            $q->where('TRANGTHAI', 'Đã duyệt')
-                            ->orWhere('ID_NGUOI_DEXUAT', $lecturerId)
-                            ->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
-                                $subQ->where('ID_GIANGVIEN', $lecturerId);
-                            });
-                        });
+                $query->where(function ($q) use ($lecturerId) {
+                    // 1. Hiển thị tất cả đề tài KHÔNG PHẢI LÀ "Nháp"
+                    // (Bao gồm: Chờ duyệt, Đã duyệt, Yêu cầu chỉnh sửa, Đã đầy, Đã khóa...)
+                    $q->where('TRANGTHAI', '<>', 'Nháp')
+                    
+                    // 2. HOẶC hiển thị đề tài do chính giảng viên này tạo (kể cả Nháp)
+                    ->orWhere('ID_NGUOI_DEXUAT', $lecturerId)
+                    
+                    // 3. HOẶC hiển thị đề tài giảng viên được phân công góp ý (nếu có)
+                    ->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
+                        $subQ->where('ID_GIANGVIEN', $lecturerId);
+                    });
+                });
 
-                        // Di chuyển filter status ra ngoài where() để không bị ảnh hưởng bởi OR
-                        if ($request->has('status') && $request->status !== 'Tất cả') {
-                            $query->where('TRANGTHAI', $request->status);
-                        }
-                    }else {
+                // Nếu có filter trạng thái từ frontend gửi lên (ví dụ chọn drop-down)
+                if ($request->has('status') && $request->status !== 'Tất cả') {
+                    $query->where('TRANGTHAI', $request->status);
+                }
+            } else {
                  // Admin/Quản trị viên cấp cao: chỉ cần lọc trạng thái nếu có
                 if ($request->has('status') && $request->status !== 'Tất cả') {
                     $query->where('TRANGTHAI', $request->status);
@@ -789,11 +795,22 @@ class DetaiController extends Controller
         return response()->json(['message' => 'Đề tài đã xóa thành công']);
     }
 
+    private function canImportTopics()
+    {
+        if ($this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu() || $this->isTruongBoMon()) {
+            return true;
+        }
+        return false;
+    }
+
     public function downloadImportTemplate()
     {
+        if (!$this->canImportTopics()) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
         $path = storage_path('app/templates/import_topics_template.xlsx');
         
-        // Tạo file mẫu nếu chưa có (Optional: Tốt nhất là bạn nên tạo sẵn file vật lý)
         if (!File::exists($path)) {
             return response()->json(['message' => 'File mẫu chưa được cấu hình trên server.'], 404);
         }
@@ -801,9 +818,12 @@ class DetaiController extends Controller
         return response()->download($path, 'mau_nhap_de_tai.xlsx');
     }
 
-    // 2. Xem trước Import (Preview)
     public function previewImport(Request $request)
     {
+        if (!$this->canImportTopics()) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
         $request->validate([
             'file' => 'required|file|mimes:xlsx,xls,csv,txt|max:10240',
             'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH'
@@ -812,10 +832,8 @@ class DetaiController extends Controller
         try {
             $import = new \App\Imports\TopicsImport($request->ID_KEHOACH);
             
-            // Excel::import sẽ chạy qua các sheet được định nghĩa trong TopicsImport
             Excel::import($import, $request->file('file'));
 
-            // [SỬA ĐỔI] Lấy kết quả từ hàm getResults() đã viết thêm hoặc truy cập trực tiếp sheetImport
             $results = $import->getResults();
 
             return response()->json([
@@ -824,11 +842,7 @@ class DetaiController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            // Ghi log lỗi hệ thống
             Log::error('Lỗi Import Đề tài: ' . $e->getMessage());
-            // Log::error($e->getTraceAsString()); // Uncomment để debug sâu hơn
-
-            // Trả về lỗi chi tiết cho Frontend
             return response()->json([
                 'message' => 'Lỗi đọc file: ' . $e->getMessage(),
                 'detail' => 'Vui lòng đảm bảo file có sheet tên "Khóa luận cử nhân" chứa cột "Tên đề tài" và "Email".'
@@ -839,6 +853,10 @@ class DetaiController extends Controller
     // 3. Tiến hành Import (Process)
     public function processImport(Request $request)
     {
+        if (!$this->canImportTopics()) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
         $request->validate([
             'data' => 'required|array',
         ]);
@@ -847,14 +865,13 @@ class DetaiController extends Controller
         DB::beginTransaction();
         try {
             foreach ($request->data as $row) {
-                // Tạo mã đề tài (nếu chưa có trong mảng row thì tạo mới)
                 $topicCode = $row['MA_DETAI_GOC'] ?? ('DT' . date('Y') . strtoupper(substr(md5(uniqid()), 0, 6)));
                 
                 Detai::create([
                     'ID_KEHOACH' => $row['ID_KEHOACH'],
                     'MA_DETAI' => $topicCode,
                     'TEN_DETAI' => $row['TEN_DETAI'],
-                    'MOTA' => $row['MOTA'], // Quan trọng: File Excel của bạn dùng cột Yêu cầu làm mô tả chính
+                    'MOTA' => $row['MOTA'],
                     'YEUCAU' => $row['YEUCAU'],
                     'MUCTIEU' => $row['MUCTIEU'] ?? '',
                     'KETQUA_MONGDOI' => $row['KETQUA_MONGDOI'] ?? '',
