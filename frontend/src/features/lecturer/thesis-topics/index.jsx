@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
     Plus, Send, BookOpen, Loader2, Users, CheckCircle, AlertTriangle, 
-    FileSignature, MessageSquare, Upload 
+    FileSignature, MessageSquare, Upload, RefreshCcw
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -134,10 +134,17 @@ const columnVisibility = {
 // === MAIN COMPONENT ===
 const ThesisTopicsPage = () => {
     const { user } = useAuth();
-    const [topics, setTopics] = useState([]);
-    const [supervisedTopics, setSupervisedTopics] = useState([]);
+    
+    // Main Data States
+    const [topics, setTopics] = useState([]); // Danh sách đề tài (theo trang hiện tại)
     const [loading, setLoading] = useState(true);
     const [loadingStats, setLoadingStats] = useState(true);
+    
+    // Stats Data States
+    const [myQuota, setMyQuota] = useState(null);
+    const [supervisedTopicsCount, setSupervisedTopicsCount] = useState(0);
+    const [assignedReviewCount, setAssignedReviewCount] = useState(0);
+    const [contributedCount, setContributedCount] = useState(0);
 
     // Dialog States
     const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -156,22 +163,20 @@ const ThesisTopicsPage = () => {
     // Filter & Pagination States
     const [activeTab, setActiveTab] = useState('my');
     const [searchTerm, setSearchTerm] = useState('');
-    const debouncedSearchTerm = useDebounce(searchTerm, 300);
+    const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce 500ms cho search server-side
     const [columnFilters, setColumnFilters] = useState([]);
-    const [contributionFilter, setContributionFilter] = useState('all');
-    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
-    const [sorting, setSorting] = useState([{ id: 'TEN_DETAI', desc: false }]);
+    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+    const [serverPageCount, setServerPageCount] = useState(0); // Tổng số trang từ server
+    const [sorting, setSorting] = useState([{ id: 'NGAYTAO', desc: true }]);
     const [rowSelection, setRowSelection] = useState({});
 
-    // Data States
+    // Context Data States
     const [selectedPlan, setSelectedPlan] = useState('');
     const [currentPlanData, setCurrentPlanData] = useState(null); 
     const [plans, setPlans] = useState([]);
     const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
-    const [myQuota, setMyQuota] = useState(null);
-    
+
     // Navigation for Detail Dialog
-    const [navigationList, setNavigationList] = useState([]);
     const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
 
     // Motion & Theme
@@ -183,12 +188,12 @@ const ThesisTopicsPage = () => {
     // Feature Flag: Kiểm tra quyền GV_RA_DE
     const canSubmitApproval = useFeatureFlag(currentPlanData, 'GV_RA_DE');
 
-    // --- [MỚI] KIỂM TRA QUYỀN IMPORT ---
+    // --- Kiểm tra quyền Import ---
     const role = user?.vaitro?.TEN_VAITRO;
     const positions = user?.giangvien?.chucvus || [];
     const canImport = role === 'Admin' || positions.length > 0; 
 
-    // --- Load dữ liệu ban đầu ---
+    // 1. Load dữ liệu ban đầu (Kế hoạch, Chuyên ngành)
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -212,7 +217,7 @@ const ThesisTopicsPage = () => {
                 }))
             );
 
-            // Tự động chọn kế hoạch đang hoạt động
+            // Tự động chọn kế hoạch đang hoạt động hoặc mới nhất
             if (plansData.length > 0 && !selectedPlan) {
                 const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
                 setSelectedPlan(String(activePlan.ID_KEHOACH));
@@ -228,58 +233,103 @@ const ThesisTopicsPage = () => {
         }
     };
 
-    const loadPlanDependentData = useCallback(async (planId) => {
-        if (!planId) {
-            setTopics([]);
-            setSupervisedTopics([]);
-            setMyQuota(null);
-            setCurrentPlanData(null);
-            setLoading(false);
-            setLoadingStats(false);
-            return;
-        }
+    // 2. Fetch Dữ liệu chính (Server-side Pagination & Filtering)
+    // Hàm này được gọi khi: selectedPlan, activeTab, pagination, sorting, filters thay đổi
+    const fetchTopicsData = useCallback(async () => {
+        if (!selectedPlan) return;
 
         setLoading(true);
-        setLoadingStats(true);
         try {
-            const params = { plan_id: planId };
-            const [topicsRes, supervisedRes, quotaRes, planDetailRes] = await Promise.all([
-                thesisTopicService.getTopics(params), 
-                thesisTopicService.getSupervisedTopics(params),
-                lecturerQuotaService.getMyQuota(params),
-                getThesisPlanById(planId)
-            ]);
+            // Map activeTab sang filter_mode
+            let filterMode = 'all';
+            if (activeTab === 'my') filterMode = 'my';
+            if (activeTab === 'review') filterMode = 'review';
 
-            setTopics(topicsRes.data.data || []);
-            setSupervisedTopics(supervisedRes.data.data || []);
-            setMyQuota(quotaRes.data);
-            setCurrentPlanData(planDetailRes);
+            // Chuẩn bị params
+            const params = {
+                plan_id: selectedPlan,
+                filter_mode: filterMode,
+                page: pagination.pageIndex + 1, // React Table dùng 0-based, Laravel dùng 1-based
+                per_page: pagination.pageSize,
+                search: debouncedSearchTerm,
+                // Có thể thêm sorting vào params nếu Backend hỗ trợ sort động
+                // sort_by: sorting[0]?.id,
+                // sort_dir: sorting[0]?.desc ? 'desc' : 'asc'
+            };
+
+            // Xử lý Column Filters (Client filter -> Server param)
+            // Ví dụ: status, chuyên ngành
+            const statusFilter = columnFilters.find(f => f.id === 'TRANGTHAI');
+            if (statusFilter) params.status = statusFilter.value; // Backend cần hỗ trợ nhận mảng hoặc giá trị đơn
+
+            const majorFilter = columnFilters.find(f => f.id === 'chuyen_nganh_id');
+            if (majorFilter) params.major_id = majorFilter.value;
+
+            const response = await thesisTopicService.getTopics(params);
+            const { data, last_page, total } = response.data;
+
+            setTopics(data || []);
+            setServerPageCount(last_page || 1);
+            
         } catch (error) {
-            console.error('Error loading plan dependent data:', error);
-            toast.error("Lỗi khi tải dữ liệu đề tài.");
+            console.error("Error fetching topics:", error);
+            toast.error("Không thể tải danh sách đề tài.");
             setTopics([]);
-            setSupervisedTopics([]);
-            setMyQuota(null);
         } finally {
             setLoading(false);
-            setLoadingStats(false);
         }
-    }, []);
+    }, [selectedPlan, activeTab, pagination.pageIndex, pagination.pageSize, debouncedSearchTerm, columnFilters, sorting]);
 
+    // Trigger fetch khi các dependency thay đổi
+    useEffect(() => {
+        fetchTopicsData();
+    }, [fetchTopicsData]);
+
+    // Reset về trang 1 khi đổi Plan, Tab hoặc Search
+    useEffect(() => {
+        setPagination(prev => ({ ...prev, pageIndex: 0 }));
+    }, [selectedPlan, activeTab, debouncedSearchTerm, columnFilters]);
+
+    // 3. Fetch Dữ liệu thống kê (Stats) & Thông tin kế hoạch (Chỉ khi đổi Plan)
     useEffect(() => {
         if (selectedPlan) {
-            loadPlanDependentData(selectedPlan);
+            loadPlanStatsAndInfo(selectedPlan);
         }
-    }, [selectedPlan, loadPlanDependentData]);
+    }, [selectedPlan]);
 
-    // --- Handlers CRUD ---
+    const loadPlanStatsAndInfo = async (planId) => {
+        setLoadingStats(true);
+        try {
+            const [quotaRes, planDetailRes, supervisedRes] = await Promise.all([
+                lecturerQuotaService.getMyQuota({ plan_id: planId }),
+                getThesisPlanById(planId),
+                thesisTopicService.getSupervisedTopics({ plan_id: planId })
+            ]);
+
+            setMyQuota(quotaRes.data);
+            setCurrentPlanData(planDetailRes);
+            setSupervisedTopicsCount(supervisedRes.data.total || 0);
+            
+            // [Tùy chọn] Lấy thống kê review riêng nếu API getMyQuota chưa trả về đủ
+            // Ở đây giả sử ta lấy tạm từ quotaRes hoặc phải gọi thêm API stats
+            // setAssignedReviewCount(...) 
+
+        } catch (error) {
+            console.error("Error loading plan stats:", error);
+        } finally {
+            setLoadingStats(false);
+        }
+    };
+
+    // --- CRUD Handlers ---
     const handleCreateTopic = async (topicData) => {
         try {
             await thesisTopicService.createTopic(topicData);
             toast.success("Tạo đề tài thành công!");
             setShowCreateDialog(false);
             setEditingTopic(null);
-            loadPlanDependentData(selectedPlan);
+            fetchTopicsData(); // Reload list
+            loadPlanStatsAndInfo(selectedPlan); // Reload stats
         } catch (error) {
             console.error('Error creating topic:', error);
             toast.error("Lỗi khi tạo đề tài.");
@@ -292,7 +342,7 @@ const ThesisTopicsPage = () => {
             toast.success("Cập nhật đề tài thành công!");
             setShowCreateDialog(false);
             setEditingTopic(null);
-            loadPlanDependentData(selectedPlan);
+            fetchTopicsData();
         } catch (error) {
             console.error('Error updating topic:', error);
             toast.error("Lỗi khi cập nhật đề tài.");
@@ -303,7 +353,7 @@ const ThesisTopicsPage = () => {
         try {
             await thesisTopicService.submitForApproval(topicId);
             toast.success("Gửi duyệt đề tài thành công!");
-            loadPlanDependentData(selectedPlan);
+            fetchTopicsData();
         } catch (error) {
             console.error('Error submitting for approval:', error);
             toast.error(error.response?.data?.message || "Lỗi khi gửi duyệt.");
@@ -314,122 +364,41 @@ const ThesisTopicsPage = () => {
         try {
             await thesisTopicService.deleteTopic(topicId);
             toast.success("Xóa đề tài thành công!");
-            loadPlanDependentData(selectedPlan);
+            fetchTopicsData();
+            loadPlanStatsAndInfo(selectedPlan);
         } catch (error) {
             console.error('Error deleting topic:', error);
             toast.error(error.response?.data?.message || "Lỗi khi xóa đề tài.");
         }
     };
 
-    // --- Data Processing ---
-    const processedData = useMemo(() => {
-        let filtered = topics; 
-        if (activeTab === 'my') {
-            filtered = filtered.filter(t => t.ID_NGUOI_DEXUAT === user?.giangvien?.ID_GIANGVIEN);
-        }
-        
-        if (debouncedSearchTerm) {
-            const lowerTerm = debouncedSearchTerm.toLowerCase();
-            filtered = filtered.filter(t =>
-                t.TEN_DETAI?.toLowerCase().includes(lowerTerm) ||
-                t.ten_giang_vien?.toLowerCase().includes(lowerTerm) ||
-                t.MA_DETAI?.toLowerCase().includes(lowerTerm)
-            );
-        }
-
-        filtered = filtered.filter(t => {
-            return columnFilters.every(filter => {
-                if (filter.id === 'chuyen_nganh_id') {
-                    const filterValues = new Set(filter.value);
-                    if (filterValues.size === 0) return true;
-                    return filterValues.has(String(t.chuyennganh?.ID_CHUYENNGANH));
-                }
-                if (filter.id === 'TRANGTHAI') {
-                    const filterValues = new Set(filter.value);
-                    if (filterValues.size === 0) return true;
-                    return filterValues.has(t.TRANGTHAI);
-                }
-                return true;
-            });
-        });
-
-        if (sorting.length > 0) {
-            const { id, desc } = sorting[0];
-            filtered.sort((a, b) => {
-                let valA = a[id];
-                let valB = b[id];
-                if (id === 'chuyennganh.TEN_CHUYENNGANH') {
-                    valA = a.chuyennganh?.TEN_CHUYENNGANH;
-                    valB = b.chuyennganh?.TEN_CHUYENNGANH;
-                }
-                if (valA === null || valA === undefined) valA = '';
-                if (valB === null || valB === undefined) valB = '';
-                if (typeof valA === 'string') {
-                    valA = valA.toLowerCase();
-                    valB = valB.toLowerCase();
-                }
-                if (valA < valB) return desc ? 1 : -1;
-                if (valA > valB) return desc ? -1 : 1;
-                return 0;
-            });
-        }
-
-        const pageCount = Math.ceil(filtered.length / pagination.pageSize);
-        const pagedData = filtered.slice(
-            pagination.pageIndex * pagination.pageSize,
-            (pagination.pageIndex + 1) * pagination.pageSize
-        );
-
-        return { pagedData, pageCount, allFiltered: filtered }; 
-    }, [topics, activeTab, debouncedSearchTerm, columnFilters, sorting, pagination, user]);
-
-    // Process Review Data (Tab: Cần góp ý)
-    const processedReviewData = useMemo(() => {
-        if (!topics) return { pagedData: [], pageCount: 0, allFiltered: [] };
-        
-        let filtered = topics.filter(t => 
-            t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
-        );
-        if (filtered.length === 0) return { pagedData: [], pageCount: 0, allFiltered: [] };
-
-        if (contributionFilter === 'contributed') {
-            filtered = filtered.filter(t => 
-                t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
-            );
-        } else if (contributionFilter === 'not_contributed') {
-            filtered = filtered.filter(t => 
-                !t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
-            );
-        }
-        
-         if (debouncedSearchTerm) {
-            const lowerTerm = debouncedSearchTerm.toLowerCase();
-            filtered = filtered.filter(t =>
-                t.TEN_DETAI?.toLowerCase().includes(lowerTerm) ||
-                t.ten_giang_vien?.toLowerCase().includes(lowerTerm) ||
-                t.MA_DETAI?.toLowerCase().includes(lowerTerm)
-            );
-        }
-
-        const pageCount = Math.ceil(filtered.length / pagination.pageSize);
-        const pagedData = filtered.slice(
-            pagination.pageIndex * pagination.pageSize,
-            (pagination.pageIndex + 1) * pagination.pageSize
-        );
-        return { pagedData, pageCount, allFiltered: filtered }; 
-    }, [topics, debouncedSearchTerm, columnFilters, sorting, pagination, user, contributionFilter]);
-
-    // Navigation Logic
+    // --- Navigation Logic cho Detail Dialog ---
     const handleViewTopicDetails = (topicId) => {
         setSelectedTopicId(topicId);
         setShowTopicDetailDialog(true);
-        
-        const currentList = (activeTab === 'review' ? processedReviewData.allFiltered : processedData.allFiltered) || [];
-        setNavigationList(currentList);
-        
-        const idx = currentList.findIndex(t => t.ID_DETAI === topicId);
+        const idx = topics.findIndex(t => t.ID_DETAI === topicId);
         setCurrentTopicIndex(idx >= 0 ? idx : 0);
     };
+
+    const hasNext = currentTopicIndex < topics.length - 1;
+    const hasPrevious = currentTopicIndex > 0;
+
+    const handleNextTopic = () => { 
+        if (hasNext) {
+            const nextIdx = currentTopicIndex + 1;
+            setCurrentTopicIndex(nextIdx);
+            setSelectedTopicId(topics[nextIdx].ID_DETAI);
+        }
+    };
+
+    const handlePreviousTopic = () => { 
+        if (hasPrevious) {
+            const prevIdx = currentTopicIndex - 1;
+            setCurrentTopicIndex(prevIdx);
+            setSelectedTopicId(topics[prevIdx].ID_DETAI);
+        }
+    };
+
     const handleAddSuggestion = (topicId) => {
         setSelectedTopicId(topicId);
         setShowSuggestionDialog(true);
@@ -439,24 +408,7 @@ const ThesisTopicsPage = () => {
         setShowRegisteredGroupsDialog(true);
     };
 
-    const hasNext = currentTopicIndex < navigationList.length - 1;
-    const hasPrevious = currentTopicIndex > 0;
-
-    const handleNextTopic = () => { if (hasNext) {
-        const nextIdx = currentTopicIndex + 1;
-        setCurrentTopicIndex(nextIdx);
-        setSelectedTopicId(navigationList[nextIdx].ID_DETAI);
-    }};
-    const handlePreviousTopic = () => { if (hasPrevious) {
-        const prevIdx = currentTopicIndex - 1;
-        setCurrentTopicIndex(prevIdx);
-        setSelectedTopicId(navigationList[prevIdx].ID_DETAI);
-    }};
-
-    useEffect(() => {
-        setPagination(prev => ({ ...prev, pageIndex: 0 }));
-    }, [activeTab, columnFilters, debouncedSearchTerm, contributionFilter]);
-
+    // --- Columns Definition ---
     const columns = useMemo(() => getColumns({
         currentUserId: user?.giangvien?.ID_GIANGVIEN,
         onEdit: (topic) => { setEditingTopic(topic); setShowCreateDialog(true); },
@@ -467,69 +419,7 @@ const ThesisTopicsPage = () => {
         onViewRegisteredGroups: handleViewRegisteredGroups,
         isReviewTab: activeTab === 'review',
         canSubmitApproval: canSubmitApproval,
-    }), [user, myQuota, handleViewRegisteredGroups, handleSubmitForApproval, handleDeleteTopic, activeTab, canSubmitApproval]);
-
-    // Render DataTable
-    const renderDataTable = () => {
-        const data = activeTab === 'review' ? processedReviewData : processedData;
-        return (
-            <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="h-full flex flex-col"
-            >
-                <DataTable
-                    columns={columns}
-                    data={data.pagedData}
-                    pageCount={data.pageCount}
-                    loading={loading}
-                    pagination={pagination}
-                    setPagination={setPagination}
-                    columnFilters={columnFilters}
-                    setColumnFilters={setColumnFilters}
-                    sorting={sorting}
-                    setSorting={setSorting}
-                    
-                    // [XÓA] onAddUser, addBtnText, onImportUser để không hiện nút xanh dương
-                    
-                    onSuccess={() => loadPlanDependentData(selectedPlan)}
-                    searchColumnId="TEN_DETAI"
-                    searchPlaceholder="Tìm theo tên, GV, mã..."
-                    searchTerm={searchTerm}
-                    onSearchChange={setSearchTerm}
-                    chuyenNganhFilterColumnId="chuyen_nganh_id"
-                    chuyenNganhFilterOptions={chuyenNganhOptions}
-                    
-                    columnVisibility={columnVisibility}
-                    state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
-                    onRowSelectionChange={setRowSelection}
-                    
-                    flexLayout={true}
-                    className="h-full"
-
-                    statusColumnId="TRANGTHAI"
-                    statusOptions={[
-                        { value: "Nháp", label: "Nháp" },
-                        { value: "Chờ duyệt", label: "Chờ duyệt" },
-                        { value: "Yêu cầu chỉnh sửa", label: "Yêu cầu chỉnh sửa" },
-                        { value: "Đã duyệt", label: "Đã duyệt" },
-                        { value: "Từ chối", label: "Từ chối" },
-                    ]}
-                />
-            </motion.div>
-        );
-    };
-
-    // Statistics
-    const assignedReviewTopics = topics.filter(t => 
-        t.phancong_nguoi_gop_y?.some(p => p.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
-    );
-    const contributedTopicsCount = assignedReviewTopics.filter(t => 
-        t.goiyDetai?.some(g => g.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN)
-    ).length;
-    const pendingReviewCount = assignedReviewTopics.length - contributedTopicsCount;
+    }), [user, activeTab, canSubmitApproval, topics]); // Thêm topics vào deps nếu cần update khi list thay đổi
 
     return (
         <motion.div 
@@ -539,8 +429,10 @@ const ThesisTopicsPage = () => {
             transition={{ duration: 0.3 }}
         >
             <div className="shrink-0 space-y-6">
+                {/* Top Bar: Title, Plan Select, Actions */}
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                     <div className="flex items-center justify-between w-full gap-4">
+                        {/* Plan Selector */}
                         <Select
                             value={selectedPlan ? String(selectedPlan) : ""}
                             onValueChange={setSelectedPlan}
@@ -559,14 +451,23 @@ const ThesisTopicsPage = () => {
                         </Select>
 
                         <div className="flex items-center gap-2">
-                            {/* [CHECK QUYỀN IMPORT] Chỉ hiện nếu canImport = true */}
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={fetchTopicsData}
+                                disabled={loading}
+                                title="Tải lại dữ liệu"
+                            >
+                                <RefreshCcw className={cn("w-4 h-4", loading && "animate-spin")} />
+                            </Button>
+
                             {canImport && (
                                 <Button 
                                     variant="outline" 
                                     onClick={() => setShowImportDialog(true)}
                                     disabled={loading || !selectedPlan}
                                 >
-                                    <Upload className="w-4 h-4 mr-2" /> Import Excel
+                                    <Upload className="w-4 h-4 mr-2" /> Import
                                 </Button>
                             )}
 
@@ -574,13 +475,13 @@ const ThesisTopicsPage = () => {
                                 onClick={() => { setEditingTopic(null); setShowCreateDialog(true); }}
                                 disabled={loading || !selectedPlan}
                             >
-                                <Plus className="w-4 h-4 mr-2" />
-                                Tạo đề tài
+                                <Plus className="w-4 h-4 mr-2" /> Tạo đề tài
                             </Button>
                         </div>
                     </div>
                 </div>
 
+                {/* Statistics Cards */}
                 <motion.div 
                     className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
                     variants={variants.container}
@@ -591,7 +492,7 @@ const ThesisTopicsPage = () => {
                         icon={Users} 
                         title="Quota được giao" 
                         value={loadingStats ? 'loading' : myQuota?.quota_assigned ?? 0} 
-                        description="Số lượng tối thiểu" 
+                        description="Số đề tài tối đa" 
                         iconBgClass="bg-blue-100 dark:bg-blue-900/30" 
                         iconColorClass="text-blue-600 dark:text-blue-400" 
                     />
@@ -607,15 +508,15 @@ const ThesisTopicsPage = () => {
                         icon={CheckCircle} 
                         title="Nhóm đã nhận HD" 
                         value={loadingStats ? 'loading' : myQuota?.actual_assigned ?? 0} 
-                        description="Số nhóm thực tế" 
+                        description="Nhóm đang hướng dẫn" 
                         iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" 
                         iconColorClass="text-indigo-600 dark:text-indigo-400" 
                     />
                     <StatCard 
                         icon={MessageSquare} 
                         title="Góp ý phản biện" 
-                        value={loadingStats ? 'loading' : `${contributedTopicsCount} / ${assignedReviewTopics.length}`} 
-                        description={loadingStats ? "..." : `Chưa góp ý: ${pendingReviewCount}`} 
+                        value={loadingStats ? 'loading' : `${myQuota?.reviewed_count ?? 0} / ${myQuota?.total_reviews_assigned ?? 0}`} 
+                        description={loadingStats ? "..." : `Chưa góp ý: ${myQuota?.pending_reviews ?? 0}`} 
                         iconBgClass="bg-purple-100 dark:bg-purple-900/30" 
                         iconColorClass="text-purple-600 dark:text-purple-400" 
                     />
@@ -650,25 +551,51 @@ const ThesisTopicsPage = () => {
                                 className="h-full flex flex-col"
                             >
                                 <TabsContent value={activeTab} className="mt-0 h-full outline-none ring-0 flex flex-col">
-                                    {activeTab === "review" ? (
-                                        <>
-                                            <div className="flex items-center gap-4 mb-4 shrink-0">
-                                                <Select value={contributionFilter} onValueChange={setContributionFilter}>
-                                                    <SelectTrigger className="w-[200px] bg-background">
-                                                        <SelectValue placeholder="Lọc theo góp ý" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="all">Tất cả</SelectItem>
-                                                        <SelectItem value="contributed">Đã góp ý</SelectItem>
-                                                        <SelectItem value="not_contributed">Chưa góp ý</SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                            </div>
-                                            {renderDataTable()}
-                                        </>
-                                    ) : (
-                                        renderDataTable()
-                                    )}
+                                    {/* DataTable với Server-side Pagination */}
+                                    <DataTable
+                                        columns={columns}
+                                        data={topics}
+                                        pageCount={serverPageCount} // Quan trọng: Tổng số trang từ server
+                                        loading={loading}
+                                        
+                                        // Pagination State Control
+                                        pagination={pagination}
+                                        setPagination={setPagination}
+                                        
+                                        // Filters State Control
+                                        columnFilters={columnFilters}
+                                        setColumnFilters={setColumnFilters}
+                                        
+                                        // Sorting State Control
+                                        sorting={sorting}
+                                        setSorting={setSorting}
+
+                                        // Search Params
+                                        searchColumnId="TEN_DETAI"
+                                        searchPlaceholder="Tìm theo tên, GV, mã..."
+                                        searchTerm={searchTerm}
+                                        onSearchChange={setSearchTerm}
+
+                                        // Filter Options (Client or Server logic supported by DataTable component structure)
+                                        chuyenNganhFilterColumnId="chuyen_nganh_id"
+                                        chuyenNganhFilterOptions={chuyenNganhOptions}
+                                        
+                                        statusColumnId="TRANGTHAI"
+                                        statusOptions={[
+                                            { value: "Nháp", label: "Nháp" },
+                                            { value: "Chờ duyệt", label: "Chờ duyệt" },
+                                            { value: "Yêu cầu chỉnh sửa", label: "Yêu cầu chỉnh sửa" },
+                                            { value: "Đã duyệt", label: "Đã duyệt" },
+                                            { value: "Từ chối", label: "Từ chối" },
+                                        ]}
+
+                                        columnVisibility={columnVisibility}
+                                        state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
+                                        onRowSelectionChange={setRowSelection}
+                                        
+                                        flexLayout={true}
+                                        className="h-full"
+                                    />
                                 </TabsContent>
                             </motion.div>
                         </AnimatePresence>
@@ -728,6 +655,10 @@ const ThesisTopicsPage = () => {
                 onPrevious={handlePreviousTopic}
                 hasNext={hasNext}
                 hasPrevious={hasPrevious}
+                onDataChange={() => {
+                    fetchTopicsData();
+                    loadPlanStatsAndInfo(selectedPlan);
+                }}
             />
 
             <SuggestionDialog 
@@ -738,7 +669,7 @@ const ThesisTopicsPage = () => {
                         const res = await thesisTopicService.addSuggestion(selectedTopicId, { NOIDUNG_GOIY: suggestion });
                         toast.success(res.data.message || 'Góp ý đã được gửi!');
                         setShowSuggestionDialog(false);
-                        loadPlanDependentData(selectedPlan);
+                        fetchTopicsData(); // Reload list to reflect status changes if any
                     } catch (error) {
                         toast.error(error.response?.data?.message || 'Có lỗi khi gửi góp ý');
                         throw error;
@@ -756,14 +687,20 @@ const ThesisTopicsPage = () => {
             <ImportTopicDialog 
                 open={showImportDialog} 
                 onOpenChange={setShowImportDialog} 
-                planId={selectedPlan}
-                onSuccess={() => loadPlanDependentData(selectedPlan)}
+                planId={selectedPlan} 
+                onSuccess={() => {
+                    fetchTopicsData();
+                    loadPlanStatsAndInfo(selectedPlan);
+                }} 
             />
 
             <ReuseTopicDialog
                 open={reuseDialogOpen}
                 onOpenChange={setReuseDialogOpen}
-                onReuseSuccess={() => loadPlanDependentData(selectedPlan)}
+                onReuseSuccess={() => {
+                    fetchTopicsData();
+                    loadPlanStatsAndInfo(selectedPlan);
+                }}
             />
 
         </motion.div>

@@ -102,15 +102,12 @@ class TopicAssignmentController extends BaseTopicAssignmentController
         return response()->json($result);
     }
 
-    /**
-     * Assign reviewers to topics (Department-restricted)
-     */
     public function assignReviewers(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'assignments' => 'required|array',
-            'assignments.*.topic_id' => 'required|exists:detai,ID_DETAI',
-            'assignments.*.reviewer_id' => 'required|exists:giangvien,ID_GIANGVIEN',
+            'assignments.*.topic_id' => 'required|exists:DETAI,ID_DETAI',
+            'assignments.*.reviewer_id' => 'required|exists:GIANGVIEN,ID_GIANGVIEN',
             'note' => 'nullable|string|max:500',
         ]);
 
@@ -120,7 +117,7 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
         $currentUser = Auth::user();
 
-        // [UPDATE] Check if user is department head
+        // Check permission
         if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
@@ -128,62 +125,68 @@ class TopicAssignmentController extends BaseTopicAssignmentController
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
         DB::transaction(function () use ($request, $currentUser, $departmentId) {
-            foreach ($request->assignments as $assignment) {
-                $topic = Detai::with('nguoiDexuat')->findOrFail($assignment['topic_id']);
+            // [BƯỚC 1] Gom nhóm các yêu cầu theo ID Đề tài
+            // Ví dụ: Đề tài A có 2 giảng viên -> Gom thành 1 mảng chứa 2 giảng viên
+            $groupedAssignments = collect($request->assignments)->groupBy('topic_id');
 
-                // Check if topic belongs to department
+            foreach ($groupedAssignments as $topicId => $items) {
+                $topic = Detai::with('nguoiDexuat')->findOrFail($topicId);
+
+                // Validate Topic Department
                 if ($topic->nguoiDexuat->ID_KHOA_BOMON !== $departmentId) {
-                    throw new \Exception("Topic {$topic->TEN_DETAI} does not belong to your department");
+                    throw new \Exception("Đề tài {$topic->TEN_DETAI} không thuộc bộ môn của bạn");
                 }
 
-                // Check if reviewer is from same department
-                $reviewer = \App\Models\Giangvien::findOrFail($assignment['reviewer_id']);
-                if ($reviewer->ID_KHOA_BOMON !== $departmentId) {
-                    throw new \Exception("Reviewer {$reviewer->nguoidung->HODEM_VA_TEN} is not from your department");
+                // Lấy danh sách ID giảng viên mới cần gán cho đề tài này
+                $reviewerIds = $items->pluck('reviewer_id')->unique();
+
+                // Validate từng giảng viên
+                foreach ($reviewerIds as $rId) {
+                    $reviewer = \App\Models\Giangvien::findOrFail($rId);
+                    
+                    if ($reviewer->ID_KHOA_BOMON !== $departmentId) {
+                        throw new \Exception("Giảng viên {$reviewer->nguoidung->HODEM_VA_TEN} không thuộc bộ môn");
+                    }
+                    if ($reviewer->ID_GIANGVIEN == $topic->ID_NGUOI_DEXUAT) {
+                        throw new \Exception("Người phản biện không thể là người đề xuất đề tài");
+                    }
                 }
 
-                // Check if reviewer is not the proposer of this topic
-                if ($reviewer->ID_GIANGVIEN == $topic->ID_NGUOI_DEXUAT) {
-                    throw new \Exception("Reviewer cannot be the proposer of this topic");
-                }
+                // [BƯỚC 2] Xóa TẤT CẢ phân công cũ của đề tài này 1 lần duy nhất
+                PhancongNguoiGopY::where('ID_DETAI', $topicId)->delete();
 
-                // Check if reviewer is already assigned to this topic
-                $existingAssignment = PhancongNguoiGopY::where('ID_DETAI', $assignment['topic_id'])
-                    ->where('ID_GIANGVIEN', $assignment['reviewer_id'])
-                    ->first();
-
-                if ($existingAssignment) {
-                    continue; // Skip if already assigned
-                }
-
-                // Create reviewer assignment
-                PhancongNguoiGopY::create([
-                    'ID_DETAI' => $assignment['topic_id'],
-                    'ID_GIANGVIEN' => $assignment['reviewer_id'],
-                    'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
-                    'GHICHU' => $request->note,
-                    'TRANGTHAI' => 'Đang phân công',
-                ]);
-
-                // Send notification to reviewer
-                if ($reviewer->nguoidung) {
-                    Thongbao::create([
-                        'ID_NGUOINHAN' => $reviewer->nguoidung->ID_NGUOIDUNG,
-                        'TIEU_DE' => 'Phân công Người Góp ý',
-                        'NOI_DUNG' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
-                        'LOAI_THONGBAO' => 'ACADEMIC',
-                        'LIEN_KET' => '/projects/topics', // Thêm link
-                        'DU_LIEU_GOC' => [
-                            'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
-                            'topic_name' => $topic->TEN_DETAI,
-                            'topic_id' => $topic->ID_DETAI,
-                        ],
+                // [BƯỚC 3] Tạo lại các phân công mới (cho nhiều người)
+                foreach ($reviewerIds as $rId) {
+                    PhancongNguoiGopY::create([
+                        'ID_DETAI' => $topicId,
+                        'ID_GIANGVIEN' => $rId,
+                        'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                        'GHICHU' => $request->note,
+                        'TRANGTHAI' => 'Đang phân công',
                     ]);
+
+                    // Gửi thông báo cho từng người
+                    $reviewer = \App\Models\Giangvien::with('nguoidung')->find($rId);
+                    if ($reviewer && $reviewer->nguoidung) {
+                        Thongbao::create([
+                            'ID_NGUOINHAN' => $reviewer->nguoidung->ID_NGUOIDUNG,
+                            'TIEU_DE' => 'Phân công Người Góp ý',
+                            'NOI_DUNG' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                            'LOAI_THONGBAO' => 'ACADEMIC',
+                            'LIEN_KET' => '/projects/topics',
+                            'DU_LIEU_GOC' => [
+                                'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                                'topic_name' => $topic->TEN_DETAI,
+                                'topic_id' => $topic->ID_DETAI,
+                            ],
+                            'NGAY_TAO' => now()
+                        ]);
+                    }
                 }
             }
         });
 
-        return response()->json(['message' => 'Phân công người góp ý thành công']);
+        return response()->json(['message' => 'Cập nhật phân công người góp ý thành công']);
     }
 
     /**

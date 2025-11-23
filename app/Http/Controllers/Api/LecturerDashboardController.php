@@ -25,32 +25,34 @@ class LecturerDashboardController extends Controller
             return response()->json(['message' => 'Tài khoản không phải là giảng viên.'], 403);
         }
         $giangvienId = $user->giangvien->ID_GIANGVIEN;
+        $now = Carbon::now();
 
-        // 1. Số nhóm đang hướng dẫn (Trong các kế hoạch đang chạy)
+        // --- 1. THỐNG KÊ CÁC CON SỐ ---
+
+        // [FIX LỖI] Số nhóm đang hướng dẫn
+        // Đếm tất cả các nhóm mà GV này là GVHD, không quan tâm kế hoạch đang ở trạng thái nào,
+        // miễn là phân công chưa bị hủy.
         $nhomHuongDanCount = PhancongDetaiNhom::where('ID_GVHD', $giangvienId)
-            ->where('TRANGTHAI', 'Đang thực hiện')
-            ->whereHas('nhom.kehoach', function($q) {
-                $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm']);
-            })
+            ->where('TRANGTHAI', '!=', 'Đã hủy') 
             ->count();
 
-        // 2. Số hội đồng tham gia (Sắp tới hoặc chưa diễn ra)
+        // Số hội đồng tham gia
         $hoiDongCount = $user->giangvien->hoidongs()
             ->whereHas('kehoach', function($q) {
-                $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm']);
+                $q->where('TRANGTHAI', '!=', 'Đã hủy');
             })
             ->count();
 
-        // 3. Lịch họp sắp tới (7 ngày)
-        $lichHopCount = LichHop::where('THOIGIAN_BATDAU', '>=', Carbon::now())
-            ->where('THOIGIAN_BATDAU', '<=', Carbon::now()->addDays(7))
+        // Lịch họp sắp tới (7 ngày tới)
+        $lichHopCount = LichHop::where('THOIGIAN_BATDAU', '>=', $now)
+            ->where('THOIGIAN_BATDAU', '<=', $now->copy()->addDays(7))
             ->where('TRANGTHAI', 'Đã lên lịch')
             ->whereHas('nhom.phancongDetaiNhom', function ($q) use ($giangvienId) {
                 $q->where('ID_GVHD', $giangvienId);
             })
             ->count();
 
-        // 4. Công việc cần Review (Task Kanban)
+        // Task cần review (Kanban)
         $taskReviewCount = CongViec::where('TRANGTHAI', 'Hoạt động')
             ->whereHas('cot', fn($q) => $q->where('TEN_COT', 'Chờ Review'))
             ->whereHas('nhom.phancongDetaiNhom', function ($q) use ($giangvienId) {
@@ -58,57 +60,88 @@ class LecturerDashboardController extends Controller
             })
             ->count();
 
-        // --- [BỔ SUNG] CÁC CHỈ SỐ MỚI ---
-
-        // 5. Bài nộp chờ duyệt (Pending Submissions)
-        // Chỉ đếm các bài nộp thuộc nhóm mà giảng viên này hướng dẫn
+        // Bài nộp chờ duyệt
         $pendingSubmissionsCount = NopSanpham::where('TRANGTHAI', 'Chờ xác nhận')
             ->whereHas('phancong', function($q) use ($giangvienId) {
                 $q->where('ID_GVHD', $giangvienId);
             })
             ->count();
 
-        // 6. Quota đề tài còn thiếu (Missing Quota)
-        // Lấy kế hoạch đang "Đang thực hiện" hoặc "Chờ duyệt chỉnh sửa" gần nhất
-        $currentPlan = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa'])
-            ->orderBy('NGAYTAO', 'desc')
-            ->first();
+        // Đề tài cần góp ý (Phản biện)
+        // Đếm những phân công chưa chuyển sang trạng thái 'Hoàn thành'
+        $pendingReviewsCount = PhancongNguoiGopY::where('ID_GIANGVIEN', $giangvienId)
+            ->where('TRANGTHAI', 'Đang phân công')
+            ->count();
+
+        // --- 2. LẤY DANH SÁCH KẾ HOẠCH ACTIVE & MỐC THỜI GIAN ---
+        $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa'])
+            ->with(['mocThoigians' => function($q) {
+                $q->orderBy('NGAY_BATDAU', 'asc');
+            }])
+            ->orderBy('NGAY_BATDAU', 'desc')
+            ->get();
 
         $missingQuotaCount = 0;
-        if ($currentPlan) {
-            $quota = QuotaGiangvien::where('ID_KEHOACH', $currentPlan->ID_KEHOACH)
+        $plansStatus = [];
+
+        foreach ($activePlans as $plan) {
+            // A. Tính Quota thiếu (Cộng dồn qua các kế hoạch)
+            $quota = QuotaGiangvien::where('ID_KEHOACH', $plan->ID_KEHOACH)
                 ->where('ID_GIANGVIEN', $giangvienId)
                 ->first();
             
             if ($quota) {
-                // Đếm số đề tài đã tạo (tính cả Nháp, Chờ duyệt, Đã duyệt để trừ dần)
-                $createdTopics = Detai::where('ID_KEHOACH', $currentPlan->ID_KEHOACH)
+                $createdTopics = Detai::where('ID_KEHOACH', $plan->ID_KEHOACH)
                     ->where('ID_NGUOI_DEXUAT', $giangvienId)
+                    ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa']) // Tính cả các trạng thái đang xử lý
                     ->count();
                 
-                $missingQuotaCount = max(0, $quota->SO_DETAI_QUOTA - $createdTopics);
+                $missing = max(0, $quota->SO_DETAI_QUOTA - $createdTopics);
+                $missingQuotaCount += $missing;
             }
-        }
 
-        // 7. Đề tài cần góp ý (Pending Reviews)
-        // Đếm số lượng phân công góp ý mà trạng thái vẫn là "Đang phân công" (chưa hoàn thành/phản hồi xong)
-        // Hoặc kiểm tra logic phức tạp hơn: Đã được phân công NHƯNG chưa có bản ghi trong bảng GOIY_DETAI của user này
-        $pendingReviewsCount = PhancongNguoiGopY::where('ID_GIANGVIEN', $giangvienId)
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->whereDoesntHave('detai.goiyDetai', function($q) use ($giangvienId) {
-                 $q->where('ID_NGUOI_GOIY', $giangvienId);
-            })
-            ->count();
+            // B. Xác định giai đoạn hiện tại của Plan cho Timeline
+            $currentPhase = null;
+            $nextPhase = null;
+
+            foreach ($plan->mocThoigians as $index => $moc) {
+                if ($now->between($moc->NGAY_BATDAU, $moc->NGAY_KETTHUC)) {
+                    $currentPhase = $moc;
+                    $nextPhase = $plan->mocThoigians[$index + 1] ?? null;
+                    break;
+                }
+            }
+            
+            if (!$currentPhase) {
+                $nextPhase = $plan->mocThoigians->where('NGAY_BATDAU', '>', $now)->first();
+            }
+
+            $plansStatus[] = [
+                'id' => $plan->ID_KEHOACH,
+                'name' => $plan->TEN_DOT,
+                'term' => $plan->NAMHOC . ' - HK' . $plan->HOCKY,
+                'current_phase' => $currentPhase ? [
+                    'name' => $currentPhase->TEN_SUKIEN,
+                    'end_date' => $currentPhase->NGAY_KETTHUC,
+                    'is_active' => true
+                ] : null,
+                'next_phase' => $nextPhase ? [
+                    'name' => $nextPhase->TEN_SUKIEN,
+                    'start_date' => $nextPhase->NGAY_BATDAU
+                ] : null,
+                'status' => $plan->TRANGTHAI
+            ];
+        }
 
         return response()->json([
             'nhomHuongDanCount' => $nhomHuongDanCount,
             'hoiDongCount' => $hoiDongCount,
             'lichHopCount' => $lichHopCount,
             'taskReviewCount' => $taskReviewCount,
-            // Các trường mới
             'pendingSubmissionsCount' => $pendingSubmissionsCount,
             'missingQuotaCount' => $missingQuotaCount,
             'pendingReviewsCount' => $pendingReviewsCount,
+            'activePlansStatus' => $plansStatus,
         ]);
     }
 }

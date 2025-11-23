@@ -136,7 +136,7 @@ const thesisTopicService = {
     // Get groups registered for lecturer's topics
     getGroupsForLecturer: async () => {
         const response = await axiosConfig.get('/detai/giangvien/groups');
-        return response;
+        return response.data; 
     },
 
     // Get group details by ID

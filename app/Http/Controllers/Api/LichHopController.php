@@ -14,33 +14,43 @@ use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use App\Services\ActivityLogger;
 use App\Services\NotificationService;
+// Import models cần dùng cho check trực tiếp
+use App\Models\ThanhvienNhom;
 
 class LichHopController extends Controller
 {
     /**
      * Kiểm tra quyền truy cập vào lịch họp của một nhóm
-     * (Helper function)
+     * (Fix lỗi 403: Truy vấn trực tiếp DB để chắc chắn)
      */
     private function checkGroupAccess(Nhom $nhom)
     {
         $user = Auth::user();
-        
+        if (!$user) return false;
+
+        // 1. Admin / Quản lý
         if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
             return true;
         }
 
-        // Kiểm tra thành viên
-        $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
+        // 2. Thành viên nhóm (Sinh viên) - Check trực tiếp bảng THANHVIEN_NHOM
+        $isMember = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
+            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+            ->exists();
+            
         if ($isMember) return true;
 
-        // Kiểm tra GVHD
+        // 3. GVHD - Check trực tiếp bảng PHANCONG_DETAI_NHOM
         if ($user->giangvien) {
-            $isGvhd = $nhom->phancongDetaiNhom?->ID_GVHD === $user->giangvien->ID_GIANGVIEN;
+            $isGvhd = PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)
+                ->where('ID_GVHD', $user->giangvien->ID_GIANGVIEN)
+                ->exists();
             if ($isGvhd) return true;
         }
 
         return false;
     }
+
     /**
      * Lấy tất cả lịch họp (sắp tới và đã qua) của một nhóm.
      */
@@ -68,7 +78,6 @@ class LichHopController extends Controller
             ->with('nguoiTao:ID_NGUOIDUNG,HODEM_VA_TEN,ID_VAITRO', 'nguoiTao.vaitro:ID_VAITRO,TEN_VAITRO');
             
         if ($startDate && $endDate) {
-            // Đảm bảo so sánh ngày bao trọn vẹn khoảng thời gian
             $start = Carbon::parse($startDate)->startOfDay();
             $end = Carbon::parse($endDate)->endOfDay();
             $query->whereBetween('THOIGIAN_BATDAU', [$start, $end]);
@@ -83,16 +92,23 @@ class LichHopController extends Controller
     }
 
     /**
-     * Tạo một lịch họp mới cho nhóm (Form truyền thống).
+     * Tạo một lịch họp mới cho nhóm.
      */
     public function storeMeetingForGroup(Request $request, Nhom $nhom)
     {
         $user = Auth::user();
+        
+        // Kiểm tra quyền quản lý nhóm (Trưởng nhóm hoặc GVHD hoặc Quản lý)
         $isLeader = $nhom->ID_NHOMTRUONG === $user->ID_NGUOIDUNG;
         
-        $isGvhd = $user->giangvien && ($nhom->phancongDetaiNhom?->ID_GVHD === $user->giangvien->ID_GIANGVIEN);
+        // Check GVHD trực tiếp DB
+        $isGvhd = false;
+        if ($user->giangvien) {
+            $isGvhd = PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)
+                ->where('ID_GVHD', $user->giangvien->ID_GIANGVIEN)
+                ->exists();
+        }
 
-        // [CẬP NHẬT] Cho phép các vai trò quản lý tạo lịch họp
         $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
 
         if (!$isLeader && !$isGvhd && !$isManager) {
@@ -120,20 +136,26 @@ class LichHopController extends Controller
             ['ID_NGUOITAO' => $user->ID_NGUOIDUNG]
         ));
 
-        $memberIds = \App\Models\ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
-        ->where('ID_NGUOIDUNG', '!=', $user->ID_NGUOIDUNG)
-        ->pluck('ID_NGUOIDUNG')
-        ->toArray();
+        // Gửi thông báo cho các thành viên khác
+        $memberIds = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
+            ->where('ID_NGUOIDUNG', '!=', $user->ID_NGUOIDUNG)
+            ->pluck('ID_NGUOIDUNG')
+            ->toArray();
 
-        if ($nhom->phancongDetaiNhom && $nhom->phancongDetaiNhom->ID_GVHD != $user->ID_NGUOIDUNG) {
-        $memberIds[] = $nhom->phancongDetaiNhom->ID_GVHD;
+        // Nếu GVHD tạo -> Gửi cho SV. Nếu SV tạo -> Gửi cho GVHD (nếu có)
+        $assignment = PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)->first();
+        if ($assignment && $assignment->ID_GVHD != $user->ID_NGUOIDUNG) {
+            // Tránh duplicate nếu GVHD vô tình cũng là thành viên (hiếm nhưng an toàn)
+            if (!in_array($assignment->ID_GVHD, $memberIds)) {
+                $memberIds[] = $assignment->ID_GVHD;
+            }
         }
 
         foreach ($memberIds as $mid) {
             NotificationService::send(
                 $mid,
                 "Lịch họp mới: {$lichHop->TIEUDE_LICHHOP}",
-                "Thời gian: " . \Carbon\Carbon::parse($lichHop->THOIGIAN_BATDAU)->format('H:i d/m/Y'),
+                "Thời gian: " . Carbon::parse($lichHop->THOIGIAN_BATDAU)->format('H:i d/m/Y'),
                 'TASK',
                 "/projects/my-group/schedule/{$nhom->ID_NHOM}"
             );
@@ -150,8 +172,7 @@ class LichHopController extends Controller
     }
 
     /**
-     * Cập nhật một lịch họp (Full Update).
-     * Hỗ trợ cập nhật cả đánh giá (DANHGIA) và nội dung họp.
+     * Cập nhật một lịch họp đã có.
      */
     public function updateMeeting(Request $request, LichHop $lichhop)
     {
@@ -175,7 +196,6 @@ class LichHopController extends Controller
             'DANHGIA' => 'nullable|in:Tot,BinhThuong,KhongTot',
         ]);
 
-        // Xử lý logic địa điểm/link nếu hình thức họp thay đổi
         if (isset($validated['HINHTHUC_HOP'])) {
             if ($validated['HINHTHUC_HOP'] === 'Trực tiếp') {
                 $validated['LINK_TRUCTUYEN'] = null;
@@ -212,7 +232,6 @@ class LichHopController extends Controller
 
     /**
      * Lấy danh sách các nhóm mà giảng viên đang hướng dẫn 
-     * (Chỉ trong các kế hoạch Đang thực hiện/Chấm điểm để hiện lên Sidebar)
      */
     public function getLecturerGroups(Request $request)
     {
@@ -222,24 +241,22 @@ class LichHopController extends Controller
         }
         $gvId = $user->giangvien->ID_GIANGVIEN;
 
-        // 1. Lấy các kế hoạch đang active
         $activePlanIds = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm'])
             ->pluck('ID_KEHOACH');
 
-        // 2. Lấy các nhóm mà GV này hướng dẫn trong các kế hoạch đó
+        // Sử dụng PhancongDetaiNhom để link chuẩn xác hơn
         $groups = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
-            ->whereHas('phancongDetaiNhom', function ($q) use ($gvId) {
-                $q->where('ID_GVHD', $gvId);
-            })
+            ->join('PHANCONG_DETAI_NHOM', 'NHOM.ID_NHOM', '=', 'PHANCONG_DETAI_NHOM.ID_NHOM')
+            ->where('PHANCONG_DETAI_NHOM.ID_GVHD', $gvId)
             ->with('kehoach:ID_KEHOACH,TEN_DOT')
-            ->select('ID_NHOM', 'TEN_NHOM', 'ID_KEHOACH') 
+            ->select('NHOM.ID_NHOM', 'NHOM.TEN_NHOM', 'NHOM.ID_KEHOACH') 
             ->get();
 
         return response()->json($groups);
     }
 
     /**
-     * Lấy toàn bộ lịch họp do Giảng viên tạo ra (theo khoảng thời gian)
+     * Lấy toàn bộ lịch họp do Giảng viên tạo ra
      */
     public function getLecturerSchedule(Request $request)
     {
@@ -262,10 +279,6 @@ class LichHopController extends Controller
         return response()->json($meetings);
     }
 
-    /**
-     * Tạo nhanh lịch họp (Kéo thả) - Mặc định 45 phút.
-     * [QUAN TRỌNG]: Xử lý chuỗi thời gian từ Frontend gửi lên.
-     */
     public function createQuickMeeting(Request $request)
     {
         $request->validate([
@@ -295,9 +308,6 @@ class LichHopController extends Controller
         return response()->json($lichHop->load('nhom'), 201);
     }
 
-    /**
-     * Đánh giá cuộc họp (Thay đổi icon/màu sắc) - API riêng biệt
-     */
     public function rateMeeting(Request $request, $id)
     {
         $request->validate([

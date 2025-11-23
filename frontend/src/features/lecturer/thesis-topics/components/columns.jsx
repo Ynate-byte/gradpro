@@ -1,3 +1,4 @@
+import React from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, ArrowUp, ArrowDown, Send } from "lucide-react";
@@ -79,7 +80,8 @@ export const getColumns = ({
         accessorKey: "ten_giang_vien",
         header: "GV Đề xuất",
         cell: ({ row }) => {
-            const isOwner = row.original.ID_NGUOI_DEXUAT === currentUserId;
+            // Ép kiểu String để so sánh an toàn
+            const isOwner = String(row.original.ID_NGUOI_DEXUAT) === String(currentUserId);
             return (
                 <div
                     className={cn(
@@ -131,36 +133,51 @@ export const getColumns = ({
             );
         },
     },
+    
+    // --- CỘT TRẠNG THÁI GÓP Ý (Chỉ hiện ở Tab 'Cần góp ý') ---
     ...(isReviewTab ? [{
         id: "contribution_status",
         header: "Trạng thái góp ý",
         cell: ({ row }) => {
             const topic = row.original;
-            const hasContributed = topic.goiyDetai?.some(g => g.ID_GIANGVIEN === currentUserId);
-            console.log("Topic ID:", topic.ID_DETAI, "Has Contributed:", hasContributed);
+            
+            // 1. Lấy danh sách phân công review của đề tài này
+            const assignments = topic.phancong_nguoi_gop_y || [];
+            
+            // 2. Tìm phân công của CHÍNH TÔI (currentUserId là ID_GIANGVIEN)
+            // Chuyển về String để so sánh an toàn
+            const myAssignment = assignments.find(a => 
+                String(a.ID_GIANGVIEN) === String(currentUserId)
+            );
+
+            // 3. Kiểm tra trạng thái trong bảng phân công
+            const isCompleted = myAssignment?.TRANGTHAI === 'Hoàn thành';
+
             return (
                 <Badge
                     variant="outline"
                     className={cn(
                         "px-2 py-0.5 text-xs",
-                        hasContributed
+                        isCompleted
                             ? "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300 border-green-200 dark:border-green-700"
                             : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 border-orange-200 dark:border-orange-700"
                     )}
                 >
-                    {hasContributed ? "Đã góp ý" : "Chưa góp ý"}
+                    {isCompleted ? "Đã góp ý" : "Chưa góp ý"}
                 </Badge>
             );
         },
     }] : []),
+
     {
         id: "actions",
         cell: ({ row }) => {
             const topic = row.original;
+            const isOwner = String(topic.ID_NGUOI_DEXUAT) === String(currentUserId);
             
             // Logic hiển thị nút Gửi duyệt (Quick Action)
             // Cho phép gửi khi: Nháp, Yêu cầu chỉnh sửa, HOẶC Đang chỉnh sửa
-            const showSubmit = ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI) && topic.ID_NGUOI_DEXUAT === currentUserId;
+            const showSubmit = ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI) && isOwner;
 
             return (
                 <div className="flex items-center gap-1 justify-end">

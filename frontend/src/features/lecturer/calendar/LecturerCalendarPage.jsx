@@ -8,7 +8,6 @@ import { vi } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Loader2, ArrowLeft, ArrowRight, Users, Smile, Meh, Frown, GripVertical, Clock, MapPin, Link as LinkIcon, MoreHorizontal, Save, Trash2, Edit3, CalendarCheck2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -26,10 +25,11 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// --- 1. Component hiển thị nội dung thẻ nhóm (Dùng cho cả List và Overlay) ---
 const GroupCardContent = ({ group, isOverlay, count = 0 }) => (
     <div className={cn(
         "flex items-center justify-between p-3 bg-white dark:bg-gray-800 border rounded-lg shadow-sm transition-all select-none",
-        isOverlay ? "shadow-xl border-blue-500 scale-105 cursor-grabbing ring-2 ring-blue-200 z-50" : "hover:border-blue-400 hover:shadow-md cursor-pointer", // Đã đổi cursor-grab thành cursor-pointer khi không kéo
+        isOverlay ? "shadow-xl border-blue-500 scale-105 cursor-grabbing ring-2 ring-blue-200 z-50" : "hover:border-blue-400 hover:shadow-md cursor-pointer",
         !isOverlay && count > 0 && "border-l-4 border-l-green-500"
     )}>
         <div className="flex flex-col overflow-hidden flex-1 mr-2 min-w-0">
@@ -53,15 +53,16 @@ const GroupCardContent = ({ group, isOverlay, count = 0 }) => (
     </div>
 );
 
+// --- 2. Component thẻ nhóm có khả năng kéo (Draggable) ---
 const DraggableGroupCard = ({ group, count }) => {
-    const [isPopoverOpen, setIsPopoverOpen] = useState(false); // Thêm state cho Popover
+    const [isPopoverOpen, setIsPopoverOpen] = useState(false);
 
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: `group-${group.ID_NHOM}`,
         data: { type: 'GROUP', group }
     });
 
-    // Đóng Popover nếu hành động kéo được kích hoạt
+    // Đóng Popover nếu bắt đầu kéo
     useEffect(() => {
         if (isDragging) {
             setIsPopoverOpen(false);
@@ -71,14 +72,13 @@ const DraggableGroupCard = ({ group, count }) => {
     return (
         <Popover open={isPopoverOpen} onOpenChange={setIsPopoverOpen}>
             <PopoverTrigger asChild>
-                {/* Thành phần có thể kéo và kích hoạt Popover */}
                 <div 
                     ref={setNodeRef} 
                     {...listeners} 
                     {...attributes} 
                     className={cn(
                         "mb-2 touch-none", 
-                        isDragging ? "opacity-30" : "hover:scale-[1.01] transition-transform" // Thêm hiệu ứng hover click
+                        isDragging ? "opacity-30" : "hover:scale-[1.01] transition-transform"
                     )}
                 >
                     <GroupCardContent group={group} count={count} isOverlay={isDragging} />
@@ -94,14 +94,15 @@ const DraggableGroupCard = ({ group, count }) => {
                 <div className="space-y-1 text-sm text-muted-foreground">
                     <p className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
-                        <span>Sĩ số: <strong className="text-foreground">{group.SO_LUONG_SV}</strong> sinh viên</span>
+                        {/* Giả sử có trường SO_LUONG_SV hoặc lấy từ length của mảng thành viên */}
+                        <span>Sĩ số: <strong className="text-foreground">{group.SO_THANHVIEN_HIENTAI || 0}</strong> sinh viên</span>
                     </p>
                     <p className="flex items-center gap-2">
                         <CalendarCheck2 className="h-4 w-4 text-green-600" />
                         <span>Buổi họp tuần: <strong className="text-foreground">{count}</strong></span>
                     </p>
-                    <div className="pt-2 text-xs italic mt-3 border-t pt-2">
-                        <p>Kéo thẻ nhóm này vào lịch để tạo lịch họp nhanh.</p>
+                    <div className="pt-2 text-xs italic mt-3 border-t text-gray-500">
+                        <p>Kéo thẻ nhóm này vào khung lịch để tạo lịch họp nhanh (45 phút).</p>
                     </div>
                 </div>
             </PopoverContent>
@@ -109,6 +110,7 @@ const DraggableGroupCard = ({ group, count }) => {
     );
 };
 
+// --- 3. Component ô lịch có khả năng thả (Droppable) ---
 const DroppableSessionCell = ({ day, session, children }) => {
     const dateStr = format(day, 'yyyy-MM-dd');
     const id = `cell-${dateStr}-${session.id}`;
@@ -122,7 +124,7 @@ const DroppableSessionCell = ({ day, session, children }) => {
         <div
             ref={setNodeRef}
             className={cn(
-                "calendar-grid-cell min-h-[150px] relative transition-colors duration-200 p-2 flex flex-col gap-2",
+                "calendar-grid-cell min-h-[150px] relative transition-colors duration-200 p-2 flex flex-col gap-2 border-r border-b border-gray-100 dark:border-gray-800",
                 isOver && "bg-blue-100/80 dark:bg-blue-900/60 ring-inset ring-2 ring-blue-500 z-0"
             )}
         >
@@ -131,10 +133,10 @@ const DroppableSessionCell = ({ day, session, children }) => {
     );
 };
 
+// --- 4. Component sự kiện trên lịch (Meeting) ---
 const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) => {
     const { resource: meeting } = event;
     const [isOpen, setIsOpen] = useState(false);
-
     const [startTime, setStartTime] = useState('');
     const [location, setLocation] = useState('');
     const [isSaving, setIsSaving] = useState(false);
@@ -160,7 +162,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
 
             const newStartDate = new Date(y, mon - 1, d, h, m, 0);
             const newEndDate = new Date(newStartDate);
-            newEndDate.setMinutes(newEndDate.getMinutes() + 45);
+            newEndDate.setMinutes(newEndDate.getMinutes() + 45); // Mặc định +45p khi sửa nhanh
 
             const payload = {
                 THOIGIAN_BATDAU: newStartDate.toISOString(),
@@ -180,7 +182,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
         }
     };
 
-    let colorClass = "event-default";
+    let colorClass = "event-default"; // CSS class defined in Calendar.css
     if (meeting.DANHGIA === 'Tot') colorClass = "event-good";
     if (meeting.DANHGIA === 'BinhThuong') colorClass = "event-normal";
     if (meeting.DANHGIA === 'KhongTot') colorClass = "event-bad";
@@ -214,10 +216,10 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
                             <MoreHorizontal className="h-3 w-3 opacity-0 group-hover:opacity-100 transition-opacity" />
                         </div>
                     </div>
-                    {/* Bổ sung min-w-0 để đảm bảo truncate hoạt động trong container hẹp */}
+                    
                     <p className="font-bold truncate text-sm min-w-0">{meeting.nhom?.TEN_NHOM}</p>
                     <p className="truncate opacity-80 text-[10px] italic min-w-0">{meeting.TIEUDE_LICHHOP}</p>
-                    {/* Bổ sung min-w-0 cho container flex và text span bên trong */}
+                    
                     <div className="flex items-center gap-1 text-[10px] opacity-70 mt-1 min-w-0">
                         {meeting.HINHTHUC_HOP === 'Trực tiếp' ? <MapPin className="h-3 w-3 shrink-0" /> : <LinkIcon className="h-3 w-3 shrink-0" />}
                         <span className="truncate min-w-0">{meeting.HINHTHUC_HOP === 'Trực tiếp' ? (meeting.DIADIEM || 'Chưa rõ') : 'Online'}</span>
@@ -236,7 +238,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
                         size="icon"
                         className="h-8 w-8 -mt-1 -mr-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                         onClick={() => { setIsOpen(false); onEditDetail(meeting); }}
-                        title="Chỉnh sửa nâng cao"
+                        title="Chỉnh sửa chi tiết"
                     >
                         <Edit3 className="h-4 w-4" />
                     </Button>
@@ -275,7 +277,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
                                     className="h-8 text-sm border-0 bg-transparent px-0 focus-visible:ring-0 focus-visible:border-b focus-visible:border-blue-500 rounded-none placeholder:text-muted-foreground/50"
                                     placeholder={meeting.HINHTHUC_HOP === 'Trực tiếp' ? "Nhập địa điểm..." : "Nhập link họp..."}
                                     value={location}
-                                    onChange={(e) => setLocation(e.target.value)} // Đã sửa lỗi cú pháp tại đây
+                                    onChange={(e) => setLocation(e.target.value)}
                                 />
                             </div>
                         </div>
@@ -315,6 +317,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
     );
 };
 
+// --- 5. Component Chính ---
 export default function LecturerCalendarPage() {
     const queryClient = useQueryClient();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -344,11 +347,17 @@ export default function LecturerCalendarPage() {
         { id: 'evening', name: 'Tối', startHour: 18, endHour: 22, defaultTime: '18:00:00' }
     ];
 
-    const { data: groups = [] } = useQuery({
+    const { data: groups = [], isLoading: isLoadingGroups, refetch: refetchGroups } = useQuery({
         queryKey: ['lecturerGroups'],
         queryFn: getLecturerGroups,
-        staleTime: 5 * 60 * 1000
+        staleTime: 0, 
+        refetchOnMount: true,
+        refetchOnWindowFocus: false, 
     });
+
+    useEffect(() => {
+        refetchGroups();
+    }, []);
 
     const { data: meetings = [], isLoading } = useQuery({
         queryKey: ['lecturerSchedule', weekRange.start],
@@ -473,8 +482,10 @@ export default function LecturerCalendarPage() {
                             <Users className="h-5 w-5 text-primary" /> Nhóm hướng dẫn
                         </h2>
                     </div>
-                    <div className="flex-1 overflow-y-auto pr-2 space-y-2">
-                        {groups.length === 0 ? (
+                    <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
+                        
+                        {/* [FIX LỖI]: Kiểm tra Array.isArray trước khi map */}
+                        {(!Array.isArray(groups) || groups.length === 0) ? (
                             <div className="text-sm text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
                                 Không có nhóm nào trong kế hoạch đang thực hiện.
                             </div>
@@ -496,6 +507,7 @@ export default function LecturerCalendarPage() {
                                 );
                             })
                         )}
+
                     </div>
                 </div>
 
@@ -522,13 +534,13 @@ export default function LecturerCalendarPage() {
                             </div>
                         )}
 
-                        <div className="calendar-container shadow-sm border h-full w-full overflow-auto">
+                        <div className="calendar-container shadow-sm border h-full w-full overflow-auto custom-scrollbar">
                             <div className="calendar-grid">
-                                <div className="calendar-header bg-muted/50 text-muted-foreground">Buổi</div>
+                                <div className="calendar-header bg-muted/50 text-muted-foreground sticky top-0 z-20">Buổi</div>
                                 {daysOfWeek.map(day => {
                                     const isToday = isSameWeek(day, new Date(), options) && format(day, 'yyyyMMdd') === format(new Date(), 'yyyyMMdd');
                                     return (
-                                        <div key={day.toISOString()} className={cn("calendar-header", isToday && "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400")}>
+                                        <div key={day.toISOString()} className={cn("calendar-header sticky top-0 z-20", isToday && "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400")}>
                                             <div className="uppercase text-[10px] font-bold opacity-70">{format(day, 'EEEE', { locale: vi })}</div>
                                             <div className="text-lg font-bold leading-none mt-0.5">{format(day, 'dd/MM')}</div>
                                         </div>
@@ -537,7 +549,7 @@ export default function LecturerCalendarPage() {
 
                                 {sessions.map(session => (
                                     <React.Fragment key={session.id}>
-                                        <div className="calendar-session-cell justify-center items-center text-sm font-bold text-muted-foreground bg-muted/20">
+                                        <div className="calendar-session-cell justify-center items-center text-sm font-bold text-muted-foreground bg-muted/20 sticky left-0 z-10 border-r">
                                             {session.name}
                                         </div>
                                         {daysOfWeek.map(day => (

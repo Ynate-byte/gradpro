@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Api\Student;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -13,203 +12,341 @@ use App\Models\KehoachKhoaluan;
 use App\Models\Nhom;
 use App\Models\CongViec;
 use App\Models\LichHop;
-use App\Models\News;
 use App\Models\Thongbao;
-use App\Models\SinhvienThamgia;
+use App\Models\News;
 
 class StudentDashboardController extends Controller
 {
-    /**
-     * API 1: Lấy dữ liệu Tổng quan (Overview) - Màn hình "The Hub"
-     * Trả về danh sách kế hoạch đang tham gia, sự kiện sắp tới và tin tức.
-     */
     public function getOverview(Request $request)
     {
         try {
             $user = Auth::user();
             $user->load('sinhvien');
-            if (!$user->sinhvien) return response()->json([]);
+
+            if (!$user || !$user->sinhvien) {
+                return response()->json([
+                    'stats' => ['active_plans' => 0, 'groups_joined' => 0, 'pending_tasks' => 0],
+                    'plans' => [],
+                    'urgent_items' => [],
+                    'news' => []
+                ]);
+            }
 
             $sinhvienId = $user->sinhvien->ID_SINHVIEN;
             $userId = $user->ID_NGUOIDUNG;
+            $now = Carbon::now();
+            $limitDate = Carbon::today()->addDays(3);
 
-            // 1. Lấy danh sách các nhóm SV đang tham gia (trong các kế hoạch Active)
+            // 1. Lấy danh sách nhóm Active
             $activeGroups = Nhom::whereHas('kehoach', function ($q) {
-                    $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm']);
+                    $q->whereIn('KEHOACH_KHOALUAN.TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm']);
                 })
                 ->whereHas('thanhviens', function ($q) use ($userId) {
-                    $q->where('ID_NGUOIDUNG', $userId);
+                    $q->where('THANHVIEN_NHOM.ID_NGUOIDUNG', $userId);
                 })
                 ->with([
-                    'kehoach:ID_KEHOACH,TEN_DOT',
+                    'kehoach:ID_KEHOACH,TEN_DOT,NAMHOC,HOCKY,NGAY_KETHUC',
                     'phancongDetaiNhom.detai:ID_DETAI,TEN_DETAI',
                     'phancongDetaiNhom.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN'
                 ])
                 ->get();
 
-            $groupIds = $activeGroups->pluck('ID_NHOM');
+            $groupIds = $activeGroups->pluck('ID_NHOM')->toArray();
 
-            // 2. Thống kê chỉ số (Stats)
-            // Task cần làm (Chưa xong + Được gán cho user)
-            $pendingTasksCount = CongViec::whereIn('ID_NHOM', $groupIds)
-                ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $userId))
-                ->whereNotIn('TRANGTHAI', ['Hoàn thành', 'Đã hủy'])
-                ->count();
-
-            // Lịch họp HÔM NAY
-            $meetingsToday = LichHop::whereIn('ID_NHOM', $groupIds)
-                ->whereDate('THOIGIAN_BATDAU', Carbon::today())
-                ->where('TRANGTHAI', '!=', 'Đã hủy')
-                ->count();
-
-            // Feedback mới (Thông báo chưa đọc)
-            $newFeedbackCount = Thongbao::where('ID_NGUOINHAN', $userId)
-                ->where('DA_DOC', false)
-                ->count();
-
-            // Tiến độ trung bình (của tất cả nhóm)
-            $avgProgress = 0;
-            if ($activeGroups->count() > 0) {
-                $totalPercent = 0;
-                foreach ($activeGroups as $g) {
-                    $totalT = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', '!=', 'Đã hủy')->count();
-                    $doneT = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', 'Hoàn thành')->count();
-                    if ($totalT > 0) $totalPercent += ($doneT / $totalT);
-                }
-                $avgProgress = round(($totalPercent / $activeGroups->count()) * 100);
+            // 2. Lấy Task Gấp
+            $urgentTasks = collect();
+            if (!empty($groupIds)) {
+                $urgentTasks = CongViec::whereIn('CONGVIEC.ID_NHOM', $groupIds)
+                    ->whereHas('nguoiDuocPhanCong', function($q) use ($userId) {
+                        $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $userId);
+                    })
+                    ->whereNotIn('CONGVIEC.TRANGTHAI', ['Hoàn thành', 'Đã hủy'])
+                    ->where(function($q) use ($limitDate) {
+                        $q->where('CONGVIEC.DO_UUTIEN', 'Cao')
+                          ->orWhereDate('CONGVIEC.NGAY_HETHAN', '<=', $limitDate);
+                    })
+                    ->with('nhom:ID_NHOM,TEN_NHOM,ID_KEHOACH')
+                    ->get()
+                    ->map(function ($t) {
+                        return [
+                            'type' => 'task',
+                            'id' => $t->ID_CONGVIEC,
+                            'title' => $t->TEN_CONGVIEC,
+                            'group_name' => $t->nhom ? $t->nhom->TEN_NHOM : '',
+                            'group_id' => $t->ID_NHOM, // [QUAN TRỌNG] Thêm dòng này
+                            'plan_id' => $t->nhom ? $t->nhom->ID_KEHOACH : null,
+                            'time' => $t->NGAY_HETHAN,
+                            'priority' => $t->DO_UUTIEN,
+                        ];
+                    });
             }
 
-            // 3. Danh sách Công việc cần làm (Unified Task List)
-            // Lấy tất cả task chưa xong của user, sắp xếp theo Deadline
-            $tasks = CongViec::whereIn('ID_NHOM', $groupIds)
-                ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $userId))
-                ->whereNotIn('TRANGTHAI', ['Hoàn thành', 'Đã hủy'])
-                ->with('nhom:ID_NHOM,TEN_NHOM') // Để biết task thuộc nhóm nào
-                ->orderByRaw('ISNULL(NGAY_HETHAN), NGAY_HETHAN ASC') // Deadline gần nhất lên đầu, null xuống cuối
-                ->take(10) // Lấy 10 cái quan trọng nhất
+            // 3. Lấy Lịch Họp
+            $upcomingMeetings = collect();
+            if (!empty($groupIds)) {
+                $upcomingMeetings = LichHop::whereIn('ID_NHOM', $groupIds)
+                    ->where('TRANGTHAI', '!=', 'Đã hủy')
+                    ->where('THOIGIAN_BATDAU', '>=', $now)
+                    ->where('THOIGIAN_BATDAU', '<=', $limitDate)
+                    ->with('nhom:ID_NHOM,TEN_NHOM,ID_KEHOACH')
+                    ->get()
+                    ->map(function ($m) {
+                        return [
+                            'type' => 'meeting',
+                            'id' => $m->ID_LICHHOP,
+                            'title' => $m->TIEUDE_LICHHOP,
+                            'group_name' => $m->nhom ? $m->nhom->TEN_NHOM : '',
+                            'group_id' => $m->ID_NHOM, // [QUAN TRỌNG] Thêm dòng này
+                            'plan_id' => $m->nhom ? $m->nhom->ID_KEHOACH : null,
+                            'time' => $m->THOIGIAN_BATDAU,
+                            'location' => $m->HINHTHUC_HOP == 'Trực tuyến' ? 'Online' : $m->DIADIEM,
+                        ];
+                    });
+            }
+
+            $mergedItems = $urgentTasks->concat($upcomingMeetings)
+                ->sortBy(function ($item) {
+                    return $item['time'] ? Carbon::parse($item['time'])->timestamp : 9999999999;
+                })
+                ->take(6)
+                ->values();
+
+            // 4. Tin tức
+            $latestNews = News::where(function($q) {
+                    $q->whereJsonContains('target_roles', 'ALL')
+                      ->orWhereJsonContains('target_roles', 'SINH_VIEN')
+                      ->orWhereNull('target_roles');
+                })
+                ->orderBy('is_pinned', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->take(3)
                 ->get()
-                ->map(function ($t) {
-                    $deadline = $t->NGAY_HETHAN ? Carbon::parse($t->NGAY_HETHAN) : null;
-                    $isOverdue = $deadline && $deadline->isPast();
-                    $isToday = $deadline && $deadline->isToday();
-                    
+                ->map(function($news) {
                     return [
-                        'id' => $t->ID_CONGVIEC,
-                        'title' => $t->TEN_CONGVIEC,
-                        'group_name' => $t->nhom->TEN_NHOM,
-                        'plan_id' => $t->nhom->ID_KEHOACH, // Để redirect
-                        'priority' => $t->DO_UUTIEN,
-                        'deadline' => $t->NGAY_HETHAN,
-                        'status_label' => $isOverdue ? 'Quá hạn' : ($isToday ? 'Hôm nay' : 'Sắp tới'),
-                        'status_color' => $isOverdue ? 'red' : ($isToday ? 'orange' : 'blue')
+                        'id' => $news->id,
+                        'title' => $news->title,
+                        'category' => $news->category,
+                        'created_at' => $news->created_at,
+                        'is_pinned' => (bool)$news->is_pinned
                     ];
                 });
 
-            // 4. Format danh sách nhóm (Context Switchers)
-            $myGroups = $activeGroups->map(function ($g) {
+            // 5. Format Plans
+            $pendingTasksCount = 0;
+            if (!empty($groupIds)) {
+                $pendingTasksCount = CongViec::whereIn('CONGVIEC.ID_NHOM', $groupIds)
+                    ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $userId))
+                    ->whereNotIn('CONGVIEC.TRANGTHAI', ['Hoàn thành', 'Đã hủy'])
+                    ->count();
+            }
+
+            $myPlans = $activeGroups->map(function ($g) {
+                $total = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', '!=', 'Đã hủy')->count();
+                $done = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', 'Hoàn thành')->count();
+                $percent = $total > 0 ? round(($done / $total) * 100) : 0;
+
                 return [
-                    'id' => $g->ID_NHOM,
-                    'name' => $g->TEN_NHOM,
-                    'plan_name' => $g->kehoach->TEN_DOT,
                     'plan_id' => $g->ID_KEHOACH,
-                    'members_count' => $g->SO_THANHVIEN_HIENTAI, // Cần đảm bảo model Nhom có cột này hoặc count relation
-                    'topic_name' => $g->phancongDetaiNhom?->detai?->TEN_DETAI ?? 'Chưa đăng ký đề tài',
-                    'supervisor_name' => $g->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN ?? 'Chưa phân công'
+                    'plan_name' => $g->kehoach ? $g->kehoach->TEN_DOT : 'Kế hoạch',
+                    'term' => $g->kehoach ? ($g->kehoach->NAMHOC . ' - HK' . $g->kehoach->HOCKY) : '',
+                    'end_date' => $g->kehoach ? $g->kehoach->NGAY_KETHUC : null,
+                    'group' => [
+                        'id' => $g->ID_NHOM,
+                        'name' => $g->TEN_NHOM,
+                        'topic_name' => $g->phancongDetaiNhom?->detai?->TEN_DETAI,
+                        'supervisor_name' => $g->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN,
+                        'members_count' => $g->SO_THANHVIEN_HIENTAI
+                    ],
+                    'task_stats' => ['total' => $total, 'done' => $done, 'percent' => $percent]
                 ];
             });
 
             return response()->json([
                 'stats' => [
+                    'active_plans' => $activeGroups->count(),
+                    'groups_joined' => $activeGroups->count(),
                     'pending_tasks' => $pendingTasksCount,
-                    'meetings_today' => $meetingsToday,
-                    'new_feedback' => $newFeedbackCount,
-                    'avg_progress' => $avgProgress
                 ],
-                'tasks' => $tasks,
-                'groups' => $myGroups
+                'plans' => $myPlans->values(),
+                'urgent_items' => $mergedItems,
+                'news' => $latestNews
             ]);
 
-        } catch (\Exception $e) {
-            Log::error("Student Dashboard Error: " . $e->getMessage());
-            return response()->json(['message' => 'Server Error'], 500);
+        } catch (\Throwable $e) {
+            Log::error("Dashboard Error: " . $e->getMessage());
+            return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
     /**
      * API 2: Lấy dữ liệu Chi tiết (Detail Context)
-     * Khi user chọn 1 Plan cụ thể để xem Dashboard chi tiết
      */
     public function getDetail(Request $request, $planId)
     {
         try {
             $user = Auth::user();
             
-            // Lấy thông tin kế hoạch kèm mốc thời gian
+            // 1. Lấy thông tin kế hoạch
             $plan = KehoachKhoaluan::with(['mocThoigians' => function($q) {
                 $q->orderBy('NGAY_BATDAU', 'asc');
             }])->findOrFail($planId);
-    
-            // Lấy thông tin nhóm của SV trong kế hoạch này (nếu có)
+   
+            // 2. Lấy thông tin nhóm
             $group = Nhom::where('ID_KEHOACH', $planId)
-                ->whereHas('thanhviens', fn($q) => $q->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG))
+                ->whereHas('thanhviens', function($q) use ($user) {
+                    $q->where('THANHVIEN_NHOM.ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
+                })
                 ->with([
                     'nhomtruong', 
                     'thanhviens.nguoidung',
                     'phancongDetaiNhom.gvhd.nguoidung',
-                    'phancongDetaiNhom.detai'
+                    'phancongDetaiNhom.detai',
+                    'diemHuongDan', 
+                    'diemPhanBien',
+                    'diemHoiDong',
+                    'hoidongs.giangviens.nguoidung'
                 ])
                 ->first();
-    
-            // Xác định giai đoạn hiện tại của kế hoạch (Current Phase)
+   
             $currentPhase = null;
             $now = Carbon::now();
             
+            // Xác định giai đoạn hiện tại
             if ($plan->mocThoigians && $plan->mocThoigians->isNotEmpty()) {
-                // Ưu tiên tìm mốc đang diễn ra
                 foreach ($plan->mocThoigians as $moc) {
                     if ($now->between($moc->NGAY_BATDAU, $moc->NGAY_KETTHUC)) {
                         $currentPhase = $moc;
                         break;
                     }
                 }
-                // Nếu không có mốc nào đang diễn ra, tìm mốc sắp tới gần nhất
                 if (!$currentPhase) {
-                    $currentPhase = $plan->mocThoigians
-                        ->where('NGAY_BATDAU', '>', $now)
-                        ->first();
+                    // Nếu không nằm trong giai đoạn nào, lấy giai đoạn sắp tới gần nhất
+                    $currentPhase = $plan->mocThoigians->where('NGAY_BATDAU', '>', $now)->first();
                 }
             }
-    
-            // Thống kê Task cá nhân trong nhóm này
-            $myTasksStats = [
-                'total' => 0,
-                'overdue' => 0,
-                'today' => 0
-            ];
-    
+   
+            $memberContribution = [];
+            $thesisHealth = null;
+            $integratedTimeline = [];
+            $myTasksStats = ['total' => 0, 'overdue' => 0, 'today' => 0];
+
             if ($group) {
-                // Query cơ sở cho các task của tôi
+                // A. Thống kê đóng góp
+                $memberContribution = $group->thanhviens->map(function($tv) use ($group) {
+                    $doneTasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
+                        ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $tv->ID_NGUOIDUNG))
+                        ->where('TRANGTHAI', 'Hoàn thành')
+                        ->count();
+                    
+                    $totalTasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
+                         ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $tv->ID_NGUOIDUNG))
+                         ->count();
+
+                    return [
+                        'name' => $tv->nguoidung->HODEM_VA_TEN ?? 'N/A',
+                        'value' => $doneTasks,
+                        'total' => $totalTasks,
+                    ];
+                });
+
+                // B. Sức khỏe đề tài
+                $phanBien = $group->hoidongs->firstWhere('LOAI', 'phanbien');
+                $gvPhanBien = $phanBien && $phanBien->giangviens->isNotEmpty() ? $phanBien->giangviens->first() : null;
+                
+                $thesisHealth = [
+                    'has_topic' => !!$group->phancongDetaiNhom,
+                    'topic_status' => $group->phancongDetaiNhom?->detai?->TRANGTHAI ?? 'Chưa đăng ký',
+                    'supervisor' => $group->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN,
+                    'reviewer' => $gvPhanBien?->nguoidung?->HODEM_VA_TEN,
+                    'grades' => [
+                        'guide' => $group->diemHuongDan->first()?->DIEM,
+                        'review' => $group->diemPhanBien->first()?->DIEM,
+                        'council' => $group->diemHoiDong->avg('DIEM')
+                    ]
+                ];
+
+                // --- C. TIMELINE TÍCH HỢP (QUAN TRỌNG) ---
+
+                // 1. Mốc kế hoạch (Milestones)
+                foreach ($plan->mocThoigians as $moc) {
+                    $integratedTimeline[] = [
+                        'id' => 'moc_' . $moc->ID,
+                        'title' => $moc->TEN_SUKIEN,
+                        'date' => $moc->NGAY_KETTHUC, // Dùng ngày kết thúc làm mốc hiển thị
+                        'type' => 'milestone',
+                        'priority' => null,
+                        'details' => $moc->MOTA // Thêm mô tả
+                    ];
+                }
+
+                // 2. Công việc (Tasks) - Lấy 5 task gần nhất chưa hoàn thành
+                $tasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
+                    ->whereNotNull('NGAY_HETHAN')
+                    ->where('TRANGTHAI', '!=', 'Hoàn thành')
+                    ->where('TRANGTHAI', '!=', 'Đã hủy')
+                    ->orderBy('NGAY_HETHAN', 'asc')
+                    ->take(5)
+                    ->get();
+
+                foreach ($tasks as $task) {
+                    $integratedTimeline[] = [
+                        'id' => 'task_' . $task->ID_CONGVIEC,
+                        'title' => $task->TEN_CONGVIEC,
+                        'date' => $task->NGAY_HETHAN,
+                        'type' => 'task',
+                        'priority' => $task->DO_UUTIEN,
+                        'details' => null
+                    ];
+                }
+
+                // 3. [MỚI] Lịch họp (Meetings) - Lấy lịch họp sắp tới (và 1-2 cái vừa qua)
+                $meetings = LichHop::where('ID_NHOM', $group->ID_NHOM)
+                    ->where('TRANGTHAI', '!=', 'Đã hủy')
+                    ->where('THOIGIAN_BATDAU', '>=', Carbon::now()->subDays(1)) // Lấy cả lịch hôm qua để user thấy
+                    ->orderBy('THOIGIAN_BATDAU', 'asc')
+                    ->take(5)
+                    ->get();
+
+                foreach ($meetings as $meeting) {
+                    $integratedTimeline[] = [
+                        'id' => 'meeting_' . $meeting->ID_LICHHOP,
+                        'title' => $meeting->TIEUDE_LICHHOP,
+                        'date' => $meeting->THOIGIAN_BATDAU,
+                        'type' => 'meeting',
+                        'priority' => null,
+                        'details' => $meeting->HINHTHUC_HOP == 'Trực tuyến' ? 'Online' : $meeting->DIADIEM
+                    ];
+                }
+
+                // Sắp xếp lại toàn bộ theo thời gian tăng dần
+                usort($integratedTimeline, function($a, $b) {
+                    return strtotime($a['date']) - strtotime($b['date']);
+                });
+                
+                // D. Stats cá nhân
                 $myTasksQuery = CongViec::where('ID_NHOM', $group->ID_NHOM)
                     ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $user->ID_NGUOIDUNG))
-                    ->whereNotIn('TRANGTHAI', ['Hoàn thành', 'Đã hủy']);
-    
+                    ->whereNotIn('CONGVIEC.TRANGTHAI', ['Hoàn thành', 'Đã hủy']);
+   
                 $myTasksStats['total'] = (clone $myTasksQuery)->count();
                 $myTasksStats['overdue'] = (clone $myTasksQuery)->where('NGAY_HETHAN', '<', $now)->count();
                 $myTasksStats['today'] = (clone $myTasksQuery)->whereDate('NGAY_HETHAN', Carbon::today())->count();
             }
-    
+   
             return response()->json([
                 'plan' => [
                     'id' => $plan->ID_KEHOACH,
                     'name' => $plan->TEN_DOT,
-                    'timeline' => $plan->mocThoigians,
                     'current_phase' => $currentPhase
                 ],
-                'group' => $group, // Trả về null nếu chưa có nhóm, frontend sẽ xử lý hiển thị
-                'my_stats' => $myTasksStats
+                'group' => $group,
+                'my_stats' => $myTasksStats,
+                'member_contribution' => $memberContribution,
+                'thesis_health' => $thesisHealth,
+                'integrated_timeline' => $integratedTimeline
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Student Dashboard Detail Error: " . $e->getMessage());
             return response()->json(['message' => 'Server Error: ' . $e->getMessage()], 500);
         }

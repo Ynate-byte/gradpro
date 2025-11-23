@@ -145,7 +145,8 @@ const TopicDetailDialog = ({
     onNext,
     onPrevious,
     hasNext,
-    hasPrevious
+    hasPrevious,
+    onDataChange
 }) => {
     const { user } = useAuth();
     const [topic, setTopic] = useState(null);
@@ -250,6 +251,8 @@ const TopicDetailDialog = ({
         try {
             await thesisTopicService.addReplyToSuggestion(suggestionId, { NOIDUNG: content });
             await loadTopicDetails(false);
+
+            if (onDataChange) onDataChange();
         } catch (error) {
             toast.error("Gửi thất bại.");
         }
@@ -279,6 +282,7 @@ const TopicDetailDialog = ({
         try {
             await thesisTopicService.addSuggestion(topic.ID_DETAI, { NOIDUNG_GOIY: content });
             await loadTopicDetails(false);
+            if (onDataChange) onDataChange();
         } catch (error) {
             toast.error("Lỗi khi gửi tin nhắn.");
         } finally {

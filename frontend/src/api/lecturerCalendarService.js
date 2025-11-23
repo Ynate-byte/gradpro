@@ -1,7 +1,15 @@
 import axiosClient from './axiosConfig';
 
 export const getLecturerGroups = () => {
-    return axiosClient.get('/lecturer/calendar/groups').then(res => res.data);
+    return axiosClient.get('/lecturer/calendar/groups').then(res => {
+        if (Array.isArray(res.data)) {
+            return res.data;
+        }
+        if (res.data && Array.isArray(res.data.data)) {
+            return res.data.data;
+        }
+        return [];
+    });
 };
 
 export const getLecturerSchedule = (params) => {

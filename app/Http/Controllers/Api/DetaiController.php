@@ -9,6 +9,7 @@ use App\Models\PhancongDetaiNhom;
 use App\Models\Nhom;
 use App\Models\Giangvien;
 use App\Models\ThanhvienNhom;
+use App\Models\PhancongNguoiGopY;
 use App\Imports\TopicsImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,6 +27,7 @@ class DetaiController extends Controller
      */
     public function index(Request $request)
     {
+        // 1. Eager Loading: Tải trước các quan hệ cần thiết
         $query = Detai::with([
             'nguoiDexuat.nguoidung',
             'chuyennganh',
@@ -38,71 +40,106 @@ class DetaiController extends Controller
             }
         ]);
 
-        // Lấy thông tin người dùng hiện tại
         $currentUser = Auth::user();
         $isLecturer = $currentUser->giangvien ? true : false;
         $lecturerId = $currentUser->giangvien->ID_GIANGVIEN ?? null;
 
+        // --- LOGIC CHO SINH VIÊN ---
         if ($currentUser->vaitro->TEN_VAITRO === 'Sinh viên') {
-            // Sinh viên: chỉ hiển thị các đề tài đã duyệt
+            // Sinh viên chỉ được xem các đề tài đã duyệt
             $query->where('TRANGTHAI', 'Đã duyệt');
-        } else if ($isLecturer || $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
-            // Giảng viên/Admin/Giáo vụ/Trưởng khoa: Mở rộng quyền xem
             
-            // Lọc theo ID Kế hoạch (bắt buộc)
+            // Lọc theo kế hoạch nếu có
+            if ($request->has('plan_id')) {
+                $query->where('ID_KEHOACH', $request->plan_id);
+            }
+        } 
+        // --- LOGIC CHO GIẢNG VIÊN / ADMIN / GIÁO VỤ ---
+        else if ($isLecturer || $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
+            
+            // Lọc theo Kế hoạch (Bắt buộc để đúng ngữ cảnh)
             if ($request->has('plan_id')) {
                 $query->where('ID_KEHOACH', $request->plan_id);
             }
 
-            // [SỬA LỖI LOGIC] Nếu là Giảng viên: Mở rộng kết quả để bao gồm:
-            // 1. Đề tài đã duyệt (của mọi người)
-            // 2. Đề tài của chính họ (bất kể trạng thái)
-            // 3. Đề tài họ được phân công góp ý
-                if ($lecturerId) {
-                $query->where(function ($q) use ($lecturerId) {
-                    // 1. Hiển thị tất cả đề tài KHÔNG PHẢI LÀ "Nháp"
-                    // (Bao gồm: Chờ duyệt, Đã duyệt, Yêu cầu chỉnh sửa, Đã đầy, Đã khóa...)
-                    $q->where('TRANGTHAI', '<>', 'Nháp')
-                    
-                    // 2. HOẶC hiển thị đề tài do chính giảng viên này tạo (kể cả Nháp)
-                    ->orWhere('ID_NGUOI_DEXUAT', $lecturerId)
-                    
-                    // 3. HOẶC hiển thị đề tài giảng viên được phân công góp ý (nếu có)
-                    ->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
+            // [QUAN TRỌNG] Xử lý Filter Mode (Server-side filtering)
+            if ($lecturerId) {
+                $filterMode = $request->input('filter_mode', 'all'); // Mặc định là 'all'
+
+                if ($filterMode === 'review') {
+                    // MODE: Cần góp ý (Review)
+                    // Chỉ lấy các đề tài mà giảng viên này có trong danh sách phân công góp ý
+                    $query->whereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
                         $subQ->where('ID_GIANGVIEN', $lecturerId);
                     });
-                });
-
-                // Nếu có filter trạng thái từ frontend gửi lên (ví dụ chọn drop-down)
-                if ($request->has('status') && $request->status !== 'Tất cả') {
-                    $query->where('TRANGTHAI', $request->status);
+                } 
+                elseif ($filterMode === 'my') {
+                    // MODE: Đề tài của tôi
+                    // Chỉ lấy đề tài do chính giảng viên đề xuất
+                    $query->where('ID_NGUOI_DEXUAT', $lecturerId);
+                } 
+                else {
+                    // MODE: Tất cả (All)
+                    // Lấy: 
+                    // 1. Đề tài KHÔNG PHẢI NHÁP (của người khác)
+                    // 2. Đề tài CỦA TÔI (kể cả Nháp)
+                    // 3. Đề tài ĐƯỢC PHÂN CÔNG GÓP Ý (kể cả Nháp nếu được gán)
+                    
+                    $query->where(function ($q) use ($lecturerId) {
+                        // Nhóm 1: Của người khác nhưng không phải Nháp
+                        $q->where('ID_NGUOI_DEXUAT', '!=', $lecturerId)
+                          ->where('TRANGTHAI', '!=', 'Nháp');
+                          
+                        // Nhóm 2: Của tôi (lấy hết)
+                        $q->orWhere('ID_NGUOI_DEXUAT', $lecturerId);
+                        
+                        // Nhóm 3: Được phân công review (lấy hết)
+                        $q->orWhereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
+                            $subQ->where('ID_GIANGVIEN', $lecturerId);
+                        });
+                    });
                 }
             } else {
-                 // Admin/Quản trị viên cấp cao: chỉ cần lọc trạng thái nếu có
-                if ($request->has('status') && $request->status !== 'Tất cả') {
+                // Nếu là Admin thuần (không phải GV), mặc định ẩn Nháp của người khác
+                // (Trừ khi Admin muốn xem hết để quản lý, ở đây giả sử Admin xem như GV thường nhưng quyền cao hơn)
+                $query->where('TRANGTHAI', '<>', 'Nháp');
+            }
+
+            // Lọc theo Trạng thái (nếu có)
+            if ($request->has('status') && $request->status !== 'Tất cả') {
+                if (is_array($request->status)) {
+                    $query->whereIn('TRANGTHAI', $request->status);
+                } else {
                     $query->where('TRANGTHAI', $request->status);
                 }
             }
-        }
-        
-        // Lọc theo ID Giảng viên (chỉ áp dụng nếu có yêu cầu cụ thể, ví dụ trang hồ sơ GV)
-        if ($request->has('lecturer_id') && $request->lecturer_id !== $lecturerId) {
-            $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
-        }
-        
-        // Lọc theo chuyên ngành
-        if ($request->has('major_id')) {
-            $query->where('ID_CHUYENNGANH', $request->major_id);
+
+            // Lọc theo ID Giảng viên cụ thể (nếu cần)
+            if ($request->has('lecturer_id') && $request->lecturer_id !== $lecturerId) {
+                $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
+            }
+
+            // Lọc theo Chuyên ngành
+            if ($request->has('major_id')) {
+                $query->where('ID_CHUYENNGANH', $request->major_id);
+            }
         }
 
-        // Tìm kiếm theo tên
-        if ($request->has('search')) {
-            $query->where('TEN_DETAI', 'like', '%' . $request->search . '%');
+        // --- TÌM KIẾM (SEARCH) ---
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('TEN_DETAI', 'like', '%' . $search . '%')
+                  ->orWhere('MA_DETAI', 'like', '%' . $search . '%')
+                  ->orWhereHas('nguoiDexuat.nguoidung', function ($subQ) use ($search) {
+                      $subQ->where('HODEM_VA_TEN', 'like', '%' . $search . '%');
+                  });
+            });
         }
 
-        $topics = $query->orderBy('NGAYTAO', 'desc')->paginate(10);
+        $topics = $query->orderBy('NGAYTAO', 'desc')
+                        ->paginate($request->input('per_page', 10));
 
-        // Thêm tên giảng viên vào mỗi đề tài để hiển thị
         $topics->getCollection()->transform(function ($topic) {
             $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
             return $topic;
@@ -111,28 +148,30 @@ class DetaiController extends Controller
         return response()->json($topics);
     }
 
+    // ... (Các hàm khác giữ nguyên như file gốc của bạn) ...
+    
     /**
      * Lấy danh sách đề tài đã duyệt của giảng viên đang đăng nhập
      */
     public function getApprovedTopicsOfLecturer(Request $request)
-{
-    $currentUser = Auth::user();
-    $lecturer = $currentUser->giangvien;
+    {
+        $currentUser = Auth::user();
+        $lecturer = $currentUser->giangvien;
 
-    if (!$lecturer) {
-        return response()->json(['message' => 'Không được phép'], 403);
+        if (!$lecturer) {
+            return response()->json(['message' => 'Không được phép'], 403);
+        }
+
+        $query = Detai::with(['kehoachKhoaluan', 'chuyennganh'])
+            ->where('TRANGTHAI', 'Đã duyệt')
+            ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
+            ->select('DETAI.*') // cần select để groupBy hoạt động đúng
+            ->groupBy('DETAI.ID_DETAI'); // Quan trọng: chỉ lấy mỗi đề tài 1 lần
+
+        $topics = $query->orderBy('TEN_DETAI', 'asc')->get();
+
+        return response()->json($topics);
     }
-
-    $query = Detai::with(['kehoachKhoaluan', 'chuyennganh'])
-        ->where('TRANGTHAI', 'Đã duyệt')
-        ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
-        ->select('DETAI.*') // cần select để groupBy hoạt động đúng
-        ->groupBy('DETAI.ID_DETAI'); // Quan trọng: chỉ lấy mỗi đề tài 1 lần
-
-    $topics = $query->orderBy('TEN_DETAI', 'asc')->get();
-
-    return response()->json($topics);
-}
 
     /**
      * Tái sử dụng đề tài đã duyệt cho một kế hoạch khác
@@ -473,6 +512,15 @@ class DetaiController extends Controller
             'NGAYTAO' => now(),
         ]);
 
+        $assignment = PhancongNguoiGopY::where('ID_DETAI', $id)
+            ->where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
+            ->first();
+
+        // Nếu có phân công và trạng thái chưa hoàn thành -> Cập nhật thành Hoàn thành
+        if ($assignment && $assignment->TRANGTHAI !== 'Hoàn thành') {
+            $assignment->update(['TRANGTHAI' => 'Hoàn thành']);
+        }
+
         // Nếu đề tài đang ở trạng thái "Chờ duyệt", chuyển sang "Đang chỉnh sửa"
         if ($topic->TRANGTHAI === 'Chờ duyệt') {
             $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
@@ -753,15 +801,19 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
+        // [FIX LỖI] Sử dụng ID_GVHD thay vì ID_NGUOI_DEXUAT
+        // Và bỏ filter plan cũ để lấy tất cả các nhóm đang hoạt động
         $assignments = PhancongDetaiNhom::with([
             'nhom.thanhviens.nguoidung',
             'nhom.nhomtruong',
+            'nhom.kehoach', // Load thêm kế hoạch để hiển thị tên đợt
             'detai.nguoiDexuat.nguoidung',
             'detai.chuyennganh',
             'gvhd.nguoidung'
-        ])->whereHas('detai', function ($q) use ($lecturer) {
-            $q->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN);
-        })->orderBy('NGAY_PHANCONG', 'desc')->get();
+        ])
+        ->where('ID_GVHD', $lecturer->ID_GIANGVIEN) // <--- SỬA TẠI ĐÂY: Lọc theo người hướng dẫn
+        ->orderBy('NGAY_PHANCONG', 'desc')
+        ->get();
 
         return response()->json($assignments);
     }

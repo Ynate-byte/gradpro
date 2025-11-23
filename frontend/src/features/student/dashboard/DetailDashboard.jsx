@@ -3,48 +3,270 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { getStudentDashboardDetail } from '@/api/studentDashboardService';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { 
-    ArrowLeft, Calendar, Users, BookOpen, 
-    CheckCircle2, Clock, AlertTriangle, ArrowRight, 
-    LayoutDashboard, ChevronRight, User, FileText, Mail, Phone
+    ArrowLeft, Calendar, Users, CheckCircle2, AlertTriangle, Clock, 
+    LayoutDashboard, User, FileText, Flag, CheckSquare, Trophy, BarChart3,
+    Video, MapPin, CalendarDays
 } from 'lucide-react';
-import { format, isWithinInterval, parseISO, formatDistance } from 'date-fns';
+import { format, parseISO, isPast, isToday } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
-// --- COMPONENT: COMPACT TIMELINE ---
-const CompactTimeline = ({ milestones }) => {
-    const now = new Date();
+// --- 1. BIỂU ĐỒ ĐÓNG GÓP (GIỮ NGUYÊN) ---
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+
+const ContributionChart = ({ data }) => {
+    if (!data || data.length === 0) return <div className="text-center text-muted-foreground py-10">Chưa có dữ liệu công việc</div>;
+    const chartData = data.filter(d => d.value > 0);
+    const totalTasks = data.reduce((acc, cur) => acc + cur.value, 0);
+
+    if (totalTasks === 0) return (
+        <div className="flex flex-col items-center justify-center h-[250px] text-muted-foreground bg-muted/20 rounded-lg border border-dashed">
+            <BarChart3 className="w-8 h-8 mb-2 opacity-20" />
+            <p className="text-sm">Chưa có công việc hoàn thành</p>
+        </div>
+    );
+
     return (
-        <div className="relative space-y-0">
-            <div className="absolute left-[7px] top-2 bottom-2 w-[1px] bg-border" />
-            {milestones.map((moc) => {
-                const start = parseISO(moc.NGAY_BATDAU);
-                const end = parseISO(moc.NGAY_KETTHUC);
-                const isActive = isWithinInterval(now, { start, end });
-                const isPast = now > end;
+        <div className="h-[300px] w-full relative">
+            <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                    <Pie
+                        data={chartData}
+                        cx="50%"
+                        cy="45%"
+                        innerRadius={60}
+                        outerRadius={85}
+                        paddingAngle={2}
+                        dataKey="value"
+                        stroke="none"
+                    >
+                        {chartData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                    </Pie>
+                    <RechartsTooltip 
+                        content={({ active, payload }) => {
+                            if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                    <div className="bg-popover border rounded-md shadow-md p-2 text-xs">
+                                        <p className="font-semibold mb-1">{data.name}</p>
+                                        <p>Hoàn thành: <span className="font-bold text-primary">{data.value}</span> việc</p>
+                                        <p className="text-muted-foreground">Tổng được giao: {data.total}</p>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        }}
+                    />
+                    <Legend 
+                        verticalAlign="bottom" 
+                        height={36}
+                        content={({ payload }) => (
+                            <div className="flex flex-wrap justify-center gap-3 mt-2 text-xs">
+                                {payload.map((entry, index) => (
+                                    <div key={`item-${index}`} className="flex items-center gap-1.5">
+                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                        <span className="text-muted-foreground">{entry.value}</span>
+                                        <span className="font-semibold ml-0.5">
+                                            ({Math.round((chartData[index].value / totalTasks) * 100)}%)
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    />
+                </PieChart>
+            </ResponsiveContainer>
+            <div className="absolute top-[45%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                <p className="text-2xl font-bold text-foreground">{totalTasks}</p>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Đã xong</p>
+            </div>
+        </div>
+    );
+};
+
+// --- 2. WIDGET SỨC KHỎE ĐỀ TÀI (GIỮ NGUYÊN) ---
+const HealthStatusItem = ({ label, value, status }) => {
+    let icon = <Clock className="w-4 h-4 text-muted-foreground" />;
+    let statusClass = "text-muted-foreground";
+    
+    if (status === 'success') {
+        icon = <CheckCircle2 className="w-4 h-4 text-green-600" />;
+        statusClass = "text-green-700 font-medium";
+    } else if (status === 'warning') {
+        icon = <AlertTriangle className="w-4 h-4 text-orange-500" />;
+        statusClass = "text-orange-700";
+    } else if (status === 'danger') {
+        // eslint-disable-next-line no-undef
+        icon = <X className="w-4 h-4 text-red-500" />;
+        statusClass = "text-red-700";
+    }
+
+    return (
+        <div className="flex items-center justify-between py-2 border-b last:border-0">
+            <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+            <div className="flex items-center gap-2">
+                <span className={cn("text-sm truncate max-w-[150px]", statusClass)}>{value || '---'}</span>
+                {icon}
+            </div>
+        </div>
+    );
+};
+
+const ThesisHealthWidget = ({ health }) => {
+    if (!health) return null;
+
+    return (
+        <div className="space-y-1">
+            <HealthStatusItem 
+                label="Đề tài" 
+                value={health.topic_status} 
+                status={health.has_topic ? 'success' : 'warning'} 
+            />
+            <HealthStatusItem 
+                label="GVHD" 
+                value={health.supervisor} 
+                status={health.supervisor ? 'success' : 'default'} 
+            />
+            <HealthStatusItem 
+                label="Phản biện" 
+                value={health.reviewer || 'Chưa phân công'} 
+                status={health.reviewer ? 'success' : 'default'} 
+            />
+            
+            <div className="mt-4 pt-2">
+                <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Điểm số ghi nhận</p>
+                <div className="grid grid-cols-3 gap-2">
+                    <GradeBadge label="HD" score={health.grades?.guide} />
+                    <GradeBadge label="PB" score={health.grades?.review} />
+                    <GradeBadge label="HĐ" score={health.grades?.council} />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const GradeBadge = ({ label, score }) => {
+    const hasScore = score !== null && score !== undefined;
+    return (
+        <div className={cn(
+            "flex flex-col items-center justify-center p-2 rounded-lg border",
+            hasScore ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-100 text-gray-400"
+        )}>
+            <span className="text-[10px] font-bold">{label}</span>
+            <span className="text-lg font-bold">{hasScore ? score : '-'}</span>
+        </div>
+    );
+};
+
+// --- 3. TIMELINE TÍCH HỢP (UPDATE: Thêm case Meeting) ---
+const IntegratedTimeline = ({ items }) => {
+    if (!items || items.length === 0) {
+        return <div className="py-8 text-center text-muted-foreground text-sm">Chưa có sự kiện nào sắp diễn ra.</div>;
+    }
+
+    return (
+        <div className="relative pl-4 space-y-6 my-2">
+            <div className="absolute left-[11px] top-2 bottom-2 w-[2px] bg-gray-100 dark:bg-gray-800" />
+            
+            {items.map((item, idx) => {
+                const date = parseISO(item.date);
+                const isPastDate = isPast(date) && !isToday(date);
+                const isTodayDate = isToday(date);
+                
+                let icon, borderColor, textColor, typeLabel;
+
+                switch (item.type) {
+                    case 'milestone':
+                        icon = <Flag className="w-3 h-3" />;
+                        borderColor = "border-indigo-400";
+                        textColor = "text-indigo-400";
+                        typeLabel = "Mốc Khoa";
+                        break;
+                    case 'meeting':
+                        icon = <CalendarDays className="w-3 h-3" />;
+                        borderColor = "border-green-500";
+                        textColor = "text-green-500";
+                        typeLabel = "Lịch họp";
+                        break;
+                    case 'task':
+                    default:
+                        icon = <CheckSquare className="w-3 h-3" />;
+                        borderColor = "border-orange-400";
+                        textColor = "text-orange-400";
+                        typeLabel = "Deadline Task";
+                        break;
+                }
 
                 return (
-                    <div key={moc.ID} className="relative pl-6 py-3 group">
+                    <div key={item.id} className="relative pl-6 group">
+                        {/* Dot Icon */}
                         <div className={cn(
-                            "absolute left-0 top-4 w-3.5 h-3.5 rounded-full border-2 z-10 bg-background",
-                            isActive ? "border-blue-600 ring-2 ring-blue-100" : 
-                            isPast ? "border-green-500 bg-green-50" : "border-gray-300"
+                            "absolute left-0 top-1 w-6 h-6 rounded-full border-2 flex items-center justify-center z-10 bg-background transition-colors",
+                            isTodayDate ? "border-blue-500 text-blue-500 scale-110" : 
+                            isPastDate ? "border-gray-300 text-gray-300 bg-gray-50" : 
+                            cn(borderColor, textColor)
                         )}>
-                            {isActive && <div className="w-1.5 h-1.5 bg-blue-600 rounded-full m-0.5" />}
+                            {icon}
                         </div>
-                        <div>
-                            <p className={cn("text-xs font-bold leading-none mb-1", isActive ? "text-blue-700" : "text-foreground")}>
-                                {moc.TEN_SUKIEN}
-                            </p>
-                            <p className="text-[10px] text-muted-foreground font-mono">
-                                {format(end, 'dd/MM')}
-                            </p>
+
+                        {/* Content */}
+                        <div className={cn(
+                            "flex flex-col transition-opacity",
+                            isPastDate ? "opacity-60 hover:opacity-100" : "opacity-100"
+                        )}>
+                            <div className="flex justify-between items-start">
+                                <span className={cn(
+                                    "text-sm font-medium leading-none",
+                                    isTodayDate ? "text-blue-600 font-bold" : "text-foreground"
+                                )}>
+                                    {item.title}
+                                </span>
+                                <span className={cn(
+                                    "text-[10px] px-1.5 py-0.5 rounded ml-2 shrink-0",
+                                    isTodayDate ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-500"
+                                )}>
+                                    {format(date, 'dd/MM')}
+                                </span>
+                            </div>
+                            
+                            <div className="flex flex-wrap items-center gap-2 mt-1">
+                                <Badge variant="outline" className={cn("text-[9px] h-4 px-1 font-normal border-0 bg-opacity-20", 
+                                    item.type === 'milestone' ? "bg-indigo-100 text-indigo-700" : 
+                                    item.type === 'meeting' ? "bg-green-100 text-green-700" :
+                                    "bg-orange-100 text-orange-700"
+                                )}>
+                                    {typeLabel}
+                                </Badge>
+                                
+                                {item.type === 'meeting' && item.details && (
+                                    <span className="text-[10px] text-muted-foreground flex items-center">
+                                        {item.details.includes('http') || item.details === 'Online' 
+                                            ? <Video className="w-3 h-3 mr-1"/> 
+                                            : <MapPin className="w-3 h-3 mr-1"/>
+                                        }
+                                        {item.details === 'Online' ? 'Online' : 'Trực tiếp'}
+                                    </span>
+                                )}
+
+                                {item.priority === 'Cao' && (
+                                    <span className="text-[9px] text-red-500 font-bold flex items-center">
+                                        <AlertTriangle className="w-2.5 h-2.5 mr-0.5" /> Gấp
+                                    </span>
+                                )}
+                            </div>
+                            
+                            {isTodayDate && (
+                                <p className="text-xs text-blue-500 mt-1 font-medium">Diễn ra hôm nay!</p>
+                            )}
                         </div>
                     </div>
                 );
@@ -53,39 +275,27 @@ const CompactTimeline = ({ milestones }) => {
     );
 };
 
-// --- COMPONENT: INFO ROW ---
-const InfoRow = ({ icon: Icon, label, value, subValue }) => (
-    <div className="flex items-start gap-3 p-3 rounded-md hover:bg-accent/50 transition-colors">
-        <Icon className="w-4 h-4 text-muted-foreground mt-0.5" />
-        <div className="min-w-0 flex-1">
-            <p className="text-xs text-muted-foreground font-medium uppercase">{label}</p>
-            <p className="text-sm font-semibold truncate" title={value}>{value}</p>
-            {subValue && <p className="text-xs text-gray-500">{subValue}</p>}
-        </div>
-    </div>
-);
-
+// --- MAIN PAGE COMPONENT ---
 export default function DetailDashboard() {
     const { planId } = useParams();
     const navigate = useNavigate();
+    
     const { data, isLoading } = useQuery({
         queryKey: ['studentDashboardDetail', planId],
         queryFn: () => getStudentDashboardDetail(planId),
         enabled: !!planId
     });
 
-    if (isLoading) return <div className="p-6"><Skeleton className="h-32 mb-4"/><Skeleton className="h-96"/></div>;
-    if (!data) return <div className="p-6">Không tìm thấy dữ liệu.</div>;
+    if (isLoading) return <div className="p-6 space-y-4"><Skeleton className="h-32"/><div className="grid grid-cols-3 gap-4"><Skeleton className="h-64"/><Skeleton className="h-64"/><Skeleton className="h-64"/></div></div>;
+    if (!data) return <div className="p-6 text-center">Không tìm thấy dữ liệu.</div>;
 
-    const { plan, group, my_stats } = data;
+    const { plan, group, member_contribution, thesis_health, integrated_timeline } = data;
     const hasGroup = !!group;
-    const hasTopic = group?.phancong_detai_nhom?.detai;
-    const gvhd = group?.phancong_detai_nhom?.gvhd?.nguoidung;
 
     return (
         <div className="h-screen flex flex-col bg-gray-50/30 dark:bg-background overflow-hidden">
-            {/* 1. COMPACT HEADER */}
-            <div className="h-14 border-b bg-background flex items-center justify-between px-6 shrink-0">
+            {/* HEADER */}
+            <div className="h-14 border-b bg-background flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/student/dashboard')}>
                         <ArrowLeft className="w-4 h-4" />
@@ -94,138 +304,117 @@ export default function DetailDashboard() {
                     <div>
                         <h1 className="text-sm font-bold leading-tight">{plan.name}</h1>
                         <p className="text-[10px] text-muted-foreground">
-                            Giai đoạn: <span className="text-blue-600 font-medium">{plan.current_phase?.TEN_SUKIEN || 'N/A'}</span>
+                            {plan.current_phase ? (
+                                <>Giai đoạn: <span className="text-blue-600 font-medium">{plan.current_phase.TEN_SUKIEN}</span></>
+                            ) : "Chưa bắt đầu"}
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
                     {hasGroup && (
                         <Button size="sm" className="h-8 bg-indigo-600 hover:bg-indigo-700" onClick={() => navigate(`/projects/my-group/kanban/${group.ID_NHOM}`)}>
-                            <LayoutDashboard className="w-3.5 h-3.5 mr-2" /> Vào Kanban
+                            <LayoutDashboard className="w-3.5 h-3.5 mr-2" /> Kanban Board
                         </Button>
                     )}
                 </div>
             </div>
 
-            {/* 2. MAIN CONTENT - 3 COLUMNS */}
-            <div className="flex-1 overflow-hidden p-4 md:p-6">
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
-                    
-                    {/* LEFT COLUMN: CONTEXT (2.5/12) */}
-                    <Card className="lg:col-span-3 flex flex-col h-full border-none shadow-md bg-white dark:bg-card">
-                        <CardHeader className="pb-2 border-b px-4 py-3">
-                            <CardTitle className="text-sm font-bold uppercase text-muted-foreground">Thông tin chung</CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-hidden">
-                            <ScrollArea className="h-full">
-                                <div className="p-2 space-y-1">
-                                    {!hasGroup ? (
-                                        <div className="p-4 text-center">
-                                            <p className="text-sm mb-3">Chưa có nhóm</p>
-                                            <Button size="sm" variant="outline" className="w-full" onClick={() => navigate('/projects/find-group', { state: { planId } })}>
-                                                Tìm nhóm ngay
-                                            </Button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <InfoRow icon={Users} label="Nhóm" value={group.TEN_NHOM} subValue={`${group.thanhviens?.length || 0} thành viên`} />
-                                            <Separator className="my-1 opacity-50" />
-                                            <InfoRow 
-                                                icon={FileText} 
-                                                label="Đề tài" 
-                                                value={hasTopic ? group.phancong_detai_nhom.detai.TEN_DETAI : "Chưa đăng ký"} 
-                                                subValue={!hasTopic && <span className="text-orange-500 cursor-pointer hover:underline" onClick={() => navigate('/projects/topics')}>Đăng ký ngay</span>}
-                                            />
-                                            <Separator className="my-1 opacity-50" />
-                                            <InfoRow 
-                                                icon={User} 
-                                                label="GVHD" 
-                                                value={gvhd ? gvhd.HODEM_VA_TEN : "Chưa phân công"}
-                                                subValue={gvhd?.EMAIL}
-                                            />
-                                             <div className="mt-4 px-2">
-                                                <Button variant="secondary" size="sm" className="w-full text-xs" onClick={() => navigate('/projects/my-group')}>
-                                                    Xem chi tiết nhóm
-                                                </Button>
-                                            </div>
-                                        </>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                    {/* CENTER COLUMN: ACTION & STATS (7/12) */}
-                    <div className="lg:col-span-7 flex flex-col gap-4 h-full overflow-hidden">
-                        {/* Top Stats Row */}
-                        <div className="grid grid-cols-3 gap-4 shrink-0">
-                             <Card className="bg-blue-50 dark:bg-blue-950/20 border-blue-100 dark:border-blue-900 shadow-sm">
-                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                                    <CheckCircle2 className="w-6 h-6 text-blue-600 mb-1" />
-                                    <span className="text-2xl font-bold text-blue-700 dark:text-blue-400">{my_stats.total}</span>
-                                    <span className="text-xs text-blue-600/80">Việc của tôi</span>
-                                </CardContent>
-                             </Card>
-                             <Card className="bg-red-50 dark:bg-red-950/20 border-red-100 dark:border-red-900 shadow-sm">
-                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                                    <AlertTriangle className="w-6 h-6 text-red-600 mb-1" />
-                                    <span className="text-2xl font-bold text-red-700 dark:text-red-400">{my_stats.overdue}</span>
-                                    <span className="text-xs text-red-600/80">Quá hạn</span>
-                                </CardContent>
-                             </Card>
-                             <Card className="bg-orange-50 dark:bg-orange-950/20 border-orange-100 dark:border-orange-900 shadow-sm">
-                                <CardContent className="p-4 flex flex-col items-center justify-center text-center">
-                                    <Clock className="w-6 h-6 text-orange-600 mb-1" />
-                                    <span className="text-2xl font-bold text-orange-700 dark:text-orange-400">{my_stats.today}</span>
-                                    <span className="text-xs text-orange-600/80">Hạn hôm nay</span>
-                                </CardContent>
-                             </Card>
+            {/* CONTENT */}
+            <ScrollArea className="flex-1">
+                <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
+                    {!hasGroup ? (
+                         <div className="flex flex-col items-center justify-center py-12 bg-card border rounded-lg border-dashed">
+                            <Users className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
+                            <h3 className="text-lg font-semibold">Bạn chưa có nhóm trong đợt này</h3>
+                            <Button className="mt-4" onClick={() => navigate('/projects/find-group', { state: { planId } })}>Tìm nhóm ngay</Button>
                         </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                            
+                            {/* CỘT 1: THÔNG TIN NHÓM & SỨC KHỎE ĐỀ TÀI (3/12) */}
+                            <div className="md:col-span-4 lg:col-span-3 space-y-6">
+                                {/* Card Thông tin Nhóm */}
+                                <Card className="shadow-sm border-l-4 border-l-indigo-500">
+                                    <CardHeader className="pb-2">
+                                        <CardTitle className="text-sm uppercase text-muted-foreground font-bold">Nhóm của bạn</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-2xl font-bold text-indigo-700 mb-1">{group.TEN_NHOM}</div>
+                                        <div className="flex items-center text-sm text-muted-foreground mb-4">
+                                            <Users className="w-4 h-4 mr-1" /> {group.thanhviens?.length || 0} thành viên
+                                        </div>
+                                        <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/projects/my-group')}>
+                                            Quản lý nhóm
+                                        </Button>
+                                    </CardContent>
+                                </Card>
 
-                        {/* Main Action Area */}
-                        <Card className="flex-1 border-none shadow-md flex flex-col min-h-0">
-                            <CardHeader className="py-3 px-5 border-b bg-muted/10">
-                                <CardTitle className="text-base flex justify-between items-center">
-                                    <span>Hoạt động & Sự kiện</span>
-                                    {plan.current_phase && (
-                                        <Badge variant="default" className="bg-blue-600 hover:bg-blue-700">
-                                            Đang diễn ra: {plan.current_phase.TEN_SUKIEN}
-                                        </Badge>
-                                    )}
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="p-0 flex-1 flex flex-col justify-center items-center text-center text-muted-foreground">
-                                {/* Placeholder for Calendar/Activity Feed */}
-                                <Calendar className="w-12 h-12 mb-3 opacity-20" />
-                                <p>Khu vực này sẽ hiển thị Lịch chi tiết và Hoạt động gần đây</p>
-                                <p className="text-xs mt-1">(Đang phát triển)</p>
-                                <div className="mt-4 flex gap-3">
-                                    <Button variant="outline" size="sm" onClick={() => navigate(`/projects/my-group/schedule/${group?.ID_NHOM}`)}>
-                                        Xem lịch họp
+                                {/* Card Sức khỏe Đề tài */}
+                                <Card>
+                                    <CardHeader className="pb-2 border-b">
+                                        <CardTitle className="text-base flex items-center gap-2">
+                                            <Trophy className="w-4 h-4 text-yellow-500" /> 
+                                            Tiến độ Đề tài
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="pt-4">
+                                        <ThesisHealthWidget health={thesis_health} />
+                                    </CardContent>
+                                </Card>
+                            </div>
+
+                            {/* CỘT 2: BIỂU ĐỒ & HOẠT ĐỘNG (6/12) */}
+                            <div className="md:col-span-8 lg:col-span-6 space-y-6">
+                                {/* Biểu đồ đóng góp */}
+                                <Card className="shadow-sm">
+                                    <CardHeader className="pb-0">
+                                        <CardTitle className="text-base">Phân bổ công việc</CardTitle>
+                                        <CardDescription>Tỷ lệ hoàn thành task của các thành viên</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="pb-2">
+                                        <ContributionChart data={member_contribution} />
+                                    </CardContent>
+                                </Card>
+
+                                {/* Quick Actions (Nút tắt trong chi tiết thì giữ lại vì hữu dụng) */}
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200" onClick={() => navigate(`/projects/my-group/kanban/${group.ID_NHOM}`)}>
+                                        <CheckCircle2 className="w-5 h-5" />
+                                        <span className="text-xs">Tạo Task</span>
+                                    </Button>
+                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200" onClick={() => navigate(`/projects/my-group/schedule/${group.ID_NHOM}`)}>
+                                        <Calendar className="w-5 h-5" />
+                                        <span className="text-xs">Lịch họp</span>
+                                    </Button>
+                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-green-50 hover:text-green-600 hover:border-green-200" onClick={() => navigate('/projects/my-group')}>
+                                        <FileText className="w-5 h-5" />
+                                        <span className="text-xs">Nộp bài</span>
+                                    </Button>
+                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" onClick={() => navigate('/projects/topics')}>
+                                        <User className="w-5 h-5" />
+                                        <span className="text-xs">GVHD</span>
                                     </Button>
                                 </div>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            </div>
 
-                    {/* RIGHT COLUMN: TIMELINE (2.5/12) */}
-                    <Card className="lg:col-span-2 flex flex-col h-full border-none shadow-md bg-white dark:bg-card">
-                        <CardHeader className="pb-2 border-b px-4 py-3 bg-muted/5">
-                            <CardTitle className="text-sm font-bold uppercase text-muted-foreground flex items-center gap-2">
-                                <Clock className="w-3.5 h-3.5" /> Mốc thời gian
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-0 flex-1 overflow-hidden">
-                            <ScrollArea className="h-full">
-                                <div className="p-4">
-                                    <CompactTimeline milestones={plan.timeline} />
-                                </div>
-                            </ScrollArea>
-                        </CardContent>
-                    </Card>
+                            {/* CỘT 3: TIMELINE (3/12) */}
+                            <div className="md:col-span-12 lg:col-span-3">
+                                <Card className="h-full border-none shadow-none bg-transparent lg:bg-card lg:border lg:shadow-sm">
+                                    <CardHeader className="pb-2 px-0 lg:px-6 lg:border-b">
+                                        <CardTitle className="text-base flex items-center gap-2">
+                                            <Clock className="w-4 h-4 text-blue-500" /> Sắp diễn ra
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="px-0 lg:px-6 pt-4">
+                                        <IntegratedTimeline items={integrated_timeline} />
+                                    </CardContent>
+                                </Card>
+                            </div>
 
+                        </div>
+                    )}
                 </div>
-            </div>
+            </ScrollArea>
         </div>
     );
 }
