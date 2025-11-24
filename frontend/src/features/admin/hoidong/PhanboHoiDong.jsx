@@ -16,12 +16,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Save, Search, Sparkles } from "lucide-react";
+import { 
+    Loader2, ArrowLeft, Search, User, Users, CheckCircle2, ArrowRight, Sparkles, 
+    X, BookOpen, GraduationCap, Building2, AlertCircle 
+} from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { autoAssignGroups } from "@/api/adminHoiDongService";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,133 +35,68 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { autoAssignGroups } from "@/api/adminHoiDongService";
 
-// ----- Component Item Nhóm (Click để chuyển) -----
-const GroupSelectItem = ({ group, onMove }) => {
-  const handleMove = () => onMove(group.ID_NHOM);
-
-  return (
-    <div
-      className={cn(
-        "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
-        "bg-background hover:bg-primary/10 hover:border-primary/30"
-      )}
-      onClick={handleMove}
-      title={`Nhấn để chuyển nhóm "${group.TEN_NHOM}"`}
-    >
-      <div className="flex-1 overflow-hidden">
-        <p className="font-medium truncate" title={group.TEN_NHOM}>
-          {group.TEN_NHOM}
-        </p>
-        <p
-          className="text-sm text-muted-foreground truncate"
-          title={group.TEN_DETAI || "Chưa đăng ký"}
-        >
-          {group.TEN_DETAI || "Chưa đăng ký đề tài"}
-        </p>
-      </div>
-    </div>
-  );
-};
-
-// ----- Component Cột (Trái hoặc Phải) -----
-const GroupTransferList = ({
-  title,
-  groups = [],
-  onMove,
-  searchTerm = "",
-  onSearchChange,
-  showSearch,
-  children,
-}) => {
-  return (
-    <Card className="flex flex-col h-[60vh]">
-      <CardHeader className="py-4 border-b">
-        <CardTitle className="text-lg flex justify-between items-center">
-          <span>{title}</span>
-          <span className="text-base font-medium text-muted-foreground">
-            {groups.length}
-          </span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="p-4 flex-1 flex flex-col min-h-0 space-y-3">
-        {showSearch && (
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Lọc theo tên nhóm, đề tài..."
-              className="pl-10"
-              value={searchTerm}
-              onChange={(e) => onSearchChange(e.target.value)}
-            />
-          </div>
-        )}
-        <ScrollArea className="flex-1 border rounded-md">
-          <div className="p-3 space-y-2">
-            {groups.length > 0 ? (
-              groups.map((group) => (
-                <GroupSelectItem
-                  key={group.ID_NHOM}
-                  group={group}
-                  onMove={onMove}
-                />
-              ))
-            ) : (
-              <div className="flex items-center justify-center h-48 text-muted-foreground text-sm">
-                {searchTerm ? "Không tìm thấy nhóm." : "Không có nhóm nào."}
-              </div>
-            )}
-          </div>
-        </ScrollArea>
-        {children}
-      </CardContent>
-    </Card>
-  );
-};
-
-// ----- Component Chính: PhanboHoiDong -----
 const PhanboHoiDong = () => {
   const [kehoach, setKehoach] = useState([]);
   const [hoidongList, setHoidongList] = useState([]);
   const [allGroups, setAllGroups] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({ chuyennganh: [], khoabomon: [] });
+
   const [chonKehoach, setChonKehoach] = useState("");
-  const [chonHoiDong, setChonHoiDong] = useState("");
+  const [selectedCouncilId, setSelectedCouncilId] = useState(null);
+
+  const [searchCouncil, setSearchCouncil] = useState("");
+  const [searchGroup, setSearchGroup] = useState("");
+  const [filterChuyenNganh, setFilterChuyenNganh] = useState("all");
+  const [filterBoMon, setFilterBoMon] = useState("all");
 
   const [loading, setLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   
-  // State cho Dialog xác nhận phân bổ tự động
+  const [dialogState, setDialogState] = useState({ isOpen: false, group: null });
   const [isAutoAssignDialogOpen, setIsAutoAssignDialogOpen] = useState(false);
-  // State chọn loại hội đồng khi phân bổ tự động ('hoidong' hoặc 'phanbien')
   const [autoAssignType, setAutoAssignType] = useState("hoidong");
+
+  const [removeDialogState, setRemoveDialogState] = useState({ isOpen: false, groupId: null, councilId: null });
 
   const navigate = useNavigate();
 
-  const [leftSearch, setLeftSearch] = useState("");
-  const [rightSearch, setRightSearch] = useState("");
-
-  // Tải Kế hoạch
   useEffect(() => {
     (async () => {
       try {
-        const [khRes] = await Promise.all([
+        const [khRes, cnRes, bmRes] = await Promise.all([
           axiosClient.get("/admin/hoidong/kehoach-options"),
+          axiosClient.get("/admin/hoidong/chuyennganh-options"),
+          axiosClient.get("/khoa-bo-mons"),
         ]);
+
         setKehoach(khRes.data || []);
+        setFilterOptions({
+          chuyennganh: (cnRes.data || []).map(cn => ({
+            value: String(cn.ID_CHUYENNGANH),
+            label: cn.TEN_CHUYENNGANH,
+          })),
+          khoabomon: (bmRes.data || []).map(bm => ({
+            value: String(bm.ID_KHOA_BOMON),
+            label: bm.TEN_KHOA_BOMON,
+          })),
+        });
+        
+        if (khRes.data && khRes.data.length > 0) {
+            setChonKehoach(String(khRes.data[0].ID_KEHOACH));
+        }
       } catch (error) {
-        toast.error("Không thể tải danh sách kế hoạch!");
+        toast.error("Không thể tải dữ liệu ban đầu!");
       }
     })();
   }, []);
 
-  // Tải dữ liệu khi chọn kế hoạch
   const fetchData = useCallback(async () => {
     if (!chonKehoach) {
       setAllGroups([]);
       setHoidongList([]);
-      setChonHoiDong("");
-      setLeftSearch("");
-      setRightSearch("");
+      setSelectedCouncilId(null);
       return;
     }
 
@@ -167,320 +104,530 @@ const PhanboHoiDong = () => {
     try {
       const [nhomRes, hoidongRes] = await Promise.all([
         axiosClient.get(`/admin/hoidong/${chonKehoach}/nhoms`),
-        // Lấy tất cả hội đồng để hiển thị dropdown
-        axiosClient.get("/admin/hoidong", {
-          params: {
-            kehoach: chonKehoach,
-            all: true,
-          },
-        }),
+        axiosClient.get("/admin/hoidong", { params: { kehoach: chonKehoach, all: true } }),
       ]);
 
       setAllGroups(nhomRes.data || []);
+      setHoidongList(hoidongRes.data || []);
 
-      const hoidongData = hoidongRes.data || [];
-      setHoidongList(hoidongData);
-
-      // Nếu chưa chọn hội đồng nào, chọn cái đầu tiên
-      if (!chonHoiDong && hoidongData.length > 0) {
-        setChonHoiDong(String(hoidongData[0].ID_HOIDONG));
+      const councils = hoidongRes.data || [];
+      if (councils.length > 0 && !councils.some(c => c.ID_HOIDONG === selectedCouncilId)) {
+        setSelectedCouncilId(councils[0].ID_HOIDONG);
+      } else if (councils.length === 0) {
+        setSelectedCouncilId(null);
       }
     } catch (error) {
-      toast.error("Không thể tải dữ liệu nhóm/hội đồng!");
+      console.error(error);
+      toast.error("Lỗi tải dữ liệu phân bổ.");
     } finally {
       setLoading(false);
     }
-  }, [chonKehoach, chonHoiDong]);
+  }, [chonKehoach, selectedCouncilId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Tính toán dữ liệu phân bổ (Client-side state)
-  const { hoidongGroupCounts, unassignedGroups, assignedGroups } = useMemo(() => {
-    const counts = new Map();
-    const unassigned = [];
-    const assigned = [];
-    const currentCouncilIdStr = chonHoiDong;
-
-    allGroups.forEach((group) => {
-      const groupIdNum = group.ID_HOIDONG;
-
-      // Đếm số nhóm theo hội đồng (để hiển thị trong dropdown)
-      if (groupIdNum) {
-        counts.set(groupIdNum, (counts.get(groupIdNum) || 0) + 1);
-      }
-
-      // Phân loại nhóm vào cột trái/phải
-      const groupIdStr = groupIdNum ? String(groupIdNum) : null;
-
-      if (groupIdStr === null) {
-        unassigned.push(group);
-      } else if (groupIdStr === currentCouncilIdStr) {
-        assigned.push(group);
-      }
-    });
-
-    return {
-      hoidongGroupCounts: counts,
-      unassignedGroups: unassigned,
-      assignedGroups: assigned,
-    };
-  }, [allGroups, chonHoiDong]);
-
-  // Lọc tìm kiếm cột trái
-  const filteredLeft = useMemo(() => {
-    if (!leftSearch) return unassignedGroups;
-    const term = leftSearch.toLowerCase();
-    return unassignedGroups.filter(
-      (g) =>
-        g.TEN_NHOM.toLowerCase().includes(term) ||
-        (g.TEN_DETAI && g.TEN_DETAI.toLowerCase().includes(term))
-    );
-  }, [unassignedGroups, leftSearch]);
-
-  // Lọc tìm kiếm cột phải
-  const filteredRight = useMemo(() => {
-    if (!rightSearch) return assignedGroups;
-    const term = rightSearch.toLowerCase();
-    return assignedGroups.filter(
-      (g) =>
-        g.TEN_NHOM.toLowerCase().includes(term) ||
-        (g.TEN_DETAI && g.TEN_DETAI.toLowerCase().includes(term))
-    );
-  }, [assignedGroups, rightSearch]);
-
-  // Di chuyển thủ công sang phải (Gán vào hội đồng đang chọn)
-  const handleMoveRight = useCallback(
-    (groupId) => {
-      const councilId = Number(chonHoiDong);
-      if (!councilId) {
-        toast.warning("Vui lòng chọn hội đồng trước!");
-        return;
-      }
-
-      setAllGroups((prev) =>
-        prev.map((g) =>
-          g.ID_NHOM === groupId ? { ...g, ID_HOIDONG: councilId } : g
-        )
+  const filteredCouncils = useMemo(() => {
+    if (!searchCouncil) return hoidongList;
+    const term = searchCouncil.toLowerCase();
+    return hoidongList.filter(hd => {
+      const matchName = hd.TEN_HOIDONG.toLowerCase().includes(term);
+      const matchLecturer = hd.giangviens?.some(gv =>
+        gv.nguoidung?.HODEM_VA_TEN.toLowerCase().includes(term)
       );
-    },
-    [chonHoiDong]
-  );
+      return matchName || matchLecturer;
+    });
+  }, [hoidongList, searchCouncil]);
 
-  // Di chuyển thủ công sang trái (Gỡ khỏi hội đồng)
-  const handleMoveLeft = useCallback((groupId) => {
-    setAllGroups((prev) =>
-      prev.map((g) =>
-        g.ID_NHOM === groupId ? { ...g, ID_HOIDONG: null } : g
-      )
-    );
-  }, []);
+  const filteredGroups = useMemo(() => {
+    let list = allGroups;
+    if (searchGroup) {
+      const term = searchGroup.toLowerCase();
+      list = list.filter(g =>
+        g.TEN_NHOM.toLowerCase().includes(term) ||
+        (g.TEN_DETAI && g.TEN_DETAI.toLowerCase().includes(term))
+      );
+    }
+    if (filterChuyenNganh !== "all") {
+      list = list.filter(g => String(g.ID_CHUYENNGANH) === filterChuyenNganh);
+    }
+    if (filterBoMon !== "all") {
+      list = list.filter(g => String(g.ID_KHOA_BOMON) === filterBoMon);
+    }
+    return list;
+  }, [allGroups, searchGroup, filterChuyenNganh, filterBoMon]);
 
-  // 1. Hàm kiểm tra điều kiện mở Dialog
-  const onOpenAutoAssignDialog = () => {
-    if (!chonKehoach) {
-      toast.warning("Vui lòng chọn kế hoạch trước!");
+  const onGroupClick = (group) => {
+    if (!selectedCouncilId) {
+      toast.warning("Vui lòng chọn Hội đồng đích ở cột bên phải trước!");
       return;
     }
-
-    if (unassignedGroups.length === 0) {
-      toast.info("Tất cả các nhóm đã được phân bổ.");
+    if (group.ID_HOIDONG === selectedCouncilId) {
+      toast.info("Nhóm này đã thuộc hội đồng đang chọn.");
       return;
     }
-    
-    // Mở dialog thay vì window.confirm
-    setIsAutoAssignDialogOpen(true);
+    setDialogState({ isOpen: true, group });
   };
 
-  // 2. Hàm thực thi logic khi bấm "Xác nhận" trong Dialog
+  const handleConfirmMove = async () => {
+    const { group } = dialogState;
+    if (!group || !selectedCouncilId) return;
+
+    const targetCouncil = hoidongList.find(h => h.ID_HOIDONG === selectedCouncilId);
+    const previousGroups = [...allGroups];
+
+    setAllGroups(prev =>
+      prev.map(g =>
+        g.ID_NHOM === group.ID_NHOM
+          ? { ...g, ID_HOIDONG: selectedCouncilId, TEN_HOIDONG: targetCouncil?.TEN_HOIDONG }
+          : g
+      )
+    );
+    setDialogState({ isOpen: false, group: null });
+
+    try {
+      await axiosClient.post("/admin/hoidong/phanbo-nhom", [
+        { ID_NHOM: group.ID_NHOM, ID_HOIDONG: selectedCouncilId },
+      ]);
+      toast.success(`Đã chuyển nhóm "${group.TEN_NHOM}" sang ${targetCouncil?.TEN_HOIDONG}`);
+    } catch (error) {
+      setAllGroups(previousGroups);
+      toast.error("Lỗi khi chuyển nhóm. Đã hoàn tác.");
+    }
+  };
+
+  const handleRemoveClick = (e, groupId, councilId) => {
+    e.stopPropagation();
+    setRemoveDialogState({ isOpen: true, groupId, councilId });
+  }
+
+  const handleConfirmRemove = async () => {
+    const { groupId, councilId } = removeDialogState;
+    if(!groupId || !councilId) return;
+
+    const previousGroups = [...allGroups];
+    setAllGroups(prev => prev.map(g => g.ID_NHOM === groupId ? { ...g, ID_HOIDONG: null, TEN_HOIDONG: null } : g));
+    
+    setRemoveDialogState({ isOpen: false, groupId: null, councilId: null });
+
+    try {
+        await axiosClient.delete(`/admin/hoidong/${councilId}/nhom/${groupId}`);
+        toast.success("Đã gỡ nhóm khỏi hội đồng");
+    } catch (err) {
+        setAllGroups(previousGroups);
+        toast.error("Lỗi khi gỡ nhóm");
+    }
+  }
+
+  const getGroupCountInCouncil = (councilId) => {
+    return allGroups.filter(g => g.ID_HOIDONG === councilId).length;
+  };
+
   const handleConfirmAutoAssign = async () => {
     setLoading(true);
     try {
-      // Gọi API với thêm tham số LOAI
+      if (allGroups.filter(g => !g.ID_HOIDONG).length === 0) {
+        toast.info("Tất cả các nhóm đã được phân bổ.");
+        return;
+      }
       const res = await autoAssignGroups(chonKehoach, autoAssignType);
-      toast.success(res.message);
-      // Tải lại dữ liệu mới nhất từ server sau khi phân bổ xong
-      await fetchData(); 
-    } catch (err) {
-      console.error(err);
-      toast.error(err.response?.data?.message || "Phân bổ thất bại.");
-    } finally {
-      setLoading(false);
-      setIsAutoAssignDialogOpen(false); // Đóng dialog
-    }
-  };
-
-  // Lưu phân bổ (Cho các thao tác thủ công)
-  const handleSave = async () => {
-    if (!chonKehoach) {
-      toast.warning("Vui lòng chọn kế hoạch!");
-      return;
-    }
-
-    const payload = allGroups.map((g) => ({
-      ID_NHOM: g.ID_NHOM,
-      ID_HOIDONG: g.ID_HOIDONG ?? null,
-    }));
-
-    setIsSaving(true);
-    try {
-      await axiosClient.post("/admin/hoidong/phanbo-nhom", payload);
-      toast.success("Lưu phân bổ thành công!");
+      toast.success(res.message || "Phân bổ tự động thành công!");
       await fetchData();
     } catch (err) {
-      toast.error("Lưu thất bại. Vui lòng thử lại!");
+      toast.error(err.response?.data?.message || "Phân bổ tự động thất bại!");
     } finally {
-      setIsSaving(false);
+      setLoading(false);
+      setIsAutoAssignDialogOpen(false);
     }
   };
 
-  return (
-    <div className="p-4 md:p-8 max-w-full mx-auto">
-      <Button
-        type="button"
-        variant="outline"
-        onClick={() => navigate(-1)}
-        className="mb-4"
-      >
-        <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
-      </Button>
-      <Card className="shadow-lg">
-        <CardContent className="space-y-6 pt-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
-            <div className="space-y-2">
-              <Select value={chonKehoach} onValueChange={setChonKehoach}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="-- Chọn kế hoạch --" />
-                </SelectTrigger>
-                <SelectContent>
-                  {kehoach.map((k) => (
-                    <SelectItem
-                      key={k.ID_KEHOACH}
-                      value={String(k.ID_KEHOACH)}
-                    >
-                      {k.TEN_DOT}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="space-y-2 md:text-right">
-              {/* Nút phân bổ tự động (Server-side) */}
-              <Button
-                type="button"
-                variant="default"
-                className="mr-2 bg-purple-600 hover:bg-purple-700 text-white"
-                onClick={onOpenAutoAssignDialog} // Gọi hàm mở dialog
-                disabled={
-                  isSaving ||
-                  loading ||
-                  !chonKehoach ||
-                  unassignedGroups.length === 0 ||
-                  hoidongList.length === 0
-                }
-              >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Phân bổ tự động
-              </Button>
+  const currentPlan = kehoach.find(k => String(k.ID_KEHOACH) === chonKehoach);
+  const unassignedGroupsCount = allGroups.filter(g => !g.ID_HOIDONG).length;
 
-              {/* Nút Lưu (cho thao tác thủ công) */}
-              <Button
-                onClick={handleSave}
-                disabled={isSaving || loading || !chonKehoach}
-              >
-                {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Lưu phân bổ
-              </Button>
-            </div>
+  return (
+    <div className="p-4 md:p-8 h-[calc(100vh-4rem)] flex flex-col bg-muted/10 overflow-hidden">
+      {/* Thay đổi ở đây: Chuyển nút Phân bổ tự động sang phải, sát Select */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-0 gap-4 shrink-0">
+        <div className="flex items-center gap-3">
+          {/* Sửa: Thêm chữ Quay lại và thay đổi size="icon" */}
+          <Button variant="outline" onClick={() => navigate(-1)} className="bg-background">
+            <ArrowLeft className="h-4 w-4 mr-2" /> Quay lại
+          </Button>
+        </div>
+        
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+          {/* Sửa: Nút Phân bổ tự động */}
+          <Button
+            variant="default"
+            className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+            onClick={() => {
+              if (!chonKehoach) return toast.warning("Vui lòng chọn kế hoạch trước!");
+              if (hoidongList.length === 0) return toast.error("Kế hoạch này chưa có Hội đồng nào được tạo!");
+              setIsAutoAssignDialogOpen(true);
+            }}
+            disabled={loading || !chonKehoach || hoidongList.length === 0}
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            Phân bổ tự động ({unassignedGroupsCount})
+          </Button>
+        
+          <div className="w-full sm:w-[250px] ml-auto">
+            {/* Select chọn kế hoạch */}
+            <Select value={chonKehoach} onValueChange={setChonKehoach} disabled={loading}>
+              <SelectTrigger className="bg-background shadow-sm">
+                <SelectValue placeholder="-- Chọn kế hoạch --" />
+              </SelectTrigger>
+              <SelectContent>
+                {kehoach.map(k => (
+                  <SelectItem key={k.ID_KEHOACH} value={String(k.ID_KEHOACH)}>
+                    {k.TEN_DOT}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+      
+      {/* Thêm khoảng cách ở đây, tách biệt header và nội dung chính (Xóa khoảng cách giữa div chọn kế hoạch và phân bổ ở dưới) */}
+      <div className="pt-6"></div>
+
+      {/* Nội dung chính - [SỬA]: min-h-0 để cho phép con bên trong cuộn */}
+      {loading && !allGroups.length ? (
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : !chonKehoach ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground border-2 border-dashed rounded-xl bg-background/50">
+          <Users className="w-12 h-12 mb-2 opacity-20" />
+          <p>Vui lòng chọn kế hoạch để bắt đầu.</p>
+        </div>
+      ) : (
+        // [SỬA]: overflow-hidden ở đây để grid không tràn ra ngoài
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-hidden">
+          
+          {/* Cột trái: Danh sách nhóm */}
+          <div className="lg:col-span-7 flex flex-col h-full min-h-0">
+            <Card className="flex flex-col h-full border-none shadow-md bg-background overflow-hidden">
+              <CardHeader className="pb-3 pt-4 px-4 border-b bg-muted/10 shrink-0">
+                <div className="flex justify-between items-center mb-3">
+                  <CardTitle className="text-base font-bold flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    Danh sách Nhóm - Đề tài
+                    <Badge variant="secondary" className="ml-2">{filteredGroups.length}</Badge>
+                  </CardTitle>
+                  <div className="flex gap-2">
+                    <Select value={filterChuyenNganh} onValueChange={setFilterChuyenNganh}>
+                      <SelectTrigger className="h-8 w-[140px] text-xs bg-background">
+                        <SelectValue placeholder="Chuyên ngành" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả C.Ngành</SelectItem>
+                        {filterOptions.chuyennganh.map(cn => (
+                          <SelectItem key={cn.value} value={cn.value}>{cn.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Select value={filterBoMon} onValueChange={setFilterBoMon}>
+                      <SelectTrigger className="h-8 w-[140px] text-xs bg-background">
+                        <SelectValue placeholder="Bộ môn" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tất cả Bộ môn</SelectItem>
+                        {filterOptions.khoabomon.map(bm => (
+                          <SelectItem key={bm.value} value={bm.value}>{bm.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tìm tên nhóm, đề tài..."
+                    className="pl-9 bg-background border-muted-foreground/20"
+                    value={searchGroup}
+                    onChange={e => setSearchGroup(e.target.value)}
+                  />
+                </div>
+              </CardHeader>
+
+              <CardContent className="flex-1 min-h-0 p-0 bg-muted/5">
+                <ScrollArea className="h-full">
+                  <div className="p-4 space-y-3">
+                    {filteredGroups.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground text-sm">
+                        Không tìm thấy nhóm nào.
+                      </div>
+                    ) : (
+                      filteredGroups.map(group => {
+                        const isAssignedToCurrent = group.ID_HOIDONG === selectedCouncilId;
+                        const hasCouncil = !!group.ID_HOIDONG;
+
+                        const tenChuyenNganh = group.phancong_detai_nhom?.detai?.chuyennganh?.TEN_CHUYENNGANH 
+                                                 || group.TEN_CHUYENNGANH 
+                                                 || "Chưa xác định";
+                        
+                        const tenBoMon = group.phancong_detai_nhom?.gvhd?.khoabomon?.TEN_KHOA_BOMON 
+                                             || group.TEN_KHOA_BOMON 
+                                             || "Chưa xác định";
+
+                        return (
+                          <div
+                            key={group.ID_NHOM}
+                            onClick={() => onGroupClick(group)}
+                            className={cn(
+                              "group relative flex flex-col p-3 rounded-lg border bg-background transition-all duration-200 shadow-sm",
+                              isAssignedToCurrent
+                                ? "border-primary/50 ring-1 ring-primary/20 bg-primary/5 cursor-default"
+                                : "hover:border-primary hover:shadow-md cursor-pointer"
+                            )}
+                          >
+                            <div className="flex justify-between items-start gap-2">
+                              <h4 className={cn("font-bold text-sm", isAssignedToCurrent ? "text-primary" : "text-foreground")}>
+                                {group.TEN_NHOM}
+                              </h4>
+
+                              {isAssignedToCurrent ? (
+                                <Badge className="bg-primary text-primary-foreground hover:bg-primary text-[10px]">
+                                  <CheckCircle2 className="w-3 h-3 mr-1" /> Đang chọn
+                                </Badge>
+                              ) : hasCouncil ? (
+                                <Badge variant="outline" className="text-[10px] max-w-[120px] truncate bg-muted text-muted-foreground">
+                                  {group.TEN_HOIDONG}
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[10px] bg-orange-100 text-orange-700 hover:bg-orange-100 border-orange-200">
+                                  Chưa có
+                                </Badge>
+                              )}
+                            </div>
+
+                            <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                              <p className="line-clamp-2 leading-relaxed" title={group.TEN_DETAI}>
+                                <span className="font-medium text-foreground/80">Đề tài:</span> {group.TEN_DETAI}
+                              </p>
+                              
+                              <div className="flex flex-wrap gap-y-1 gap-x-3 pt-2 border-t border-border/40 mt-2 text-[11px]">
+                                <span className="flex items-center gap-1 truncate max-w-[180px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded" title={`Chuyên ngành: ${tenChuyenNganh}`}>
+                                    <GraduationCap className="w-3 h-3 opacity-70"/>
+                                    {tenChuyenNganh}
+                                </span>
+                                <span className="flex items-center gap-1 truncate max-w-[180px] text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded" title={`Bộ môn: ${tenBoMon}`}>
+                                    <Building2 className="w-3 h-3 opacity-70"/>
+                                    {tenBoMon}
+                                </span>
+                              </div>
+                            </div>
+
+                            {!isAssignedToCurrent && selectedCouncilId && (
+                              <div className="absolute inset-0 bg-primary/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-lg pointer-events-none">
+                                <Badge className="bg-primary text-white shadow-lg pointer-events-auto">
+                                  Chuyển sang HĐ đang chọn <ArrowRight className="ml-1 w-3 h-3" />
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Hàng 2: Giao diện 2 cột */}
-          {loading ? (
-            <div className="text-center p-8">
-              <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : chonKehoach ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              {/* Cột trái: Chưa phân bổ */}
-              <GroupTransferList
-                title="Nhóm chưa phân bổ"
-                groups={filteredLeft}
-                onMove={handleMoveRight}
-                searchTerm={leftSearch}
-                onSearchChange={setLeftSearch}
-                showSearch={true}
-              />
+          {/* Cột phải: Danh sách hội đồng */}
+          <div className="lg:col-span-5 flex flex-col h-full min-h-0">
+            <Card className="flex flex-col h-full border-none shadow-md bg-background overflow-hidden">
+              <CardHeader className="pb-3 pt-4 px-4 border-b bg-blue-50/30 dark:bg-blue-900/10 shrink-0">
+                <div className="flex justify-between items-center mb-3">
+                  <CardTitle className="text-base font-bold flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                    <Users className="h-4 w-4" />
+                    Chọn Hội đồng
+                  </CardTitle>
+                  <Badge variant="outline" className="bg-background">{filteredCouncils.length}</Badge>
+                </div>
 
-              {/* Cột phải: Hội đồng */}
-              <div className="flex flex-col h-[60vh] space-y-4">
-                <Select
-                  value={chonHoiDong}
-                  onValueChange={setChonHoiDong}
-                  disabled={!hoidongList.length}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue
-                      placeholder={
-                        hoidongList.length
-                          ? "--- Chọn hội đồng để xem ---"
-                          : "Chưa có hội đồng"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {hoidongList.map((hd) => (
-                      <SelectItem
-                        key={hd.ID_HOIDONG}
-                        value={String(hd.ID_HOIDONG)}
-                      >
-                        {hd.TEN_HOIDONG} ({hoidongGroupCounts.get(hd.ID_HOIDONG) || 0} nhóm)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {chonHoiDong ? (
-                  <GroupTransferList
-                    title="Nhóm thuộc hội đồng này"
-                    groups={filteredRight}
-                    onMove={handleMoveLeft}
-                    searchTerm={rightSearch}
-                    onSearchChange={setRightSearch}
-                    showSearch={true}
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Tìm tên HĐ, Tên GV..."
+                    className="pl-9 bg-background border-blue-200 dark:border-blue-800 focus-visible:ring-blue-500"
+                    value={searchCouncil}
+                    onChange={e => setSearchCouncil(e.target.value)}
                   />
-                ) : (
-                  <Card className="flex-1 flex flex-col min-w-[300px]">
-                    <CardHeader className="py-4 border-b">
-                      <CardTitle className="text-lg">
-                        Chưa chọn hội đồng
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-4 min-h-[300px] flex items-center justify-center">
-                      <p className="text-muted-foreground">
-                        {hoidongList.length > 0
-                          ? "Vui lòng chọn một hội đồng từ danh sách ở trên."
-                          : "Kế hoạch này chưa có hội đồng nào được tạo."}
-                      </p>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </div>
-          ) : (
-            <p className="text-muted-foreground text-center py-6">
-              Vui lòng chọn kế hoạch để bắt đầu.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+                </div>
+              </CardHeader>
 
-      {/* DIALOG XÁC NHẬN PHÂN BỔ TỰ ĐỘNG */}
+              <CardContent className="flex-1 min-h-0 p-0">
+                <ScrollArea className="h-full">
+                  <div className="p-4 space-y-3">
+                    {filteredCouncils.length === 0 ? (
+                      <div className="text-center py-10 text-muted-foreground text-sm">
+                        Không tìm thấy hội đồng.
+                      </div>
+                    ) : (
+                      filteredCouncils.map(hd => {
+                        const isSelected = selectedCouncilId === hd.ID_HOIDONG;
+                        const groupCount = getGroupCountInCouncil(hd.ID_HOIDONG);
+                        const assignedGroupsInThisCouncil = allGroups.filter(g => g.ID_HOIDONG === hd.ID_HOIDONG);
+
+                        return (
+                          <div
+                            key={hd.ID_HOIDONG}
+                            onClick={() => setSelectedCouncilId(hd.ID_HOIDONG)}
+                            className={cn(
+                              "cursor-pointer rounded-lg border p-3 transition-all duration-200 relative",
+                              isSelected
+                                ? "bg-blue-50 border-blue-500 ring-1 ring-blue-500 shadow-sm dark:bg-blue-900/20"
+                                : "bg-background hover:border-blue-300 hover:shadow-sm"
+                            )}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-0 right-0 p-1 bg-blue-500 rounded-bl-lg">
+                                <CheckCircle2 className="w-3 h-3 text-white" />
+                              </div>
+                            )}
+
+                            <div className="flex justify-between items-center mb-2 pr-4">
+                              <h4 className={cn("font-bold text-sm", isSelected ? "text-blue-700 dark:text-blue-400" : "text-foreground")}>
+                                {hd.TEN_HOIDONG}
+                              </h4>
+                              <Badge variant={hd.LOAI === 'phanbien' ? 'secondary' : 'default'} className="text-[10px] px-1.5 h-5">
+                                {hd.LOAI === 'phanbien' ? 'Phản biện' : 'Hội đồng'}
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-1 mb-3">
+                              {hd.giangviens?.length > 0 ? (
+                                hd.giangviens.map(gv => (
+                                  <div key={gv.ID_GIANGVIEN} className="text-xs flex items-center text-muted-foreground">
+                                    <User className="w-3 h-3 mr-1.5 opacity-70" />
+                                    <span className={cn(gv.pivot?.VAITRO === 'chutich' ? "font-bold text-foreground" : "")}>
+                                      {gv.nguoidung?.HODEM_VA_TEN || 'N/A'}
+                                    </span>
+                                    {gv.pivot?.VAITRO && (
+                                      <span className="ml-1 opacity-70 text-[10px]">
+                                        ({gv.pivot.VAITRO === 'chutich' ? 'CT' : gv.pivot.VAITRO === 'thuky' ? 'TK' : 'TV'})
+                                      </span>
+                                    )}
+                                  </div>
+                                ))
+                              ) : (
+                                <span className="text-xs text-muted-foreground italic">Chưa có thành viên</span>
+                              )}
+                            </div>
+
+                            <div className="pt-2 border-t border-border/50 flex justify-between items-center">
+                              <span className="text-xs text-muted-foreground">Số nhóm:</span>
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs font-mono",
+                                  groupCount > 0 ? "bg-primary/10 text-primary border-primary/20" : "bg-muted text-muted-foreground"
+                                )}
+                              >
+                                {groupCount}
+                              </Badge>
+                            </div>
+
+                            {isSelected && (
+                                <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800 animate-in slide-in-from-top-2">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <BookOpen className="w-3.5 h-3.5 text-blue-600"/>
+                                        <p className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase">
+                                            Đề tài đang chấm ({assignedGroupsInThisCouncil.length})
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-blue-200 scrollbar-track-transparent">
+                                        {assignedGroupsInThisCouncil.length > 0 ? (
+                                            assignedGroupsInThisCouncil.map(assignedGroup => (
+                                                <div key={assignedGroup.ID_NHOM} className="group/item flex justify-between items-center bg-white dark:bg-slate-950 p-2 rounded border text-xs hover:border-destructive/50 transition-colors shadow-sm">
+                                                    <div className="flex-1 min-w-0 mr-2">
+                                                        <p className="font-medium truncate text-foreground" title={assignedGroup.TEN_DETAI || assignedGroup.TEN_NHOM}>
+                                                            {assignedGroup.TEN_DETAI || assignedGroup.TEN_NHOM}
+                                                        </p>
+                                                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
+                                                            ({assignedGroup.TEN_NHOM})
+                                                        </p>
+                                                    </div>
+                                                    <Button
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                                        onClick={(e) => handleRemoveClick(e, assignedGroup.ID_NHOM, hd.ID_HOIDONG)}
+                                                        title="Gỡ nhóm khỏi hội đồng này"
+                                                    >
+                                                        <X className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-xs text-muted-foreground italic pl-1">Chưa có nhóm nào được gán.</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </ScrollArea>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Dialog xác nhận chuyển nhóm */}
+      <AlertDialog open={dialogState.isOpen} onOpenChange={open => !open && setDialogState({ isOpen: false, group: null })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận chuyển nhóm</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn chuyển nhóm <strong>{dialogState.group?.TEN_NHOM}</strong>
+              {dialogState.group?.TEN_HOIDONG && (
+                <> hiện đang ở hội đồng <strong>{dialogState.group.TEN_HOIDONG}</strong></>
+              )}
+              {' '}sang hội đồng đích <strong>{hoidongList.find(h => h.ID_HOIDONG === selectedCouncilId)?.TEN_HOIDONG || 'N/A'}</strong> không?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmMove}>Xác nhận</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog xác nhận GỠ nhóm (Thay thế window.confirm) */}
+      <AlertDialog open={removeDialogState.isOpen} onOpenChange={open => !open && setRemoveDialogState({ isOpen: false, groupId: null, councilId: null })}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-5 w-5" />
+                Xác nhận Gỡ nhóm
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc chắn muốn gỡ nhóm này khỏi hội đồng không? Nhóm sẽ trở về trạng thái chưa phân bổ.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRemove} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                Gỡ bỏ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog phân bổ tự động */}
       <AlertDialog open={isAutoAssignDialogOpen} onOpenChange={setIsAutoAssignDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -488,22 +635,13 @@ const PhanboHoiDong = () => {
               <Sparkles className="h-5 w-5 text-purple-600" />
               Xác nhận Phân bổ Tự động?
             </AlertDialogTitle>
-            
-            {/* Sử dụng asChild để tránh lỗi <ul> bên trong <p> */}
             <AlertDialogDescription asChild>
               <div className="text-sm text-muted-foreground">
-                Hệ thống sẽ tự động phân bổ <strong>{unassignedGroups.length} nhóm</strong> chưa có hội đồng vào các hội đồng phù hợp nhất.
+                Hệ thống sẽ tự động phân bổ <strong>{unassignedGroupsCount} nhóm</strong> chưa có hội đồng vào các hội đồng phù hợp nhất trong kế hoạch <strong>{currentPlan?.TEN_DOT}</strong>.
                 <br /><br />
-
-                {/* Chọn loại hội đồng */}
                 <div className="mb-4 p-3 bg-muted/50 rounded-md border">
                   <Label className="mb-2 block text-xs font-bold uppercase">Chọn loại hội đồng đích:</Label>
-                  <RadioGroup 
-                    defaultValue="hoidong" 
-                    value={autoAssignType} 
-                    onValueChange={setAutoAssignType} 
-                    className="flex gap-4"
-                  >
+                  <RadioGroup value={autoAssignType} onValueChange={setAutoAssignType} className="flex gap-4">
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="hoidong" id="opt-hd" />
                       <Label htmlFor="opt-hd" className="cursor-pointer">Hội đồng Bảo vệ</Label>
@@ -514,9 +652,8 @@ const PhanboHoiDong = () => {
                     </div>
                   </RadioGroup>
                 </div>
-
                 <ul className="list-disc list-inside text-sm space-y-1">
-                  <li>Ưu tiên gán vào Hội đồng có <strong>cùng chuyên ngành</strong>.</li>
+                  <li>Ưu tiên gán vào Hội đồng có cùng chuyên ngành/bộ môn.</li>
                   <li>Cân bằng số lượng nhóm giữa các hội đồng.</li>
                 </ul>
               </div>
@@ -524,11 +661,7 @@ const PhanboHoiDong = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={loading}>Hủy</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleConfirmAutoAssign} 
-              disabled={loading}
-              className="bg-purple-600 hover:bg-purple-700 text-white"
-            >
+            <AlertDialogAction onClick={handleConfirmAutoAssign} disabled={loading} className="bg-purple-600 hover:bg-purple-700 text-white">
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Tiến hành phân bổ
             </AlertDialogAction>

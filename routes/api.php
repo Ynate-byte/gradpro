@@ -301,6 +301,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Quản lý Hội đồng
         Route::prefix('hoidong')->group(function () {
+            Route::get('/auto-create-stats', [HoiDongController::class, 'getAutoCreateStats']);
+            Route::post('/create-bulk-department', [HoiDongController::class, 'createBulkByDepartment']);
             Route::get('/statistics', [HoiDongController::class, 'getStatistics']);
             Route::get('/workload-stats', [HoiDongController::class, 'getLecturerWorkload']); 
             Route::get('/kehoach-options', [HoiDongController::class, 'getKeHoachOptions']);

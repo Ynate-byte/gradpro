@@ -99,3 +99,11 @@ export const autoAssignGroups = (planId, type = 'hoidong') => {
         LOAI: type
     }).then(res => res.data);
 };
+
+export const getAutoCreateStats = (planId) => {
+    return axiosClient.get('/admin/hoidong/auto-create-stats', { params: { plan_id: planId } }).then(res => res.data);
+};
+
+export const createBulkByDepartment = (data) => {
+    return axiosClient.post('/admin/hoidong/create-bulk-department', data).then(res => res.data);
+};

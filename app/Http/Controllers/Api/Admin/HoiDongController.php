@@ -9,6 +9,7 @@ use App\Models\KehoachKhoaluan;
 use App\Models\Nhom;
 use App\Models\TyTrongDiem;
 use App\Models\Giangvien;
+use App\Models\KhoaBomon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -75,7 +76,8 @@ class HoiDongController extends Controller
         };
 
         if ($request->boolean('all')) {
-            $hoidongs = $query->get();
+            $hoidongs = $query->with(['giangviens.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN'])->get();
+            
             $hoidongs->transform($calculateStatus);
 
             if ($request->filled('trang_thai_cham_diem')) {
@@ -563,7 +565,10 @@ class HoiDongController extends Controller
                         $query->select('ID_PHANCONG', 'ID_NHOM', 'ID_DETAI')
                             ->with('detai:ID_DETAI,TEN_DETAI');
                     },
-                    'phancongDetaiNhom.gvhd'
+                    'phancongDetaiNhom.gvhd',
+                    // [CẬP NHẬT] Load thêm thông tin để lọc
+                    'chuyennganh:ID_CHUYENNGANH,TEN_CHUYENNGANH', 
+                    'khoabomon:ID_KHOA_BOMON,TEN_KHOA_BOMON'
                 ])
                 ->get()
                 ->map(function ($nhom) {
@@ -575,6 +580,12 @@ class HoiDongController extends Controller
                         'TEN_DETAI' => $nhom->phancongDetaiNhom?->detai?->TEN_DETAI ?? 'Chưa đăng ký đề tài',
                         'ID_HOIDONG' => $hoidong?->ID_HOIDONG ?? null,
                         'TEN_HOIDONG' => $hoidong?->TEN_HOIDONG ?? null,
+                        
+                        // [CẬP NHẬT] Thêm trường để frontend lọc
+                        'ID_CHUYENNGANH' => $nhom->ID_CHUYENNGANH,
+                        'TEN_CHUYENNGANH' => $nhom->chuyennganh?->TEN_CHUYENNGANH,
+                        'ID_KHOA_BOMON' => $nhom->ID_KHOA_BOMON,
+                        'TEN_KHOA_BOMON' => $nhom->khoabomon?->TEN_KHOA_BOMON,
                     ];
                 });
 
@@ -649,6 +660,134 @@ class HoiDongController extends Controller
             return response()->json($result);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Lỗi tải danh sách hội đồng', 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function getAutoCreateStats(Request $request)
+    {
+        $planId = $request->input('plan_id');
+        $type = $request->input('type', 'hoidong'); 
+
+        if (!$planId) return response()->json([]);
+
+        // 1. Lấy các nhóm đủ điều kiện NGHIÊM NGẶT
+        $groups = Nhom::where('ID_KEHOACH', $planId)
+            // Điều kiện: Chưa có hội đồng loại này
+            ->whereDoesntHave('hoidongs', function($q) use ($type) {
+                $q->where('LOAI', $type);
+            })
+            // Điều kiện QUAN TRỌNG: Phải có bài nộp ĐÃ ĐƯỢC DUYỆT
+            ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                $q->where('TRANGTHAI', 'Đã xác nhận');
+            })
+            // Eager load để lấy thông tin Bộ môn từ Đề tài -> GV Đề xuất
+            ->with([
+                'phancongDetaiNhom.detai.nguoiDexuat', // Để lấy ID_KHOA_BOMON từ GV ra đề
+                'phancongDetaiNhom.gvhd' // Fallback nếu cần
+            ])
+            ->get();
+
+        // 2. Nhóm các group theo ID_KHOA_BOMON (Lấy từ Đề tài)
+        // Bước này quan trọng để fix lỗi không hiện nhóm nếu bảng NHOM thiếu ID_KHOA_BOMON
+        $grouped = $groups->groupBy(function ($group) {
+            // Ưu tiên 1: Lấy bộ môn của Người đề xuất đề tài (Chính xác nhất)
+            if ($group->phancongDetaiNhom?->detai?->nguoiDexuat?->ID_KHOA_BOMON) {
+                return $group->phancongDetaiNhom->detai->nguoiDexuat->ID_KHOA_BOMON;
+            }
+            // Ưu tiên 2: Lấy bộ môn của GVHD
+            if ($group->phancongDetaiNhom?->gvhd?->ID_KHOA_BOMON) {
+                return $group->phancongDetaiNhom->gvhd->ID_KHOA_BOMON;
+            }
+            // Ưu tiên 3: Lấy trực tiếp từ nhóm (nếu có set)
+            return $group->ID_KHOA_BOMON ?? 'UNKNOWN';
+        });
+        
+        $stats = [];
+        foreach ($grouped as $deptId => $groupList) {
+            if ($deptId === 'UNKNOWN') continue; // Bỏ qua nếu không xác định được bộ môn
+
+            $dept = KhoaBomon::find($deptId);
+            if (!$dept) continue;
+
+            $count = $groupList->count();
+            
+            // Tìm chuyên ngành mặc định của bộ môn này để gán cho Hội đồng
+            $defaultMajor = Chuyennganh::where('ID_KHOA_BOMON', $deptId)
+                                        ->where('TRANGTHAI_KICHHOAT', true)
+                                        ->first();
+
+            $stats[] = [
+                'ID_KHOA_BOMON' => $deptId,
+                'TEN_KHOA_BOMON' => $dept->TEN_KHOA_BOMON,
+                'MA_KHOA_BOMON' => $dept->MA_KHOA_BOMON, 
+                'group_count' => $count,
+                'suggested_councils' => 0, // Frontend sẽ tính
+                'default_major_id' => $defaultMajor ? $defaultMajor->ID_CHUYENNGANH : null,
+                'prefix_name' => "" 
+            ];
+        }
+
+        return response()->json($stats);
+    }
+
+    /**
+     * [MỚI] Tạo hội đồng hàng loạt theo từng bộ môn
+     */
+    public function createBulkByDepartment(Request $request)
+    {
+        $validated = $request->validate([
+            'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'LOAI' => 'required|in:hoidong,phanbien',
+            'items' => 'required|array', // Danh sách các bộ môn cần tạo
+            'items.*.ID_KHOA_BOMON' => 'required',
+            'items.*.quantity' => 'required|integer|min:1',
+            'items.*.prefix' => 'required|string',
+            'items.*.major_id' => 'nullable'
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $totalCreated = 0;
+            
+            foreach ($validated['items'] as $item) {
+                $qty = $item['quantity'];
+                $prefix = $item['prefix'];
+                $majorId = $item['major_id'];
+
+                // Nếu không có chuyên ngành cụ thể, bỏ qua hoặc gán null (tùy DB constraint)
+                if (!$majorId) {
+                     $defaultMajor = Chuyennganh::where('ID_KHOA_BOMON', $item['ID_KHOA_BOMON'])->first();
+                     $majorId = $defaultMajor ? $defaultMajor->ID_CHUYENNGANH : null;
+                }
+
+                // Tạo N hội đồng cho bộ môn này
+                for ($i = 1; $i <= $qty; $i++) {
+                    // Tạo tên: "HĐ Bảo vệ - CNTT 1", "HĐ Bảo vệ - CNTT 2"...
+                    $name = "{$prefix} {$i}";
+                    
+                    // Check trùng tên để thêm hậu tố nếu cần
+                    while (Hoidong::where('ID_KEHOACH', $validated['ID_KEHOACH'])
+                        ->where('TEN_HOIDONG', $name)->exists()) {
+                        $name .= " (" . rand(10, 99) . ")";
+                    }
+
+                    Hoidong::create([
+                        'TEN_HOIDONG' => $name,
+                        'LOAI' => $validated['LOAI'],
+                        'ID_KEHOACH' => $validated['ID_KEHOACH'],
+                        'ID_CHUYENNGANH' => $majorId,
+                        // Các trường khác để null chờ cập nhật sau
+                    ]);
+                    $totalCreated++;
+                }
+            }
+
+            DB::commit();
+            return response()->json(['message' => "Đã tạo thành công {$totalCreated} hội đồng."]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['error' => 'Lỗi tạo hội đồng: ' . $e->getMessage()], 500);
         }
     }
 
