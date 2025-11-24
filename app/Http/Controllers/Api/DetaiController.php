@@ -548,47 +548,79 @@ class DetaiController extends Controller
      */
     public function getAvailableTopics(Request $request)
     {
-        $query = Detai::with(['nguoiDexuat.nguoidung', 'chuyennganh'])
-            ->where('TRANGTHAI', 'Đã duyệt');
+        $request->validate([
+            'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH'
+        ]);
 
-        // Lọc theo kế hoạch
-        if ($request->has('plan_id')) {
-            $query->where('ID_KEHOACH', $request->plan_id);
+        $query = Detai::with(['nguoiDexuat.nguoidung', 'chuyennganh'])
+            ->where('TRANGTHAI', 'Đã duyệt')
+            ->where('ID_KEHOACH', $request->plan_id);
+
+        if ($request->filled('lecturer_id') && $request->lecturer_id !== 'all') {
+            $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
         }
 
-        // Lọc theo chuyên ngành nếu được cung cấp
-        if ($request->has('major_id')) {
+        if ($request->filled('major_id') && $request->major_id !== 'all') {
             $query->where('ID_CHUYENNGANH', $request->major_id);
         }
 
-        // Tìm kiếm theo tên
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $query->where('TEN_DETAI', 'like', '%' . $request->search . '%');
         }
 
-        $topics = $query->orderBy('NGAYTAO', 'desc')->paginate(10);
+        $topics = $query->orderBy('NGAYTAO', 'desc')->get();
 
-        return response()->json($topics);
+        return response()->json([
+            'data' => $topics
+        ]);
+    }
+
+    /**
+     *  Lấy danh sách Giảng viên có đề tài trong kế hoạch (để làm bộ lọc)
+     */
+    public function getSupervisorsByPlan(Request $request)
+    {
+        $request->validate([
+            'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH'
+        ]);
+
+        $lecturers = Giangvien::whereHas('detai', function($q) use ($request) {
+            $q->where('ID_KEHOACH', $request->plan_id)
+              ->where('TRANGTHAI', 'Đã duyệt');
+        })
+        ->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN')
+        ->get()
+        ->map(function($gv) {
+            $name = $gv->nguoidung ? $gv->nguoidung->HODEM_VA_TEN : ('GV #' . $gv->ID_GIANGVIEN);
+            
+            return [
+                'ID_GIANGVIEN' => $gv->ID_GIANGVIEN,
+                'HODEM_VA_TEN' => $name
+            ];
+        });
+
+        return response()->json($lecturers);
     }
 
     /**
      * Đăng ký nhóm cho đề tài (Chỉ nhóm trưởng)
+     * [ĐÃ SỬA LỖI] Kiểm tra đề tài và nhóm phải cùng 1 kế hoạch
      */
     public function registerGroup(Request $request, $topicId)
     {
         $currentUser = Auth::user();
-        $topic = Detai::with('kehoachKhoaluan')->findOrFail($topicId);
-
-        if (!$topic->kehoachKhoaluan->isFeatureActive('SV_DANGKY_DE')) {
-            return response()->json(['message' => 'Chức năng đăng ký đề tài hiện chưa mở hoặc đã kết thúc.'], 403);
-        }
-
+        
         // Kiểm tra nếu người dùng là sinh viên
         if ($currentUser->vaitro->TEN_VAITRO !== 'Sinh viên') {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        $topic = Detai::findOrFail($topicId);
+        // Tìm đề tài
+        $topic = Detai::with('kehoachKhoaluan')->findOrFail($topicId);
+
+        if (!$topic->kehoachKhoaluan->isFeatureActive('SV_DANGKY_DE')) {
+            return response()->json(['message' => 'Chức năng đăng ký đề tài hiện chưa mở hoặc đã kết thúc.'], 403);
+        }
 
         // Tìm nhóm của người dùng mà họ là nhóm trưởng
         $group = Nhom::where('ID_NHOMTRUONG', $currentUser->ID_NGUOIDUNG)->first();
@@ -597,26 +629,47 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Bạn không phải là nhóm trưởng'], 403);
         }
 
+        // [FIX 2 - QUAN TRỌNG] Kiểm tra Đề tài và Nhóm có cùng Kế hoạch không
+        if ($topic->ID_KEHOACH != $group->ID_KEHOACH) {
+            return response()->json([
+                'message' => 'Đề tài này thuộc khóa/đợt khác. Bạn không thể đăng ký.'
+            ], 400);
+        }
+
         // Kiểm tra nếu nhóm đã có đề tài
         $existingAssignment = PhancongDetaiNhom::where('ID_NHOM', $group->ID_NHOM)->first();
         if ($existingAssignment) {
             return response()->json(['message' => 'Nhóm đã có đề tài đã đăng ký'], 400);
         }
 
+        // Kiểm tra đề tài đã đầy chưa (Concurrency check)
+        if ($topic->SO_NHOM_HIENTAI >= $topic->SO_NHOM_TOIDA) {
+            return response()->json(['message' => 'Đề tài này đã đủ số lượng nhóm đăng ký.'], 400);
+        }
+
         DB::transaction(function () use ($topic, $group) {
+            // Lock để tránh Race Condition (nhiều nhóm bấm cùng lúc)
+            $topicLocked = Detai::where('ID_DETAI', $topic->ID_DETAI)->lockForUpdate()->first();
+
+            if ($topicLocked->SO_NHOM_HIENTAI >= $topicLocked->SO_NHOM_TOIDA) {
+                throw new \Exception('Đề tài vừa bị nhóm khác đăng ký đầy.');
+            }
+
             // Tạo phân công
             PhancongDetaiNhom::create([
                 'ID_NHOM' => $group->ID_NHOM,
                 'ID_DETAI' => $topic->ID_DETAI,
-                'ID_GVHD' => $topic->ID_NGUOI_DEXUAT, // Tự động gán người đề xuất làm GVHD
+                'ID_GVHD' => $topic->ID_NGUOI_DEXUAT, 
+                'NGAY_PHANCONG' => now(),
+                'TRANGTHAI' => 'Đang thực hiện' // Set trạng thái mặc định
             ]);
 
             // Cập nhật số lượng nhóm hiện tại của đề tài
-            $topic->increment('SO_NHOM_HIENTAI');
+            $topicLocked->increment('SO_NHOM_HIENTAI');
 
             // Cập nhật tên nhóm theo tên đề tài
             $group->update([
-                'TEN_NHOM' => $topic->TEN_DETAI,
+                'TEN_NHOM' => $topicLocked->TEN_DETAI,
                 'TRANGTHAI' => 'Đã có đề tài'
             ]);
         });

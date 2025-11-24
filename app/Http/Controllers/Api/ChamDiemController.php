@@ -351,7 +351,7 @@ class ChamDiemController extends Controller
         }
         $giangvienId = $giangvien->ID_GIANGVIEN;
 
-        // --- Helper để thêm điểm hiện tại ---
+        // --- Helper để thêm điểm hiện tại vào collection ---
         $addCurrentScore = function ($nhomCollection, $scoreModel) use ($giangvienId) {
             return $nhomCollection->map(function ($nhom) use ($giangvienId, $scoreModel) {
                 // Tải điểm riêng của GV này cho nhóm này
@@ -359,41 +359,47 @@ class ChamDiemController extends Controller
                                      ->where('ID_GIANGVIEN', $giangvienId)
                                      ->first();
                 
-                // Gắn điểm vào thuộc tính mới (diem_phanbien_hientai, diem_huongdan_hientai, etc.)
-                $attributeName = 'diem_' . strtolower(str_replace('App\Models\Diem', '', $scoreModel)) . '_hientai';
+                // Tạo tên thuộc tính động: diem_huongdan_hientai, diem_phanbien_hientai...
+                // Logic replace: App\Models\DiemHuongDan -> HuongDan -> diem_huongdan_hientai
+                $className = class_basename($scoreModel); // Lấy tên class (vd: DiemHuongDan)
+                $type = str_replace('Diem', '', $className); // Bỏ chữ Diem -> HuongDan
+                $attributeName = 'diem_' . strtolower($type) . '_hientai';
+                
                 $nhom->{$attributeName} = $score ? $score->DIEM : null;
                 return $nhom;
             });
         };
 
         // 1. Lấy nhóm Hướng dẫn
+        // Điều kiện: Có trong phân công GVHD
         $nhomHuongDan = Nhom::whereHas('phancongDetaiNhom', function ($query) use ($giangvienId) {
             $query->where('ID_GVHD', $giangvienId);
         })
-        ->with(['phancongDetaiNhom.detai'])
+        ->with(['phancongDetaiNhom.detai', 'kehoach']) // [QUAN TRỌNG]: Thêm 'kehoach'
         ->get();
 
         // 2. Lấy nhóm Phản biện
+        // Điều kiện: Có trong Hội đồng loại 'phanbien'
         $nhomPhanBien = Nhom::whereHas('hoidongs', function ($query) use ($giangvienId) {
             $query->where('LOAI', 'phanbien')
                 ->whereHas('giangviens', fn($q) => $q->where('HOIDONG_GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
-        ->with(['phancongDetaiNhom.detai'])
+        ->with(['phancongDetaiNhom.detai', 'kehoach']) // [QUAN TRỌNG]: Thêm 'kehoach'
         ->get();
 
-        // 3. Lấy nhóm Hội đồng
+        // 3. Lấy nhóm Hội đồng (Bảo vệ)
+        // Điều kiện: Có trong Hội đồng loại 'hoidong'
         $nhomHoiDong = Nhom::whereHas('hoidongs', function ($query) use ($giangvienId) {
             $query->where('LOAI', 'hoidong')
                 ->whereHas('giangviens', fn($q) => $q->where('HOIDONG_GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
-        ->with(['phancongDetaiNhom.detai'])
+        ->with(['phancongDetaiNhom.detai', 'kehoach']) // [QUAN TRỌNG]: Thêm 'kehoach'
         ->get();
         
         // 4. Gắn điểm hiện tại vào từng Collection
         $huongdanData = $addCurrentScore($nhomHuongDan, DiemHuongDan::class);
         $phanbienData = $addCurrentScore($nhomPhanBien, DiemPhanBien::class);
         $hoidongData = $addCurrentScore($nhomHoiDong, DiemHoiDong::class);
-
 
         return response()->json([
             'huongdan' => $huongdanData,

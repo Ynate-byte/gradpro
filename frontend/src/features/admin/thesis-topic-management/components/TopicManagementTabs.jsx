@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
+import { getAllPlans } from "@/api/thesisPlanService";
 import { getChuyenNganhs } from "@/api/userService";
 import TopicDetailDialog from "../../../lecturer/thesis-topics/components/TopicDetailDialog";
 import RejectDialog from "./RejectDialog";
@@ -15,7 +17,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 
-// ... (StatCard Component giữ nguyên)
+// ... (StatCard Component giữ nguyên như cũ)
 const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasStatusDot }) => {
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
@@ -66,7 +68,7 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
     );
 };
 
-// ... (getVariants giữ nguyên)
+// ... (getVariants, columnVisibility giữ nguyên)
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -101,13 +103,15 @@ const TopicManagementTabs = () => {
     const [loading, setLoading] = useState(true);
     const [loadingStats, setLoadingStats] = useState(true);
 
+    const [plans, setPlans] = useState([]);
+    const [selectedPlanId, setSelectedPlanId] = useState("");
+
     const [activeTab, setActiveTab] = useState("Chờ duyệt");
     const [searchTerm, setSearchTerm] = useState("");
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
     const [columnFilters, setColumnFilters] = useState([]);
     
     const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
-
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
     const [sorting, setSorting] = useState([]);
     const [rowSelection, setRowSelection] = useState({});
@@ -126,29 +130,62 @@ const TopicManagementTabs = () => {
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
+    // 1. Load Plans & Chuyen Nganh
     useEffect(() => {
-        loadAllData();
+        const init = async () => {
+            try {
+                const [plansRes, cnRes] = await Promise.all([
+                    getAllPlans(),
+                    getChuyenNganhs().catch(() => [])
+                ]);
+                
+                const plansList = plansRes || [];
+                setPlans(plansList);
+
+                if (plansList.length > 0) {
+                    const activePlan = plansList.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansList[0];
+                    setSelectedPlanId(String(activePlan.ID_KEHOACH));
+                }
+
+                setChuyenNganhOptions(
+                    (cnRes || []).map(cn => ({
+                        label: cn.TEN_CHUYENNGANH,
+                        value: String(cn.ID_CHUYENNGANH)
+                    }))
+                );
+            } catch (error) {
+                console.error("Error initializing:", error);
+                toast.error("Lỗi tải dữ liệu ban đầu.");
+            }
+        };
+        init();
     }, []);
 
-    const loadAllData = async () => {
+    // 2. Load Topics
+    useEffect(() => {
+        if (selectedPlanId) {
+            loadTopics(selectedPlanId);
+        } else {
+            setAllTopics([]); 
+            setLoading(false);
+            setLoadingStats(false);
+        }
+    }, [selectedPlanId]);
+
+    const loadTopics = async (planId) => {
         try {
             setLoading(true);
             setLoadingStats(true);
-            const [topicRes, cnRes] = await Promise.all([
-                thesisTopicService.getAdminTopics(),
-                getChuyenNganhs().catch(() => [])
-            ]);
+            
+            const topicRes = await thesisTopicService.getAdminTopics({ plan_id: planId });
+            const topicsData = topicRes.data || topicRes || []; 
+            
+            setAllTopics(Array.isArray(topicsData) ? topicsData : (topicsData.data || []));
 
-            setAllTopics(topicRes.data || []);
-            setChuyenNganhOptions(
-                (cnRes || []).map(cn => ({
-                    label: cn.TEN_CHUYENNGANH,
-                    value: String(cn.ID_CHUYENNGANH)
-                }))
-            );
         } catch (error) {
-            console.error("Error loading data:", error);
-            toast.error("Không thể tải dữ liệu.");
+            console.error("Error loading topics:", error);
+            toast.error("Không thể tải danh sách đề tài.");
+            setAllTopics([]);
         } finally {
             setLoading(false);
             setLoadingStats(false);
@@ -239,7 +276,8 @@ const TopicManagementTabs = () => {
         try {
             await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
             toast.success("Đề tài đã được duyệt thành công!");
-            loadAllData();
+            loadTopics(selectedPlanId); 
+            
             if (showTopicDetailDialog && navigationList.length > 0) {
                 if (currentTopicIndex < navigationList.length - 1) {
                     const nextIndex = currentTopicIndex + 1;
@@ -267,7 +305,7 @@ const TopicManagementTabs = () => {
                 : "Đã yêu cầu chỉnh sửa đề tài.";
             toast.success(message);
             setShowRejectDialog(false);
-            loadAllData();
+            loadTopics(selectedPlanId);
 
             if (showTopicDetailDialog && navigationList.length > 0) {
                 if (currentTopicIndex < navigationList.length - 1) {
@@ -298,7 +336,7 @@ const TopicManagementTabs = () => {
 
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
-    }, [activeTab, columnFilters, debouncedSearchTerm]);
+    }, [activeTab, columnFilters, debouncedSearchTerm, selectedPlanId]);
 
     const columns = useMemo(() => getColumns({
         onViewDetails: handleViewTopicDetails,
@@ -330,26 +368,19 @@ const TopicManagementTabs = () => {
                     setColumnFilters={setColumnFilters}
                     sorting={sorting}
                     setSorting={setSorting}
-                    
-                    // --- [XÓA HOẶC COMMENT CÁC DÒNG NÀY ĐỂ ẨN NÚT XANH DƯƠNG] ---
-                    // onAddUser={() => { }} 
-                    // addBtnText={null}
-                    // onImportUser={null}
-                    // -------------------------------------------------------------
-
-                    onSuccess={loadAllData}
+                    onSuccess={() => loadTopics(selectedPlanId)}
                     searchColumnId="TEN_DETAI"
                     searchPlaceholder="Tìm theo tên, GV, mã..."
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
                     chuyenNganhFilterColumnId="chuyen_nganh_id"
                     
+                    // [FIX] Sử dụng đúng tên biến state đã khai báo
                     chuyenNganhFilterOptions={chuyenNganhOptions}
                     
                     columnVisibility={columnVisibility}
                     state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
                     onRowSelectionChange={setRowSelection}
-                    
                     flexLayout={true}
                     className="h-full"
                 />
@@ -364,6 +395,7 @@ const TopicManagementTabs = () => {
             transition={{ duration: 0.3 }}
             className="flex flex-col h-[calc(100vh-8.7rem)] space-y-4 p-4 md:p-0 overflow-hidden"
         >
+            {/* Stat Cards */}
             <div className="shrink-0">
                 <motion.div
                     className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
@@ -413,8 +445,11 @@ const TopicManagementTabs = () => {
 
             <div className="flex-1 min-h-0 flex flex-col">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full space-y-4">
-                    <div className="shrink-0">
-                        <TabsList className={cn("transition-all duration-300 w-full justify-start bg-transparent p-0 h-auto gap-2", isReduced && "transition-none")}>
+                    {/* Dòng công cụ: Tabs Trạng thái (Trái) + Chọn Kế hoạch (Phải) */}
+                    <div className="shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        
+                        {/* 1. Các Tab Trạng thái */}
+                        <TabsList className={cn("transition-all duration-300 w-full md:w-auto justify-start bg-transparent p-0 h-auto gap-2 flex-wrap", isReduced && "transition-none")}>
                             {["Tất cả", "Chờ duyệt", "Đang chỉnh sửa", "Đã duyệt", "Yêu cầu chỉnh sửa", "Từ chối", "Nháp"].map(tab => (
                                 <TabsTrigger
                                     key={tab}
@@ -428,13 +463,30 @@ const TopicManagementTabs = () => {
                                 </TabsTrigger>
                             ))}
                         </TabsList>
+
+                        {/* 2. Chọn Kế hoạch */}
+                        <div className="flex items-center gap-2 w-full md:w-auto">
+                            <Filter className="h-4 w-4 text-muted-foreground hidden sm:block" />
+                            <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                                <SelectTrigger className="w-full md:w-[250px] h-9 bg-background shadow-sm focus:ring-1">
+                                    <SelectValue placeholder="Chọn kế hoạch..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {plans.map((plan) => (
+                                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                            <span className="font-medium">{plan.TEN_DOT}</span> 
+                                            <span className="text-xs text-muted-foreground ml-2">({plan.NAMHOC})</span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
-                    {/* [SỬA LỖI 4]: Loại bỏ các class tạo khung (border, shadow, bg) */}
                     <div className="flex-1 min-h-0 overflow-hidden">
                         <AnimatePresence mode="wait">
                             <motion.div
-                                key={activeTab}
+                                key={activeTab + selectedPlanId} 
                                 variants={variants.table}
                                 initial="hidden"
                                 animate="visible"

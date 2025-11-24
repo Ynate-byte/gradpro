@@ -126,13 +126,6 @@ const ListHoiDong = () => {
         initial="hidden"
         animate="visible"
     >
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Hội đồng của tôi</h1>
-            <p className="text-muted-foreground mt-1">Danh sách các hội đồng bạn tham gia chấm hoặc phản biện.</p>
-          </div>
-      </div>
-
       <Card className="shadow-sm border-border/60">
         <CardHeader className="pb-3 border-b bg-muted/5">
           {/* ... (Phần Filter và Search giữ nguyên như code trước) ... */}

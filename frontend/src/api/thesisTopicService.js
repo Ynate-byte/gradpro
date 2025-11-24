@@ -133,6 +133,13 @@ const thesisTopicService = {
         return response;
     },
 
+    getSupervisorsByPlan: async (planId) => {
+        const response = await axiosConfig.get('/detai/available/supervisors', { 
+            params: { plan_id: planId } 
+        });
+        return response.data;
+    },
+
     // Get groups registered for lecturer's topics
     getGroupsForLecturer: async () => {
         const response = await axiosConfig.get('/detai/giangvien/groups');

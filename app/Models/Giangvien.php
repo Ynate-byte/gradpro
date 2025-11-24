@@ -41,6 +41,11 @@ class Giangvien extends Model
         return $this->chucvus->contains('MA_CHUCVU', $maChucVu);
     }
 
+    public function detai()
+    {
+        return $this->hasMany(Detai::class, 'ID_NGUOI_DEXUAT', 'ID_GIANGVIEN');
+    }
+
     public function hoidongs()
     {
         return $this->belongsToMany(

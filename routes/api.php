@@ -51,7 +51,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('roles', [UserController::class, 'getRoles']);
     Route::get('chuyen-nganhs', [UserController::class, 'getChuyenNganhs']);
     Route::get('khoa-bo-mons', [UserController::class, 'getKhoaBomons']);
-    Route::get('positions', [UserController::class, 'getPositions']); // Route Mới cho Chức vụ
+    Route::get('positions', [UserController::class, 'getPositions']); 
     Route::get('/users/import/template', [UserController::class, 'downloadImportTemplate']);
     Route::post('/users/import/preview', [UserController::class, 'previewImport']);
     Route::post('/users/import/process', [UserController::class, 'processImport']);
@@ -68,8 +68,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/{nhom}/transfer-leadership/{newLeaderId}', [NhomController::class, 'transferLeadership']);
         Route::post('/{nhom}/invitations/{loimoi}/cancel', [NhomController::class, 'cancelInvitation']);
         Route::prefix('submissions')->group(function () {
-            Route::get('/{phancong}', [NhomController::class, 'getSubmissions']); // Lấy lịch sử nộp
-            Route::post('/{phancong}', [NhomController::class, 'submitProduct']); // Nộp sản phẩm
+            Route::get('/{phancong}', [NhomController::class, 'getSubmissions']); 
+            Route::post('/{phancong}', [NhomController::class, 'submitProduct']); 
         });
         Route::get('/plan/{planId}/available-students', [NhomController::class, 'searchAvailableStudents']);
         Route::post('/{nhom}/invite-multiple', [NhomController::class, 'inviteMultipleMembers']);
@@ -96,12 +96,12 @@ Route::middleware('auth:sanctum')->group(function () {
     });
 
     // ---------------- TIN TỨC (Chung) ----------------
-    Route::get('/news', [NewsController::class, 'index']); // [UPDATED] Use imported controller
+    Route::get('/news', [NewsController::class, 'index']); 
     Route::post('/news', [NewsController::class, 'store']);
     Route::get('/news/{id}', [NewsController::class, 'show']);
     Route::post('/news/{id}', [NewsController::class, 'update']);
     Route::delete('/news/{id}', [NewsController::class, 'destroy']);
-    Route::get('/news/{id}/pdf', [NewsController::class, 'downloadPdf']); // [UPDATED] Correct method name
+    Route::get('/news/{id}/pdf', [NewsController::class, 'downloadPdf']); 
 
     // ---------------- KẾ HOẠCH MẪU (User) ----------------
     Route::get('thesis-plan-templates', [UserTemplateController::class, 'index']);
@@ -109,27 +109,36 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ---------------- ĐỀ TÀI (Giảng viên & Sinh viên) ----------------
     Route::prefix('detai')->group(function () {
+        // --- [QUAN TRỌNG] Các Route tĩnh (Static) phải đặt lên ĐẦU ---
         Route::get('/', [DetaiController::class, 'index']);
         Route::post('/', [DetaiController::class, 'store']);
+        
+        // Route này gây lỗi 404 nếu đặt sau {id}, đã chuyển lên đây
+        Route::get('/available/supervisors', [DetaiController::class, 'getSupervisorsByPlan']); 
+        Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
+        Route::get('/approved/topics', [DetaiController::class, 'getApprovedTopicsOfLecturer']);
+        Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); 
+        Route::get('/supervised', [DetaiController::class, 'getSupervisedTopics']);
+        Route::get('/my-registered-topic', [DetaiController::class, 'getMyRegisteredTopic']);
+        Route::get('/giangvien/groups', [DetaiController::class, 'getGroupsForLecturer']); 
+        
         Route::get('/import/template', [DetaiController::class, 'downloadImportTemplate']);
         Route::post('/import/preview', [DetaiController::class, 'previewImport']);
         Route::post('/import/process', [DetaiController::class, 'processImport']);
-        Route::get('/available/for-registration', [DetaiController::class, 'getAvailableTopics']);
-        Route::get('/registered-groups', [DetaiController::class, 'getRegisteredGroups']); // GV xem nhóm đăng ký đề tài của mình
-        Route::get('/supervised', [DetaiController::class, 'getSupervisedTopics']);
-        Route::get('/my-registered-topic', [DetaiController::class, 'getMyRegisteredTopic']);
-        Route::get('/giangvien/groups', [DetaiController::class, 'getGroupsForLecturer']); // GV xem các nhóm mình HƯỚNG DẪN
-        Route::get('/{id}', [DetaiController::class, 'show']); // Route động (phải nằm sau)
+        
+        Route::post('/reuse', [DetaiController::class, 'reuseApprovedTopic']);
+
+        // --- Các Route động (Dynamic) đặt ở CUỐI ---
+        Route::get('/{id}', [DetaiController::class, 'show']); 
         Route::put('/{id}', [DetaiController::class, 'update']);
         Route::delete('/{id}', [DetaiController::class, 'destroy']);
         Route::post('/{id}/submit-approval', [DetaiController::class, 'submitForApproval']);
-        Route::post('/{id}/approve-reject', [DetaiController::class, 'approveOrReject']); // Của Giảng viên tự duyệt? (đã tồn tại)
+        Route::post('/{id}/approve-reject', [DetaiController::class, 'approveOrReject']); 
         Route::post('/{id}/suggestions', [DetaiController::class, 'addSuggestion']);
         Route::post('/goiy/{goiy}/reply', [PhanhoiGoiyController::class, 'store']);
         Route::post('/{topicId}/register-group', [DetaiController::class, 'registerGroup']);
-        Route::get('/approved/topics', [DetaiController::class, 'getApprovedTopicsOfLecturer']);
-        Route::post('/reuse', [DetaiController::class, 'reuseApprovedTopic']);
     });
+
     Route::get('/check-group-leader', [DetaiController::class, 'isGroupLeader']);
     Route::get('/group-status', [DetaiController::class, 'groupStatus']);
     Route::get('/groups/{id}', [NhomController::class, 'getGroupById']);
@@ -162,8 +171,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // ----- API IMPORT SINH VIÊN VÀO KẾ HOẠCH (WIZARD) -----
         Route::post('thesis-plans/{plan}/import-analyze', [ThesisPlanController::class, 'importAnalyze']);
-        Route::post('thesis-plans/{plan}/import-preview', [ThesisPlanController::class, 'importPreview']); // Giai đoạn 2 & 3
-        Route::post('thesis-plans/{plan}/import-process', [ThesisPlanController::class, 'importProcess']); // Giai đoạn 4
+        Route::post('thesis-plans/{plan}/import-preview', [ThesisPlanController::class, 'importPreview']); 
+        Route::post('thesis-plans/{plan}/import-process', [ThesisPlanController::class, 'importProcess']); 
         
         // ----- NHÓM (Admin) -----
         Route::prefix('groups')->group(function () {
@@ -291,9 +300,9 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/', [DepartmentHeadDetaiController::class, 'index']);
             Route::get('/pending', [DepartmentHeadDetaiController::class, 'getPendingTopics']);
             Route::get('/statistics', [DepartmentHeadDetaiController::class, 'getStatistics']);
+            Route::get('/available/supervisors', [DetaiController::class, 'getSupervisorsByPlan']);
             Route::get('/{id}', [DepartmentHeadDetaiController::class, 'show']);
             Route::post('/{id}/approve-reject', [DepartmentHeadDetaiController::class, 'approveOrReject']);
-
         });
     });
 
