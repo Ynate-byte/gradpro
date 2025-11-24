@@ -38,7 +38,7 @@ const StudentDetailDashboard = lazy(() => import('./features/student/dashboard/D
 const TopicReviewerAssignmentPage = lazy(() => import('./features/department-head/topic-reviewer-assignment/index.jsx'));
 
 // --- Import các components Quản trị ---
-const AdminDashboard = lazy(() => import('./features/admin/dashboard/AdminDashboard.jsx')); // [MỚI] Import Dashboard Admin
+const AdminDashboard = lazy(() => import('./features/admin/dashboard/AdminDashboard.jsx'));
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
 const GroupAdminPage = lazy(() => import('./features/admin/group-management/index.jsx'));
 const ThesisPlanManagementPage = lazy(() => import('./features/admin/thesis-plan-management/index.jsx'));
@@ -55,6 +55,7 @@ const ChamDiemChiTiet = lazy(() => import('./features/admin/chamdiem/ChamDiemChi
 const GeneralSettingsPage = lazy(() => import('./features/admin/settings/GeneralSettingsPage.jsx'));
 const AdminActivityLog = lazy(() => import('./features/admin/activity-log/index.jsx'));
 const NotificationPage = lazy(() => import('./features/notifications/index.jsx'));
+const FileManagerPage = lazy(() => import('./features/admin/file-manager/FileManager.jsx'));
 
 // Component placeholder cho các trang chưa có nội dung
 const PlaceholderPage = ({ title }) => (
@@ -105,6 +106,22 @@ function App() {
   const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
   const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
+  // [UPDATED] Component điều hướng trang chủ
+  const HomeRedirect = () => {
+    if (isSinhVien) {
+      return <Navigate to="/student/dashboard" replace />;
+    }
+    if (isAdmin) {
+      return <Navigate to="/admin/dashboard" replace />;
+    }
+    // Nếu là Giảng viên / Giáo vụ / Trưởng khoa (không phải Admin thuần) -> Vào Dashboard GV
+    if (canViewGiangVienRoutes) {
+      return <LecturerDashboard />;
+    }
+    // Mặc định
+    return <HomePage />;
+  };
+
   return (
     <Suspense
       fallback={
@@ -133,15 +150,8 @@ function App() {
             </ProtectedRoute>
           }
         >
-          {/* Route trang chủ động theo vai trò */}
-          <Route 
-            index 
-            element={
-              canViewGiangVienRoutes && !isSinhVien 
-                ? <LecturerDashboard />  
-                : <HomePage />          
-            } 
-          />
+          {/* [UPDATED] Route trang chủ động theo vai trò */}
+          <Route index element={<HomeRedirect />} />
 
           {/* Các Routes chung */}
           <Route path="notifications" element={<NotificationPage />} />
@@ -242,6 +252,7 @@ function App() {
               
               {/*Route Nhật ký hệ thống */}
               <Route path="admin/system-logs" element={<AdminActivityLog />} />
+              <Route path="admin/files" element={<FileManagerPage />} />
             </>
           )}
         </Route>

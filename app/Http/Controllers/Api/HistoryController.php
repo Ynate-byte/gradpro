@@ -102,21 +102,39 @@ class HistoryController extends Controller
      */
     public function getGroupHistory(Request $request, $groupId)
     {
-        $user = $request->user();
-        $nhom = Nhom::findOrFail($groupId);
+        // Log để debug xem request có vào đây không
+        Log::info("Fetching history for group ID: " . $groupId);
 
+        $user = $request->user();
+        
+        // Thay findOrFail bằng find để kiểm soát lỗi 404 thủ công
+        $nhom = Nhom::find($groupId);
+
+        if (!$nhom) {
+            return response()->json(['message' => 'Không tìm thấy nhóm.'], 404);
+        }
+
+        // Logic phân quyền (Giữ nguyên)
         $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
         $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
-        $isGvhd = $user->giangvien && ($nhom->phancongDetaiNhom?->ID_GVHD === $user->giangvien->ID_GIANGVIEN);
+        
+        // Fix lỗi check GVHD: Eager load hoặc query trực tiếp để tránh null pointer
+        $isGvhd = false;
+        if ($user->giangvien) {
+            $isGvhd = \App\Models\PhancongDetaiNhom::where('ID_NHOM', $groupId)
+                        ->where('ID_GVHD', $user->giangvien->ID_GIANGVIEN)
+                        ->exists();
+        }
 
         if (!$isManager && !$isMember && !$isGvhd) {
             return response()->json(['message' => 'Bạn không có quyền xem lịch sử của nhóm này.'], 403);
         }
 
         $query = LichSuHoatDong::where('ID_NHOM', $groupId)
-            ->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH,EMAIL')
+            ->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH') // Bỏ EMAIL cho nhẹ
             ->orderBy('NGAY_TAO', 'desc');
 
+        // Filter & Search (Giữ nguyên)
         if ($request->filled('type')) {
             $query->where('LOAI_HANH_DONG', $request->type);
         }

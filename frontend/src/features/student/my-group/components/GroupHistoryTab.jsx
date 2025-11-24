@@ -282,11 +282,14 @@ const GroupHistoryTab = ({ groupId }) => {
     const ITEMS_PER_PAGE = 10;
 
     const { data: historyData, isLoading: loadingHistory } = useQuery({
-        queryKey: ['group-history', groupId, debouncedSearch], 
-        queryFn: () => getGroupHistory(groupId, { per_page: 100, search: debouncedSearch }), // Lấy 100 items về trước
-        enabled: !!groupId,
-        staleTime: 1000 * 60, 
+        queryKey: ['group-history', groupId, debouncedSearch],
+        queryFn: () => getGroupHistory(groupId, { per_page: 100, search: debouncedSearch }),
+        
+        enabled: !!groupId && groupId !== '0', 
+        
+        staleTime: 1000 * 60,
         refetchOnWindowFocus: false,
+        retry: 1,
     });
 
     const { data: groupData } = useQuery({
