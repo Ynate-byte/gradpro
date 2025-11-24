@@ -17,6 +17,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use App\Services\NotificationService;
 
 class QuotaController extends Controller
 {
@@ -187,18 +188,16 @@ class QuotaController extends Controller
                 ]);
 
                 // Gửi thông báo
-                $lecturer = Giangvien::find($request->ID_GIANGVIEN);
-                if ($lecturer && $lecturer->nguoidung) {
-                    Thongbao::create([
-                        'user_id' => $lecturer->nguoidung->ID_NGUOIDUNG,
-                        'type' => 'lecturer_quota_assigned',
-                        'data' => [
-                            'message' => "Bạn đã được phân công {$request->SO_DETAI_QUOTA} đề tài",
-                            'quota' => $request->SO_DETAI_QUOTA,
-                            'plan_id' => $request->ID_KEHOACH,
-                        ],
-                    ]);
-                }
+                if ($request->SO_DETAI_QUOTA > 0 && $lecturer->nguoidung) {
+                NotificationService::send(
+                    $lecturer->nguoidung->ID_NGUOIDUNG,
+                    "Phân công chỉ tiêu hướng dẫn",
+                    "Trưởng bộ môn đã phân công cho bạn hướng dẫn tối đa {$request->SO_DETAI_QUOTA} đề tài.",
+                    'ACADEMIC',
+                    '/lecturer/quota-management', // Link đến trang xem quota của GV
+                    ['quota' => $request->SO_DETAI_QUOTA, 'plan_id' => $request->ID_KEHOACH]
+                );
+            }
             }
         });
 
@@ -284,6 +283,16 @@ class QuotaController extends Controller
                             'GHICHU' => 'Tự động phân công từ giảng viên',
                             'TRANGTHAI' => 'Đang phân công',
                         ]);
+                    }
+                    if ($lecturer->nguoidung) {
+                        NotificationService::send(
+                            $lecturer->nguoidung->ID_NGUOIDUNG,
+                            "Phân công chỉ tiêu tự động",
+                            "Bạn được phân công hướng dẫn {$lecturerTopics} đề tài (Tự động chia đều).",
+                            'ACADEMIC',
+                            '/lecturer/quota-management',
+                            ['quota' => $lecturerTopics, 'plan_id' => $planId]
+                        );
                     }
                 }
             });

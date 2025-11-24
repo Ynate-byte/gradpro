@@ -12,11 +12,14 @@ use App\Models\KehoachKhoaluan;
 use App\Models\Nhom;
 use App\Models\CongViec;
 use App\Models\LichHop;
-use App\Models\Thongbao;
 use App\Models\News;
 
 class StudentDashboardController extends Controller
 {
+    /**
+     * Lấy dữ liệu tổng quan cho Dashboard Sinh viên
+     * Bao gồm: Stats, Các đồ án đang tham gia (kèm thông tin nhóm/hội đồng), Việc gấp, Tin tức
+     */
     public function getOverview(Request $request)
     {
         try {
@@ -35,9 +38,10 @@ class StudentDashboardController extends Controller
             $sinhvienId = $user->sinhvien->ID_SINHVIEN;
             $userId = $user->ID_NGUOIDUNG;
             $now = Carbon::now();
-            $limitDate = Carbon::today()->addDays(3);
+            $limitDate = Carbon::today()->addDays(3); // Định nghĩa "gấp" là trong 3 ngày tới
 
-            // 1. Lấy danh sách nhóm Active
+            // 1. Lấy danh sách nhóm Active (Thuộc các kế hoạch đang chạy)
+            // Kèm theo thông tin Kế hoạch, Đề tài, GVHD và HỘI ĐỒNG BẢO VỆ
             $activeGroups = Nhom::whereHas('kehoach', function ($q) {
                     $q->whereIn('KEHOACH_KHOALUAN.TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm']);
                 })
@@ -47,13 +51,18 @@ class StudentDashboardController extends Controller
                 ->with([
                     'kehoach:ID_KEHOACH,TEN_DOT,NAMHOC,HOCKY,NGAY_KETHUC',
                     'phancongDetaiNhom.detai:ID_DETAI,TEN_DETAI',
-                    'phancongDetaiNhom.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN'
+                    'phancongDetaiNhom.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN',
+                    // [CẬP NHẬT] Load thông tin Hội đồng (Chỉ lấy thông tin cơ bản, không lấy giảng viên)
+                    'hoidongs' => function($q) {
+                        $q->where('LOAI', 'hoidong')
+                          ->select('HOIDONG.ID_HOIDONG', 'TEN_HOIDONG', 'NGAY_BAOCAO', 'GIO_BAOCAO', 'PHONG');
+                    }
                 ])
                 ->get();
 
             $groupIds = $activeGroups->pluck('ID_NHOM')->toArray();
 
-            // 2. Lấy Task Gấp
+            // 2. Lấy Task Gấp (Priority Cao hoặc Deadline gần)
             $urgentTasks = collect();
             if (!empty($groupIds)) {
                 $urgentTasks = CongViec::whereIn('CONGVIEC.ID_NHOM', $groupIds)
@@ -73,7 +82,7 @@ class StudentDashboardController extends Controller
                             'id' => $t->ID_CONGVIEC,
                             'title' => $t->TEN_CONGVIEC,
                             'group_name' => $t->nhom ? $t->nhom->TEN_NHOM : '',
-                            'group_id' => $t->ID_NHOM, // [QUAN TRỌNG] Thêm dòng này
+                            'group_id' => $t->ID_NHOM,
                             'plan_id' => $t->nhom ? $t->nhom->ID_KEHOACH : null,
                             'time' => $t->NGAY_HETHAN,
                             'priority' => $t->DO_UUTIEN,
@@ -81,7 +90,7 @@ class StudentDashboardController extends Controller
                     });
             }
 
-            // 3. Lấy Lịch Họp
+            // 3. Lấy Lịch Họp sắp tới
             $upcomingMeetings = collect();
             if (!empty($groupIds)) {
                 $upcomingMeetings = LichHop::whereIn('ID_NHOM', $groupIds)
@@ -96,7 +105,7 @@ class StudentDashboardController extends Controller
                             'id' => $m->ID_LICHHOP,
                             'title' => $m->TIEUDE_LICHHOP,
                             'group_name' => $m->nhom ? $m->nhom->TEN_NHOM : '',
-                            'group_id' => $m->ID_NHOM, // [QUAN TRỌNG] Thêm dòng này
+                            'group_id' => $m->ID_NHOM,
                             'plan_id' => $m->nhom ? $m->nhom->ID_KEHOACH : null,
                             'time' => $m->THOIGIAN_BATDAU,
                             'location' => $m->HINHTHUC_HOP == 'Trực tuyến' ? 'Online' : $m->DIADIEM,
@@ -104,6 +113,7 @@ class StudentDashboardController extends Controller
                     });
             }
 
+            // Gộp Task và Meeting, sắp xếp theo thời gian
             $mergedItems = $urgentTasks->concat($upcomingMeetings)
                 ->sortBy(function ($item) {
                     return $item['time'] ? Carbon::parse($item['time'])->timestamp : 9999999999;
@@ -111,7 +121,7 @@ class StudentDashboardController extends Controller
                 ->take(6)
                 ->values();
 
-            // 4. Tin tức
+            // 4. Tin tức mới nhất (Dành cho sinh viên hoặc tất cả)
             $latestNews = News::where(function($q) {
                     $q->whereJsonContains('target_roles', 'ALL')
                       ->orWhereJsonContains('target_roles', 'SINH_VIEN')
@@ -131,7 +141,7 @@ class StudentDashboardController extends Controller
                     ];
                 });
 
-            // 5. Format Plans
+            // 5. Format dữ liệu Plans (Kèm thống kê task và thông tin hội đồng)
             $pendingTasksCount = 0;
             if (!empty($groupIds)) {
                 $pendingTasksCount = CongViec::whereIn('CONGVIEC.ID_NHOM', $groupIds)
@@ -141,6 +151,7 @@ class StudentDashboardController extends Controller
             }
 
             $myPlans = $activeGroups->map(function ($g) {
+                // Thống kê task nhanh
                 $total = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', '!=', 'Đã hủy')->count();
                 $done = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', 'Hoàn thành')->count();
                 $percent = $total > 0 ? round(($done / $total) * 100) : 0;
@@ -155,7 +166,15 @@ class StudentDashboardController extends Controller
                         'name' => $g->TEN_NHOM,
                         'topic_name' => $g->phancongDetaiNhom?->detai?->TEN_DETAI,
                         'supervisor_name' => $g->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN,
-                        'members_count' => $g->SO_THANHVIEN_HIENTAI
+                        'members_count' => $g->SO_THANHVIEN_HIENTAI,
+                        
+                        // [MỚI] Thông tin hội đồng (Chỉ lấy cái đầu tiên nếu có nhiều)
+                        'council' => $g->hoidongs->first() ? [
+                            'name' => $g->hoidongs->first()->TEN_HOIDONG,
+                            'date' => $g->hoidongs->first()->NGAY_BAOCAO,
+                            'time' => $g->hoidongs->first()->GIO_BAOCAO,
+                            'room' => $g->hoidongs->first()->PHONG,
+                        ] : null
                     ],
                     'task_stats' => ['total' => $total, 'done' => $done, 'percent' => $percent]
                 ];
@@ -164,7 +183,7 @@ class StudentDashboardController extends Controller
             return response()->json([
                 'stats' => [
                     'active_plans' => $activeGroups->count(),
-                    'groups_joined' => $activeGroups->count(),
+                    'groups_joined' => $activeGroups->count(), // Tạm thời giống nhau
                     'pending_tasks' => $pendingTasksCount,
                 ],
                 'plans' => $myPlans->values(),
@@ -173,13 +192,13 @@ class StudentDashboardController extends Controller
             ]);
 
         } catch (\Throwable $e) {
-            Log::error("Dashboard Error: " . $e->getMessage());
+            Log::error("Student Dashboard Overview Error: " . $e->getMessage());
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }
 
     /**
-     * API 2: Lấy dữ liệu Chi tiết (Detail Context)
+     * Lấy dữ liệu chi tiết cho một kế hoạch cụ thể (Detail Context)
      */
     public function getDetail(Request $request, $planId)
     {
@@ -220,7 +239,6 @@ class StudentDashboardController extends Controller
                     }
                 }
                 if (!$currentPhase) {
-                    // Nếu không nằm trong giai đoạn nào, lấy giai đoạn sắp tới gần nhất
                     $currentPhase = $plan->mocThoigians->where('NGAY_BATDAU', '>', $now)->first();
                 }
             }
@@ -265,21 +283,21 @@ class StudentDashboardController extends Controller
                     ]
                 ];
 
-                // --- C. TIMELINE TÍCH HỢP (QUAN TRỌNG) ---
+                // --- C. TIMELINE TÍCH HỢP ---
 
-                // 1. Mốc kế hoạch (Milestones)
+                // 1. Mốc kế hoạch
                 foreach ($plan->mocThoigians as $moc) {
                     $integratedTimeline[] = [
                         'id' => 'moc_' . $moc->ID,
                         'title' => $moc->TEN_SUKIEN,
-                        'date' => $moc->NGAY_KETTHUC, // Dùng ngày kết thúc làm mốc hiển thị
+                        'date' => $moc->NGAY_KETTHUC, 
                         'type' => 'milestone',
                         'priority' => null,
-                        'details' => $moc->MOTA // Thêm mô tả
+                        'details' => $moc->MOTA 
                     ];
                 }
 
-                // 2. Công việc (Tasks) - Lấy 5 task gần nhất chưa hoàn thành
+                // 2. Công việc (Tasks)
                 $tasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
                     ->whereNotNull('NGAY_HETHAN')
                     ->where('TRANGTHAI', '!=', 'Hoàn thành')
@@ -299,10 +317,10 @@ class StudentDashboardController extends Controller
                     ];
                 }
 
-                // 3. [MỚI] Lịch họp (Meetings) - Lấy lịch họp sắp tới (và 1-2 cái vừa qua)
+                // 3. Lịch họp
                 $meetings = LichHop::where('ID_NHOM', $group->ID_NHOM)
                     ->where('TRANGTHAI', '!=', 'Đã hủy')
-                    ->where('THOIGIAN_BATDAU', '>=', Carbon::now()->subDays(1)) // Lấy cả lịch hôm qua để user thấy
+                    ->where('THOIGIAN_BATDAU', '>=', Carbon::now()->subDays(1))
                     ->orderBy('THOIGIAN_BATDAU', 'asc')
                     ->take(5)
                     ->get();
@@ -318,7 +336,7 @@ class StudentDashboardController extends Controller
                     ];
                 }
 
-                // Sắp xếp lại toàn bộ theo thời gian tăng dần
+                // Sắp xếp timeline
                 usort($integratedTimeline, function($a, $b) {
                     return strtotime($a['date']) - strtotime($b['date']);
                 });

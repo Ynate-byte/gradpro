@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
+use App\Services\NotificationService;
 
 class HoiDongController extends Controller
 {
@@ -188,29 +189,45 @@ class HoiDongController extends Controller
         DB::beginTransaction();
         try {
             $isManual = !$request->has('soLuong') || (int)$request->input('soLuong', 1) === 1;
+            $createdCouncils = [];
 
             if ($isManual) {
                 if (!empty($validated['giangviens'])) {
                     $this->validateHoiDongGiangviens($validated['LOAI'], $validated['giangviens']);
                 }
-                $this->createSingleHoiDong($validated);
+                $createdCouncils[] = $this->createSingleHoiDong($validated);
             } else {
                 $soLuong = (int)$validated['soLuong'];
                 for ($i = 0; $i < $soLuong; $i++) {
                     $tenHoiDong = trim("{$validated['TEN_HOIDONG']} " . ($i + 1));
                     $exists = Hoidong::where('TEN_HOIDONG', $tenHoiDong)
-                        ->where('ID_KEHOACH', $validated['ID_KEHOACH'])
-                        ->exists();
-
+                            ->where('ID_KEHOACH', $validated['ID_KEHOACH'])
+                            ->exists();
                     if ($exists) {
                         $tenHoiDong = "{$tenHoiDong} (" . uniqid() . ")";
                     }
-
+                    
                     $payload = $validated;
                     $payload['TEN_HOIDONG'] = $tenHoiDong;
                     $payload['giangviens'] = [];
+                    $createdCouncils[] = $this->createSingleHoiDong($payload);
+                }
+            }
 
-                    $this->createSingleHoiDong($payload);
+            foreach ($createdCouncils as $hoidong) {
+                // Load quan hệ để lấy thông tin user
+                $hoidong->load('giangviens.nguoidung'); 
+                foreach ($hoidong->giangviens as $gv) {
+                    if ($gv->nguoidung) {
+                        NotificationService::send(
+                            $gv->nguoidung->ID_NGUOIDUNG,
+                            "Lịch hội đồng mới",
+                            "Bạn được xếp vào hội đồng '{$hoidong->TEN_HOIDONG}'. Thời gian: " . ($hoidong->NGAY_BAOCAO ?? 'Chưa chốt'),
+                            'ACADEMIC',
+                            '/lecturer/council',
+                            ['council_id' => $hoidong->ID_HOIDONG]
+                        );
+                    }
                 }
             }
 
@@ -234,6 +251,10 @@ class HoiDongController extends Controller
         if (!$hoidong) {
             return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
         }
+
+        $oldDate = $hoidong->NGAY_BAOCAO;
+        $oldTime = $hoidong->GIO_BAOCAO;
+        $oldRoom = $hoidong->PHONG;
 
         $validated = $request->validate([
             'TEN_HOIDONG' => 'nullable|string|max:255',
@@ -296,6 +317,41 @@ class HoiDongController extends Controller
                     }
                 }
                 $hoidong->giangviens()->sync($syncData);
+            }
+
+            $isRescheduled = ($validated['NGAY_BAOCAO'] ?? $oldDate) != $oldDate 
+                          || ($validated['GIO_BAOCAO'] ?? $oldTime) != $oldTime
+                          || ($validated['PHONG'] ?? $oldRoom) != $oldRoom;
+
+            if ($isRescheduled) {
+                // 1. Gửi cho GIẢNG VIÊN
+                $hoidong->load('giangviens.nguoidung');
+                foreach ($hoidong->giangviens as $gv) {
+                    if ($gv->nguoidung) {
+                        NotificationService::send(
+                            $gv->nguoidung->ID_NGUOIDUNG,
+                            "Thay đổi lịch hội đồng",
+                            "Hội đồng '{$hoidong->TEN_HOIDONG}' đã thay đổi lịch/địa điểm. Vui lòng kiểm tra lại.",
+                            'URGENT', 
+                            '/lecturer/council',
+                            ['council_id' => $hoidong->ID_HOIDONG]
+                        );
+                    }
+                }
+
+                $hoidong->load('nhoms.thanhviens');
+                foreach ($hoidong->nhoms as $nhom) {
+                    foreach ($nhom->thanhviens as $tv) {
+                        NotificationService::send(
+                            $tv->ID_NGUOIDUNG,
+                            "Thay đổi lịch bảo vệ",
+                            "Lịch bảo vệ của nhóm bạn (Hội đồng: {$hoidong->TEN_HOIDONG}) đã thay đổi. Thời gian mới: " . ($hoidong->NGAY_BAOCAO ?? 'Chưa chốt') . " tại " . ($hoidong->PHONG ?? 'Chưa chốt'),
+                            'URGENT',
+                            '/student/dashboard', // Link về dashboard sinh viên
+                            ['council_id' => $hoidong->ID_HOIDONG]
+                        );
+                    }
+                }
             }
 
             DB::commit();
@@ -612,6 +668,21 @@ class HoiDongController extends Controller
                 if (!$nhom) continue;
                 if (!empty($item['ID_HOIDONG'])) {
                     $nhom->hoidongs()->sync([$item['ID_HOIDONG']]);
+
+                    $hoidong = Hoidong::find($item['ID_HOIDONG']);
+                    if ($hoidong) {
+                        $loaiText = $hoidong->LOAI === 'phanbien' ? 'Phản biện' : 'Bảo vệ';
+                        foreach ($nhom->thanhviens as $tv) {
+                            NotificationService::send(
+                                $tv->ID_NGUOIDUNG,
+                                "Đã xếp lịch {$loaiText}",
+                                "Nhóm của bạn đã được xếp vào hội đồng: {$hoidong->TEN_HOIDONG}. Ngày: " . ($hoidong->NGAY_BAOCAO ?? 'Chưa chốt'),
+                                'ACADEMIC',
+                                '/student/dashboard',
+                                ['council_id' => $hoidong->ID_HOIDONG]
+                            );
+                        }
+                    }
                 } else {
                     $nhom->hoidongs()->detach();
                 }
@@ -1174,6 +1245,7 @@ class HoiDongController extends Controller
             ->whereHas('phancongDetaiNhom.submissions', function ($q) {
                 $q->where('TRANGTHAI', 'Đã xác nhận');
             })
+            ->with('thanhviens')
             ->get();
 
         if ($unassignedGroups->isEmpty()) {
@@ -1208,6 +1280,18 @@ class HoiDongController extends Controller
                 if ($bestCouncil) {
                     $bestCouncil->nhoms()->attach($group->ID_NHOM);
                     $bestCouncil->nhoms_count++;
+
+                    $loaiText = $loai === 'phanbien' ? 'Phản biện' : 'Bảo vệ';
+                    foreach ($group->thanhviens as $tv) {
+                         NotificationService::send(
+                            $tv->ID_NGUOIDUNG,
+                            "Đã xếp lịch {$loaiText} (Tự động)",
+                            "Nhóm của bạn đã được phân công vào hội đồng: {$bestCouncil->TEN_HOIDONG}. Ngày: " . ($bestCouncil->NGAY_BAOCAO ?? 'Chưa chốt'),
+                            'ACADEMIC',
+                            '/student/dashboard',
+                            ['council_id' => $bestCouncil->ID_HOIDONG]
+                        );
+                    }
 
                     $councils = $councils->map(function ($c) use ($bestCouncil) {
                         if ($c->ID_HOIDONG == $bestCouncil->ID_HOIDONG) {

@@ -19,6 +19,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use App\Services\NotificationService;
 
 class QuotaController extends Controller
 {
@@ -139,13 +140,59 @@ class QuotaController extends Controller
         }
 
         $currentUser = Auth::user();
-
-        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
         if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
-        return $this->updateSingleDepartment($request, $currentUser);
+        DB::transaction(function () use ($request, $currentUser) {
+            $existingQuota = QuotaKhoaBomon::where('ID_KEHOACH', $request->ID_KEHOACH)
+                ->where('ID_KHOA_BOMON', $request->ID_KHOA_BOMON)
+                ->first();
+
+            if ($existingQuota) {
+                if ($request->SO_DETAI_QUOTA == 0) {
+                    $existingQuota->delete();
+                } else {
+                    $existingQuota->update([
+                        'SO_DETAI_QUOTA' => $request->SO_DETAI_QUOTA,
+                        'GHICHU' => $request->GHICHU,
+                        'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                    ]);
+                }
+            } elseif ($request->SO_DETAI_QUOTA > 0) {
+                QuotaKhoaBomon::create([
+                    'ID_KEHOACH' => $request->ID_KEHOACH,
+                    'ID_KHOA_BOMON' => $request->ID_KHOA_BOMON,
+                    'SO_DETAI_QUOTA' => $request->SO_DETAI_QUOTA,
+                    'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                    'GHICHU' => $request->GHICHU,
+                    'TRANGTHAI' => 'Đang phân công',
+                ]);
+            }
+            
+            if ($request->SO_DETAI_QUOTA > 0) {
+                $department = KhoaBomon::find($request->ID_KHOA_BOMON);
+                
+                $headOfDepartment = Giangvien::where('ID_KHOA_BOMON', $request->ID_KHOA_BOMON)
+                    ->whereHas('chucvus', function ($q) {
+                        $q->where('MA_CHUCVU', 'TRUONG_BOMON');
+                    })
+                    ->with('nguoidung')
+                    ->first();
+
+                if ($headOfDepartment && $headOfDepartment->nguoidung) {
+                    NotificationService::send(
+                        $headOfDepartment->nguoidung->ID_NGUOIDUNG,
+                        "Giao chỉ tiêu bộ môn",
+                        "Admin đã giao chỉ tiêu {$request->SO_DETAI_QUOTA} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}.",
+                        'ACADEMIC',
+                        '/lecturer/quota-management'
+                    );
+                }
+            }
+        });
+
+        return response()->json(['message' => 'Cập nhật quota cho khoa/bộ môn thành công']);
     }
 
     private function updateSingleDepartment(Request $request, $currentUser)

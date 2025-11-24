@@ -8,6 +8,7 @@ use App\Models\GoiyDetai;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use App\Services\NotificationService;
 
 class DetaiAdminController extends Controller
 {
@@ -85,7 +86,6 @@ class DetaiAdminController extends Controller
     {
         $currentUser = Auth::user();
         
-        // Sử dụng hàm helper từ BaseController (đã cập nhật logic N-N)
         if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Không có quyền thực hiện.'], 403);
         }
@@ -99,7 +99,7 @@ class DetaiAdminController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        $topic = Detai::findOrFail($id);
+        $topic = Detai::with('nguoiDexuat')->findOrFail($id);
 
         if ($request->action === 'approve') {
             $topic->update([
@@ -114,13 +114,42 @@ class DetaiAdminController extends Controller
                 'TRANGTHAI' => 'Từ chối',
                 'LYDO_TUCHOI' => $request->reason,
             ]);
-            $message = 'Đề tài đã bị từ chối với lý do: ' . ($request->reason ?: 'Không có lý do cụ thể');
+            $message = 'Đề tài đã bị từ chối';
         } elseif ($request->action === 'request_edit') {
             $topic->update([
                 'TRANGTHAI' => 'Yêu cầu chỉnh sửa',
                 'LYDO_TUCHOI' => $request->reason,
             ]);
-            $message = 'Đề tài đã được yêu cầu chỉnh sửa với lý do: ' . ($request->reason ?: 'Không có lý do cụ thể');
+            $message = 'Đề tài đã được yêu cầu chỉnh sửa';
+        }
+
+        $lecturerId = $topic->nguoiDexuat->ID_NGUOIDUNG ?? null;
+        if ($lecturerId) {
+            $notiTitle = "";
+            $notiContent = "";
+            $notiType = "ACADEMIC";
+
+            if ($request->action === 'approve') {
+                $notiTitle = "Đề tài được duyệt";
+                $notiContent = "Đề tài '{$topic->TEN_DETAI}' của bạn đã được phê duyệt.";
+            } elseif ($request->action === 'reject') {
+                $notiTitle = "Đề tài bị từ chối";
+                $notiContent = "Đề tài '{$topic->TEN_DETAI}' bị từ chối. Lý do: {$request->reason}";
+                $notiType = "WARNING";
+            } elseif ($request->action === 'request_edit') {
+                $notiTitle = "Yêu cầu chỉnh sửa đề tài";
+                $notiContent = "Đề tài '{$topic->TEN_DETAI}' cần chỉnh sửa. Góp ý: {$request->reason}";
+                $notiType = "WARNING";
+            }
+
+            NotificationService::send(
+                $lecturerId,
+                $notiTitle,
+                $notiContent,
+                $notiType,
+                '/lecturer/thesis-topics',
+                ['topic_id' => $topic->ID_DETAI]
+            );
         }
 
         return response()->json(['message' => $message]);

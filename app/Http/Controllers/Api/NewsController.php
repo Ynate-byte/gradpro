@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
+use App\Services\NotificationService;
 
 class NewsController extends Controller
 {
@@ -115,9 +116,6 @@ class NewsController extends Controller
         }
     }
 
-    /* ===========================================================
-     | ✅ TẠO TIN TỨC MỚI (STORE)
-     =========================================================== */
     public function store(Request $request)
     {
         try {
@@ -183,6 +181,32 @@ class NewsController extends Controller
                     ]);
                 }
             }
+
+            $targetRoles = $news->target_roles ?? ['ALL'];
+            $query = \App\Models\Nguoidung::where('TRANGTHAI_KICHHOAT', true);
+
+            if (!in_array('ALL', $targetRoles)) {
+                $query->whereHas('vaitro', function($q) use ($targetRoles) {
+                    $roles = [];
+                    if (in_array('SINH_VIEN', $targetRoles)) $roles[] = 'Sinh viên';
+                    if (in_array('GIANG_VIEN', $targetRoles)) $roles[] = 'Giảng viên';
+                    $q->whereIn('TEN_VAITRO', $roles);
+                });
+            }
+
+            // Chunk để gửi
+            $query->chunk(100, function($users) use ($news) {
+                foreach ($users as $user) {
+                    NotificationService::send(
+                        $user->ID_NGUOIDUNG,
+                        "Tin tức mới: " . \Illuminate\Support\Str::limit($news->title, 50),
+                        "Đã có thông báo mới trong mục Tin tức.",
+                        'SYSTEM',
+                        '/news/' . $news->id,
+                        ['news_id' => $news->id]
+                    );
+                }
+            });
 
             return response()->json([
                 'message' => 'Đăng tin tức thành công!',

@@ -19,6 +19,7 @@ use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use App\Services\ActivityLogger;
+use App\Services\NotificationService;
 
 class DetaiController extends Controller
 {
@@ -610,68 +611,71 @@ class DetaiController extends Controller
     {
         $currentUser = Auth::user();
         
-        // Kiểm tra nếu người dùng là sinh viên
         if ($currentUser->vaitro->TEN_VAITRO !== 'Sinh viên') {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Tìm đề tài
-        $topic = Detai::with('kehoachKhoaluan')->findOrFail($topicId);
+        $topic = Detai::with(['kehoachKhoaluan', 'nguoiDexuat'])->findOrFail($topicId);
 
         if (!$topic->kehoachKhoaluan->isFeatureActive('SV_DANGKY_DE')) {
             return response()->json(['message' => 'Chức năng đăng ký đề tài hiện chưa mở hoặc đã kết thúc.'], 403);
         }
 
-        // Tìm nhóm của người dùng mà họ là nhóm trưởng
         $group = Nhom::where('ID_NHOMTRUONG', $currentUser->ID_NGUOIDUNG)->first();
 
         if (!$group) {
             return response()->json(['message' => 'Bạn không phải là nhóm trưởng'], 403);
         }
 
-        // [FIX 2 - QUAN TRỌNG] Kiểm tra Đề tài và Nhóm có cùng Kế hoạch không
         if ($topic->ID_KEHOACH != $group->ID_KEHOACH) {
             return response()->json([
                 'message' => 'Đề tài này thuộc khóa/đợt khác. Bạn không thể đăng ký.'
             ], 400);
         }
 
-        // Kiểm tra nếu nhóm đã có đề tài
         $existingAssignment = PhancongDetaiNhom::where('ID_NHOM', $group->ID_NHOM)->first();
         if ($existingAssignment) {
             return response()->json(['message' => 'Nhóm đã có đề tài đã đăng ký'], 400);
         }
 
-        // Kiểm tra đề tài đã đầy chưa (Concurrency check)
         if ($topic->SO_NHOM_HIENTAI >= $topic->SO_NHOM_TOIDA) {
             return response()->json(['message' => 'Đề tài này đã đủ số lượng nhóm đăng ký.'], 400);
         }
 
         DB::transaction(function () use ($topic, $group) {
-            // Lock để tránh Race Condition (nhiều nhóm bấm cùng lúc)
             $topicLocked = Detai::where('ID_DETAI', $topic->ID_DETAI)->lockForUpdate()->first();
 
             if ($topicLocked->SO_NHOM_HIENTAI >= $topicLocked->SO_NHOM_TOIDA) {
                 throw new \Exception('Đề tài vừa bị nhóm khác đăng ký đầy.');
             }
 
-            // Tạo phân công
             PhancongDetaiNhom::create([
                 'ID_NHOM' => $group->ID_NHOM,
                 'ID_DETAI' => $topic->ID_DETAI,
                 'ID_GVHD' => $topic->ID_NGUOI_DEXUAT, 
                 'NGAY_PHANCONG' => now(),
-                'TRANGTHAI' => 'Đang thực hiện' // Set trạng thái mặc định
+                'TRANGTHAI' => 'Đang thực hiện'
             ]);
 
-            // Cập nhật số lượng nhóm hiện tại của đề tài
             $topicLocked->increment('SO_NHOM_HIENTAI');
 
-            // Cập nhật tên nhóm theo tên đề tài
             $group->update([
                 'TEN_NHOM' => $topicLocked->TEN_DETAI,
                 'TRANGTHAI' => 'Đã có đề tài'
             ]);
+
+            $lecturerId = $topic->nguoiDexuat->ID_NGUOIDUNG ?? null;
+            if ($lecturerId) {
+                NotificationService::send(
+                    $lecturerId,
+                    "Đề tài đã được đăng ký",
+                    "Nhóm '{$group->TEN_NHOM}' (Mã nhóm: {$group->ID_NHOM}) đã đăng ký đề tài: {$topic->TEN_DETAI}.",
+                    'ACADEMIC',
+                    '/lecturer/groups-management',
+                    ['topic_id' => $topic->ID_DETAI, 'group_id' => $group->ID_NHOM]
+                );
+            }
+            // --- [END CHANGE] ---
         });
 
         ActivityLogger::log(

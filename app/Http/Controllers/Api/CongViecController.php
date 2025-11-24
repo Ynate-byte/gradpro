@@ -233,6 +233,7 @@ class CongViecController extends Controller
 
         // [FIX LOG 2 LẦN] Kiểm tra xem có gì thay đổi không
         $congviec->fill($validated);
+
         
         // Nếu có thay đổi cột (ID_COT) -> Cần xử lý thứ tự để tránh lỗi hiển thị
         if ($congviec->isDirty('ID_COT')) {

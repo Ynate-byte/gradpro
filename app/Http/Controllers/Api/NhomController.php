@@ -937,8 +937,8 @@ class NhomController extends Controller
         $user = $request->user();
 
         $isMember = ThanhvienNhom::where('ID_NHOM', $phancong->ID_NHOM)
-                                ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
-                                ->exists();
+            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+            ->exists();
 
         if (!$isMember) {
             return response()->json(['message' => 'Bạn không thuộc nhóm này.'], 403);
@@ -948,19 +948,20 @@ class NhomController extends Controller
             return response()->json(['message' => 'Không thể nộp. Đề tài không ở trạng thái "Đang thực hiện".'], 400);
         }
 
-        // [MỚI] Kiểm tra thời gian nộp bài (SV_NOP_BAI)
+        // Kiểm tra thời gian nộp bài (SV_NOP_BAI)
         if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
-             $phancong->load('nhom.kehoach');
-             if (!$phancong->nhom->kehoach->isFeatureActive('SV_NOP_BAI')) {
-                  return response()->json(['message' => 'Cổng nộp bài hiện chưa mở hoặc đã đóng.'], 403);
-             }
+            $phancong->load('nhom.kehoach');
+            if (!$phancong->nhom->kehoach->isFeatureActive('SV_NOP_BAI')) {
+                return response()->json(['message' => 'Cổng nộp bài hiện chưa mở hoặc đã đóng.'], 403);
+            }
         }
 
         $isPending = NopSanpham::where('ID_PHANCONG', $phancong->ID_PHANCONG)
-                                ->where('TRANGTHAI', 'Chờ xác nhận')
-                                ->exists();
+            ->where('TRANGTHAI', 'Chờ xác nhận')
+            ->exists();
+            
         if ($isPending) {
-            return response()->json(['message' => 'Bạn có một lần nộp đang chờ xác nhận. Vui lòng đợi admin duyệt.'], 409);
+            return response()->json(['message' => 'Bạn có một lần nộp đang chờ xác nhận. Vui lòng đợi admin/GV duyệt.'], 409);
         }
 
         $validated = $request->validate([
@@ -971,7 +972,7 @@ class NhomController extends Controller
         ]);
 
         if (empty($validated)) {
-             throw ValidationException::withMessages(['files' => 'Phải nộp ít nhất 1 sản phẩm (file hoặc link).']);
+            throw ValidationException::withMessages(['files' => 'Phải nộp ít nhất 1 sản phẩm (file hoặc link).']);
         }
 
         $filesToInsert = [];
@@ -989,13 +990,6 @@ class NhomController extends Controller
                     if ($request->hasFile($fileType)) {
                         $file = $request->file($fileType);
                         $path = $file->store($storagePath, 'public');
-
-                        Log::info("Nộp bài thành công", [
-                            'nhom_id' => $phancong->ID_NHOM,
-                            'file_type' => $fileType,
-                            'path' => $path,
-                            'size' => $file->getSize()
-                        ]);
 
                         $filesToInsert[] = [
                             'ID_NOP_SANPHAM' => $submission->ID_NOP_SANPHAM,
@@ -1022,13 +1016,24 @@ class NhomController extends Controller
                 if (!empty($filesToInsert)) {
                     FileNopSanpham::insert($filesToInsert);
                 }
+                
+                $gvhdUserId = $phancong->gvhd->ID_NGUOIDUNG ?? null;
+                if ($gvhdUserId) {
+                    NotificationService::send(
+                        $gvhdUserId,
+                        "Nhóm sinh viên nộp bài",
+                        "Nhóm {$phancong->nhom->TEN_NHOM} vừa nộp sản phẩm cho đề tài '{$phancong->detai->TEN_DETAI}'.",
+                        'ACADEMIC',
+                        '/lecturer/submissions',
+                        ['submission_id' => $submission->ID_NOP_SANPHAM]
+                    );
+                }
 
                 return $submission;
             });
 
             $tenDetai = $phancong->detai ? $phancong->detai->TEN_DETAI : 'Đề tài';
             
-            // [LOG] Ghi log nộp bài
             ActivityLogger::log(
                 'SUBMIT_PRODUCT', 
                 "Nộp sản phẩm cho đề tài: {$tenDetai}", 
@@ -1037,7 +1042,7 @@ class NhomController extends Controller
             );
 
             return response()->json([
-                'message' => 'Nộp sản phẩm thành công! Vui lòng chờ admin xác nhận.',
+                'message' => 'Nộp sản phẩm thành công! Vui lòng chờ admin/GV xác nhận.',
                 'submission' => $newSubmission->load('files')
             ], 201);
 

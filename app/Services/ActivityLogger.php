@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\LichSuHoatDong;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Database\Eloquent\Model;
 
 class ActivityLogger
 {
@@ -77,5 +78,39 @@ class ActivityLogger
             'CREATE_MEETING' => 'Calendar',
             default => 'Activity',
         };
+    }
+
+    public static function logModelChange(string $action, string $title, Model $model, ?int $groupId = null)
+    {
+        if (!Auth::check()) return;
+
+        $changes = $model->getChanges();
+        $original = $model->getOriginal();
+
+        $details = [];
+        
+        unset($changes['updated_at'], $changes['ngaycapnhat']);
+
+        foreach ($changes as $key => $newValue) {
+            $oldValue = $original[$key] ?? null;
+            
+            if ($oldValue != $newValue) {
+                $details[] = [
+                    'field' => $key,
+                    'old' => $oldValue,
+                    'new' => $newValue
+                ];
+            }
+        }
+
+        if (empty($details)) return;
+
+        self::log(
+            $action,
+            $title,
+            ['changes' => $details, 'model_id' => $model->getKey()],
+            $groupId,
+            'Edit3'
+        );
     }
 }
