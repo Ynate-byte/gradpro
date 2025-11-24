@@ -147,7 +147,7 @@ export default function SubmissionManagementPage() {
   const compactStatCardClass = "p-3 shadow-sm border"; 
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-8 gap-0 bg-muted/10"> 
+    <div className="flex flex-col h-[calc(100vh-4rem)] p-8 pb-0 gap-0 bg-muted/10"> 
       <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 shrink-0">
             <StatCard
                 title="Chờ xác nhận"
@@ -270,7 +270,7 @@ export default function SubmissionManagementPage() {
                         addBtnText=""
                         bulkActions={null}
                         
-                        containerClassName="h-full border-0 rounded-none"
+                        containerClassName="flex-1 overflow-y-auto min-h-0 border-0 rounded-none relative"
                         className="h-full flex flex-col p-4" 
                         flexLayout={true} 
                     />

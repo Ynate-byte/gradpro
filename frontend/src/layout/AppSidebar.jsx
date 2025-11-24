@@ -19,6 +19,87 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
+// --- 1. Đưa hàm checkActive ra ngoài hoặc dùng useCallback (nhưng đưa ra ngoài cho đơn giản) ---
+const checkActive = (href, currentUrl) => {
+    if (!href) return false;
+    if (href === '/') return currentUrl === '/';
+    return currentUrl === href || currentUrl.startsWith(`${href}/`);
+};
+
+// --- 2. Đưa Component MenuItem ra ngoài AppSidebar ---
+const MenuItem = ({ item, currentUrl }) => {
+    if (item.hidden) return null;
+
+    // Tính toán trạng thái active dựa trên props currentUrl được truyền vào
+    const isSubItemActive = item.subItems?.some(sub => checkActive(sub.href, currentUrl));
+    const isDirectActive = checkActive(item.href, currentUrl);
+    const isActive = isSubItemActive || isDirectActive;
+
+    if (item.subItems) {
+        if (item.subItems.length === 0) return null;
+
+        return (
+            // Lưu ý: Key cho Collapsible để React nhận biết trạng thái tốt hơn (nếu cần)
+            <Collapsible defaultOpen={isActive} className="group/collapsible">
+                <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                        <SidebarMenuButton
+                            className={`w-full ${isActive ? 'font-semibold text-primary' : ''}`}
+                            isActive={isActive}
+                        >
+                            <item.icon className="size-4 shrink-0" />
+                            <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
+                                {item.title}
+                            </span>
+                            <ChevronRight className="ml-auto size-4 shrink-0 transition-transform duration-200 ease-in-out group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                        </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                        <SidebarMenuSub>
+                            {item.subItems.map((subItem, idx) => {
+                                const isSubActive = checkActive(subItem.href, currentUrl);
+                                return (
+                                    <SidebarMenuSubItem key={idx}>
+                                        <SidebarMenuSubButton
+                                            asChild
+                                            isActive={isSubActive}
+                                            className={isSubActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
+                                        >
+                                            <Link to={subItem.href}>{subItem.title}</Link>
+                                        </SidebarMenuSubButton>
+                                    </SidebarMenuSubItem>
+                                );
+                            })}
+                        </SidebarMenuSub>
+                    </CollapsibleContent>
+                </SidebarMenuItem>
+            </Collapsible>
+        );
+    }
+
+    if (item.href) {
+        return (
+            <SidebarMenuItem>
+                <SidebarMenuButton
+                    asChild
+                    isActive={isActive}
+                    className={isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-bold border-r-4 border-primary' : ''}
+                >
+                    <Link to={item.href}>
+                        <item.icon className={`size-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                        <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
+                            {item.title}
+                        </span>
+                    </Link>
+                </SidebarMenuButton>
+            </SidebarMenuItem>
+        );
+    }
+
+    return null;
+};
+
+
 // Component chính: Thanh Sidebar
 export function AppSidebar() {
     const { user, logout } = useAuth();
@@ -50,14 +131,8 @@ export function AppSidebar() {
     // Quyền chấm điểm
     const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
-    // --- HÀM HELPER: Kiểm tra Active ---
-    const checkActive = (href) => {
-        if (!href) return false;
-        if (href === '/') return currentUrl === '/';
-        return currentUrl === href || currentUrl.startsWith(`${href}/`);
-    };
-
     // --- Cấu hình Menu Chính ---
+    // (Giữ nguyên logic cấu hình menu của bạn)
     const menuConfig = [
         {
             label: "Platform",
@@ -67,25 +142,17 @@ export function AppSidebar() {
                     icon: LayoutDashboard,
                     href: "/",
                     subItems: [
-                        // [1] Dashboard cho Admin/Giáo vụ
                         ...(canViewAdminMenu ? [
                              { href: "/admin/dashboard", title: "Bảng điều khiển (Admin)" }
                         ] : []),
-
-                        // [2] Dashboard cho Sinh viên
                         ...(isSinhVien ? [
                              { href: "/student/dashboard", title: "Bảng điều khiển (SV)" }
                         ] : []),
-
-                        // [3] Dashboard cho Giảng viên
-                        // [UPDATED] Ẩn nếu là Admin (vì Admin có Dashboard riêng ở trên)
                         ...(canViewGiangVienRoutes && !isSinhVien && !isAdmin ? [
                              { href: "/", title: "Bảng điều khiển (GV)" } 
                         ] : []),
-
                         { href: "/notifications", title: "Thông báo" },
                         { href: "/history", title: "Lịch sử hoạt động" }, 
-                        { href: "/starred", title: "Mục đã lưu" },
                     ],
                 },
                 { title: "Tin tức", href: "/news", icon: Newspaper },
@@ -96,13 +163,11 @@ export function AppSidebar() {
                     hidden: isAdmin,
                     subItems: [
                         { href: "/projects/topics", title: "Đề tài" },
-                        // Menu cho Sinh viên
                         ...(isSinhVien ? [
                             { href: "/projects/my-plans", title: "Kế hoạch KLTN" },
                             { href: "/projects/my-group", title: "Nhóm của tôi" },
                             { href: "/projects/find-group", title: "Tìm nhóm" },
                         ] : []),
-                        // Menu cho Giảng viên (và cấp cao hơn)
                         ...(canViewGiangVienRoutes ? [
                             { href: "/lecturer/groups-management", title: "Quản lý nhóm SV" },
                             { href: "/lecturer/submissions", title: "Duyệt nộp bài" },
@@ -134,13 +199,11 @@ export function AppSidebar() {
         },
     ];
 
-    // --- Cấu hình Menu Quản trị ---
     const adminMenuConfig = [
         {
             label: "Quản trị",
             items: [
                 { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart },
-                
                 { title: "Người dùng", href: "/admin/users", icon: Shield },
                 { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
                 { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
@@ -156,87 +219,16 @@ export function AppSidebar() {
     ];
 
     // --- Kiểm tra xem một nhóm menu có active không ---
+    // Cập nhật hàm này dùng checkActive bên ngoài
     const isGroupActive = (items) => {
         return items.some(item => {
             if (item.subItems) {
-                return item.subItems.some(sub => checkActive(sub.href));
+                return item.subItems.some(sub => checkActive(sub.href, currentUrl));
             }
-            return checkActive(item.href);
+            return checkActive(item.href, currentUrl);
         });
     };
 
-    // --- Component hiển thị từng mục Menu ---
-    const MenuItem = ({ item }) => {
-        if (item.hidden) return null;
-
-        const isSubItemActive = item.subItems?.some(sub => checkActive(sub.href));
-        const isDirectActive = checkActive(item.href);
-        const isActive = isSubItemActive || isDirectActive;
-
-        if (item.subItems) {
-            if (item.subItems.length === 0) return null;
-
-            return (
-                <Collapsible defaultOpen={isActive} className="group/collapsible">
-                    <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                            <SidebarMenuButton 
-                                className={`w-full ${isActive ? 'font-semibold text-primary' : ''}`}
-                                isActive={isActive}
-                            >
-                                <item.icon className="size-4 shrink-0" />
-                                <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
-                                    {item.title}
-                                </span>
-                                <ChevronRight className="ml-auto size-4 shrink-0 transition-transform duration-200 ease-in-out group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-                            </SidebarMenuButton>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                            <SidebarMenuSub>
-                                {item.subItems.map((subItem, idx) => {
-                                    const isSubActive = checkActive(subItem.href);
-                                    return (
-                                        <SidebarMenuSubItem key={idx}>
-                                            <SidebarMenuSubButton 
-                                                asChild 
-                                                isActive={isSubActive}
-                                                className={isSubActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
-                                            >
-                                                <Link to={subItem.href}>{subItem.title}</Link>
-                                            </SidebarMenuSubButton>
-                                        </SidebarMenuSubItem>
-                                    );
-                                })}
-                            </SidebarMenuSub>
-                        </CollapsibleContent>
-                    </SidebarMenuItem>
-                </Collapsible>
-            );
-        }
-
-        if (item.href) {
-            return (
-                <SidebarMenuItem>
-                    <SidebarMenuButton 
-                        asChild 
-                        isActive={isActive}
-                        className={isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-bold border-r-4 border-primary' : ''}
-                    >
-                        <Link to={item.href}>
-                            <item.icon className={`size-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
-                            <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
-                                {item.title}
-                            </span>
-                        </Link>
-                    </SidebarMenuButton>
-                </SidebarMenuItem>
-            );
-        }
-
-        return null;
-    };
-
-    // --- Logic hiển thị tiêu đề user ---
     const getUserDisplayTitle = () => {
         if (role === 'Giảng viên' && positionNames.length > 0) {
             return positionNames.join(', ');
@@ -284,7 +276,8 @@ export function AppSidebar() {
                         <SidebarGroupContent>
                             <SidebarMenu>
                                 {group.items.map((item, itemIdx) => (
-                                    <MenuItem key={itemIdx} item={item} />
+                                    // 3. Truyền currentUrl vào MenuItem
+                                    <MenuItem key={itemIdx} item={item} currentUrl={currentUrl} />
                                 ))}
                             </SidebarMenu>
                         </SidebarGroupContent>
@@ -306,7 +299,7 @@ export function AppSidebar() {
                                 <SidebarGroupContent>
                                     <SidebarMenu>
                                         {group.items.map((item, itemIdx) => (
-                                            <MenuItem key={itemIdx} item={item} />
+                                            <MenuItem key={itemIdx} item={item} currentUrl={currentUrl} />
                                         ))}
                                     </SidebarMenu>
                                 </SidebarGroupContent>
@@ -315,7 +308,7 @@ export function AppSidebar() {
                     })}
             </SidebarContent>
 
-            {/* Footer: User Info */}
+            {/* Footer */}
             <SidebarFooter>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
