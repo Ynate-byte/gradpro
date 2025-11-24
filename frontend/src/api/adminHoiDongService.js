@@ -107,3 +107,8 @@ export const getAutoCreateStats = (planId) => {
 export const createBulkByDepartment = (data) => {
     return axiosClient.post('/admin/hoidong/create-bulk-department', data).then(res => res.data);
 };
+
+
+export const getHoiDongByGiangVien = () => {
+    return axiosClient.get('/giangvien/my-hoidong').then(res => res.data);
+};

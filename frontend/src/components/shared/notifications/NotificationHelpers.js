@@ -1,32 +1,58 @@
-import React from 'react';
-import { Bell, Users, Calendar, BookOpen, Info, CheckCircle, AlertTriangle } from 'lucide-react';
+import { 
+    Bell, Users, Calendar, BookOpen, Info, 
+    CheckCircle, AlertTriangle, Shield, FileText, 
+    Clock, Megaphone 
+} from 'lucide-react';
 
 export const getNotificationStyle = (type) => {
     switch (type) {
-        case 'GROUP':
-            return {
-                icon: Users,
-                colorClass: 'bg-indigo-100 text-indigo-600',
-                borderClass: 'border-l-indigo-500'
-            };
-        case 'TASK':
-            return {
-                icon: Calendar,
-                colorClass: 'bg-orange-100 text-orange-600',
-                borderClass: 'border-l-orange-500'
-            };
-        case 'ACADEMIC':
+        case 'ACADEMIC': // Học thuật (Chấm điểm, Duyệt đề tài)
             return {
                 icon: BookOpen,
-                colorClass: 'bg-red-100 text-red-600',
-                borderClass: 'border-l-red-500'
+                bgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
+                textColor: 'text-emerald-600 dark:text-emerald-400',
+                borderColor: 'border-l-emerald-500',
+                label: 'Học tập'
             };
-        case 'SYSTEM':
+        case 'TASK': // Công việc, Lịch họp
+            return {
+                icon: Calendar,
+                bgColor: 'bg-blue-100 dark:bg-blue-900/30',
+                textColor: 'text-blue-600 dark:text-blue-400',
+                borderColor: 'border-l-blue-500',
+                label: 'Công việc'
+            };
+        case 'GROUP': // Nhóm (Mời, Xin vào)
+            return {
+                icon: Users,
+                bgColor: 'bg-violet-100 dark:bg-violet-900/30',
+                textColor: 'text-violet-600 dark:text-violet-400',
+                borderColor: 'border-l-violet-500',
+                label: 'Nhóm'
+            };
+        case 'WARNING': // Cảnh báo (Sắp hết hạn, Bị từ chối)
+            return {
+                icon: AlertTriangle,
+                bgColor: 'bg-orange-100 dark:bg-orange-900/30',
+                textColor: 'text-orange-600 dark:text-orange-400',
+                borderColor: 'border-l-orange-500',
+                label: 'Cần chú ý'
+            };
+        case 'SYSTEM': // Hệ thống, Tin tức
+            return {
+                icon: Megaphone,
+                bgColor: 'bg-gray-100 dark:bg-gray-800',
+                textColor: 'text-gray-600 dark:text-gray-400',
+                borderColor: 'border-l-gray-500',
+                label: 'Hệ thống'
+            };
         default:
             return {
                 icon: Info,
-                colorClass: 'bg-blue-100 text-blue-600',
-                borderClass: 'border-l-blue-500'
+                bgColor: 'bg-gray-100 dark:bg-gray-800',
+                textColor: 'text-gray-600 dark:text-gray-400',
+                borderColor: 'border-l-gray-400',
+                label: 'Thông báo'
             };
     }
 };

@@ -6,19 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { 
     ArrowLeft, Calendar, Users, CheckCircle2, AlertTriangle, Clock, 
     LayoutDashboard, User, FileText, Flag, CheckSquare, Trophy, BarChart3,
-    Video, MapPin, CalendarDays
+    Video, MapPin, CalendarDays, GraduationCap
 } from 'lucide-react';
 import { format, parseISO, isPast, isToday } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
-// --- 1. BIỂU ĐỒ ĐÓNG GÓP (GIỮ NGUYÊN) ---
+// --- 1. BIỂU ĐỒ ĐÓNG GÓP ---
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
 const ContributionChart = ({ data }) => {
@@ -93,7 +92,7 @@ const ContributionChart = ({ data }) => {
     );
 };
 
-// --- 2. WIDGET SỨC KHỎE ĐỀ TÀI (GIỮ NGUYÊN) ---
+// --- 2. WIDGET SỨC KHỎE ĐỀ TÀI ---
 const HealthStatusItem = ({ label, value, status }) => {
     let icon = <Clock className="w-4 h-4 text-muted-foreground" />;
     let statusClass = "text-muted-foreground";
@@ -105,7 +104,6 @@ const HealthStatusItem = ({ label, value, status }) => {
         icon = <AlertTriangle className="w-4 h-4 text-orange-500" />;
         statusClass = "text-orange-700";
     } else if (status === 'danger') {
-        // eslint-disable-next-line no-undef
         icon = <X className="w-4 h-4 text-red-500" />;
         statusClass = "text-red-700";
     }
@@ -167,7 +165,66 @@ const GradeBadge = ({ label, score }) => {
     );
 };
 
-// --- 3. TIMELINE TÍCH HỢP (UPDATE: Thêm case Meeting) ---
+// --- WIDGET THÔNG TIN HỘI ĐỒNG ---
+const CouncilInfoWidget = ({ group }) => {
+    const defenseCouncil = group?.hoidongs?.find(c => c.LOAI === 'hoidong');
+
+    if (!defenseCouncil) {
+        return (
+            <div className="p-6 text-center border-2 border-dashed rounded-lg bg-muted/30">
+                <CalendarDays className="w-8 h-8 mx-auto mb-2 text-muted-foreground/30" />
+                <p className="text-xs text-muted-foreground">Chưa có lịch hội đồng bảo vệ.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="text-center pb-2 border-b border-dashed">
+                 <Badge variant="secondary" className="mb-2 font-normal">
+                    {defenseCouncil.TEN_HOIDONG}
+                 </Badge>
+            </div>
+
+            <div className="space-y-3">
+                {/* Ngày */}
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Ngày bảo vệ</span>
+                    <div className="flex items-center gap-2 font-medium">
+                        <span>{defenseCouncil.NGAY_BAOCAO ? format(parseISO(defenseCouncil.NGAY_BAOCAO), 'dd/MM/yyyy') : '---'}</span>
+                        <CalendarDays className="w-4 h-4 text-blue-500" />
+                    </div>
+                </div>
+
+                {/* Giờ */}
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Thời gian</span>
+                    <div className="flex items-center gap-2 font-medium">
+                        <span>{defenseCouncil.GIO_BAOCAO ? format(parseISO(`2000-01-01T${defenseCouncil.GIO_BAOCAO}`), 'HH:mm') : '---'}</span>
+                        <Clock className="w-4 h-4 text-orange-500" />
+                    </div>
+                </div>
+
+                {/* Địa điểm */}
+                <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Địa điểm</span>
+                    <div className="flex items-center gap-2 font-medium">
+                        <span className="truncate max-w-[150px]">{defenseCouncil.PHONG || 'Chưa cập nhật'}</span>
+                        <MapPin className="w-4 h-4 text-red-500" />
+                    </div>
+                </div>
+            </div>
+
+            {/* Note nhỏ */}
+             <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-[10px] rounded border border-blue-100 dark:border-blue-800 flex gap-2 items-start">
+                <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                <span>Vui lòng có mặt trước 15 phút để chuẩn bị thiết bị.</span>
+            </div>
+        </div>
+    );
+};
+
+// --- 3. TIMELINE TÍCH HỢP ---
 const IntegratedTimeline = ({ items }) => {
     if (!items || items.length === 0) {
         return <div className="py-8 text-center text-muted-foreground text-sm">Chưa có sự kiện nào sắp diễn ra.</div>;
@@ -293,9 +350,11 @@ export default function DetailDashboard() {
     const hasGroup = !!group;
 
     return (
-        <div className="h-screen flex flex-col bg-gray-50/30 dark:bg-background overflow-hidden">
+        // [FIX 1]: Bỏ h-screen và overflow-hidden để không tạo thanh cuộn lồng nhau
+        <div className="flex flex-col min-h-full bg-gray-50/30 dark:bg-background">
+            
             {/* HEADER */}
-            <div className="h-14 border-b bg-background flex items-center justify-between px-6 shrink-0 sticky top-0 z-20">
+            <div className="h-14 border-b bg-background flex items-center justify-between px-6 shrink-0 sticky top-0 z-20 shadow-sm">
                 <div className="flex items-center gap-4">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate('/student/dashboard')}>
                         <ArrowLeft className="w-4 h-4" />
@@ -319,102 +378,115 @@ export default function DetailDashboard() {
                 </div>
             </div>
 
-            {/* CONTENT */}
-            <ScrollArea className="flex-1">
-                <div className="p-4 md:p-6 max-w-[1600px] mx-auto">
-                    {!hasGroup ? (
-                         <div className="flex flex-col items-center justify-center py-12 bg-card border rounded-lg border-dashed">
-                            <Users className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
-                            <h3 className="text-lg font-semibold">Bạn chưa có nhóm trong đợt này</h3>
-                            <Button className="mt-4" onClick={() => navigate('/projects/find-group', { state: { planId } })}>Tìm nhóm ngay</Button>
+            {/* CONTENT: Sử dụng div thường, không dùng ScrollArea để dùng scrollbar của trình duyệt */}
+            <div className="flex-1 p-4 md:p-6 max-w-[1600px] mx-auto w-full">
+                {!hasGroup ? (
+                        <div className="flex flex-col items-center justify-center py-12 bg-card border rounded-lg border-dashed">
+                        <Users className="w-12 h-12 text-muted-foreground mb-4 opacity-50" />
+                        <h3 className="text-lg font-semibold">Bạn chưa có nhóm trong đợt này</h3>
+                        <Button className="mt-4" onClick={() => navigate('/projects/find-group', { state: { planId } })}>Tìm nhóm ngay</Button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                        
+                        {/* CỘT 1: THÔNG TIN NHÓM & SỨC KHỎE ĐỀ TÀI (3/12) */}
+                        <div className="md:col-span-4 lg:col-span-3 space-y-6">
+                            {/* Card Thông tin Nhóm */}
+                            <Card className="shadow-sm border-l-4 border-l-indigo-500">
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-sm uppercase text-muted-foreground font-bold">Nhóm của bạn</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-indigo-700 mb-1">{group.TEN_NHOM}</div>
+                                    <div className="flex items-center text-sm text-muted-foreground mb-4">
+                                        <Users className="w-4 h-4 mr-1" /> {group.thanhviens?.length || 0} thành viên
+                                    </div>
+                                    <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/projects/my-group')}>
+                                        Quản lý nhóm
+                                    </Button>
+                                </CardContent>
+                            </Card>
+
+                            {/* Card Sức khỏe Đề tài */}
+                            <Card>
+                                <CardHeader className="pb-2 border-b">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Trophy className="w-4 h-4 text-yellow-500" /> 
+                                        Tiến độ Đề tài
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-4">
+                                    <ThesisHealthWidget health={thesis_health} />
+                                </CardContent>
+                            </Card>
                         </div>
-                    ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-                            
-                            {/* CỘT 1: THÔNG TIN NHÓM & SỨC KHỎE ĐỀ TÀI (3/12) */}
-                            <div className="md:col-span-4 lg:col-span-3 space-y-6">
-                                {/* Card Thông tin Nhóm */}
-                                <Card className="shadow-sm border-l-4 border-l-indigo-500">
-                                    <CardHeader className="pb-2">
-                                        <CardTitle className="text-sm uppercase text-muted-foreground font-bold">Nhóm của bạn</CardTitle>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="text-2xl font-bold text-indigo-700 mb-1">{group.TEN_NHOM}</div>
-                                        <div className="flex items-center text-sm text-muted-foreground mb-4">
-                                            <Users className="w-4 h-4 mr-1" /> {group.thanhviens?.length || 0} thành viên
-                                        </div>
-                                        <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/projects/my-group')}>
-                                            Quản lý nhóm
-                                        </Button>
-                                    </CardContent>
-                                </Card>
 
-                                {/* Card Sức khỏe Đề tài */}
-                                <Card>
-                                    <CardHeader className="pb-2 border-b">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <Trophy className="w-4 h-4 text-yellow-500" /> 
-                                            Tiến độ Đề tài
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="pt-4">
-                                        <ThesisHealthWidget health={thesis_health} />
-                                    </CardContent>
-                                </Card>
+                        {/* CỘT 2: BIỂU ĐỒ & HOẠT ĐỘNG (6/12) */}
+                        <div className="md:col-span-8 lg:col-span-6 space-y-6">
+                            {/* Biểu đồ đóng góp */}
+                            <Card className="shadow-sm">
+                                <CardHeader className="pb-0">
+                                    <CardTitle className="text-base">Phân bổ công việc</CardTitle>
+                                    <CardDescription>Tỷ lệ hoàn thành task của các thành viên</CardDescription>
+                                </CardHeader>
+                                <CardContent className="pb-2">
+                                    <ContributionChart data={member_contribution} />
+                                </CardContent>
+                            </Card>
+
+                            {/* Quick Actions */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200" onClick={() => navigate(`/projects/my-group/kanban/${group.ID_NHOM}`)}>
+                                    <CheckCircle2 className="w-5 h-5" />
+                                    <span className="text-xs">Tạo Task</span>
+                                </Button>
+                                <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200" onClick={() => navigate(`/projects/my-group/schedule/${group.ID_NHOM}`)}>
+                                    <Calendar className="w-5 h-5" />
+                                    <span className="text-xs">Lịch họp</span>
+                                </Button>
+                                <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-green-50 hover:text-green-600 hover:border-green-200" onClick={() => navigate('/projects/my-group')}>
+                                    <FileText className="w-5 h-5" />
+                                    <span className="text-xs">Nộp bài</span>
+                                </Button>
+                                <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" onClick={() => navigate('/projects/topics')}>
+                                    <User className="w-5 h-5" />
+                                    <span className="text-xs">GVHD</span>
+                                </Button>
                             </div>
-
-                            {/* CỘT 2: BIỂU ĐỒ & HOẠT ĐỘNG (6/12) */}
-                            <div className="md:col-span-8 lg:col-span-6 space-y-6">
-                                {/* Biểu đồ đóng góp */}
-                                <Card className="shadow-sm">
-                                    <CardHeader className="pb-0">
-                                        <CardTitle className="text-base">Phân bổ công việc</CardTitle>
-                                        <CardDescription>Tỷ lệ hoàn thành task của các thành viên</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="pb-2">
-                                        <ContributionChart data={member_contribution} />
-                                    </CardContent>
-                                </Card>
-
-                                {/* Quick Actions (Nút tắt trong chi tiết thì giữ lại vì hữu dụng) */}
-                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200" onClick={() => navigate(`/projects/my-group/kanban/${group.ID_NHOM}`)}>
-                                        <CheckCircle2 className="w-5 h-5" />
-                                        <span className="text-xs">Tạo Task</span>
-                                    </Button>
-                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200" onClick={() => navigate(`/projects/my-group/schedule/${group.ID_NHOM}`)}>
-                                        <Calendar className="w-5 h-5" />
-                                        <span className="text-xs">Lịch họp</span>
-                                    </Button>
-                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-green-50 hover:text-green-600 hover:border-green-200" onClick={() => navigate('/projects/my-group')}>
-                                        <FileText className="w-5 h-5" />
-                                        <span className="text-xs">Nộp bài</span>
-                                    </Button>
-                                    <Button variant="outline" className="h-auto py-3 flex flex-col gap-1 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200" onClick={() => navigate('/projects/topics')}>
-                                        <User className="w-5 h-5" />
-                                        <span className="text-xs">GVHD</span>
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* CỘT 3: TIMELINE (3/12) */}
-                            <div className="md:col-span-12 lg:col-span-3">
-                                <Card className="h-full border-none shadow-none bg-transparent lg:bg-card lg:border lg:shadow-sm">
-                                    <CardHeader className="pb-2 px-0 lg:px-6 lg:border-b">
-                                        <CardTitle className="text-base flex items-center gap-2">
-                                            <Clock className="w-4 h-4 text-blue-500" /> Sắp diễn ra
-                                        </CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="px-0 lg:px-6 pt-4">
-                                        <IntegratedTimeline items={integrated_timeline} />
-                                    </CardContent>
-                                </Card>
-                            </div>
-
                         </div>
-                    )}
-                </div>
-            </ScrollArea>
+
+                        {/* CỘT 3: HỘI ĐỒNG & TIMELINE (3/12) */}
+                        <div className="md:col-span-12 lg:col-span-3 space-y-6">
+                            {/* [ĐÃ DI CHUYỂN] Card Hội đồng Bảo vệ */}
+                            <Card>
+                                <CardHeader className="pb-2 border-b bg-blue-50/30 dark:bg-blue-900/10">
+                                    <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                                        <GraduationCap className="w-4 h-4" />
+                                        Lịch bảo vệ
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="pt-4">
+                                    <CouncilInfoWidget group={group} />
+                                </CardContent>
+                            </Card>
+
+                            {/* Card Timeline */}
+                            {/* [FIX 2]: Bỏ h-full để Card không bị giãn ép gây tràn */}
+                            <Card className="border-none shadow-none bg-transparent lg:bg-card lg:border lg:shadow-sm">
+                                <CardHeader className="pb-2 px-0 lg:px-6 lg:border-b">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Clock className="w-4 h-4 text-blue-500" /> Sắp diễn ra
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="px-0 lg:px-6 pt-4">
+                                    <IntegratedTimeline items={integrated_timeline} />
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

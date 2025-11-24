@@ -17,6 +17,7 @@ import { NotificationDropdown } from '@/components/shared/notifications/Notifica
 import { useTheme } from "@/components/theme-provider";
 
 // --- CẤU HÌNH TÊN HIỂN THỊ CHO BREADCRUMB ---
+// Lưu ý: Các route con (chi tiết) phải đặt khớp với pattern trong App.jsx
 const routeNameMap = {
     // 1. CHUNG
     '/': 'Trang chủ',
@@ -26,65 +27,64 @@ const routeNameMap = {
     '/history': 'Lịch sử hoạt động',
     '/starred': 'Mục đã lưu',
     '/profile': 'Hồ sơ cá nhân',
-    '/settings/account': 'Cài đặt tài khoản',
-    '/settings/appearance': 'Giao diện hệ thống',
+    '/settings': 'Cài đặt',
+    '/settings/account': 'Tài khoản',
+    '/settings/appearance': 'Giao diện',
 
-    // 2. SINH VIÊN
+    // 2. SINH VIÊN (Cập nhật đầy đủ để fix lỗi hiển thị ID)
+    '/student': 'Sinh viên',
+    '/student/dashboard': 'Tổng quan',
+    '/student/dashboard/:planId': 'Chi tiết Đồ án', // Fix lỗi hiển thị số "2"
+    
     '/projects': 'Đồ án',
-    '/projects/my-plans': 'Kế hoạch của tôi',
+    '/projects/my-plans': 'Kế hoạch tham gia',
     '/projects/my-group': 'Nhóm của tôi',
-    '/projects/my-group/kanban/:id': 'Bảng công việc (Kanban)',
-    '/projects/my-group/schedule/:id': 'Lịch họp nhóm',
+    '/projects/my-group/kanban': 'Quản lý công việc',
+    '/projects/my-group/kanban/:id': 'Bảng Kanban',
+    '/projects/my-group/schedule': 'Lịch họp',
+    '/projects/my-group/schedule/:id': 'Chi tiết Lịch họp',
     '/projects/find-group': 'Tìm kiếm nhóm',
     '/projects/topics': 'Đăng ký đề tài',
 
     // 3. GIẢNG VIÊN
     '/lecturer': 'Giảng viên',
     '/lecturer/dashboard': 'Bảng điều khiển',
-    '/lecturer/groups-management': 'Quản lý nhóm sinh viên',
-    '/lecturer/groups-management/:id/details': 'Chi tiết nhóm',
-    '/lecturer/groups-management/:id/kanban': 'Theo dõi tiến độ (Kanban)',
+    '/lecturer/groups-management': 'Quản lý nhóm SV',
+    '/lecturer/groups-management/:id': 'Chi tiết nhóm',
+    '/lecturer/groups-management/:id/details': 'Thông tin nhóm',
+    '/lecturer/groups-management/:id/kanban': 'Tiến độ (Kanban)',
     '/lecturer/groups-management/:id/schedule': 'Lịch họp nhóm',
     '/lecturer/thesis-topics': 'Đề tài hướng dẫn',
-    '/lecturer/quota-management': 'Quản lý chỉ tiêu & Phân công',
+    '/lecturer/quota-management': 'Phân bổ chỉ tiêu',
     '/lecturer/council': 'Hội đồng bảo vệ',
-    '/lecturer/council/:id': 'Chi tiết Hội đồng',
-    '/lecturer/grading': 'Chấm điểm khóa luận',
+    '/lecturer/grading': 'Chấm điểm',
     '/lecturer/submissions': 'Duyệt bài nộp',
     '/lecturer/calendar': 'Lịch làm việc',
 
     // 4. TRƯỞNG BỘ MÔN
     '/department-head/topic-reviewer-assignment': 'Phân công phản biện',
 
-    // 5. QUẢN TRỊ (ADMIN/GIÁO VỤ)
+    // 5. QUẢN TRỊ
     '/admin': 'Quản trị',
-    '/admin/users': 'Quản lý người dùng',
-    '/admin/groups': 'Quản lý nhóm',
-    '/admin/news': 'Quản lý tin tức',
+    '/admin/dashboard': 'Dashboard',
+    '/admin/users': 'Người dùng',
+    '/admin/groups': 'Nhóm sinh viên',
+    '/admin/news': 'Tin tức',
     
-    // Kế hoạch
     '/admin/thesis-plans': 'Kế hoạch khóa luận',
-    '/admin/thesis-plans/create': 'Tạo kế hoạch mới',
-    '/admin/thesis-plans/:id/edit': 'Chỉnh sửa kế hoạch',
-    '/admin/thesis-plans/:id/participants': 'Sinh viên tham gia',
+    '/admin/thesis-plans/create': 'Tạo mới',
+    '/admin/thesis-plans/:id/edit': 'Chỉnh sửa',
+    '/admin/thesis-plans/:id/participants': 'Danh sách sinh viên',
     
-    // Mẫu
     '/admin/templates': 'Mẫu kế hoạch',
-    '/admin/templates/create': 'Tạo mẫu mới',
-    '/admin/templates/:id/edit': 'Chỉnh sửa mẫu',
-    
-    // Đề tài & Phân công
     '/admin/thesis-topics': 'Quản lý đề tài',
-    '/admin/quota-management': 'Phân bổ chỉ tiêu',
-    
-    // Hội đồng & Điểm
+    '/admin/quota-management': 'Phân bổ Quota',
     '/admin/hoidong': 'Quản lý Hội đồng',
     '/admin/submissions': 'Quản lý nộp bài',
-    '/admin/cham-diem': 'Quản lý điểm số',
-    '/admin/cham-diem/:id': 'Chi tiết bảng điểm',
-    
-    // Hệ thống
+    '/admin/cham-diem': 'Bảng điểm tổng hợp',
+    '/admin/cham-diem/:id': 'Chi tiết điểm',
     '/admin/system-logs': 'Nhật ký hệ thống',
+    '/admin/files': 'Quản lý tập tin',
     '/admin/settings/general': 'Cấu hình chung',
 };
 
@@ -119,7 +119,7 @@ export default function AuthenticatedLayout() {
     const location = useLocation();
     const { theme, setTheme } = useTheme();
 
-    // --- LOGIC POLLING THÔNG BÁO (30s/lần) ---
+    // --- LOGIC POLLING THÔNG BÁO ---
     const { data: countData } = useQuery({
         queryKey: ['unreadCount'],
         queryFn: getUnreadCount,
@@ -138,12 +138,13 @@ export default function AuthenticatedLayout() {
     const unreadCount = countData?.count || 0;
     const notifications = latestNotiData?.data || [];
 
-    // --- LOGIC BREADCRUMB (Xử lý Dynamic Route) ---
+    // --- [UPDATED] LOGIC BREADCRUMB ---
     const breadcrumbItems = useMemo(() => {
         const pathnames = location.pathname.split('/').filter(x => x);
         let currentPath = '';
         const items = [];
 
+        // Luôn thêm Home
         items.push(
             <BreadcrumbItem key="root">
                 <BreadcrumbLink asChild>
@@ -155,10 +156,10 @@ export default function AuthenticatedLayout() {
         pathnames.forEach((value, index) => {
             currentPath += `/${value}`;
             const isLast = index === pathnames.length - 1;
-            let routeName = '...';
+            let routeName = null;
             let matchedRoute = null;
 
-            // 1. Kiểm tra khớp chính xác
+            // 1. Kiểm tra khớp chính xác (Ưu tiên cao nhất)
             if (routeNameMap[currentPath]) {
                 routeName = routeNameMap[currentPath];
                 matchedRoute = currentPath;
@@ -174,13 +175,18 @@ export default function AuthenticatedLayout() {
                 }
             }
 
-            // Chỉ hiển thị breadcrumb nếu tìm thấy tên route hoặc là phần tử cuối cùng (để tránh hiện ID vô nghĩa)
-            // Tuy nhiên, ở đây ta luôn hiển thị để giữ cấu trúc, nếu không tìm thấy tên thì hiển thị value (ID/slug)
-            const displayName = routeName !== '...' ? routeName : value;
+            // Nếu tìm thấy tên route, hiển thị nó. 
+            // Nếu không tìm thấy (VD: "student" đứng một mình mà không có map), 
+            // ta có thể chọn hiển thị raw value hoặc bỏ qua. 
+            // Ở đây ta hiển thị raw value nhưng viết hoa chữ đầu để đỡ trống trải.
+            const displayName = routeName || (value.charAt(0).toUpperCase() + value.slice(1));
+
+            // [FIX]: Ẩn các segment không có ý nghĩa nếu muốn (VD: ẩn ID nếu không match được tên)
+            // Nhưng với logic trên, ID sẽ match được pattern /:id và hiển thị "Chi tiết..." nên ổn.
 
             items.push(<BreadcrumbSeparator key={`sep-${index}`} />);
             
-            if (isLast || !matchedRoute) {
+            if (isLast) {
                 items.push(
                     <BreadcrumbItem key={currentPath}>
                         <BreadcrumbPage>{displayName}</BreadcrumbPage>
@@ -189,15 +195,20 @@ export default function AuthenticatedLayout() {
             } else {
                 items.push(
                     <BreadcrumbItem key={currentPath}>
-                        <BreadcrumbLink asChild>
-                            <Link to={matchedRoute}>{displayName}</Link>
-                        </BreadcrumbLink>
+                        {/* Nếu route có map thì link, không thì chỉ hiện text (tránh link chết 404) */}
+                        {routeName ? (
+                             <BreadcrumbLink asChild>
+                                <Link to={matchedRoute}>{displayName}</Link>
+                            </BreadcrumbLink>
+                        ) : (
+                            <span className="text-muted-foreground">{displayName}</span>
+                        )}
                     </BreadcrumbItem>
                 );
             }
         });
 
-        // Xử lý trường hợp trang chủ
+        // Xử lý trường hợp trang chủ (tránh lặp breadcrumb)
         if (items.length <= 1 && location.pathname === '/') {
             items.push(<BreadcrumbSeparator key="sep-home" />);
             items.push(
@@ -247,8 +258,6 @@ export default function AuthenticatedLayout() {
                         </div>
                         
                         <div className="flex items-center gap-2">
-                            
-                            {/* Nút chuyển đổi giao diện nhanh */}
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -260,7 +269,6 @@ export default function AuthenticatedLayout() {
                                 <span className="sr-only">Toggle theme</span>
                             </Button>
 
-                            {/* Icon Lịch họp cho Giảng viên */}
                             {isLecturerOrHigher && (
                                 <Button 
                                     variant="ghost" 
@@ -273,7 +281,6 @@ export default function AuthenticatedLayout() {
                                 </Button>
                             )}
 
-                            {/* Dropdown Thông báo */}
                             <NotificationDropdown 
                                 notifications={notifications} 
                                 unreadCount={unreadCount} 

@@ -12,7 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { 
     Layers, Users, Zap, ArrowRight, AlertCircle, 
     Clock, CheckSquare, BookOpen, MessageSquare, Trophy, UserPlus,
-    CalendarDays, Video, MapPin, Pin, Newspaper
+    CalendarDays, Video, MapPin, Pin, Newspaper, GraduationCap
 } from 'lucide-react';
 import { format, parseISO, isPast, isToday } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -54,6 +54,7 @@ const NewsItem = ({ news, onClick }) => (
 const PlanCard = ({ plan }) => {
     const navigate = useNavigate();
     const hasGroup = !!plan.group;
+    const council = plan.group?.council; // Lấy thông tin hội đồng
     const cardBorderClass = hasGroup ? "border-l-4 border-l-indigo-500" : "border-l-4 border-l-orange-400 border-dashed";
 
     return (
@@ -66,17 +67,45 @@ const PlanCard = ({ plan }) => {
                             {!hasGroup && <Badge className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200 text-[10px]">Chưa có nhóm</Badge>}
                         </div>
                         <h3 className="text-lg font-bold text-gray-800 dark:text-gray-100 truncate" title={plan.plan_name}>{plan.plan_name}</h3>
+                        
                         {hasGroup ? (
-                            <div className="mt-3 space-y-1">
+                            <div className="mt-3 space-y-2">
+                                {/* Thông tin nhóm & Đề tài */}
                                 <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                                    <Users className="w-4 h-4 mr-2 text-indigo-500" />
+                                    <Users className="w-4 h-4 mr-2 text-indigo-500 shrink-0" />
                                     <span className="font-medium mr-1">{plan.group.name}</span>
                                     <span className="text-muted-foreground text-xs">({plan.group.members_count} TV)</span>
                                 </div>
                                 <div className="flex items-center text-sm text-gray-600 dark:text-gray-300">
-                                    <BookOpen className="w-4 h-4 mr-2 text-indigo-500" />
+                                    <BookOpen className="w-4 h-4 mr-2 text-indigo-500 shrink-0" />
                                     <span className="truncate max-w-[300px]">{plan.group.topic_name || "Chưa đăng ký đề tài"}</span>
                                 </div>
+
+                                {/* [MỚI] Thông tin Hội đồng (Nếu có) */}
+                                {council && (
+                                    <div className="mt-3 pt-3 border-t border-dashed flex flex-col gap-1 bg-blue-50/50 dark:bg-blue-900/10 p-2 rounded-md">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <GraduationCap className="w-4 h-4 text-blue-600" />
+                                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase">
+                                                Lịch bảo vệ: {council.name}
+                                            </span>
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pl-6">
+                                            <span className="flex items-center gap-1">
+                                                <CalendarDays className="w-3 h-3" />
+                                                {council.date ? format(parseISO(council.date), 'dd/MM/yyyy') : '---'}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <Clock className="w-3 h-3" />
+                                                {council.time ? format(parseISO(`2000-01-01T${council.time}`), 'HH:mm') : '---'}
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                <MapPin className="w-3 h-3" />
+                                                {council.room || 'Chưa xếp phòng'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             <div className="mt-3 text-sm text-muted-foreground italic flex items-center gap-2">
@@ -84,6 +113,8 @@ const PlanCard = ({ plan }) => {
                             </div>
                         )}
                     </div>
+                    
+                    {/* Phần tiến độ & Nút bấm */}
                     <div className="flex flex-col items-end justify-between gap-3 min-w-[140px]">
                         {hasGroup ? (
                             <div className="w-full text-right">
@@ -94,6 +125,7 @@ const PlanCard = ({ plan }) => {
                                 </div>
                             </div>
                         ) : <div className="w-full"></div>}
+                        
                         <Button size="sm" className={cn("w-full shadow-sm", hasGroup ? "bg-indigo-600 hover:bg-indigo-700" : "bg-orange-500 hover:bg-orange-600")}
                             onClick={() => hasGroup ? navigate(`/student/dashboard/${plan.plan_id}`) : navigate('/projects/find-group', { state: { planId: plan.plan_id } })}>
                             {hasGroup ? <><ArrowRight className="w-4 h-4 ml-1" /> Chi tiết</> : <><UserPlus className="w-4 h-4 mr-1" /> Tìm nhóm ngay</>}

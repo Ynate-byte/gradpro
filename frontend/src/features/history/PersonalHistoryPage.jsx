@@ -19,16 +19,30 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 
 // Icons
-// [SỬA LỖI]: Đã thay Cross2Icon -> X, CheckIcon -> Check
 import { 
     History, Search, Activity, Calendar, PlusCircle, Edit3, LogIn, 
-    RefreshCw, FileText, User, Shield, Monitor,
-    ArrowLeft, ArrowRight, Check, SlidersHorizontal, X, Filter
+    RefreshCw, FileText, User, Shield, Monitor, Check, X, Filter, 
+    ArrowLeft, ArrowRight, Mail, UserCheck, UserPlus
 } from 'lucide-react';
 
-// ==============================================================================
-// 1. COMPONENT BỘ LỌC GIỐNG ADMIN (SimpleFacetedFilter)
-// ==============================================================================
+// Map tên trường Database sang Tiếng Việt
+const FIELD_MAP = {
+    'TEN_CONGVIEC': 'Tên công việc',
+    'TRANGTHAI': 'Trạng thái',
+    'DIEM': 'Điểm số',
+    'NGAY_HETHAN': 'Hạn chót',
+    'DO_UUTIEN': 'Độ ưu tiên',
+    'MOTA': 'Mô tả',
+    'DIADIEM': 'Địa điểm',
+    'THOIGIAN_BATDAU': 'Bắt đầu',
+    'THOIGIAN_KETTHUC': 'Kết thúc',
+    'TEN_DETAI': 'Tên đề tài',
+    'ID_COT': 'Cột Kanban',
+    'NOIDUNG_BINHLUAN': 'Nội dung',
+    'LINK_TRUCTUYEN': 'Link họp'
+};
+
+// Component lọc đơn giản
 const SimpleFacetedFilter = ({ title, options, value, onChange }) => {
     const selectedValues = new Set(value ? [value] : []);
     
@@ -70,19 +84,14 @@ const SimpleFacetedFilter = ({ title, options, value, onChange }) => {
                                     <CommandItem
                                         key={option.value}
                                         onSelect={() => {
-                                            // Logic Single Select: Chọn cái mới thì bỏ cái cũ
-                                            if (isSelected) {
-                                                onChange(null); // Bỏ chọn
-                                            } else {
-                                                onChange(option.value); // Chọn mới
-                                            }
+                                            if (isSelected) onChange(null);
+                                            else onChange(option.value);
                                         }}
                                     >
                                         <div className={cn(
                                             "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
                                             isSelected ? "bg-primary text-primary-foreground" : "opacity-50 [&_svg]:invisible"
                                         )}>
-                                            {/* [SỬA LỖI]: Dùng Check thay vì CheckIcon */}
                                             <Check className={cn("h-4 w-4")} />
                                         </div>
                                         <span>{option.label}</span>
@@ -109,10 +118,6 @@ const SimpleFacetedFilter = ({ title, options, value, onChange }) => {
         </Popover>
     );
 };
-
-// ==============================================================================
-// 2. SUB-COMPONENTS HIỂN THỊ (StatCard, ActionBadge...)
-// ==============================================================================
 
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass }) => (
     <Card className="flex-1 min-w-[200px] border shadow-sm hover:shadow-md transition-all">
@@ -147,6 +152,7 @@ const ActionBadge = ({ type }) => {
         else if(type === 'INVITE_MEMBER') label = "Mời thành viên";
         else if(type === 'REGISTER_TOPIC') label = "Đăng ký đề tài";
         else if(type === 'PROPOSE_TOPIC') label = "Đề xuất đề tài";
+        else if(type === 'SEND_REQUEST') label = "Gửi yêu cầu";
         else label = "Tạo mới";
     }
 
@@ -155,12 +161,14 @@ const ActionBadge = ({ type }) => {
         if(type === 'TASK_MOVE') label = "Cập nhật Task";
         else if(type === 'CHANGE_PASSWORD') label = "Đổi mật khẩu";
         else if(type === 'UPDATE_PROFILE') label = "Cập nhật hồ sơ";
+        else if(type === 'TRANSFER_LEADER') label = "Chuyển quyền";
         else label = "Chỉnh sửa";
     }
 
     if (type.includes('JOIN') || type.includes('APPROVE')) {
         color = "bg-indigo-50 text-indigo-700 border-indigo-200"; icon = User; label = "Gia nhập";
         if(type === 'APPROVE_MEMBER') label = "Duyệt thành viên";
+        if(type === 'JOIN_GROUP') label = "Vào nhóm";
     }
 
     if (type.includes('GRADE') || type.includes('CONFIRM') || type.includes('REJECT')) {
@@ -200,9 +208,119 @@ function getResourceIcon(type) {
     return Monitor;
 }
 
-// ==============================================================================
-// 3. MAIN PAGE COMPONENT
-// ==============================================================================
+// Helper: Render chi tiết thông minh (Full view)
+const DetailRenderer = ({ type, details }) => {
+    if (!details || Object.keys(details).length === 0) return <span className="text-muted-foreground text-xs italic">Không có chi tiết</span>;
+
+    // 1. Hiển thị Diff (Sự thay đổi Old -> New)
+    if (details.changes && Array.isArray(details.changes)) {
+        return (
+            <div className="mt-2 flex flex-col gap-1.5 bg-muted/40 p-2.5 rounded-md border text-xs">
+                <span className="font-semibold text-muted-foreground mb-0.5">Chi tiết thay đổi:</span>
+                {details.changes.map((change, idx) => (
+                    <div key={idx} className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-foreground min-w-[80px]">
+                            {FIELD_MAP[change.field] || change.field}:
+                        </span>
+                        <div className="flex items-center gap-2 flex-1">
+                            <span className="line-through opacity-60 px-1.5 py-0.5 bg-red-100 dark:bg-red-900/30 rounded text-red-600 dark:text-red-400 truncate max-w-[200px]">
+                                {change.old ?? <span className="italic">Trống</span>}
+                            </span>
+                            <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                            <span className="px-1.5 py-0.5 bg-green-100 dark:bg-green-900/30 rounded text-green-600 dark:text-green-400 font-medium truncate max-w-[200px]">
+                                {change.new ?? <span className="italic">Trống</span>}
+                            </span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
+    // 2. Các loại log cụ thể khác
+    if (type === 'LOGIN') {
+        return <p className="text-xs text-muted-foreground">IP: {details.ip} • {details.user_agent?.split(')')[0]})</p>;
+    }
+
+    if (type === 'INVITE_MEMBER') {
+         return (
+             <div className="flex flex-col gap-1 mt-1">
+                 <div className="flex items-center gap-2 text-xs text-indigo-600 font-medium">
+                     <Mail className="h-3 w-3" />
+                     {details.count ? (
+                        <span>Đã gửi lời mời cho {details.count} người</span>
+                     ) : (
+                        <span>Đã mời: {details.name} ({details.mssv})</span>
+                     )}
+                 </div>
+                 {details.names && (
+                     <p className="text-xs text-muted-foreground pl-5">
+                        {details.names.join(', ')}
+                     </p>
+                 )}
+             </div>
+         );
+    }
+    
+    if (type === 'JOIN_GROUP' || type === 'APPROVE_MEMBER') {
+        return (
+            <div className="flex items-center gap-2 mt-1 text-xs text-green-600 font-medium">
+                <UserCheck className="h-3 w-3" />
+                <span>Đã duyệt: {details.name || 'Thành viên mới'} {details.mssv ? `(${details.mssv})` : ''}</span>
+            </div>
+        );
+    }
+
+    if (type === 'TRANSFER_LEADER') {
+         return (
+             <div className="flex items-center gap-2 mt-1 text-xs text-orange-600">
+                 <RefreshCw className="h-3 w-3" />
+                 <span>Chuyển quyền cho: <strong>{details.new_leader}</strong></span>
+             </div>
+         );
+    }
+    
+    // Grading Logs
+    if (type && type.includes('GRADE')) {
+         return (
+             <div className="flex flex-col gap-1 mt-1">
+                <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-yellow-600 border-yellow-200 bg-yellow-50">
+                        {details.new_score ?? details.score} điểm
+                    </Badge>
+                    {details.old_score !== undefined && (
+                        <span className="text-xs text-muted-foreground flex items-center">
+                            (Cũ: {details.old_score})
+                        </span>
+                    )}
+                </div>
+                {(details.note || details.comment) && (
+                    <span className="text-xs text-muted-foreground italic border-l-2 pl-2">
+                        "{details.note || details.comment}"
+                    </span>
+                )}
+             </div>
+         );
+    }
+
+    // Fallback: Hiển thị các thông tin text đơn giản
+    if (details.topic_name) return <p className="text-xs text-muted-foreground mt-1">Đề tài: {details.topic_name}</p>;
+    if (details.message) return <p className="text-xs text-muted-foreground italic mt-1">"{details.message}"</p>;
+    
+    // Fallback cuối cùng: In các cặp key-value còn lại
+    return (
+        <div className="text-xs text-muted-foreground mt-1">
+            {Object.entries(details).map(([key, value]) => {
+                if(typeof value === 'object') return null;
+                return (
+                    <span key={key} className="mr-3 inline-block">
+                         <span className="font-medium text-foreground/70">{key}:</span> {value}
+                    </span>
+                )
+            })}
+        </div>
+    );
+};
 
 export default function PersonalHistoryPage() {
     const { user } = useAuth();
@@ -221,6 +339,7 @@ export default function PersonalHistoryPage() {
             { value: 'UPDATE_PROFILE', label: 'Cập nhật hồ sơ' },
             { value: 'TASK_CREATE', label: 'Tạo công việc (Kanban)' },
             { value: 'TASK_MOVE', label: 'Cập nhật công việc' },
+            { value: 'TASK_UPDATE', label: 'Chỉnh sửa công việc' }, // Thêm cái này
             { value: 'CREATE_MEETING', label: 'Tạo lịch họp' },
         ];
 
@@ -233,6 +352,7 @@ export default function PersonalHistoryPage() {
                 { value: 'SUBMIT_PRODUCT', label: 'Nộp sản phẩm' },
                 { value: 'INVITE_MEMBER', label: 'Mời thành viên' },
                 { value: 'LEAVE_GROUP', label: 'Rời nhóm' },
+                { value: 'SEND_REQUEST', label: 'Gửi yêu cầu' },
             ];
         }
 
@@ -246,6 +366,7 @@ export default function PersonalHistoryPage() {
                 { value: 'GRADE_HOIDONG', label: 'Chấm điểm Hội đồng' },
                 { value: 'CONFIRM_SUBMISSION', label: 'Xác nhận nộp bài' },
                 { value: 'REJECT_SUBMISSION', label: 'Yêu cầu nộp lại' },
+                { value: 'TRANSFER_LEADER', label: 'Chuyển quyền nhóm' },
             ];
         }
 
@@ -355,7 +476,6 @@ export default function PersonalHistoryPage() {
                                     className="h-8 px-2 lg:px-3"
                                 >
                                     Reset
-                                    {/* [SỬA LỖI]: Dùng X thay vì Cross2Icon */}
                                     <X className="ml-2 h-4 w-4" />
                                 </Button>
                             )}
@@ -395,6 +515,7 @@ export default function PersonalHistoryPage() {
                                     </TableRow>
                                 ) : (
                                     historyItems.map((item) => {
+                                        // Parse JSON detail
                                         const details = typeof item.CHI_TIET === 'string' ? JSON.parse(item.CHI_TIET) : (item.CHI_TIET || {});
                                         const resourceName = getResourceName(item.LOAI_HANH_DONG);
                                         const ResourceIcon = getResourceIcon(item.LOAI_HANH_DONG);
@@ -424,12 +545,12 @@ export default function PersonalHistoryPage() {
                                                 </TableCell>
 
                                                 <TableCell>
-                                                    <span className="text-sm text-foreground block mb-1">
+                                                    <span className="text-sm text-foreground block mb-1 font-medium">
                                                         {item.TIEU_DE}
                                                     </span>
-                                                    {details.reason && <span className="text-xs text-red-500 block">Lý do: {details.reason}</span>}
-                                                    {details.score && <span className="text-xs text-yellow-600 block font-medium">Điểm: {details.score}</span>}
-                                                    {details.to_column && <span className="text-xs text-muted-foreground block">→ {details.to_column}</span>}
+                                                    
+                                                    {/* Render chi tiết dựa trên loại hành động */}
+                                                    <DetailRenderer type={item.LOAI_HANH_DONG} details={details} />
                                                 </TableCell>
 
                                                 <TableCell className="text-right text-xs text-muted-foreground font-mono">
