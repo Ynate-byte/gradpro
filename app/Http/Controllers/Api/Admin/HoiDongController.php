@@ -522,7 +522,8 @@ class HoiDongController extends Controller
                 $q->with([
                     'phancongDetaiNhom.detai',
                     'phancongDetaiNhom.gvhd.nguoidung',
-                    'thanhviens.nguoidung' // Load thành viên nhóm để hiển thị trong dialog
+                    'thanhviens.nguoidung',
+                    'diemHoiDong'
                 ]);
             }
         ])->find($id);

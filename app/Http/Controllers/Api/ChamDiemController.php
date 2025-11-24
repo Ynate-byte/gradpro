@@ -17,6 +17,7 @@ use App\Models\DiemHoiDong;
 use App\Models\DiemTongKet;
 use App\Models\PhancongDetaiNhom;
 use App\Services\ActivityLogger;
+use Carbon\Carbon;
 
 class ChamDiemController extends Controller
 {
@@ -248,10 +249,18 @@ class ChamDiemController extends Controller
             return response()->json(['error' => 'Nhóm chưa thuộc kế hoạch nào.'], 404);
         }
 
-        // 3. LOGIC KIỂM TRA THỜI GIAN (Feature Flag & Date Check)
+        // =================================================================
+        // 3. LOGIC KIỂM TRA THỜI GIAN (ĐÃ CẬP NHẬT)
+        // =================================================================
+
+        // A. Kiểm tra Thiết lập chung (Áp dụng cho cả HD, PB, HĐ)
+        // Admin/Giáo vụ có thể bỏ qua check này nếu muốn (ở đây tôi để Admin bypass)
+        if (!$this->isAdmin() && !$plan->isFeatureActive('CHAM_DIEM')) {
+            return response()->json(['error' => 'Cổng chấm điểm hiện đang đóng theo kế hoạch chung.'], 403);
+        }
+
+        // B. Kiểm tra Riêng cho Hội đồng
         if ($loai === 'HOIDONG') {
-            // --- Đối với Hội đồng: Chỉ cho phép chấm đúng NGAY_BAOCAO ---
-            
             // Tìm hội đồng bảo vệ của nhóm này
             $hoidong = $nhom->hoidongs()->where('LOAI', 'hoidong')->first();
             
@@ -259,29 +268,24 @@ class ChamDiemController extends Controller
                  return response()->json(['error' => 'Nhóm chưa được xếp lịch hội đồng hoặc chưa có ngày báo cáo.'], 403);
             }
 
-            $today = now()->format('Y-m-d');
-            $reportDate = \Carbon\Carbon::parse($hoidong->NGAY_BAOCAO)->format('Y-m-d');
-
-            // So sánh ngày hiện tại với ngày báo cáo
-            if ($today !== $reportDate) {
-                // Cho phép admin chấm bù (tùy chọn), nhưng mặc định chặn giảng viên
+            // Logic mới: Chỉ cần KHÔNG TRƯỚC thời gian báo cáo
+            // Lấy đầu ngày báo cáo để so sánh
+            $reportTime = \Carbon\Carbon::parse($hoidong->NGAY_BAOCAO)->startOfDay();
+            
+            if (now()->lt($reportTime)) {
+                // Nếu chưa đến ngày báo cáo -> Chặn
                 if (!$this->isAdmin()) {
+                    $fmtDate = $reportTime->format('d/m/Y');
                     return response()->json([
-                        'error' => "Chức năng chấm hội đồng chỉ mở vào ngày báo cáo ($reportDate). Hôm nay là $today."
+                        'error' => "Chưa đến thời gian bảo vệ ($fmtDate). Bạn chưa thể chấm điểm lúc này."
                     ], 403);
                 }
             }
-        } else {
-            // --- Đối với HD và PB: Theo cấu hình chung 'CHAM_DIEM' trong Settings ---
-            if (!$plan->isFeatureActive('CHAM_DIEM')) {
-                return response()->json(['error' => 'Thời gian chấm điểm (Hướng dẫn/Phản biện) hiện đang đóng.'], 403);
-            }
         }
-
         try {
             DB::beginTransaction();
             
-            // 4. Xác định Model tương ứng (Giữ nguyên)
+            // 4. Xác định Model tương ứng
             $modelMap = [
                 'HUONGDAN' => DiemHuongDan::class,
                 'PHANBIEN' => DiemPhanBien::class,
@@ -294,7 +298,7 @@ class ChamDiemController extends Controller
             
             $model = $modelMap[$loai];
 
-            // 5. Lưu điểm vào CSDL (Giữ nguyên)
+            // 5. Lưu điểm vào CSDL
             $model::updateOrCreate(
                 [
                     'ID_NHOM' => $idNhom, 
@@ -302,12 +306,11 @@ class ChamDiemController extends Controller
                 ],
                 [
                     'DIEM' => $validated['DIEM'],
-                    // Sử dụng ?? null để tránh lỗi nếu không có nhận xét
                     'NHANXET' => $validated['NHANXET'] ?? null 
                 ]
             );
             
-            // 6. Cập nhật điểm tổng kết cho nhóm ngay lập tức (Giữ nguyên)
+            // 6. Cập nhật điểm tổng kết cho nhóm ngay lập tức
             $this->capNhatTong($nhom);
             
             $logTitle = "Chấm điểm " . ($loai === 'HUONGDAN' ? 'Hướng dẫn' : ($loai === 'PHANBIEN' ? 'Phản biện' : 'Hội đồng'));
