@@ -38,21 +38,24 @@ class StudentDashboardController extends Controller
             $sinhvienId = $user->sinhvien->ID_SINHVIEN;
             $userId = $user->ID_NGUOIDUNG;
             $now = Carbon::now();
-            $limitDate = Carbon::today()->addDays(3); // Định nghĩa "gấp" là trong 3 ngày tới
+            
+            // Định nghĩa giới hạn "Sắp tới" (ví dụ: 7 ngày cho sự kiện, 3 ngày cho task)
+            $limitDateTask = Carbon::today()->addDays(3);
+            $limitDateEvent = Carbon::today()->addDays(7);
 
             // 1. Lấy danh sách nhóm Active (Thuộc các kế hoạch đang chạy)
             // Kèm theo thông tin Kế hoạch, Đề tài, GVHD và HỘI ĐỒNG BẢO VỆ
             $activeGroups = Nhom::whereHas('kehoach', function ($q) {
-                    $q->whereIn('KEHOACH_KHOALUAN.TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm']);
+                    $q->whereIn('KEHOACH_KHOALUAN.TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa']);
                 })
                 ->whereHas('thanhviens', function ($q) use ($userId) {
                     $q->where('THANHVIEN_NHOM.ID_NGUOIDUNG', $userId);
                 })
                 ->with([
-                    'kehoach:ID_KEHOACH,TEN_DOT,NAMHOC,HOCKY,NGAY_KETHUC',
+                    'kehoach:ID_KEHOACH,TEN_DOT,NAMHOC,HOCKY,NGAY_KETHUC,TRANGTHAI',
                     'phancongDetaiNhom.detai:ID_DETAI,TEN_DETAI',
                     'phancongDetaiNhom.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN',
-                    // [CẬP NHẬT] Load thông tin Hội đồng (Chỉ lấy thông tin cơ bản, không lấy giảng viên)
+                    // Load thông tin Hội đồng để hiển thị trên Card & List Urgent
                     'hoidongs' => function($q) {
                         $q->where('LOAI', 'hoidong')
                           ->select('HOIDONG.ID_HOIDONG', 'TEN_HOIDONG', 'NGAY_BAOCAO', 'GIO_BAOCAO', 'PHONG');
@@ -62,7 +65,7 @@ class StudentDashboardController extends Controller
 
             $groupIds = $activeGroups->pluck('ID_NHOM')->toArray();
 
-            // 2. Lấy Task Gấp (Priority Cao hoặc Deadline gần)
+            // 2. Lấy Task Gấp (Priority Cao hoặc Deadline gần <= 3 ngày)
             $urgentTasks = collect();
             if (!empty($groupIds)) {
                 $urgentTasks = CongViec::whereIn('CONGVIEC.ID_NHOM', $groupIds)
@@ -70,9 +73,9 @@ class StudentDashboardController extends Controller
                         $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $userId);
                     })
                     ->whereNotIn('CONGVIEC.TRANGTHAI', ['Hoàn thành', 'Đã hủy'])
-                    ->where(function($q) use ($limitDate) {
+                    ->where(function($q) use ($limitDateTask) {
                         $q->where('CONGVIEC.DO_UUTIEN', 'Cao')
-                          ->orWhereDate('CONGVIEC.NGAY_HETHAN', '<=', $limitDate);
+                          ->orWhereDate('CONGVIEC.NGAY_HETHAN', '<=', $limitDateTask);
                     })
                     ->with('nhom:ID_NHOM,TEN_NHOM,ID_KEHOACH')
                     ->get()
@@ -90,13 +93,13 @@ class StudentDashboardController extends Controller
                     });
             }
 
-            // 3. Lấy Lịch Họp sắp tới
+            // 3. Lấy Lịch Họp sắp tới (<= 7 ngày)
             $upcomingMeetings = collect();
             if (!empty($groupIds)) {
                 $upcomingMeetings = LichHop::whereIn('ID_NHOM', $groupIds)
                     ->where('TRANGTHAI', '!=', 'Đã hủy')
                     ->where('THOIGIAN_BATDAU', '>=', $now)
-                    ->where('THOIGIAN_BATDAU', '<=', $limitDate)
+                    ->where('THOIGIAN_BATDAU', '<=', $limitDateEvent)
                     ->with('nhom:ID_NHOM,TEN_NHOM,ID_KEHOACH')
                     ->get()
                     ->map(function ($m) {
@@ -113,15 +116,47 @@ class StudentDashboardController extends Controller
                     });
             }
 
-            // Gộp Task và Meeting, sắp xếp theo thời gian
-            $mergedItems = $urgentTasks->concat($upcomingMeetings)
+            // 4. [QUAN TRỌNG] Lấy Lịch Hội đồng sắp tới (<= 7 ngày)
+            // Logic này đảm bảo hội đồng xuất hiện trong list "Ưu tiên xử lý"
+            $upcomingCouncils = collect();
+            foreach ($activeGroups as $group) {
+                $council = $group->hoidongs->first(); // Đã filter LOAI='hoidong' ở query activeGroups
+                
+                if ($council && $council->NGAY_BAOCAO) {
+                    // Ghép ngày và giờ
+                    $timeStr = $council->GIO_BAOCAO ?? '00:00:00';
+                    $councilDate = Carbon::parse($council->NGAY_BAOCAO . ' ' . $timeStr);
+
+                    // Kiểm tra thời gian: Từ hôm nay đến 7 ngày tới
+                    if ($councilDate->gte($now->copy()->startOfDay()) && $councilDate->lte($limitDateEvent)) {
+                        $upcomingCouncils->push([
+                            'type' => 'council', // Type riêng để frontend render màu tím
+                            'id' => $council->ID_HOIDONG,
+                            'title' => 'Bảo vệ: ' . $council->TEN_HOIDONG,
+                            'group_name' => $group->TEN_NHOM,
+                            'group_id' => $group->ID_NHOM,
+                            'plan_id' => $group->kehoach->ID_KEHOACH,
+                            'time' => $councilDate->toDateTimeString(),
+                            'location' => $council->PHONG ?? 'Chưa cập nhật',
+                            'priority' => 'Cao' // Hội đồng luôn là ưu tiên cao
+                        ]);
+                    }
+                }
+            }
+
+            // 5. Gộp Task + Meeting + Council, sắp xếp theo thời gian
+            $mergedItems = $urgentTasks
+                ->concat($upcomingMeetings)
+                ->concat($upcomingCouncils)
                 ->sortBy(function ($item) {
+                    // Sắp xếp thời gian tăng dần (cái nào gần nhất hiện trước)
+                    // Nếu không có time thì đẩy xuống cuối
                     return $item['time'] ? Carbon::parse($item['time'])->timestamp : 9999999999;
                 })
-                ->take(6)
+                ->take(6) // Lấy 6 item quan trọng nhất
                 ->values();
 
-            // 4. Tin tức mới nhất (Dành cho sinh viên hoặc tất cả)
+            // 6. Tin tức mới nhất
             $latestNews = News::where(function($q) {
                     $q->whereJsonContains('target_roles', 'ALL')
                       ->orWhereJsonContains('target_roles', 'SINH_VIEN')
@@ -141,7 +176,7 @@ class StudentDashboardController extends Controller
                     ];
                 });
 
-            // 5. Format dữ liệu Plans (Kèm thống kê task và thông tin hội đồng)
+            // 7. Format dữ liệu Plans cho UI (Cards)
             $pendingTasksCount = 0;
             if (!empty($groupIds)) {
                 $pendingTasksCount = CongViec::whereIn('CONGVIEC.ID_NHOM', $groupIds)
@@ -151,10 +186,13 @@ class StudentDashboardController extends Controller
             }
 
             $myPlans = $activeGroups->map(function ($g) {
-                // Thống kê task nhanh
+                // Thống kê task nhanh cho từng nhóm
                 $total = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', '!=', 'Đã hủy')->count();
                 $done = CongViec::where('ID_NHOM', $g->ID_NHOM)->where('TRANGTHAI', 'Hoàn thành')->count();
                 $percent = $total > 0 ? round(($done / $total) * 100) : 0;
+
+                // Lấy hội đồng (nếu có) để hiện lên Card chính
+                $council = $g->hoidongs->first();
 
                 return [
                     'plan_id' => $g->ID_KEHOACH,
@@ -168,12 +206,12 @@ class StudentDashboardController extends Controller
                         'supervisor_name' => $g->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN,
                         'members_count' => $g->SO_THANHVIEN_HIENTAI,
                         
-                        // [MỚI] Thông tin hội đồng (Chỉ lấy cái đầu tiên nếu có nhiều)
-                        'council' => $g->hoidongs->first() ? [
-                            'name' => $g->hoidongs->first()->TEN_HOIDONG,
-                            'date' => $g->hoidongs->first()->NGAY_BAOCAO,
-                            'time' => $g->hoidongs->first()->GIO_BAOCAO,
-                            'room' => $g->hoidongs->first()->PHONG,
+                        // Thông tin hội đồng để hiển thị ngay trên Dashboard Card
+                        'council' => $council ? [
+                            'name' => $council->TEN_HOIDONG,
+                            'date' => $council->NGAY_BAOCAO,
+                            'time' => $council->GIO_BAOCAO,
+                            'room' => $council->PHONG,
                         ] : null
                     ],
                     'task_stats' => ['total' => $total, 'done' => $done, 'percent' => $percent]
@@ -183,7 +221,7 @@ class StudentDashboardController extends Controller
             return response()->json([
                 'stats' => [
                     'active_plans' => $activeGroups->count(),
-                    'groups_joined' => $activeGroups->count(), // Tạm thời giống nhau
+                    'groups_joined' => $activeGroups->count(),
                     'pending_tasks' => $pendingTasksCount,
                 ],
                 'plans' => $myPlans->values(),
@@ -197,20 +235,17 @@ class StudentDashboardController extends Controller
         }
     }
 
-    /**
-     * Lấy dữ liệu chi tiết cho một kế hoạch cụ thể (Detail Context)
-     */
+    // ... hàm getDetail giữ nguyên ...
     public function getDetail(Request $request, $planId)
     {
+        // (Giữ nguyên logic getDetail như cũ vì nó đã đúng)
         try {
             $user = Auth::user();
             
-            // 1. Lấy thông tin kế hoạch
             $plan = KehoachKhoaluan::with(['mocThoigians' => function($q) {
                 $q->orderBy('NGAY_BATDAU', 'asc');
             }])->findOrFail($planId);
    
-            // 2. Lấy thông tin nhóm
             $group = Nhom::where('ID_KEHOACH', $planId)
                 ->whereHas('thanhviens', function($q) use ($user) {
                     $q->where('THANHVIEN_NHOM.ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
@@ -230,7 +265,6 @@ class StudentDashboardController extends Controller
             $currentPhase = null;
             $now = Carbon::now();
             
-            // Xác định giai đoạn hiện tại
             if ($plan->mocThoigians && $plan->mocThoigians->isNotEmpty()) {
                 foreach ($plan->mocThoigians as $moc) {
                     if ($now->between($moc->NGAY_BATDAU, $moc->NGAY_KETTHUC)) {
@@ -283,9 +317,7 @@ class StudentDashboardController extends Controller
                     ]
                 ];
 
-                // --- C. TIMELINE TÍCH HỢP ---
-
-                // 1. Mốc kế hoạch
+                // C. TIMELINE
                 foreach ($plan->mocThoigians as $moc) {
                     $integratedTimeline[] = [
                         'id' => 'moc_' . $moc->ID,
@@ -297,7 +329,6 @@ class StudentDashboardController extends Controller
                     ];
                 }
 
-                // 2. Công việc (Tasks)
                 $tasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
                     ->whereNotNull('NGAY_HETHAN')
                     ->where('TRANGTHAI', '!=', 'Hoàn thành')
@@ -317,7 +348,6 @@ class StudentDashboardController extends Controller
                     ];
                 }
 
-                // 3. Lịch họp
                 $meetings = LichHop::where('ID_NHOM', $group->ID_NHOM)
                     ->where('TRANGTHAI', '!=', 'Đã hủy')
                     ->where('THOIGIAN_BATDAU', '>=', Carbon::now()->subDays(1))
@@ -336,12 +366,10 @@ class StudentDashboardController extends Controller
                     ];
                 }
 
-                // Sắp xếp timeline
                 usort($integratedTimeline, function($a, $b) {
                     return strtotime($a['date']) - strtotime($b['date']);
                 });
                 
-                // D. Stats cá nhân
                 $myTasksQuery = CongViec::where('ID_NHOM', $group->ID_NHOM)
                     ->whereHas('nguoiDuocPhanCong', fn($q) => $q->where('PHANCONG_CONGVIEC.ID_NGUOIDUNG', $user->ID_NGUOIDUNG))
                     ->whereNotIn('CONGVIEC.TRANGTHAI', ['Hoàn thành', 'Đã hủy']);

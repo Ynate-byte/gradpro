@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use App\Services\NotificationService;
+use App\Services\ActivityLogger; // Đã import đúng
 
 class HoiDongController extends Controller
 {
@@ -332,7 +333,7 @@ class HoiDongController extends Controller
                             $gv->nguoidung->ID_NGUOIDUNG,
                             "Thay đổi lịch hội đồng",
                             "Hội đồng '{$hoidong->TEN_HOIDONG}' đã thay đổi lịch/địa điểm. Vui lòng kiểm tra lại.",
-                            'URGENT', 
+                            'ACADEMIC', // [ĐÃ SỬA]
                             '/lecturer/council',
                             ['council_id' => $hoidong->ID_HOIDONG]
                         );
@@ -346,8 +347,8 @@ class HoiDongController extends Controller
                             $tv->ID_NGUOIDUNG,
                             "Thay đổi lịch bảo vệ",
                             "Lịch bảo vệ của nhóm bạn (Hội đồng: {$hoidong->TEN_HOIDONG}) đã thay đổi. Thời gian mới: " . ($hoidong->NGAY_BAOCAO ?? 'Chưa chốt') . " tại " . ($hoidong->PHONG ?? 'Chưa chốt'),
-                            'URGENT',
-                            '/student/dashboard', // Link về dashboard sinh viên
+                            'ACADEMIC', // [ĐÃ SỬA]
+                            '/student/dashboard/' . $hoidong->ID_KEHOACH,
                             ['council_id' => $hoidong->ID_HOIDONG]
                         );
                     }
@@ -681,6 +682,19 @@ class HoiDongController extends Controller
                                 '/student/dashboard',
                                 ['council_id' => $hoidong->ID_HOIDONG]
                             );
+
+                             // [THÊM MỚI] Ghi log cho nhóm
+                            ActivityLogger::log(
+                                'ASSIGN_COUNCIL',
+                                "Nhóm được xếp vào hội đồng: {$hoidong->TEN_HOIDONG}",
+                                [
+                                    'council_name' => $hoidong->TEN_HOIDONG,
+                                    'time' => $hoidong->NGAY_BAOCAO . ' ' . $hoidong->GIO_BAOCAO,
+                                    'room' => $hoidong->PHONG
+                                ],
+                                $nhom->ID_NHOM, // ID Nhóm
+                                'GraduationCap' // Icon
+                            );
                         }
                     }
                 } else {
@@ -785,8 +799,8 @@ class HoiDongController extends Controller
             
             // Tìm chuyên ngành mặc định của bộ môn này để gán cho Hội đồng
             $defaultMajor = Chuyennganh::where('ID_KHOA_BOMON', $deptId)
-                                        ->where('TRANGTHAI_KICHHOAT', true)
-                                        ->first();
+                                    ->where('TRANGTHAI_KICHHOAT', true)
+                                    ->first();
 
             $stats[] = [
                 'ID_KHOA_BOMON' => $deptId,

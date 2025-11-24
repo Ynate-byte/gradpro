@@ -19,35 +19,34 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 
-// --- 1. Đưa hàm checkActive ra ngoài hoặc dùng useCallback (nhưng đưa ra ngoài cho đơn giản) ---
+// --- Helper: Kiểm tra URL active ---
 const checkActive = (href, currentUrl) => {
     if (!href) return false;
     if (href === '/') return currentUrl === '/';
+    // Active nếu URL hiện tại bắt đầu bằng href (cho các trang con)
     return currentUrl === href || currentUrl.startsWith(`${href}/`);
 };
 
-// --- 2. Đưa Component MenuItem ra ngoài AppSidebar ---
+// --- Component Menu Item riêng biệt ---
 const MenuItem = ({ item, currentUrl }) => {
     if (item.hidden) return null;
 
-    // Tính toán trạng thái active dựa trên props currentUrl được truyền vào
     const isSubItemActive = item.subItems?.some(sub => checkActive(sub.href, currentUrl));
     const isDirectActive = checkActive(item.href, currentUrl);
     const isActive = isSubItemActive || isDirectActive;
 
-    if (item.subItems) {
-        if (item.subItems.length === 0) return null;
-
+    // Render menu có sub-items (Collapsible)
+    if (item.subItems && item.subItems.length > 0) {
         return (
-            // Lưu ý: Key cho Collapsible để React nhận biết trạng thái tốt hơn (nếu cần)
             <Collapsible defaultOpen={isActive} className="group/collapsible">
                 <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
                         <SidebarMenuButton
+                            tooltip={item.title}
                             className={`w-full ${isActive ? 'font-semibold text-primary' : ''}`}
                             isActive={isActive}
                         >
-                            <item.icon className="size-4 shrink-0" />
+                            {item.icon && <item.icon className="size-4 shrink-0" />}
                             <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
                                 {item.title}
                             </span>
@@ -57,6 +56,7 @@ const MenuItem = ({ item, currentUrl }) => {
                     <CollapsibleContent>
                         <SidebarMenuSub>
                             {item.subItems.map((subItem, idx) => {
+                                if (subItem.hidden) return null;
                                 const isSubActive = checkActive(subItem.href, currentUrl);
                                 return (
                                     <SidebarMenuSubItem key={idx}>
@@ -77,16 +77,18 @@ const MenuItem = ({ item, currentUrl }) => {
         );
     }
 
+    // Render menu đơn
     if (item.href) {
         return (
             <SidebarMenuItem>
                 <SidebarMenuButton
                     asChild
+                    tooltip={item.title}
                     isActive={isActive}
                     className={isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-bold border-r-4 border-primary' : ''}
                 >
                     <Link to={item.href}>
-                        <item.icon className={`size-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />
+                        {item.icon && <item.icon className={`size-4 shrink-0 ${isActive ? 'text-primary' : ''}`} />}
                         <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
                             {item.title}
                         </span>
@@ -99,146 +101,135 @@ const MenuItem = ({ item, currentUrl }) => {
     return null;
 };
 
-
-// Component chính: Thanh Sidebar
+// --- Component Chính ---
 export function AppSidebar() {
     const { user, logout } = useAuth();
     const location = useLocation();
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Lấy thông tin User ---
-    const role = user?.vaitro?.TEN_VAITRO;
-    
-    // Lấy mảng chức vụ từ quan hệ mới
+    // --- 1. Lấy thông tin Role & Permissions ---
+    const roleName = user?.vaitro?.TEN_VAITRO;
     const positions = user?.giangvien?.chucvus || [];
     const positionCodes = positions.map(p => p.MA_CHUCVU);
     const positionNames = positions.map(p => p.TEN_CHUCVU);
 
-    // --- Logic phân quyền ---
-    const isAdmin = role === 'Admin';
-    const isTruongKhoa = role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
-    const isGiaoVu = role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
-    const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
+    // Check Vai trò chính
+    const isSinhVien = roleName === 'Sinh viên';
+    const isAdminAccount = roleName === 'Admin'; // Admin hệ thống (có thể không phải GV)
     
-    const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
-    const isSinhVien = role === 'Sinh viên';
+    // Check Hồ sơ Giảng viên (Quan trọng: Trưởng khoa cũng là GV)
+    const hasLecturerProfile = !!user?.giangvien; 
 
-    // Quyền xem menu Admin
-    const canViewAdminMenu = isAdmin || isTruongKhoa || isGiaoVu;
-    // Quyền xem các mục của Giảng viên
-    const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
-    // Quyền chấm điểm
-    const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
+    // Check Chức vụ quản lý
+    const isTruongKhoa = positionCodes.includes('TRUONG_KHOA');
+    const isGiaoVu = positionCodes.includes('GIAO_VU');
+    const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
 
-    // --- Cấu hình Menu Chính ---
-    // (Giữ nguyên logic cấu hình menu của bạn)
-    const menuConfig = [
-        {
-            label: "Platform",
-            items: [
-                {
-                    title: "Tổng quan",
-                    icon: LayoutDashboard,
-                    href: "/",
-                    subItems: [
-                        ...(canViewAdminMenu ? [
-                             { href: "/admin/dashboard", title: "Bảng điều khiển (Admin)" }
-                        ] : []),
-                        ...(isSinhVien ? [
-                             { href: "/student/dashboard", title: "Bảng điều khiển (SV)" }
-                        ] : []),
-                        ...(canViewGiangVienRoutes && !isSinhVien && !isAdmin ? [
-                             { href: "/", title: "Bảng điều khiển (GV)" } 
-                        ] : []),
-                        { href: "/notifications", title: "Thông báo" },
-                        { href: "/history", title: "Lịch sử hoạt động" }, 
-                    ],
-                },
-                { title: "Tin tức", href: "/news", icon: Newspaper },
-                {
-                    title: "Đồ án",
-                    icon: BookCopy,
-                    href: "/projects",
-                    hidden: isAdmin,
-                    subItems: [
-                        { href: "/projects/topics", title: "Đề tài" },
-                        ...(isSinhVien ? [
-                            { href: "/projects/my-plans", title: "Kế hoạch KLTN" },
-                            { href: "/projects/my-group", title: "Nhóm của tôi" },
-                            { href: "/projects/find-group", title: "Tìm nhóm" },
-                        ] : []),
-                        ...(canViewGiangVienRoutes ? [
-                            { href: "/lecturer/groups-management", title: "Quản lý nhóm SV" },
-                            { href: "/lecturer/submissions", title: "Duyệt nộp bài" },
-                            {
-                                href: "/lecturer/quota-management",
-                                title: isTruongBoMon ? "Phân công (GV)" : "Thông tin Quota",
-                                hidden: isSinhVien || isAdmin
-                            },
-                            ...(isTruongBoMon ? [{
-                                href: "/department-head/topic-reviewer-assignment",
-                                title: "Phân công Người Góp ý"
-                            }] : []),
-                        ] : []),
-                    ],
-                },
-                {
-                    title: "Hội đồng",
-                    href: canViewAdminMenu ? "/admin/hoidong" : "/lecturer/council",
-                    icon: GraduationCap,
-                    hidden: !canViewGiangVienRoutes
-                },
-                {
-                    title: "Chấm điểm",
-                    href: canViewAdminMenu ? "/admin/cham-diem" : "/lecturer/grading",
-                    icon: PenSquare,
-                    hidden: !canChamDiem
-                },
-            ],
-        },
-    ];
+    // Quyền truy cập khu vực Admin/Quản lý
+    const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu || isTruongBoMon;
 
-    const adminMenuConfig = [
-        {
-            label: "Quản trị",
-            items: [
-                { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart },
-                { title: "Người dùng", href: "/admin/users", icon: Shield },
-                { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
-                { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
-                { title: "Kế hoạch Mẫu", href: "/admin/templates", icon: FileText }, 
-                { title: "Phân công Quota", href: "/admin/quota-management", icon: Layers },
-                { title: "Đề tài Khóa luận", href: "/admin/thesis-topics", icon: BookCopy }, 
-                { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
-                { title: "Quản lý File", href: "/admin/files", icon: Folder },
-                { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity },
-                { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
-            ],
-        },
-    ];
-
-    // --- Kiểm tra xem một nhóm menu có active không ---
-    // Cập nhật hàm này dùng checkActive bên ngoài
-    const isGroupActive = (items) => {
-        return items.some(item => {
-            if (item.subItems) {
-                return item.subItems.some(sub => checkActive(sub.href, currentUrl));
-            }
-            return checkActive(item.href, currentUrl);
-        });
+    // --- 2. Cấu hình Menu Platform (Cá nhân) ---
+    const platformMenu = {
+        label: "Platform",
+        items: [
+            {
+                title: "Tổng quan",
+                icon: LayoutDashboard,
+                href: "/", // Mặc định
+                subItems: [
+                    // Dashboard Sinh viên
+                    { href: "/student/dashboard", title: "Tổng quan (SV)", hidden: !isSinhVien },
+                    // Dashboard Giảng viên (Dành cho ai có hồ sơ GV)
+                    { href: "/lecturer/dashboard", title: "Tổng quan (GV)", hidden: !hasLecturerProfile },
+                    // Dashboard Admin (Dành cho quản lý)
+                    { href: "/admin/dashboard", title: "Dashboard (Admin)", hidden: !canAccessAdminArea },
+                    // Chung
+                    { href: "/notifications", title: "Thông báo" },
+                    { href: "/history", title: "Lịch sử hoạt động" },
+                ],
+            },
+            { title: "Tin tức", href: "/news", icon: Newspaper },
+            {
+                title: "Đồ án",
+                icon: BookCopy,
+                href: "/projects",
+                hidden: isAdminAccount && !hasLecturerProfile, // Ẩn với Admin thuần không phải GV
+                subItems: [
+                    // --- Sinh viên ---
+                    { href: "/projects/topics", title: "Danh sách Đề tài", hidden: !isSinhVien },
+                    { href: "/projects/my-plans", title: "Kế hoạch tham gia", hidden: !isSinhVien },
+                    { href: "/projects/my-group", title: "Nhóm của tôi", hidden: !isSinhVien },
+                    { href: "/projects/find-group", title: "Tìm nhóm", hidden: !isSinhVien },
+                    
+                    // --- Giảng viên (Cá nhân) ---
+                    { href: "/lecturer/thesis-topics", title: "Đề tài của tôi", hidden: !hasLecturerProfile },
+                    { href: "/lecturer/groups-management", title: "Nhóm hướng dẫn", hidden: !hasLecturerProfile },
+                    { href: "/lecturer/submissions", title: "Duyệt nộp bài", hidden: !hasLecturerProfile },
+                    { href: "/lecturer/quota-management", title: "Thông tin Quota", hidden: !hasLecturerProfile },
+                    
+                    // --- Trưởng bộ môn ---
+                    { 
+                        href: "/department-head/topic-reviewer-assignment", 
+                        title: "Phân công Góp ý", 
+                        hidden: !isTruongBoMon 
+                    },
+                ],
+            },
+            // [FIXED]: Luôn trỏ về trang cá nhân, chỉ hiện nếu là Giảng viên
+            {
+                title: "Hội đồng",
+                href: "/lecturer/council", 
+                icon: GraduationCap,
+                hidden: !hasLecturerProfile 
+            },
+            // [FIXED]: Luôn trỏ về trang chấm điểm cá nhân
+            {
+                title: "Chấm điểm",
+                href: "/lecturer/grading",
+                icon: PenSquare,
+                hidden: !hasLecturerProfile
+            },
+        ],
     };
 
+    // --- 3. Cấu hình Menu Admin (Quản trị) ---
+    const adminMenu = {
+        label: "Quản trị",
+        items: [
+            { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart },
+            { title: "Người dùng", href: "/admin/users", icon: Shield },
+            { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
+            { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
+            { title: "Mẫu kế hoạch", href: "/admin/templates", icon: FileText },
+            
+            { title: "Phân công Quota", href: "/admin/quota-management", icon: Layers },
+            { title: "Quản lý Đề tài", href: "/admin/thesis-topics", icon: BookCopy },
+            
+            // Menu quản lý Hội đồng dành cho Admin/TK/GVụ
+            { title: "Quản lý Hội đồng", href: "/admin/hoidong", icon: GraduationCap },
+            
+            // Menu xem bảng điểm tổng hợp
+            { title: "Bảng điểm tổng", href: "/admin/cham-diem", icon: Star },
+            
+            { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
+            { title: "Quản lý File", href: "/admin/files", icon: Folder },
+            { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity },
+            { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
+        ],
+    };
+
+    // --- Helper hiển thị tên dưới logo ---
     const getUserDisplayTitle = () => {
-        if (role === 'Giảng viên' && positionNames.length > 0) {
+        if (hasLecturerProfile && positionNames.length > 0) {
             return positionNames.join(', ');
         }
-        return role || '...';
+        return roleName || 'Thành viên';
     };
 
     return (
         <Sidebar collapsible="icon" className="group">
-            {/* Header: Logo + Thông tin */}
+            {/* Header */}
             <SidebarHeader>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -248,7 +239,7 @@ export function AppSidebar() {
                             </div>
                             <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden">
                                 <span className="text-sm font-semibold">GradPro</span>
-                                <span className="text-xs text-muted-foreground">
+                                <span className="text-xs text-muted-foreground truncate w-32">
                                     {getUserDisplayTitle()}
                                 </span>
                             </div>
@@ -256,7 +247,7 @@ export function AppSidebar() {
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" className="w-56">
-                        <DropdownMenuLabel>GradPro</DropdownMenuLabel>
+                        <DropdownMenuLabel>GradPro System</DropdownMenuLabel>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem onClick={() => navigate('/')}>
                             <LayoutDashboard className="mr-2 size-4" /> Trang chủ
@@ -265,47 +256,37 @@ export function AppSidebar() {
                 </DropdownMenu>
             </SidebarHeader>
 
-            {/* Nội dung chính */}
-            <SidebarContent className="py-3">
-                {/* Menu chính */}
-                {menuConfig.map((group, idx) => (
-                    <SidebarGroup key={idx}>
-                        <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
-                            {group.label}
+            {/* Content */}
+            <SidebarContent className="py-2">
+                {/* 1. Nhóm Menu Platform (Cá nhân) */}
+                <SidebarGroup>
+                    <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
+                        {platformMenu.label}
+                    </SidebarGroupLabel>
+                    <SidebarGroupContent>
+                        <SidebarMenu>
+                            {platformMenu.items.map((item, idx) => (
+                                <MenuItem key={`plat-${idx}`} item={item} currentUrl={currentUrl} />
+                            ))}
+                        </SidebarMenu>
+                    </SidebarGroupContent>
+                </SidebarGroup>
+
+                {/* 2. Nhóm Menu Quản trị (Chỉ hiện nếu có quyền) */}
+                {canAccessAdminArea && (
+                    <SidebarGroup className="border-t mt-2 pt-2">
+                        <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-primary font-semibold">
+                            {adminMenu.label}
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
-                                {group.items.map((item, itemIdx) => (
-                                    // 3. Truyền currentUrl vào MenuItem
-                                    <MenuItem key={itemIdx} item={item} currentUrl={currentUrl} />
+                                {adminMenu.items.map((item, idx) => (
+                                    <MenuItem key={`admin-${idx}`} item={item} currentUrl={currentUrl} />
                                 ))}
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
-                ))}
-
-                {/* Menu Quản trị */}
-                {canViewAdminMenu &&
-                    adminMenuConfig.map((group, idx) => {
-                        const isActive = isGroupActive(group.items);
-                        return (
-                            <SidebarGroup 
-                                key={`admin-${idx}`}
-                                className={isActive ? 'border-l-4 border-primary/20 bg-sidebar-accent/5' : ''} 
-                            >
-                                <SidebarGroupLabel className={`group-data-[collapsible=icon]:hidden ${isActive ? 'text-primary font-bold' : ''}`}>
-                                    {group.label}
-                                </SidebarGroupLabel>
-                                <SidebarGroupContent>
-                                    <SidebarMenu>
-                                        {group.items.map((item, itemIdx) => (
-                                            <MenuItem key={itemIdx} item={item} currentUrl={currentUrl} />
-                                        ))}
-                                    </SidebarMenu>
-                                </SidebarGroupContent>
-                            </SidebarGroup>
-                        )
-                    })}
+                )}
             </SidebarContent>
 
             {/* Footer */}
@@ -314,7 +295,7 @@ export function AppSidebar() {
                     <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="w-full justify-start gap-3 p-2 text-left group-data-[collapsible=icon]:justify-center">
                             <Avatar className="size-8">
-                                <AvatarFallback>{user?.HODEM_VA_TEN?.charAt(0) ?? '?'}</AvatarFallback>
+                                <AvatarFallback>{user?.HODEM_VA_TEN?.charAt(0) ?? 'U'}</AvatarFallback>
                             </Avatar>
                             <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden min-w-0 flex-1">
                                 <span className="text-sm font-semibold truncate w-full">{user?.HODEM_VA_TEN}</span>
@@ -325,24 +306,22 @@ export function AppSidebar() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent side="right" align="start" className="w-56">
                         <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
-                        
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem asChild>
-                            <Link to="/profile" className="w-full cursor-pointer flex items-center">
-                                <CircleUserRound className="mr-2 size-4" /> Thông tin
+                            <Link to="/profile" className="cursor-pointer w-full flex items-center">
+                                <CircleUserRound className="mr-2 size-4" /> Thông tin cá nhân
                             </Link>
                         </DropdownMenuItem>
-
                         <DropdownMenuItem asChild>
-                            <Link to="/history" className="w-full cursor-pointer flex items-center">
+                            <Link to="/history" className="cursor-pointer w-full flex items-center">
                                 <History className="mr-2 size-4" /> Lịch sử hoạt động
                             </Link>
                         </DropdownMenuItem>
-
                         <DropdownMenuItem onClick={() => navigate('/settings/appearance')}>
                             <Settings className="mr-2 size-4" /> Giao diện
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive cursor-pointer">
                             <LogOut className="mr-2 size-4" /> Đăng xuất
                         </DropdownMenuItem>
                     </DropdownMenuContent>

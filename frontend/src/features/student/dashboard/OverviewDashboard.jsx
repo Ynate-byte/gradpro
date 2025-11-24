@@ -5,8 +5,6 @@ import { getStudentDashboardOverview } from '@/api/studentDashboardService';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { 
@@ -18,6 +16,7 @@ import { format, parseISO, isPast, isToday } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
+import { Progress } from '@/components/ui/progress';
 
 // --- COMPONENTS CON ---
 const StatBox = ({ label, value, icon: Icon, colorClass }) => (
@@ -84,26 +83,26 @@ const PlanCard = ({ plan }) => {
                                 {/* [MỚI] Thông tin Hội đồng (Nếu có) */}
                                 {council && (
                                     <div className="mt-3 pt-3 border-t border-dashed flex flex-col gap-1 bg-blue-50/50 dark:bg-blue-900/10 p-2 rounded-md">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <GraduationCap className="w-4 h-4 text-blue-600" />
-                                            <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase">
-                                                Lịch bảo vệ: {council.name}
-                                            </span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pl-6">
-                                            <span className="flex items-center gap-1">
-                                                <CalendarDays className="w-3 h-3" />
-                                                {council.date ? format(parseISO(council.date), 'dd/MM/yyyy') : '---'}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <Clock className="w-3 h-3" />
-                                                {council.time ? format(parseISO(`2000-01-01T${council.time}`), 'HH:mm') : '---'}
-                                            </span>
-                                            <span className="flex items-center gap-1">
-                                                <MapPin className="w-3 h-3" />
-                                                {council.room || 'Chưa xếp phòng'}
-                                            </span>
-                                        </div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <GraduationCap className="w-4 h-4 text-blue-600" />
+                                                <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase">
+                                                    Lịch bảo vệ: {council.name}
+                                                </span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground pl-6">
+                                                <span className="flex items-center gap-1">
+                                                    <CalendarDays className="w-3 h-3" />
+                                                    {council.date ? format(parseISO(council.date), 'dd/MM/yyyy') : '---'}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="w-3 h-3" />
+                                                    {council.time ? format(parseISO(`2000-01-01T${council.time}`), 'HH:mm') : '---'}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <MapPin className="w-3 h-3" />
+                                                    {council.room || 'Chưa xếp phòng'}
+                                                </span>
+                                            </div>
                                     </div>
                                 )}
                             </div>
@@ -153,11 +152,37 @@ const UrgentItem = ({ item }) => {
         if (item.type === 'task') {
             // Navigate đến Kanban của nhóm đó, mở task modal
             navigate(`/projects/my-group/kanban/${item.group_id}?taskId=${item.id}`);
+        } else if (item.type === 'council') {
+             // [UPDATED] Navigate đến Dashboard Chi tiết của đợt đó (nơi hiển thị Card Hội đồng)
+             navigate(`/student/dashboard/${item.plan_id}`);
         } else {
             // Navigate đến Lịch họp của nhóm đó
             navigate(`/projects/my-group/schedule/${item.group_id}`);
         }
     };
+
+    // [UPDATED] Handle Council Item (Hội đồng)
+    if (item.type === 'council') {
+        return (
+            <div onClick={handleClick} 
+                className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-l-purple-500 bg-purple-50/30 hover:bg-purple-50 transition-colors cursor-pointer group">
+                <div className="p-1.5 bg-purple-100 text-purple-600 rounded shrink-0">
+                    <GraduationCap className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold leading-tight text-purple-700">{item.title}</p>
+                    <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                         <span className="flex items-center text-purple-600 font-medium">
+                            <Clock className="w-3 h-3 mr-1" /> {time ? format(time, 'HH:mm dd/MM') : '---'}
+                        </span>
+                        <span className="flex items-center">
+                            <MapPin className="w-3 h-3 mr-1" /> {item.location}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     if (item.type === 'task') {
         return (
@@ -177,6 +202,7 @@ const UrgentItem = ({ item }) => {
         );
     }
 
+    // Default (Meeting)
     return (
         <div onClick={handleClick} 
             className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-l-blue-500 bg-blue-50/30 hover:bg-blue-50 transition-colors cursor-pointer group">

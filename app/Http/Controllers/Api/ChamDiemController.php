@@ -326,6 +326,17 @@ class ChamDiemController extends Controller
                 'Star'
             );
 
+            $tenLoai = ($loai === 'HUONGDAN' ? 'Hướng dẫn' : ($loai === 'PHANBIEN' ? 'Phản biện' : 'Hội đồng'));
+            foreach ($nhom->thanhviens as $tv) {
+                NotificationService::send(
+                    $tv->ID_NGUOIDUNG,
+                    "Đã có điểm {$tenLoai}",
+                    "Giảng viên đã nhập điểm {$tenLoai} cho nhóm bạn: {$validated['DIEM']} điểm.",
+                    'ACADEMIC',
+                    '/student/dashboard/' . $nhom->ID_KEHOACH // Link về chi tiết đồ án
+                );
+            }
+
             DB::commit();
 
             return response()->json(['message' => "Lưu điểm {$loai} thành công!"]);
