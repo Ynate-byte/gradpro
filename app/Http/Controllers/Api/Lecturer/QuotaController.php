@@ -12,6 +12,7 @@ use App\Models\QuotaGiangvien;
 use App\Models\QuotaKhoaBomon;
 use App\Models\SinhvienThamgia;
 use App\Models\PhancongNguoiGopY;
+use App\Models\Thongbao;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -188,7 +189,7 @@ class QuotaController extends Controller
                 // Gửi thông báo
                 $lecturer = Giangvien::find($request->ID_GIANGVIEN);
                 if ($lecturer && $lecturer->nguoidung) {
-                    Notification::create([
+                    Thongbao::create([
                         'user_id' => $lecturer->nguoidung->ID_NGUOIDUNG,
                         'type' => 'lecturer_quota_assigned',
                         'data' => [

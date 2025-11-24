@@ -24,13 +24,14 @@ class AuthController extends Controller
 
         $identifier = $request->identifier;
 
+        // 1. Xác định xem người dùng đang nhập Email hay Mã định danh
         $isEmail = filter_var($identifier, FILTER_VALIDATE_EMAIL);
         $fieldToSearch = $isEmail ? 'EMAIL' : 'MA_DINHDANH';
 
-        $user = Nguoidung::where($fieldToSearch, $identifier)->first();
+        $user = Nguoidung::with('vaitro')->where($fieldToSearch, $identifier)->first();
 
+        // 3. Kiểm tra cơ bản: Tồn tại user, Đã kích hoạt, Mật khẩu đúng
         if (!$user || !$user->TRANGTHAI_KICHHOAT || !Hash::check($request->password, $user->MATKHAU_BAM)) {
-
             Log::warning('Đăng nhập thất bại', [
                 'identifier' => $identifier,
                 'ip' => $request->ip(),
@@ -42,6 +43,13 @@ class AuthController extends Controller
             ]);
         }
 
+        if ($user->vaitro && $user->vaitro->TEN_VAITRO === 'Sinh viên' && $isEmail) {
+            throw ValidationException::withMessages([
+                'identifier' => ['Sinh viên vui lòng đăng nhập bằng Mã số sinh viên (MSSV), không sử dụng Email.'],
+            ]);
+        }
+
+        // 5. Đăng nhập thành công -> Tạo token
         $token = $user->createToken('auth_token')->plainTextToken;
 
         $user->DANGNHAP_CUOI = now();

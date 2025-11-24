@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use App\Services\ActivityLogger;
+use Illuminate\Support\Facades\Log;
 
 class ProfileController extends Controller
 {
@@ -20,7 +21,7 @@ class ProfileController extends Controller
         /** @var \App\Models\Nguoidung $user */
         $user = Auth::user();
 
-        // [FIX 1] Load quan hệ sinh viên/giảng viên để tránh lỗi null khi truy cập
+        // [FIX] Load quan hệ sinh viên/giảng viên để tránh lỗi null khi truy cập
         $user->load(['sinhvien', 'giangvien']);
 
         // 1. Validate dữ liệu
@@ -32,14 +33,14 @@ class ProfileController extends Controller
                 // Bỏ qua check trùng nếu là email của chính user này
                 Rule::unique('NGUOIDUNG', 'EMAIL')->ignore($user->ID_NGUOIDUNG, 'ID_NGUOIDUNG')
             ],
-            // [FIX 2] Đổi regex sang dạng đơn giản (10-11 số) để tránh lỗi nhà mạng mới
+            // [FIX] Regex đơn giản hóa: chỉ chấp nhận 10-11 chữ số, không khoảng trắng
             'SO_DIENTHOAI' => ['required', 'regex:/^[0-9]{10,11}$/'],
             
-            // ID_CHUYENNGANH chỉ validate nếu có gửi lên
+            // ID_CHUYENNGANH chỉ validate nếu có gửi lên và khác null
             'ID_CHUYENNGANH' => ['nullable', 'exists:CHUYENNGANH,ID_CHUYENNGANH'],
         ], [
             'EMAIL.unique' => 'Email này đã được sử dụng bởi người khác.',
-            'SO_DIENTHOAI.regex' => 'Số điện thoại phải bao gồm 10-11 chữ số.',
+            'SO_DIENTHOAI.regex' => 'Số điện thoại phải bao gồm 10-11 chữ số (không chứa khoảng trắng).',
             'ID_CHUYENNGANH.exists' => 'Chuyên ngành không hợp lệ.'
         ]);
 
@@ -52,13 +53,18 @@ class ProfileController extends Controller
             ]);
 
             // 3. Nếu là Sinh viên (có bản ghi sinhvien), cập nhật Chuyên ngành
-            // [FIX 3] Kiểm tra trực tiếp quan hệ thay vì check string Role
             if ($user->sinhvien) {
-                if ($request->filled('ID_CHUYENNGANH')) {
-                    // Sử dụng relationship update để an toàn
-                    $user->sinhvien()->update([
-                        'ID_CHUYENNGANH' => $request->ID_CHUYENNGANH
-                    ]);
+                // [FIX LOGIC] Kiểm tra request có chứa key ID_CHUYENNGANH không
+                if ($request->has('ID_CHUYENNGANH')) {
+                    $chuyenNganhId = $request->input('ID_CHUYENNGANH');
+                    
+                    // Chỉ update nếu giá trị hợp lệ (khác rỗng/null)
+                    // Điều này ngăn chặn việc update null vào cột ID_CHUYENNGANH nếu DB không cho phép null
+                    if (!empty($chuyenNganhId)) {
+                        $user->sinhvien()->update([
+                            'ID_CHUYENNGANH' => $chuyenNganhId
+                        ]);
+                    }
                 }
             }
 
@@ -76,8 +82,8 @@ class ProfileController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Log lỗi ra file để debug nếu cần: storage/logs/laravel.log
-            \Illuminate\Support\Facades\Log::error("Update Profile Error: " . $e->getMessage());
+            // Log lỗi ra file để debug nếu cần
+            Log::error("Update Profile Error: " . $e->getMessage());
             
             return response()->json([
                 'message' => 'Lỗi máy chủ khi cập nhật: ' . $e->getMessage()
@@ -101,7 +107,6 @@ class ProfileController extends Controller
         $user = Auth::user();
 
         // 1. Kiểm tra mật khẩu cũ
-        // [FIX] Sử dụng đúng tên cột MATKHAU_BAM
         if (!Hash::check($request->current_password, $user->MATKHAU_BAM)) {
             return response()->json([
                 'message' => 'Dữ liệu không hợp lệ.',

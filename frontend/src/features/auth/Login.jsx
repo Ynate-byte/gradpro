@@ -5,11 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-// 1. Thay Mail bằng UserSquare (hoặc icon nào đó chung chung)
 import { UserSquare, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
-    // 2. Sửa state 'email' thành 'identifier'
     const [identifier, setIdentifier] = useState('');
     const [password, setPassword] = useState('');
     const [remember, setRemember] = useState(false);
@@ -24,14 +22,15 @@ export default function Login() {
         setLoading(true);
 
         try {
-            // 3. Truyền 'identifier' vào service
+            // Gửi identifier thay vì email
             const data = await loginService(identifier, password);
             auth.login(data.user, data.access_token, remember);
         } catch (err) {
             if (err.response && err.response.data) {
                 const message = err.response.data.message || 'Có lỗi xảy ra.';
                 const errors = err.response.data.errors;
-                // 4. Sửa 'errors.email' thành 'errors.identifier'
+                
+                // Ưu tiên hiển thị lỗi của field identifier (bao gồm lỗi chặn Email sinh viên)
                 if (errors && (errors.identifier || errors.IDENTIFIER)) {
                     setError((errors.identifier || errors.IDENTIFIER)[0]);
                 } else {
@@ -45,7 +44,6 @@ export default function Login() {
         }
     };
 
-    // Phần JSX (giao diện) bên dưới không có gì thay đổi
     return (
         <div
             className="flex min-h-screen items-center justify-center bg-cover bg-center p-4"
@@ -56,37 +54,45 @@ export default function Login() {
             <div className="w-full max-w-md">
                 <div className="bg-background/80 backdrop-blur-sm border border-border/20 p-8 rounded-2xl shadow-2xl text-foreground">
                     <div className="mb-8 text-center">
-                        <h2 className="text-3xl font-bold">Đăng nhập GradPro</h2>
+                        <h2 className="text-3xl font-bold">ĐĂNG NHẬP</h2>
                         <p className="text-muted-foreground mt-2">Truy cập tài khoản của bạn để tiếp tục.</p>
                     </div>
                     
                     <form onSubmit={handleLogin} className="space-y-6">
-                        {/* 5. Sửa đổi trường Input Email/Identifier */}
                         <div className="space-y-2">
-                            <Label htmlFor="identifier">Email hoặc Mã số sinh viên</Label>
+                            <Label htmlFor="identifier">Tài khoản</Label>
                             <div className="relative">
                                 <UserSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                                 <Input 
                                     id="identifier" 
-                                    type="text" // Đổi type="email" thành "text"
-                                    placeholder="Email hoặc Mã số sinh viên" 
+                                    type="text" 
+                                    placeholder="MSSV (Sinh viên) hoặc Email/Mã GV" 
                                     className="pl-10 h-12" 
-                                    value={identifier} // Sửa value
-                                    onChange={(e) => setIdentifier(e.target.value)} // Sửa onChange
+                                    value={identifier} 
+                                    onChange={(e) => setIdentifier(e.target.value)} 
                                     required 
                                 />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label htmlFor="password">Mật khẩu</Label>
-                                <a href="#" className="text-sm text-primary hover:underline">Quên mật khẩu?</a>
-                            </div>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
-                                <Input id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••" className="pl-10 pr-10 h-12" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}>
+                                <Input 
+                                    id="password" 
+                                    type={showPassword ? 'text' : 'password'} 
+                                    placeholder="••••••••" 
+                                    className="pl-10 pr-10 h-12" 
+                                    value={password} 
+                                    onChange={(e) => setPassword(e.target.value)} 
+                                    required 
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setShowPassword(!showPassword)} 
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground" 
+                                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                                >
                                     {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
                                 </button>
                             </div>
@@ -115,20 +121,7 @@ export default function Login() {
                             )}
                         </Button>
                     </form>
-
-                    <div className="mt-6 text-center">
-                        <p className="text-sm text-muted-foreground">
-                            Chưa có tài khoản?{' '}
-                            <a href="#" className="font-semibold text-primary hover:underline">
-                                Đăng ký ngay
-                            </a>
-                        </p>
-                    </div>
-
                 </div>
-                <p className="text-center text-xs text-white/50 mt-8">
-                    © 2025 GradPro. All Rights Reserved.
-                </p>
             </div>
         </div>
     );
