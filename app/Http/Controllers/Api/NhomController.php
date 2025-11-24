@@ -989,6 +989,14 @@ class NhomController extends Controller
                     if ($request->hasFile($fileType)) {
                         $file = $request->file($fileType);
                         $path = $file->store($storagePath, 'public');
+
+                        Log::info("Nộp bài thành công", [
+                            'nhom_id' => $phancong->ID_NHOM,
+                            'file_type' => $fileType,
+                            'path' => $path,
+                            'size' => $file->getSize()
+                        ]);
+
                         $filesToInsert[] = [
                             'ID_NOP_SANPHAM' => $submission->ID_NOP_SANPHAM,
                             'LOAI_FILE' => $fileType,

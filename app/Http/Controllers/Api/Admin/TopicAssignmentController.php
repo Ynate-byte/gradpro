@@ -309,6 +309,13 @@ class TopicAssignmentController extends Controller
 
             return response()->json(['message' => 'Tự động phân công đề tài thành công']);
         } catch (\Exception $e) {
+
+            Log::error("Lỗi phân công Quota tự động", [
+                'plan_id' => $planId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json(['message' => $e->getMessage()], 400);
         }
     }

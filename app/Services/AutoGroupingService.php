@@ -8,6 +8,7 @@ use App\Models\Nhom;
 use App\Models\ThanhvienNhom;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Collection;
+use App\Services\ActivityLogger;
 
 /**
  * Dịch vụ này xử lý logic tự động ghép nhóm cho sinh viên.

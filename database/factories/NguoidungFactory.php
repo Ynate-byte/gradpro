@@ -5,10 +5,7 @@ namespace Database\Factories;
 use App\Models\Nguoidung;
 use App\Models\Vaitro;
 use App\Models\Chuyennganh;
-use App\Models\KhoaBomon;
 use App\Models\Sinhvien;
-use App\Models\Giangvien;
-use App\Models\ChucVu;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 
@@ -18,8 +15,10 @@ class NguoidungFactory extends Factory
 
     public function definition(): array
     {
+        $faker = \Faker\Factory::create('vi_VN');
+
         return [
-            'HODEM_VA_TEN' => $this->faker->name(),
+            'HODEM_VA_TEN' => $faker->name(),
             'EMAIL' => $this->faker->unique()->safeEmail(),
             'MATKHAU_BAM' => Hash::make('123'),
             'NGAYSINH' => $this->faker->date('Y-m-d', '2004-12-31'),
@@ -43,43 +42,15 @@ class NguoidungFactory extends Factory
             $chuyenNganhId = Chuyennganh::inRandomOrder()->value('ID_CHUYENNGANH') ?? 
                              Chuyennganh::factory()->create()->ID_CHUYENNGANH;
 
+            $faker = \Faker\Factory::create('vi_VN');
+
             Sinhvien::create([
                 'ID_NGUOIDUNG' => $nguoidung->ID_NGUOIDUNG,
                 'ID_CHUYENNGANH' => $chuyenNganhId,
-                'TEN_LOP' => 'DH' . $this->faker->numberBetween(20, 22) . 'CNTT' . $this->faker->numberBetween(1, 5),
-                'NIENKHOA' => 'K' . $this->faker->numberBetween(12, 14),
-                'HEDAOTAO' => $this->faker->randomElement(['Cử nhân', 'Kỹ sư']),
+                'TEN_LOP' => 'DH' . $faker->numberBetween(20, 22) . 'CNTT' . $faker->numberBetween(1, 5),
+                'NIENKHOA' => 'K' . $faker->numberBetween(12, 14),
+                'HEDAOTAO' => $faker->randomElement(['Cử nhân', 'Kỹ sư']),
             ]);
-        });
-    }
-
-    /**
-     * Cấu hình state cho Giảng viên
-     */
-    public function asGiangVien(): Factory
-    {
-        return $this->state(function (array $attributes) {
-            $giangVienRole = Vaitro::where('TEN_VAITRO', 'Giảng viên')->first();
-            return [
-                'ID_VAITRO' => $giangVienRole->ID_VAITRO ?? 2,
-                'MA_DINHDANH' => 'GV' . $this->faker->unique()->numberBetween(100, 999),
-                'NGAYSINH' => $this->faker->date('Y-m-d', '1995-12-31'),
-            ];
-        })->afterCreating(function (Nguoidung $nguoidung) {
-            $khoaId = KhoaBomon::inRandomOrder()->value('ID_KHOA_BOMON') ?? 1;
-
-            $gv = Giangvien::create([
-                'ID_NGUOIDUNG' => $nguoidung->ID_NGUOIDUNG,
-                'ID_KHOA_BOMON' => $khoaId,
-                'HOCVI' => $this->faker->randomElement(['Thạc sĩ', 'Tiến sĩ']),
-            ]);
-
-            if ($this->faker->boolean(10)) {
-                $chucVu = ChucVu::where('MA_CHUCVU', 'TRUONG_BOMON')->first();
-                if ($chucVu) {
-                    $gv->chucvus()->attach($chucVu->ID_CHUCVU);
-                }
-            }
         });
     }
 }

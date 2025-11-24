@@ -28,7 +28,7 @@ class NguoidungSeeder extends Seeder
         $this->call(ChucVuSeeder::class);
 
         $cvMap = ChucVu::pluck('ID_CHUCVU', 'MA_CHUCVU');
-        $faker = Faker::create();
+        $faker = Faker::create('vi_VN');
 
         Nguoidung::create([
             'MA_DINHDANH' => 'ADMIN01',

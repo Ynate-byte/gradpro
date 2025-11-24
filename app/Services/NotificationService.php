@@ -31,7 +31,13 @@ class NotificationService
                 'NGAY_TAO' => now(),
             ]);
         } catch (\Exception $e) {
-            Log::error("Failed to send notification to user {$receiverId}: " . $e->getMessage());
+            Log::error("Lỗi gửi thông báo (NotificationService)", [
+            'receiver_id' => $receiverId,
+            'type' => $type,
+            'title' => $title,
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
         }
     }
 }

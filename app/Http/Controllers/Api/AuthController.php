@@ -29,6 +29,13 @@ class AuthController extends Controller
         $user = Nguoidung::where($fieldToSearch, $identifier)->first();
 
         if (!$user || !$user->TRANGTHAI_KICHHOAT || !Hash::check($request->password, $user->MATKHAU_BAM)) {
+
+            Log::warning('Đăng nhập thất bại', [
+                'identifier' => $identifier,
+                'ip' => $request->ip(),
+                'reason' => !$user ? 'User not found' : (!$user->TRANGTHAI_KICHHOAT ? 'Inactive' : 'Wrong password')
+            ]);
+            
             throw ValidationException::withMessages([
                 'identifier' => ['Thông tin đăng nhập không chính xác hoặc tài khoản đã bị khóa.'],
             ]);

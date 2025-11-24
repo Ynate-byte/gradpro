@@ -293,15 +293,7 @@ export default function PersonalHistoryPage() {
         <div className="p-6 space-y-8 bg-background min-h-screen">
             
             {/* --- 1. HEADER & ACTIONS --- */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold tracking-tight flex items-center gap-3">
-                        Nhật ký hoạt động
-                    </h1>
-                    <p className="text-muted-foreground mt-1 text-base">
-                        Theo dõi các hoạt động của bạn trong hệ thống
-                    </p>
-                </div>
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"> 
                 <div className="flex gap-2">
                     <Button 
                         variant={isAutoRefresh ? "secondary" : "outline"} 

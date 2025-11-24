@@ -259,7 +259,12 @@ class ThesisPlanController extends Controller
         } else {
              return response()->json(['message' => 'Bạn không có quyền xóa kế hoạch này.'], 403);
         }
-        
+        Log::warning("Xóa kế hoạch khóa luận", [
+            'user_deleting' => Auth::id(),
+            'plan_id' => $plan->ID_KEHOACH,
+            'plan_name' => $plan->TEN_DOT,
+            'status' => $plan->TRANGTHAI
+        ]);
         $plan->delete();
         Cache::forget('plan_filter_options');
         return response()->json(null, 204);
