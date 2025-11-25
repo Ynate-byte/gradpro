@@ -33,6 +33,7 @@ use App\Http\Controllers\Api\HistoryController;
 use App\Http\Controllers\Api\Student\StudentDashboardController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\FileManagerController;
+use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
 
 /*
 |--------------------------------------------------------------------------
@@ -338,6 +339,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/history', [HistoryController::class, 'getSystemHistory']);
         Route::post('/history/cleanup', [HistoryController::class, 'cleanup']);
         Route::get('/giangvien', [GiangVienController::class, 'index']);
+        Route::post('/notifications/broadcast', [AdminNotificationController::class, 'broadcast']);
     });
 
     // =================================================================================

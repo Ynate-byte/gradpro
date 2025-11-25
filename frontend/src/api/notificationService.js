@@ -34,3 +34,8 @@ export const deleteNotification = async (id) => {
     const response = await axiosClient.delete(`/notifications/${id}`);
     return response.data;
 };
+
+export const broadcastNotification = async (data) => {
+    const response = await axiosClient.post('/admin/notifications/broadcast', data);
+    return response.data;
+};
