@@ -71,6 +71,79 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
+import RichTextEditor from "@/components/ui/RichTextEditor"
+
+// ──────────────────────────────────────────────────────────────
+// FIX LAG 1: Wrapper Debounce cho Input thường
+// ──────────────────────────────────────────────────────────────
+const DebouncedInput = React.memo(({ value, onChange, onBlur, ...props }) => {
+  const [localValue, setLocalValue] = useState(value ?? '');
+
+  useEffect(() => {
+    setLocalValue(value ?? '');
+  }, [value]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localValue !== value) {
+        onChange(localValue);
+      }
+    }, 500); // Delay 500ms
+
+    return () => clearTimeout(timer);
+  }, [localValue, onChange, value]);
+
+  const handleBlur = (e) => {
+    // Khi blur, cập nhật ngay lập tức để đảm bảo logic onBlur của form chạy đúng
+    if (localValue !== value) {
+      onChange(localValue);
+    }
+    if (onBlur) {
+      onBlur(e);
+    }
+  };
+
+  return (
+    <Input
+      {...props}
+      value={localValue}
+      onChange={(e) => setLocalValue(e.target.value)}
+      onBlur={handleBlur}
+    />
+  );
+});
+
+// ──────────────────────────────────────────────────────────────
+// FIX LAG 2: Wrapper Debounce cho RichTextEditor
+// ──────────────────────────────────────────────────────────────
+const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
+  const [localValue, setLocalValue] = useState(value ?? '');
+
+  useEffect(() => {
+    if (value !== localValue) {
+      setLocalValue(value ?? '');
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localValue !== value) {
+        onChange(localValue);
+      }
+    }, 800); // Delay 800ms cho editor nặng
+
+    return () => clearTimeout(timer);
+  }, [localValue, onChange, value]);
+
+  return (
+    <RichTextEditor
+      value={localValue}
+      onChange={setLocalValue}
+      placeholder="Nhập mô tả (hỗ trợ in đậm, nghiêng...)"
+    />
+  );
+});
+
 
 // ──────────────────────────────────────────────────────────────
 // Hệ thống chức năng
@@ -204,7 +277,8 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Nội dung (Mục {index + 1})*</FormLabel>
               <FormControl>
-                <Input {...f} />
+                {/* Dùng DebouncedInput */}
+                <DebouncedInput {...f} />
               </FormControl>
               <FormMessage className="text-xs" />
             </FormItem>
@@ -220,7 +294,13 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Mô tả</FormLabel>
               <FormControl>
-                <Textarea {...f} className="min-h-[60px] resize-y" value={f.value ?? ''} />
+                <div className="rich-text-wrapper">
+                    {/* Dùng DebouncedRichTextEditor */}
+                    <DebouncedRichTextEditor
+                        value={f.value}
+                        onChange={f.onChange}
+                    />
+                </div>
               </FormControl>
               <FormMessage className="text-xs" />
             </FormItem>
@@ -302,7 +382,8 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Bắt đầu*</FormLabel>
               <FormControl>
-                <Input
+                {/* Dùng DebouncedInput */}
+                <DebouncedInput
                   type="datetime-local"
                   {...f}
                   onBlur={(e) => {
@@ -325,7 +406,8 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Thời lượng* (ngày)</FormLabel>
               <FormControl>
-                <Input
+                {/* Dùng DebouncedInput */}
+                <DebouncedInput
                   type="number"
                   min="1"
                   {...f}
@@ -349,7 +431,8 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Kết thúc*</FormLabel>
               <FormControl>
-                <Input
+                {/* Dùng DebouncedInput */}
+                <DebouncedInput
                   type="datetime-local"
                   {...f}
                   onBlur={(e) => {
@@ -482,8 +565,8 @@ export default function PlanFormPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [templateBaseWeeks, setTemplateBaseWeeks] = useState(12)
 
-  const [milestoneMetadata, setMilestoneMetadata] = useState([])                
-  const [originalTemplateMetadata, setOriginalTemplateMetadata] = useState([])   
+  const [milestoneMetadata, setMilestoneMetadata] = useState([])                  
+  const [originalTemplateMetadata, setOriginalTemplateMetadata] = useState([])    
 
   const [isManuallyEditingPlanEndDate, setIsManuallyEditingPlanEndDate] = useState(false)
   
@@ -1096,13 +1179,13 @@ export default function PlanFormPage() {
               <CardContent className="space-y-5 pt-2">
                 
                 {/* Dòng 1: Tên đợt */}
-                <FormField name="TEN_DOT" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên đợt*</FormLabel><FormControl><Input placeholder="VD: KLTN HK1, 2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                <FormField name="TEN_DOT" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên đợt*</FormLabel><FormControl><DebouncedInput placeholder="VD: KLTN HK1, 2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )} />
                 
                 {/* Dòng 2: Năm học - Học kỳ - Khóa (3 cột) */}
                 <div className="grid grid-cols-3 gap-4">
-                  <FormField name="NAMHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Năm học*</FormLabel><FormControl><Input placeholder="2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                  <FormField name="NAMHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Năm học*</FormLabel><FormControl><DebouncedInput placeholder="2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )}/>
                   <FormField name="HOCKY" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Học kỳ*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger></FormControl><SelectContent><SelectItem key="1" value="1">1</SelectItem><SelectItem key="2" value="2">2</SelectItem><SelectItem key="3" value="3">Hè</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
-                  <FormField name="KHOAHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Khóa*</FormLabel><FormControl><Input placeholder="K13" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                  <FormField name="KHOAHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Khóa*</FormLabel><FormControl><DebouncedInput placeholder="K13" {...field} /></FormControl><FormMessage /></FormItem> )}/>
                 </div>
 
                 {/* Dòng 3: Hệ đào tạo - Số tuần (2 cột) */}
@@ -1112,12 +1195,12 @@ export default function PlanFormPage() {
                     <FormItem>
                       <FormLabel>Số tuần TH*</FormLabel>
                       <FormControl>
-                        <Input
+                        <DebouncedInput
                           type="number" min="1" placeholder="12"
                           {...field}
                           onBlur={field.onBlur}
-                          onChange={(e) => {
-                            field.onChange(e); 
+                          onChange={(val) => {
+                            field.onChange(val); 
                             setIsManuallyEditingPlanEndDate(false); 
                           }}
                         />
@@ -1136,7 +1219,7 @@ export default function PlanFormPage() {
                     <FormItem>
                       <FormLabel>Ngày bắt đầu*</FormLabel>
                       <FormControl>
-                        <Input
+                        <DebouncedInput
                           type="date"
                           {...field}
                           disabled={isPlanStartDateLocked}
@@ -1161,7 +1244,7 @@ export default function PlanFormPage() {
                     <FormItem>
                       <FormLabel>Ngày kết thúc*</FormLabel>
                       <FormControl>
-                        <Input
+                        <DebouncedInput
                           type="date"
                           {...field}
                           onFocus={() => setIsManuallyEditingPlanEndDate(true)}

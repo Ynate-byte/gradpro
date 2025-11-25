@@ -129,7 +129,8 @@
             width: 8%;
         }
         .plan-table .content-cell {
-            white-space: pre-line;
+            text-align: justify;
+            vertical-align: top;
         }
 
         .footer-text {
@@ -189,6 +190,20 @@
     text-align: center;
 }
 
+.rich-text-content,
+.rich-text-content p,
+.rich-text-content li,
+.rich-text-content span,
+.rich-text-content a {
+    font-size: 12pt !important; 
+    text-indent: 0 !important;
+    margin: 0 !important;
+    padding: 0;
+}
+
+.rich-text-content a {
+    color: #000000 !important;
+}
 
     </style>
 </head>
@@ -224,14 +239,27 @@
             <p class="no-indent">- Căn cứ kế hoạch số 25/KH-KCNTT ngày 27/08/2025 của Khoa CNTT về tổ chức và triển khai Khóa luận cử nhân Khóa {{ $plan->KHOAHOC }} cho các ngành CNTT và ATTT;</p>
             <p style="margin-top: 10px;">Khoa Công nghệ thông tin thông báo kế hoạch triển khai Khóa luận {{ $plan->HEDAOTAO }} Khóa {{ $plan->KHOAHOC }} các ngành CNTT và ATTT như sau:</p>
 
-            <div class= "indent-block">
+            <div class="indent-block">
                 <div class="section-title">1. Yêu cầu chung:</div>
                 @php
-                    $thucHienDeTai = $plan->mocThoigians->firstWhere('TEN_SUKIEN', 'Nhóm sinh viên thực hiện đề tài');
+                    // CÁCH SỬA: Tìm mốc thời gian có chứa từ "thực hiện" hoặc "làm khóa luận" (không phân biệt hoa thường)
+                    $thucHienDeTai = $plan->mocThoigians->first(function($moc) {
+                        $ten = mb_strtolower($moc->TEN_SUKIEN, 'UTF-8');
+                        return \Illuminate\Support\Str::contains($ten, ['thực hiện', 'làm khóa luận', 'triển khai']);
+                    });
                 @endphp
-                <div class="sub-item">• Thời gian thực hiện trong 12 tuần từ <strong>{{ $thucHienDeTai ? \Carbon\Carbon::parse($thucHienDeTai->NGAY_BATDAU)->format('d/m/Y') : '[N/A]' }}</strong> đến <strong>{{ $thucHienDeTai ? \Carbon\Carbon::parse($thucHienDeTai->NGAY_KETTHUC)->format('d/m/Y') : '[N/A]' }}</strong>.</div>
+                
+                <div class="sub-item">
+                    • Thời gian thực hiện trong {{ $plan->SO_TUAN_THUCHIEN ?? 12 }} tuần từ 
+                    <strong>
+                        {{ $thucHienDeTai && $thucHienDeTai->NGAY_BATDAU ? \Carbon\Carbon::parse($thucHienDeTai->NGAY_BATDAU)->format('d/m/Y') : '...../...../20.....' }}
+                    </strong> 
+                    đến 
+                    <strong>
+                        {{ $thucHienDeTai && $thucHienDeTai->NGAY_KETTHUC ? \Carbon\Carbon::parse($thucHienDeTai->NGAY_KETTHUC)->format('d/m/Y') : '...../...../20.....' }}
+                    </strong>.
+                </div>
             </div>
-
             <div class= "indent-block">
                 
                     <div class="section-title">2. Danh sách Sinh viên đăng ký học phần Khóa luận {{ $plan->HEDAOTAO }}: <span class="normal-text">file đính kèm thông báo.</span></div>
@@ -254,7 +282,17 @@
                         @forelse($plan->mocThoigians->sortBy('NGAY_BATDAU') as $index => $moc)
                             <tr>
                                 <td class="stt">{{ $index + 1 }}</td>
-                                <td class="content-cell">{{ $moc->TEN_SUKIEN }}{{ $moc->MOTA ? "\n" . $moc->MOTA : '' }}</td>
+                                <td class="content-cell">
+                                    {{-- Tên sự kiện giữ nguyên text thường để an toàn --}}
+                                    <div style="font-weight: bold; margin-bottom: 4px;">{{ $moc->TEN_SUKIEN }}</div>
+                                    
+                                    {{-- Mô tả dùng {!! !!} để render HTML (đậm, nghiêng...) --}}
+                                    @if($moc->MOTA)
+                                        <div class="rich-text-content">
+                                            {!! $moc->MOTA !!}
+                                        </div>
+                                    @endif
+                                </td>
                                 <td style="text-align: center;">
                                     @php
                                         $ngayBatDau = \Carbon\Carbon::parse($moc->NGAY_BATDAU)->format('d/m/Y');

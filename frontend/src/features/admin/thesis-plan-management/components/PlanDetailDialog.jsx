@@ -271,9 +271,10 @@ export function PlanDetailDialog({ planId, isOpen, setIsOpen }) {
 																 <TableCell className="font-medium align-top break-words py-3"> {/* Tăng padding y */}
 																	 <p className="text-foreground">{moc.TEN_SUKIEN}</p> {/* Màu chữ chính */}
 																	 {moc.MOTA && (
-																		 <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line">
-																			 {moc.MOTA}
-																		 </p>
+																		 <div 
+																			className="text-xs text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none"
+																			dangerouslySetInnerHTML={{ __html: moc.MOTA }} 
+																		/>
 																	 )}
 																 </TableCell>
 																 <TableCell className="align-top text-sm text-muted-foreground py-3"> {/* Tăng padding y */}

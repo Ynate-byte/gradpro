@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId, useCallback } from 'react'; // Added useCallback
+import React, { useState, useEffect, useId, useCallback } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -13,12 +13,44 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, PlusCircle, Trash2, ChevronLeft, GripVertical, Info } from 'lucide-react'; // Added Info icon
+import { Loader2, PlusCircle, Trash2, ChevronLeft, GripVertical, Info } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Skeleton } from '@/components/ui/skeleton';
-import { cn } from '@/lib/utils'; // Added cn
+import { cn } from '@/lib/utils';
+import RichTextEditor from "@/components/ui/RichTextEditor"; // Import RichTextEditor
+
+// ──────────────────────────────────────────────────────────────
+// FIX LAG: Wrapper Debounce cho RichTextEditor
+// ──────────────────────────────────────────────────────────────
+const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
+  const [localValue, setLocalValue] = useState(value ?? '');
+
+  useEffect(() => {
+    if (value !== localValue) {
+      setLocalValue(value ?? '');
+    }
+  }, [value]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localValue !== value) {
+        onChange(localValue);
+      }
+    }, 800); // Delay 800ms
+
+    return () => clearTimeout(timer);
+  }, [localValue, onChange, value]);
+
+  return (
+    <RichTextEditor
+      value={localValue}
+      onChange={setLocalValue}
+      placeholder="Nhập mô tả (hỗ trợ in đậm, nghiêng...)"
+    />
+  );
+});
 
 // Schema validation (no change)
 const templateSchema = z.object({
@@ -57,10 +89,8 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
             ref={ref}
             style={style}
             {...props}
-            // Use subtle background, rounded corners, padding, and hover effect
             className="grid grid-cols-12 gap-x-4 gap-y-3 items-start p-4 border rounded-lg bg-background hover:bg-muted/50 transition-colors relative group"
         >
-            {/* Drag Handle - styled */}
             <div
                 {...handleProps}
                 className="absolute -left-7 top-4 cursor-grab text-muted-foreground opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity p-1 touch-none"
@@ -69,7 +99,6 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
                 <GripVertical className="h-5 w-5" />
             </div>
 
-            {/* Fields organized */}
             <div className="col-span-12">
                 <FormField
                     name={`mocThoigians.${index}.TEN_SUKIEN`}
@@ -90,13 +119,21 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
                     render={({ field: fld }) => (
                         <FormItem>
                             <FormLabel className="text-sm">Mô tả</FormLabel>
-                            <FormControl><Textarea {...fld} className="min-h-[60px] resize-y" value={fld.value ?? ''} /></FormControl>
+                            {/* SỬA: Dùng DebouncedRichTextEditor thay vì Textarea */}
+                            <FormControl>
+                                <div className="rich-text-wrapper">
+                                    <DebouncedRichTextEditor
+                                        value={fld.value}
+                                        onChange={fld.onChange}
+                                    />
+                                </div>
+                            </FormControl>
                             <FormMessage className="text-xs" />
                         </FormItem>
                     )}
                 />
             </div>
-             <div className="col-span-12 sm:col-span-4"> {/* Adjusted grid span */}
+             <div className="col-span-12 sm:col-span-4">
                  <FormField
                     name={`mocThoigians.${index}.OFFSET_BATDAU`}
                     control={form.control}
@@ -109,7 +146,7 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
                     )}
                 />
             </div>
-             <div className="col-span-12 sm:col-span-4"> {/* Adjusted grid span */}
+             <div className="col-span-12 sm:col-span-4">
                  <FormField
                     name={`mocThoigians.${index}.THOI_LUONG`}
                     control={form.control}
@@ -122,7 +159,7 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
                     )}
                 />
             </div>
-            <div className="col-span-12 sm:col-span-4"> {/* Adjusted grid span */}
+            <div className="col-span-12 sm:col-span-4">
                 <FormField
                     name={`mocThoigians.${index}.VAITRO_THUCHIEN_MACDINH`}
                     control={form.control}
@@ -150,7 +187,6 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
                     )}
                 />
             </div>
-            {/* Remove Button */}
             <Button
                 type="button"
                 variant="ghost"
@@ -218,7 +254,7 @@ export default function TemplateFormPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const form = useForm({
         resolver: zodResolver(templateSchema),
-        defaultValues: { /* ... default values ... */
+        defaultValues: {
             TEN_MAU: '', HEDAOTAO_MACDINH: 'Cử nhân', SO_TUAN_MACDINH: 12, MO_TA: '',
             mocThoigians: [{ id: crypto.randomUUID(), ID_MAU_MOC: null, TEN_SUKIEN: '', OFFSET_BATDAU: 0, THOI_LUONG: 1, MOTA: '', VAITRO_THUCHIEN_MACDINH: null }]
         }
@@ -226,7 +262,7 @@ export default function TemplateFormPage() {
     const { fields, append, remove, move, insert } = useFieldArray({
         control: form.control,
         name: "mocThoigians",
-        keyName: "arrayId" // Keep custom key name if needed
+        keyName: "arrayId"
     });
     const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
 
@@ -242,8 +278,8 @@ export default function TemplateFormPage() {
                         SO_TUAN_MACDINH: data.SO_TUAN_MACDINH || 12,
                         MO_TA: data.MO_TA || '',
                         mocThoigians: (data.mau_moc_thoigians || []).map(m => ({
-                            arrayId: crypto.randomUUID(), // Ensure unique key for react-hook-form
-                            id: m.ID_MAU_MOC, // Use original ID if available
+                            arrayId: crypto.randomUUID(),
+                            id: m.ID_MAU_MOC,
                             ID_MAU_MOC: m.ID_MAU_MOC,
                             TEN_SUKIEN: m.TEN_SUKIEN || '',
                             OFFSET_BATDAU: m.OFFSET_BATDAU ?? 0,
@@ -260,10 +296,10 @@ export default function TemplateFormPage() {
                 })
                 .finally(() => setIsLoading(false));
         } else {
-             form.reset({ // Reset explicitly for create mode
+             form.reset({
                  TEN_MAU: '', HEDAOTAO_MACDINH: 'Cử nhân', SO_TUAN_MACDINH: 12, MO_TA: '',
                  mocThoigians: [{
-                     id: crypto.randomUUID(), // Generate ID for dnd
+                     id: crypto.randomUUID(),
                      arrayId: crypto.randomUUID(),
                      ID_MAU_MOC: null,
                      TEN_SUKIEN: '',
@@ -326,13 +362,13 @@ export default function TemplateFormPage() {
 
 
     if (isLoading) {
-        return <FormSkeleton />; // Use Skeleton component
+        return <FormSkeleton />;
     }
 
     return (
         <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4 md:p-8">
-                {/* Header Section - Improved Alignment & Spacing */}
+                {/* Header Section */}
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
                     <div>
                         <Button type="button" variant="outline" size="sm" onClick={() => navigate('/admin/templates')} className="mb-2">
@@ -340,18 +376,17 @@ export default function TemplateFormPage() {
                         </Button>
                     </div>
                     {/* Save Button */}
-                    <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto"> {/* Add isValid check */}
+                    <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto">
                         {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isEditMode ? 'Lưu thay đổi' : 'Tạo bản mẫu'}
                     </Button>
                 </div>
 
-                {/* --- REDESIGNED Two-Column Layout --- */}
+                {/* --- Two-Column Layout --- */}
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
                     {/* Left Column: General Info Card */}
-                    {/* Use motion for subtle appearance */}
                     <motion.div
-                        className="lg:col-span-1 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.8))]" // Sticky on large screens
+                        className="lg:col-span-1 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.8))]"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.4, ease: "easeOut" }}
@@ -362,7 +397,7 @@ export default function TemplateFormPage() {
                                      <Info className="h-5 w-5 text-primary" /> Thông tin chung
                                 </CardTitle>
                             </CardHeader>
-                            <CardContent className="space-y-5 pt-2"> {/* Increased space-y */}
+                            <CardContent className="space-y-5 pt-2">
                                 <FormField name="TEN_MAU" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên bản mẫu*</FormLabel><FormControl><Input placeholder="VD: KLTN Cử nhân HK1" {...field} /></FormControl><FormMessage /></FormItem> )}/>
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField name="HEDAOTAO_MACDINH" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Hệ ĐT MĐ*</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Cử nhân">Cử nhân</SelectItem><SelectItem value="Kỹ sư">Kỹ sư</SelectItem><SelectItem value="Thạc sỹ">Thạc sỹ</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
@@ -378,7 +413,7 @@ export default function TemplateFormPage() {
                         className="lg:col-span-2 space-y-4"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }} // Slight delay
+                        transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
                     >
                          <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
                              <CardHeader className="flex flex-row items-center justify-between pb-4">
@@ -388,10 +423,9 @@ export default function TemplateFormPage() {
                                      variant="outline"
                                      size="sm"
                                      onClick={() => append({
-                                         // Make sure 'id' is always a unique string for dnd-kit
                                          id: crypto.randomUUID(),
-                                         arrayId: crypto.randomUUID(), // Keep if needed by hook form
-                                         ID_MAU_MOC: null, // Keep null for new items
+                                         arrayId: crypto.randomUUID(),
+                                         ID_MAU_MOC: null,
                                          TEN_SUKIEN: '',
                                          OFFSET_BATDAU: 0,
                                          THOI_LUONG: 1,
@@ -402,12 +436,12 @@ export default function TemplateFormPage() {
                                      <PlusCircle className="mr-2 h-4 w-4" /> Thêm mục
                                  </Button>
                              </CardHeader>
-                             <CardContent className="pt-2"> {/* Reduce top padding */}
+                             <CardContent className="pt-2">
                                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                                     <SortableContext items={fields.map(field => field.id)} strategy={verticalListSortingStrategy}>
                                         <div className="space-y-4">
                                             {fields.map((field, index) => (
-                                                <div key={field.arrayId} className="group relative pl-7"> {/* Indent slightly for handle */}
+                                                <div key={field.arrayId} className="group relative pl-7">
                                                     <SortableItemWrapper id={field.id}>
                                                         <MilestoneTemplateItem
                                                             index={index}
@@ -416,7 +450,6 @@ export default function TemplateFormPage() {
                                                             form={form}
                                                         />
                                                     </SortableItemWrapper>
-                                                    {/* Add button below (optional, can keep remove button only) */}
                                                     <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity mt-1">
                                                         <Button
                                                             type="button"
@@ -444,7 +477,7 @@ export default function TemplateFormPage() {
                                     </SortableContext>
                                 </DndContext>
                              </CardContent>
-                         </Card>
+                          </Card>
                     </motion.div>
                 </div>
             </form>
