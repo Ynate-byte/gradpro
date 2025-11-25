@@ -138,4 +138,16 @@
     /* Tắt cuộn mượt */
     scroll-behavior: auto !important;
   }
+
+  /* [MỚI] Animation Rung Chuông (Bell Shake) cho thông báo URGENT */
+  @keyframes bell-shake {
+    0%, 100% { transform: rotate(0deg); }
+    20%, 60% { transform: rotate(-15deg); }
+    40%, 80% { transform: rotate(15deg); }
+  }
+
+  .animate-bell-shake {
+    animation: bell-shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    transform-origin: top center;
+  }
 }

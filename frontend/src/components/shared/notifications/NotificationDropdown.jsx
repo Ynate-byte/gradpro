@@ -21,28 +21,44 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("all");
 
-    // Mutation: Đánh dấu đã đọc
+    // 1. Kiểm tra xem có tin KHẨN CẤP (URGENT) chưa đọc không để rung chuông
+    const hasUrgentUnread = notifications.some(n => !n.DA_DOC && n.DO_UU_TIEN === 'URGENT');
+
+    // --- MUTATIONS ---
     const markReadMutation = useMutation({
         mutationFn: markAsRead,
         onSuccess: () => {
             queryClient.invalidateQueries(['notifications']);
+            queryClient.invalidateQueries(['notifications-page']);
             queryClient.invalidateQueries(['unreadCount']);
         }
     });
 
-    // Mutation: Xóa thông báo
     const deleteMutation = useMutation({
         mutationFn: deleteNotification,
         onSuccess: () => {
             queryClient.invalidateQueries(['notifications']);
+            queryClient.invalidateQueries(['notifications-page']);
             queryClient.invalidateQueries(['unreadCount']);
             toast.success("Đã xóa thông báo");
         }
     });
 
-    const handleMarkAllRead = () => markReadMutation.mutate(null);
-    const handleMarkOneRead = (id) => markReadMutation.mutate(id);
-    const handleDeleteOne = (id) => deleteMutation.mutate(id);
+    // --- HANDLERS ---
+    const handleMarkAllRead = () => {
+        if (unreadCount === 0) return;
+        markReadMutation.mutate(null, {
+            onSuccess: () => toast.success("Đã đánh dấu tất cả là đã đọc")
+        });
+    };
+
+    const handleMarkOneRead = (id) => {
+        markReadMutation.mutate(id);
+    };
+
+    const handleDeleteOne = (id) => {
+        deleteMutation.mutate(id);
+    };
 
     // Lọc danh sách hiển thị theo Tab
     const displayNotifications = activeTab === 'unread' 
@@ -53,9 +69,21 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full hover:bg-muted/60 transition-colors">
-                    <Bell className={cn("h-5 w-5 transition-all", open ? "fill-current text-primary" : "text-muted-foreground")} />
+                    {/* Icon Chuông: Đổi màu đỏ và rung nếu có tin khẩn cấp */}
+                    <Bell 
+                        className={cn(
+                            "h-5 w-5 transition-all", 
+                            open ? "fill-current text-primary" : 
+                            hasUrgentUnread ? "text-red-500 animate-bell-shake" : "text-muted-foreground"
+                        )} 
+                    />
+                    
+                    {/* Badge số lượng */}
                     {unreadCount > 0 && (
-                        <span className="absolute top-1.5 right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-background animate-in zoom-in duration-300">
+                        <span className={cn(
+                            "absolute top-1.5 right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-background animate-in zoom-in duration-300",
+                            hasUrgentUnread ? "bg-red-600" : "bg-red-500"
+                        )}>
                             {unreadCount > 9 ? '9+' : unreadCount}
                         </span>
                     )}
@@ -92,7 +120,7 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
                         </TabsList>
                     </div>
 
-                    {/* CONTENT AREA */}
+                    {/* CONTENT LIST */}
                     <div className="relative min-h-[300px]">
                         {isLoading ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
