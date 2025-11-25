@@ -20,8 +20,7 @@ return new class extends Migration
             $table->string('TIEU_DE', 255);
             $table->text('NOI_DUNG');
             
-            // Phân loại để hiển thị Icon/Màu sắc
-            // SYSTEM: Hệ thống, GROUP: Nhóm, TASK: Công việc/Kanban, ACADEMIC: Học tập/Nộp bài/Điểm
+
             $table->enum('LOAI_THONGBAO', ['SYSTEM', 'GROUP', 'TASK', 'ACADEMIC'])->default('SYSTEM');
             
             // Đường dẫn để redirect khi click vào (VD: /projects/my-group/kanban)

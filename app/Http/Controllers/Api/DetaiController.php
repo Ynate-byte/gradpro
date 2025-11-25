@@ -10,6 +10,7 @@ use App\Models\Nhom;
 use App\Models\Giangvien;
 use App\Models\ThanhvienNhom;
 use App\Models\PhancongNguoiGopY;
+use App\Models\Nguoidung;
 use App\Imports\TopicsImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -402,30 +403,67 @@ class DetaiController extends Controller
      */
     public function submitForApproval($id)
     {
-        $topic = Detai::findOrFail($id);
+        $topic = Detai::with('nguoiDexuat.nguoidung')->findOrFail($id);
 
-        // Kiểm tra nếu người dùng là người đề xuất
         $currentUser = Auth::user();
         $lecturer = $currentUser->giangvien;
 
         $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
-        // [CẬP NHẬT] Sử dụng helper isAdmin()
         $isAdmin = $this->isAdmin();
 
         if (!$isProposer && !$isAdmin) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Cho phép gửi từ trạng thái "Nháp" hoặc "Đang chỉnh sửa"
         if (!in_array($topic->TRANGTHAI, ['Nháp', 'Đang chỉnh sửa'])) {
             return response()->json(['message' => 'Đề tài phải ở trạng thái nháp hoặc đang chỉnh sửa để gửi duyệt'], 400);
         }
-
-        if (!$topic->kehoachKhoaluan->isFeatureActive('GV_RA_DE')) {
+        
+        if ($topic->kehoachKhoaluan && !$topic->kehoachKhoaluan->isFeatureActive('GV_RA_DE')) {
              return response()->json(['message' => 'Chức năng gửi duyệt đề tài hiện đang đóng.'], 403);
         }
-        
+
         $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
+
+        try {
+            $approvers = Nguoidung::where('TRANGTHAI_KICHHOAT', true)
+                ->where(function($query) {
+                    $query->whereHas('vaitro', function($q) {
+                        $q->whereIn('TEN_VAITRO', ['Admin', 'Trưởng khoa', 'Giáo vụ']);
+                    })
+                    ->orWhereHas('giangvien.chucvus', function($q) {
+                        $q->whereIn('MA_CHUCVU', ['TRUONG_KHOA', 'GIAO_VU']);
+                    });
+                })
+                ->get();
+
+            $senderName = $currentUser->HODEM_VA_TEN ?? 'Giảng viên';
+
+            foreach ($approvers as $approver) {
+                if ($approver->ID_NGUOIDUNG === $currentUser->ID_NGUOIDUNG) continue;
+
+                NotificationService::send(
+                    $approver->ID_NGUOIDUNG,
+                    "Yêu cầu duyệt đề tài",
+                    "{$senderName} vừa gửi yêu cầu duyệt đề tài: '{$topic->TEN_DETAI}'.",
+                    'ACADEMIC',
+                    '/admin/thesis-topics?status=Chờ duyệt',
+                    ['topic_id' => $topic->ID_DETAI]
+                );
+            }
+
+            ActivityLogger::log(
+                'SUBMIT_TOPIC',
+                "Gửi duyệt đề tài: {$topic->TEN_DETAI}",
+                ['topic_id' => $topic->ID_DETAI],
+                null,
+                'Send'
+            );
+
+        } catch (\Exception $e) {
+            Log::error("Lỗi gửi thông báo submitForApproval: " . $e->getMessage());
+        }
+
         return response()->json(['message' => 'Đã gửi đề tài để phê duyệt.']);
     }
 

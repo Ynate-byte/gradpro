@@ -76,6 +76,7 @@ export default function Login() {
                         </div>
 
                         <div className="space-y-2">
+                            <Label>Mật khẩu</Label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={20} />
                                 <Input 

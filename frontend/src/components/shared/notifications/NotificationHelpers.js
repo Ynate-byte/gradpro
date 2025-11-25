@@ -30,14 +30,6 @@ export const getNotificationStyle = (type) => {
                 borderColor: 'border-l-violet-500',
                 label: 'Nhóm'
             };
-        case 'WARNING': // Cảnh báo (Sắp hết hạn, Bị từ chối)
-            return {
-                icon: AlertTriangle,
-                bgColor: 'bg-orange-100 dark:bg-orange-900/30',
-                textColor: 'text-orange-600 dark:text-orange-400',
-                borderColor: 'border-l-orange-500',
-                label: 'Cần chú ý'
-            };
         case 'SYSTEM': // Hệ thống, Tin tức
             return {
                 icon: Megaphone,

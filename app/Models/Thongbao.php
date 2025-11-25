@@ -11,7 +11,7 @@ class Thongbao extends Model
 
     protected $table = 'THONGBAO';
     protected $primaryKey = 'ID_THONGBAO';
-    public $timestamps = false; // Tự quản lý NGAY_TAO
+    public $timestamps = false;
 
     protected $fillable = [
         'ID_NGUOINHAN',

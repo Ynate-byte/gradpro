@@ -43,7 +43,7 @@ class SendLecturerReminders extends Command
                         $gv->nguoidung->ID_NGUOIDUNG,
                         "Nhắc nhở: Hội đồng bảo vệ ngày mai",
                         "Bạn có lịch hội đồng '{$council->TEN_HOIDONG}' vào ngày mai " . $tomorrow->format('d/m/Y') . ".",
-                        'WARNING',
+                        'ACADEMIC',
                         '/lecturer/council'
                     );
                 }
@@ -90,7 +90,7 @@ class SendLecturerReminders extends Command
                 $gvUserId,
                 "Nhắc nhở: Duyệt bài nộp",
                 "Bạn có {$count} bài nộp của sinh viên đã chờ quá 3 ngày chưa được xử lý.",
-                'WARNING',
+                'ACADEMIC',
                 '/lecturer/submissions'
             );
         }

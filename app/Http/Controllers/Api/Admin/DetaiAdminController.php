@@ -135,11 +135,11 @@ class DetaiAdminController extends Controller
             } elseif ($request->action === 'reject') {
                 $notiTitle = "Đề tài bị từ chối";
                 $notiContent = "Đề tài '{$topic->TEN_DETAI}' bị từ chối. Lý do: {$request->reason}";
-                $notiType = "WARNING";
+                $notiType = "ACADEMIC";
             } elseif ($request->action === 'request_edit') {
                 $notiTitle = "Yêu cầu chỉnh sửa đề tài";
                 $notiContent = "Đề tài '{$topic->TEN_DETAI}' cần chỉnh sửa. Góp ý: {$request->reason}";
-                $notiType = "WARNING";
+                $notiType = "ACADEMIC";
             }
 
             NotificationService::send(

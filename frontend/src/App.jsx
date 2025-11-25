@@ -186,7 +186,7 @@ function App() {
           {/* Routes dành cho Giảng viên (Bao gồm GV, TK, GVụ, Admin) */}
           {canViewGiangVienRoutes && (
             <>
-              {!isSinhVien && <Route path="projects/topics" element={<LecturerThesisTopicsPage />} />}
+              {!isSinhVien && <Route path="lecturer/thesis-topics" element={<LecturerThesisTopicsPage />} />}
               <Route path="lecturer/groups-management" element={<LecturerGroupsManagementPage />} />
               <Route path="lecturer/groups-management/:nhomId/details" element={<LecturerGroupDetailPage />} />
               <Route path="lecturer/groups-management/:nhomId/kanban" element={<KanbanPage />} />
