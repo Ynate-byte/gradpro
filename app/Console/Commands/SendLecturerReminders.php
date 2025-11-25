@@ -44,7 +44,9 @@ class SendLecturerReminders extends Command
                         "Nhắc nhở: Hội đồng bảo vệ ngày mai",
                         "Bạn có lịch hội đồng '{$council->TEN_HOIDONG}' vào ngày mai " . $tomorrow->format('d/m/Y') . ".",
                         'ACADEMIC',
-                        '/lecturer/council'
+                        '/lecturer/council',
+                        null,
+                        'URGENT'
                     );
                 }
             }
@@ -58,14 +60,15 @@ class SendLecturerReminders extends Command
             ->get();
 
         foreach ($upcomingMeetings as $meeting) {
-            // Kiểm tra nếu người tạo là giảng viên (để tránh spam sinh viên)
             if ($meeting->nguoiTao && $meeting->nguoiTao->giangvien) {
                 NotificationService::send(
                     $meeting->ID_NGUOITAO,
                     "Nhắc nhở: Lịch họp nhóm ngày mai",
                     "Cuộc họp '{$meeting->TIEUDE_LICHHOP}' sẽ diễn ra vào ngày mai lúc " . $meeting->THOIGIAN_BATDAU->format('H:i') . ".",
                     'TASK',
-                    "/lecturer/groups-management/{$meeting->ID_NHOM}/schedule"
+                    "/lecturer/groups-management/{$meeting->ID_NHOM}/schedule",
+                    null,
+                    'HIGH'
                 );
             }
         }
@@ -91,7 +94,9 @@ class SendLecturerReminders extends Command
                 "Nhắc nhở: Duyệt bài nộp",
                 "Bạn có {$count} bài nộp của sinh viên đã chờ quá 3 ngày chưa được xử lý.",
                 'ACADEMIC',
-                '/lecturer/submissions'
+                '/lecturer/submissions',
+                null,
+                'HIGH'
             );
         }
         $this->info('Đã gửi nhắc nhở Duyệt bài.');

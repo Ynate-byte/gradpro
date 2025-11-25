@@ -169,19 +169,18 @@ class TopicAssignmentController extends BaseTopicAssignmentController
                     // Gửi thông báo cho từng người
                     $reviewer = \App\Models\Giangvien::with('nguoidung')->find($rId);
                     if ($reviewer && $reviewer->nguoidung) {
-                        Thongbao::create([
-                            'ID_NGUOINHAN' => $reviewer->nguoidung->ID_NGUOIDUNG,
-                            'TIEU_DE' => 'Phân công Người Góp ý',
-                            'NOI_DUNG' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
-                            'LOAI_THONGBAO' => 'ACADEMIC',
-                            'LIEN_KET' => '/projects/topics',
-                            'DU_LIEU_GOC' => [
-                                'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                        NotificationService::send(
+                            $reviewer->nguoidung->ID_NGUOIDUNG,
+                            "Phân công Người Góp ý",
+                            "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                            'ACADEMIC',
+                            '/projects/topics',
+                            [
                                 'topic_name' => $topic->TEN_DETAI,
                                 'topic_id' => $topic->ID_DETAI,
                             ],
-                            'NGAY_TAO' => now()
-                        ]);
+                            'HIGH'
+                        );
                     }
                 }
             }

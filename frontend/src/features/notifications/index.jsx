@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getNotifications, markAsRead, deleteNotification, getUnreadCount } from '@/api/notificationService';
 import { useDebounce } from 'use-debounce';
-import { formatDistanceToNow, isToday, isYesterday } from 'date-fns';
+import { formatDistanceToNow, isToday, isYesterday, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -23,63 +23,116 @@ import {
 // Icons
 import { 
     Bell, BellOff, Star, Calendar, Search, MoreVertical, 
-    CheckCircle, Trash2, MailOpen, Clock, AlertTriangle, Info, Megaphone, BookOpen
+    CheckCircle, Trash2, MailOpen, Clock, AlertTriangle, AlertCircle, 
+    Megaphone, BookOpen, Info, Zap, Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // --- 1. HELPER STYLES ---
-const getNotificationStyle = (type, isRead) => {
-    if (isRead) return { bg: 'bg-white dark:bg-card', border: 'border-gray-100 dark:border-border', iconBg: 'bg-gray-100 text-gray-500', icon: Bell };
-
+const getNotificationStyle = (type) => {
     switch (type) {
         case 'ACADEMIC':
-            return { bg: 'bg-emerald-50 dark:bg-emerald-900/10', border: 'border-emerald-200 dark:border-emerald-800', iconBg: 'bg-emerald-100 text-emerald-600', icon: BookOpen };
+            return { icon: BookOpen, color: 'text-emerald-600', bg: 'bg-emerald-100' };
         case 'SYSTEM':
-            return { bg: 'bg-blue-50 dark:bg-blue-900/10', border: 'border-blue-200 dark:border-blue-800', iconBg: 'bg-blue-100 text-blue-600', icon: Megaphone };
+            return { icon: Megaphone, color: 'text-blue-600', bg: 'bg-blue-100' };
         case 'GROUP':
-            return { bg: 'bg-violet-50 dark:bg-violet-900/10', border: 'border-violet-200 dark:border-violet-800', iconBg: 'bg-violet-100 text-violet-600', icon: Info };
+            return { icon: Users, color: 'text-violet-600', bg: 'bg-violet-100' };
         case 'TASK':
-            return { bg: 'bg-orange-50 dark:bg-orange-900/10', border: 'border-orange-200 dark:border-orange-800', iconBg: 'bg-orange-100 text-orange-600', icon: Calendar };
+            return { icon: Calendar, color: 'text-orange-600', bg: 'bg-orange-100' };
         default:
-            return { bg: 'bg-white dark:bg-card', border: 'border-gray-200', iconBg: 'bg-gray-100 text-gray-600', icon: Bell };
+            return { icon: Info, color: 'text-gray-600', bg: 'bg-gray-100' };
     }
 };
 
-// --- 2. ITEM COMPONENT ---
+// --- 2. ITEM COMPONENT (Đã cập nhật Priority) ---
 const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
     const navigate = useNavigate();
-    const { bg, border, iconBg, icon: Icon } = getNotificationStyle(notification.LOAI_THONGBAO, notification.DA_DOC);
+    const { icon: Icon, color, bg } = getNotificationStyle(notification.LOAI_THONGBAO);
+    
+    // Lấy mức độ ưu tiên và metadata
+    const priority = notification.DO_UU_TIEN || 'NORMAL';
+    const metaData = notification.DU_LIEU_GOC || {};
+    const isUnread = !notification.DA_DOC;
 
     const handleClick = () => {
-        if (!notification.DA_DOC) onMarkRead(notification.ID_THONGBAO);
+        if (isUnread) onMarkRead(notification.ID_THONGBAO);
         if (notification.LIEN_KET) navigate(notification.LIEN_KET);
     };
 
+    // Style dựa trên độ ưu tiên
+    const getPriorityClasses = () => {
+        if (!isUnread) return "bg-white dark:bg-card border-gray-200 dark:border-border opacity-80 hover:opacity-100"; // Đã đọc
+
+        switch (priority) {
+            case 'URGENT':
+                return "bg-red-50 dark:bg-red-950/20 border-red-500 border-l-4 shadow-sm";
+            case 'HIGH':
+                return "bg-orange-50 dark:bg-orange-950/20 border-orange-500 border-l-4 shadow-sm";
+            default:
+                return "bg-blue-50/50 dark:bg-blue-900/10 border-blue-500 border-l-4 shadow-sm";
+        }
+    };
+
     return (
-        <div className={cn("group relative flex items-start gap-4 p-4 rounded-xl border transition-all mb-3 hover:shadow-md cursor-pointer", bg, border)} onClick={handleClick}>
+        <div 
+            className={cn(
+                "group relative flex items-start gap-4 p-4 rounded-xl border transition-all mb-3 hover:shadow-md cursor-pointer", 
+                getPriorityClasses()
+            )} 
+            onClick={handleClick}
+        >
             {/* Icon */}
-            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg shadow-sm mt-1", iconBg)}>
+            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-1 shadow-sm", bg, color)}>
                 <Icon className="h-5 w-5" />
             </div>
 
             {/* Content */}
-            <div className="flex-1 min-w-0">
-                <div className="flex justify-between items-start mb-1">
-                    <h4 className={cn("text-sm font-semibold pr-8", notification.DA_DOC ? "text-muted-foreground" : "text-foreground")}>
-                        {notification.TIEU_DE}
-                    </h4>
-                    {!notification.DA_DOC && (
-                        <Badge variant="secondary" className="hidden sm:inline-flex text-[10px] h-5 px-1.5 bg-background/80 backdrop-blur-sm shadow-sm">
-                            Mới
-                        </Badge>
+            <div className="flex-1 min-w-0 space-y-1">
+                <div className="flex justify-between items-start gap-2">
+                    <div className="flex items-center gap-2 pr-6">
+                        {/* Icon cảnh báo cho mức độ khẩn cấp */}
+                        {priority === 'URGENT' && <AlertTriangle className="h-4 w-4 text-red-600 animate-pulse shrink-0" />}
+                        {priority === 'HIGH' && <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />}
+
+                        <h4 className={cn("text-sm font-semibold leading-snug", isUnread ? "text-foreground" : "text-muted-foreground")}>
+                            {notification.TIEU_DE}
+                        </h4>
+                    </div>
+                    
+                    {/* Badge Mới */}
+                    {isUnread && priority === 'NORMAL' && (
+                        <Badge variant="secondary" className="shrink-0 text-[10px] h-5 px-1.5">Mới</Badge>
                     )}
                 </div>
                 
-                <p className={cn("text-sm line-clamp-2 mb-2", notification.DA_DOC ? "text-muted-foreground" : "text-foreground/80")}>
+                <p className={cn("text-sm line-clamp-2 leading-relaxed", isUnread ? "text-foreground/80" : "text-muted-foreground")}>
                     {notification.NOI_DUNG}
                 </p>
+
+                {/* --- Metadata Chips (Điểm số, Hạn chót...) --- */}
+                {(metaData.deadline || metaData.quota || metaData.score) && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                        {metaData.deadline && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">
+                                <Clock className="w-3 h-3 mr-1" />
+                                Hạn: {format(new Date(metaData.deadline), 'HH:mm dd/MM')}
+                            </span>
+                        )}
+                        {metaData.score && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                                <Zap className="w-3 h-3 mr-1" />
+                                Điểm: {metaData.score}
+                            </span>
+                        )}
+                        {metaData.quota && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
+                                Chỉ tiêu: {metaData.quota}
+                            </span>
+                        )}
+                    </div>
+                )}
                 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1">
                     <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {formatDistanceToNow(new Date(notification.NGAY_TAO), { addSuffix: true, locale: vi })}
@@ -91,7 +144,7 @@ const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
             <div className="absolute top-3 right-3" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-background/50">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity">
                             <MoreVertical className="h-4 w-4" />
                         </Button>
                     </DropdownMenuTrigger>
@@ -107,18 +160,13 @@ const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
                     </DropdownMenuContent>
                 </DropdownMenu>
             </div>
-            
-            {/* Blue dot for unread */}
-            {!notification.DA_DOC && (
-                <div className="absolute top-4 left-[-6px] w-2 h-2 bg-blue-500 rounded-full shadow-sm" />
-            )}
         </div>
     );
 };
 
 // --- 3. MAIN PAGE ---
 export default function NotificationPage() {
-    const [currentTab, setCurrentTab] = useState('all'); // Mặc định xem tất cả
+    const [currentTab, setCurrentTab] = useState('all'); // all | unread | important
     const [search, setSearch] = useState('');
     const [debouncedSearch] = useDebounce(search, 300);
     const queryClient = useQueryClient();
@@ -136,13 +184,15 @@ export default function NotificationPage() {
     });
     const unreadCount = countData?.count || 0;
 
-    // 2. Lấy danh sách thông báo
+    // 2. Lấy danh sách thông báo (Có lọc server-side theo tab)
     const { data: notiData, isLoading } = useQuery({
-        queryKey: ['notifications-page', currentTab], 
+        queryKey: ['notifications-page', currentTab, debouncedSearch], 
         queryFn: () => getNotifications({ 
             page: 1, 
             per_page: 50, 
-            filter: currentTab === 'unread' ? 'unread' : null 
+            filter: currentTab === 'unread' ? 'unread' : null,
+            priority: currentTab === 'important' ? 'important' : null, // Gửi tham số priority lên server
+            search: debouncedSearch // Nếu backend hỗ trợ tìm kiếm
         }),
         keepPreviousData: true,
     });
@@ -166,22 +216,16 @@ export default function NotificationPage() {
         }
     });
 
-    // Filter Logic
+    // Filter Logic (Client-side fallback cho search)
     const filteredNotifications = useMemo(() => {
         let items = allNotifications;
-
-        if (currentTab === 'important') {
-            items = items.filter(n => ['ACADEMIC', 'SYSTEM'].includes(n.LOAI_THONGBAO));
-        } else if (currentTab === 'unread') {
-            items = items.filter(n => !n.DA_DOC);
-        }
-
+        // Filter search client-side nếu backend chưa hỗ trợ full text search
         if (debouncedSearch) {
             const s = debouncedSearch.toLowerCase();
             items = items.filter(n => n.TIEU_DE.toLowerCase().includes(s) || n.NOI_DUNG.toLowerCase().includes(s));
         }
         return items;
-    }, [allNotifications, currentTab, debouncedSearch]);
+    }, [allNotifications, debouncedSearch]);
 
     // Group by Date
     const groupedNotifications = useMemo(() => {
@@ -195,10 +239,12 @@ export default function NotificationPage() {
         return groups;
     }, [filteredNotifications]);
 
+    // Thống kê giả định cho UI (Trong thực tế có thể lấy từ API nếu cần chính xác)
     const stats = {
-        total: allNotifications.length,
+        total: notiData?.total || 0,
         unread: unreadCount,
-        important: allNotifications.filter(n => ['ACADEMIC', 'SYSTEM'].includes(n.LOAI_THONGBAO) && !n.DA_DOC).length,
+        // Đếm số quan trọng trong trang hiện tại
+        important: allNotifications.filter(n => ['HIGH', 'URGENT'].includes(n.DO_UU_TIEN)).length,
         today: allNotifications.filter(n => isToday(new Date(n.NGAY_TAO))).length
     };
 
@@ -225,7 +271,7 @@ export default function NotificationPage() {
     };
 
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-7xl space-y-6">
+        <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-6">
             
             {/* 1. HEADER & ACTIONS */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -234,7 +280,6 @@ export default function NotificationPage() {
                     <p className="text-muted-foreground text-sm">Cập nhật các hoạt động mới nhất từ hệ thống.</p>
                 </div>
                 
-                {/* [THÊM] Nút Gửi thông báo chung (Chỉ hiện với Admin/Quản lý) */}
                 {canBroadcast && (
                     <div className="flex shrink-0">
                         <CreateNotificationDialog />
@@ -242,15 +287,13 @@ export default function NotificationPage() {
                 )}
             </div>
 
-            {/* 2. Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* 2. Stat Cards (Sử dụng dữ liệu thực tế hơn) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 <StatCard 
                     title="Tất cả" 
                     value={stats.total} 
-                    description="Tổng thông báo"
+                    description="Tổng số tin"
                     icon={Bell} 
-                    iconBgClass="bg-gray-100 dark:bg-gray-800" 
-                    iconColorClass="text-gray-600 dark:text-gray-400" 
                     isActive={currentTab === 'all'}
                     onClick={() => setCurrentTab('all')}
                 />
@@ -259,79 +302,86 @@ export default function NotificationPage() {
                     value={stats.unread} 
                     description="Cần xem ngay" 
                     icon={BellOff} 
-                    iconBgClass="bg-orange-100 dark:bg-orange-900/20" 
-                    iconColorClass="text-orange-600 dark:text-orange-400" 
+                    iconBgClass="bg-blue-100 dark:bg-blue-900/20" 
+                    iconColorClass="text-blue-600 dark:text-blue-400" 
                     isActive={currentTab === 'unread'}
                     onClick={() => setCurrentTab('unread')}
                     hasStatusDot={stats.unread > 0}
                 />
                 <StatCard 
                     title="Quan trọng" 
-                    value={stats.important} 
-                    description="Học tập & Hệ thống" 
+                    value={stats.important} // Hiển thị số lượng quan trọng trong trang hiện tại
+                    description="Khẩn cấp / Cao" 
                     icon={Star} 
-                    iconBgClass="bg-red-100 dark:bg-red-900/20" 
-                    iconColorClass="text-red-600 dark:text-red-400" 
+                    iconBgClass="bg-orange-100 dark:bg-orange-900/20" 
+                    iconColorClass="text-orange-600 dark:text-orange-400" 
                     isActive={currentTab === 'important'}
                     onClick={() => setCurrentTab('important')}
                 />
                 <StatCard 
                     title="Hôm nay" 
                     value={stats.today} 
-                    description="Thông báo mới" 
+                    description="Mới nhất" 
                     icon={Calendar} 
-                    iconBgClass="bg-blue-100 dark:bg-blue-900/20" 
-                    iconColorClass="text-blue-600 dark:text-blue-400" 
+                    iconBgClass="bg-emerald-100 dark:bg-emerald-900/20" 
+                    iconColorClass="text-emerald-600 dark:text-emerald-400" 
                 />
             </div>
 
-            {/* 3. Search Bar */}
-            <div className="relative">
-                <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <Input 
-                    placeholder="Tìm kiếm theo tiêu đề hoặc nội dung..." 
-                    className="pl-12 h-12 rounded-xl bg-background border-input shadow-sm text-base focus-visible:ring-1 focus-visible:ring-primary"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-            </div>
-
-            {/* 4. Main Content */}
-            <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-                <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
-                    <TabsList className="h-10 bg-muted p-1 rounded-lg">
-                        <TabsTrigger value="all" className="px-4">Tất cả</TabsTrigger>
-                        <TabsTrigger value="unread" className="px-4">Chưa đọc</TabsTrigger>
-                        <TabsTrigger value="important" className="px-4">Quan trọng</TabsTrigger>
-                    </TabsList>
-
-                    <Button variant="outline" size="sm" onClick={() => markReadMutation.mutate(null)} disabled={unreadCount === 0}>
-                        <CheckCircle className="w-4 h-4 mr-2" /> Đánh dấu đã đọc tất cả
-                    </Button>
+            {/* 3. Search & Tabs */}
+            <div className="space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                    <Input 
+                        placeholder="Tìm kiếm theo tiêu đề hoặc nội dung..." 
+                        className="pl-12 h-12 rounded-xl bg-background border-input shadow-sm text-base focus-visible:ring-1 focus-visible:ring-primary"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
                 </div>
 
-                <div className="min-h-[400px]">
-                    {isLoading ? (
-                        <div className="space-y-4 mt-4">
-                            {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
-                        </div>
-                    ) : filteredNotifications.length > 0 ? (
-                        <div className="mt-4">
-                            {renderGroup("Hôm nay", groupedNotifications.today)}
-                            {renderGroup("Hôm qua", groupedNotifications.yesterday)}
-                            {renderGroup("Cũ hơn", groupedNotifications.older)}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/30 mt-4">
-                            <div className="bg-background p-4 rounded-full shadow-sm mb-4">
-                                <BellOff className="h-8 w-8 text-muted-foreground" />
+                <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+                    <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
+                        <TabsList className="h-10 bg-muted p-1 rounded-lg">
+                            <TabsTrigger value="all" className="px-4">Tất cả</TabsTrigger>
+                            <TabsTrigger value="unread" className="px-4">Chưa đọc</TabsTrigger>
+                            <TabsTrigger value="important" className="px-4 text-orange-700 dark:text-orange-400 data-[state=active]:text-orange-800 data-[state=active]:font-bold">
+                                <AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> Quan trọng
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <Button variant="outline" size="sm" onClick={() => markReadMutation.mutate(null)} disabled={unreadCount === 0}>
+                            <CheckCircle className="w-4 h-4 mr-2" /> Đánh dấu đã đọc tất cả
+                        </Button>
+                    </div>
+
+                    <div className="min-h-[400px]">
+                        {isLoading ? (
+                            <div className="space-y-4 mt-4">
+                                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
                             </div>
-                            <h3 className="text-lg font-semibold">Không tìm thấy thông báo</h3>
-                            <p className="text-muted-foreground text-sm">Bạn không có thông báo nào phù hợp với bộ lọc hiện tại.</p>
-                        </div>
-                    )}
-                </div>
-            </Tabs>
+                        ) : filteredNotifications.length > 0 ? (
+                            <div className="mt-4">
+                                {renderGroup("Hôm nay", groupedNotifications.today)}
+                                {renderGroup("Hôm qua", groupedNotifications.yesterday)}
+                                {renderGroup("Cũ hơn", groupedNotifications.older)}
+                            </div>
+                        ) : (
+                            <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/30 mt-4">
+                                <div className="bg-background p-4 rounded-full shadow-sm mb-4">
+                                    <BellOff className="h-8 w-8 text-muted-foreground" />
+                                </div>
+                                <h3 className="text-lg font-semibold">Không tìm thấy thông báo</h3>
+                                <p className="text-muted-foreground text-sm">
+                                    {currentTab === 'important' 
+                                        ? "Bạn không có thông báo quan trọng nào." 
+                                        : "Bạn chưa nhận được thông báo nào phù hợp."}
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </Tabs>
+            </div>
         </div>
     );
 }

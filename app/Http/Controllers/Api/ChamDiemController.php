@@ -333,7 +333,9 @@ class ChamDiemController extends Controller
                     "Đã có điểm {$tenLoai}",
                     "Giảng viên đã nhập điểm {$tenLoai} cho nhóm bạn: {$validated['DIEM']} điểm.",
                     'ACADEMIC',
-                    '/student/dashboard/' . $nhom->ID_KEHOACH // Link về chi tiết đồ án
+                    '/student/dashboard/' . $nhom->ID_KEHOACH,
+                    null,
+                    'HIGH'
                 );
             }
 

@@ -148,15 +148,19 @@ class ThesisPlanController extends Controller
      */
     public function update(UpdateThesisPlanRequest $request, KehoachKhoaluan $plan)
     {
-        $isCreator = $plan->ID_NGUOITAO == Auth::id();
-        
+        $currentUser = Auth::user();
+        $isCreator = $plan->ID_NGUOITAO == $currentUser->ID_NGUOIDUNG;
+        $isPlanRunning = in_array($plan->TRANGTHAI, ['Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành']);
+
+        // --- 1. KIỂM TRA QUYỀN HẠN ---
         if ($this->isTruongKhoa()) {
              if ($plan->TRANGTHAI === 'Đã hoàn thành') {
                  return response()->json(['message' => 'Không thể chỉnh sửa kế hoạch đã hoàn thành.'], 403);
              }
         } else {
              $canEditDraft = in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa']) && ($isCreator || $this->isAdmin());
-             $canEditActive = $plan->TRANGTHAI === 'Đang thực hiện' && ($this->isGiaoVu() || $this->isAdmin());
+             $canEditActive = $isPlanRunning && ($this->isGiaoVu() || $this->isAdmin());
+             
              if (!($canEditDraft || $canEditActive)) {
                  return response()->json(['message' => 'Bạn không có quyền chỉnh sửa kế hoạch ở trạng thái này.'], 403);
              }
@@ -164,27 +168,51 @@ class ThesisPlanController extends Controller
 
         $validated = $request->validated();
         
-        $isPlanRunning = in_array($plan->TRANGTHAI, ['Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành']);
+        // Chặn đổi ngày bắt đầu gốc nếu kế hoạch đang chạy (tránh vỡ logic hệ thống)
+        // Chỉ cho phép đổi ngày kết thúc hoặc các mốc thời gian con
         $formattedPlanDate = $plan->NGAY_BATDAU->format('Y-m-d'); 
-
         if ($isPlanRunning && isset($validated['NGAY_BATDAU']) && $validated['NGAY_BATDAU'] !== $formattedPlanDate) {
-            return response()->json(['message' => 'Không thể thay đổi Ngày Bắt Đầu khi kế hoạch đang thực hiện hoặc đã hoàn thành.'], 403);
-        }
-        
-        if ($isPlanRunning) {
-            unset($validated['NGAY_BATDAU']);
+            if (!$this->isAdmin()||!$this->isTruongKhoa()) {
+                return response()->json(['message' => 'Không thể thay đổi Ngày Bắt Đầu khi kế hoạch đang hoạt động.'], 403);
+            }
         }
 
+        // Detect changes (để quyết định có gửi thông báo hay không)
+        $oldData = $plan->only(['TEN_DOT', 'NGAY_KETTHUC']);
+        $hasCriticalChanges = false;
+
+        DB::beginTransaction();
         try {
-            DB::beginTransaction();
-            
+            // --- 2. CẬP NHẬT THÔNG TIN CHÍNH ---
             $plan->update(collect($validated)->except('mocThoigians')->all());
 
-            $incomingIds = collect($validated['mocThoigians'])->pluck('id')->filter();
+            // Kiểm tra xem có thay đổi quan trọng ở cấp độ cha không
+            if ($plan->TEN_DOT !== $oldData['TEN_DOT'] || $plan->NGAY_KETHUC != $oldData['NGAY_KETTHUC']) {
+                $hasCriticalChanges = true;
+            }
+
+            // --- 3. ĐỒNG BỘ MỐC THỜI GIAN (ONETOMANY) ---
+            $incomingIds = collect($validated['mocThoigians'])->pluck('id')->filter()->all();
+            
+            // Xóa các mốc không còn trong danh sách gửi lên
             $plan->mocThoigians()->whereNotIn('ID', $incomingIds)->delete();
             
             foreach ($validated['mocThoigians'] as $moc) {
-                MocThoigian::updateOrCreate(
+                // Kiểm tra thay đổi trong mốc thời gian (nếu là update)
+                if (isset($moc['id'])) {
+                    $existingMoc = \App\Models\MocThoigian::find($moc['id']);
+                    if ($existingMoc) {
+                        if ($existingMoc->NGAY_BATDAU != $moc['NGAY_BATDAU'] || 
+                            $existingMoc->NGAY_KETTHUC != $moc['NGAY_KETTHUC']) {
+                            $hasCriticalChanges = true;
+                        }
+                    }
+                } else {
+                    // Có mốc mới được thêm vào -> Là thay đổi quan trọng
+                    $hasCriticalChanges = true;
+                }
+
+                \App\Models\MocThoigian::updateOrCreate(
                     ['ID' => $moc['id'] ?? null, 'ID_KEHOACH' => $plan->ID_KEHOACH],
                     [
                         'TEN_SUKIEN' => $moc['TEN_SUKIEN'],
@@ -196,42 +224,70 @@ class ThesisPlanController extends Controller
                     ]
                 );
             }
-            
+
+            // Đồng bộ cài đặt Feature Flags
+            $this->syncMilestonesToSettings($plan);
+
             if (in_array($plan->TRANGTHAI, ['Bản nháp', 'Yêu cầu chỉnh sửa'])) {
-                if (($this->isGiaoVu() || $this->isAdmin()) && ($isCreator || $this->isAdmin())) {
+                if (($this->isGiaoVu() || $this->isAdmin()) && $isCreator) {
                     $plan->TRANGTHAI = 'Bản nháp';
                     $plan->BINHLUAN_PHEDUYET = null;
-                } elseif ($this->isTruongKhoa() && ($isCreator || $this->isAdmin())) {
+                } elseif ($this->isTruongKhoa()) {
                     $plan->TRANGTHAI = 'Đã phê duyệt';
                     $plan->BINHLUAN_PHEDUYET = null;
                     $plan->ID_NGUOIPHEDUYET = Auth::id();
                 }
             }
-            elseif ($plan->TRANGTHAI === 'Đang thực hiện') {
+            elseif ($isPlanRunning) {
                  if ($this->isGiaoVu()) {
-                     $plan->TRANGTHAI = 'Chờ duyệt chỉnh sửa';
-                     Log::info("Plan ID {$plan->ID_KEHOACH} updated by Giao Vu. Awaiting re-approval.");
-                 } elseif ($this->isTruongKhoa() || $this->isAdmin()) {
-                     Log::info("Plan ID {$plan->ID_KEHOACH} updated and auto-approved by Truong Khoa/Admin.");
+                     Log::info("Kế hoạch ID {$plan->ID_KEHOACH} đang chạy đã được chỉnh sửa bởi Giáo vụ.");
                  }
             }
-            elseif ($this->isTruongKhoa()) {
-                 if(in_array($plan->TRANGTHAI, ['Chờ phê duyệt', 'Chờ duyệt chỉnh sửa'])){
-                     $plan->TRANGTHAI = ($plan->TRANGTHAI === 'Chờ duyệt chỉnh sửa') ? 'Đang thực hiện' : 'Đã phê duyệt';
-                     $plan->ID_NGUOIPHEDUYET = Auth::id();
-                     $plan->BINHLUAN_PHEDUYET = null;
-                 }
-            }
-            
+
             $plan->save();
-            $this->syncMilestonesToSettings($plan);
+            
+            ActivityLogger::log(
+                'UPDATE_PLAN',
+                "Cập nhật kế hoạch: {$plan->TEN_DOT}",
+                ['plan_id' => $plan->ID_KEHOACH],
+                null,
+                'Edit3'
+            );
+
+            if ($isPlanRunning && $hasCriticalChanges) {
+                
+                $studentUserIds = \App\Models\SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)
+                    ->join('SINHVIEN', 'SINHVIEN_THAMGIA.ID_SINHVIEN', '=', 'SINHVIEN.ID_SINHVIEN')
+                    ->pluck('SINHVIEN.ID_NGUOIDUNG');
+
+                $lecturerUserIds = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $plan->ID_KEHOACH)
+                    ->join('GIANGVIEN', 'QUOTA_GIANGVIEN.ID_GIANGVIEN', '=', 'GIANGVIEN.ID_GIANGVIEN')
+                    ->pluck('GIANGVIEN.ID_NGUOIDUNG');
+                
+                $allRecipients = $studentUserIds->merge($lecturerUserIds)->unique();
+
+                foreach ($allRecipients->chunk(50) as $chunk) {
+                    foreach ($chunk as $userId) {
+                        NotificationService::send(
+                            $userId,
+                            "Cập nhật Kế hoạch: {$plan->TEN_DOT}",
+                            "Đã có sự thay đổi về mốc thời gian hoặc nội dung quan trọng trong kế hoạch khóa luận. Vui lòng kiểm tra lại lịch trình.",
+                            'ACADEMIC',
+                            '/student/dashboard/' . $plan->ID_KEHOACH,
+                            ['plan_id' => $plan->ID_KEHOACH],
+                            'URGENT'
+                        );
+                    }
+                }
+                
+                Log::info("Đã gửi thông báo khẩn cập nhật kế hoạch tới " . $allRecipients->count() . " người dùng.");
+            }
 
             DB::commit();
             
             Cache::forget('plan_filter_options');
 
-            $plan->load('mocThoigians'); 
-            return response()->json($plan);
+            return response()->json($plan->load('mocThoigians'));
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -286,6 +342,32 @@ class ThesisPlanController extends Controller
          
          $plan->update(['TRANGTHAI' => 'Chờ phê duyệt']);
          
+         ActivityLogger::log(
+            'SUBMIT_PLAN',
+            "Gửi duyệt kế hoạch: {$plan->TEN_DOT}",
+            ['plan_id' => $plan->ID_KEHOACH],
+            null,
+            'Send'
+         );
+
+         $managers = Nguoidung::whereHas('giangvien.chucvus', function($q) {
+             $q->where('MA_CHUCVU', 'TRUONG_KHOA');
+         })->orWhereHas('vaitro', function($q) {
+             $q->where('TEN_VAITRO', 'Admin');
+         })->get();
+
+         foreach ($managers as $manager) {
+             NotificationService::send(
+                 $manager->ID_NGUOIDUNG,
+                 "Yêu cầu duyệt Kế hoạch",
+                 "Giáo vụ vừa gửi yêu cầu phê duyệt kế hoạch '{$plan->TEN_DOT}'. Vui lòng kiểm tra.",
+                 'SYSTEM',
+                 '/admin/thesis-plans',
+                 ['plan_id' => $plan->ID_KEHOACH],
+                 'HIGH'
+             );
+         }
+         
          return response()->json(['message' => 'Đã gửi kế hoạch để phê duyệt thành công.']);
     }
 
@@ -311,6 +393,26 @@ class ThesisPlanController extends Controller
             'BINHLUAN_PHEDUYET' => null, // Xóa bình luận nếu có từ yêu cầu chỉnh sửa
             'ID_NGUOIPHEDUYET' => Auth::id()
         ]);
+
+        ActivityLogger::log(
+            'APPROVE_PLAN',
+            "Đã phê duyệt kế hoạch: {$plan->TEN_DOT}",
+            ['plan_id' => $plan->ID_KEHOACH],
+            null,
+            'CheckCircle'
+        );
+
+        if ($plan->ID_NGUOITAO) {
+            NotificationService::send(
+                $plan->ID_NGUOITAO,
+                "Kế hoạch đã được duyệt",
+                "Kế hoạch '{$plan->TEN_DOT}' đã được Trưởng khoa phê duyệt.",
+                'SYSTEM',
+                '/admin/thesis-plans',
+                ['plan_id' => $plan->ID_KEHOACH],
+                'HIGH'
+            );
+        }
         
         return response()->json(['message' => 'Đã phê duyệt kế hoạch thành công.']);
     }

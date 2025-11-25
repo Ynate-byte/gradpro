@@ -127,7 +127,7 @@ export function AppSidebar() {
     const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
 
     // Quyền truy cập khu vực Admin/Quản lý
-    const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu || isTruongBoMon;
+    const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu;
 
     // --- 2. Cấu hình Menu Platform (Cá nhân) ---
     const platformMenu = {

@@ -1022,10 +1022,11 @@ class NhomController extends Controller
                     NotificationService::send(
                         $gvhdUserId,
                         "Nhóm sinh viên nộp bài",
-                        "Nhóm {$phancong->nhom->TEN_NHOM} vừa nộp sản phẩm cho đề tài '{$phancong->detai->TEN_DETAI}'.",
+                        "Nhóm {$phancong->nhom->TEN_NHOM} vừa nộp sản phẩm cho đề tài '{$phancong->detai->TEN_DETAI}'. Vui lòng kiểm tra và duyệt.",
                         'ACADEMIC',
                         '/lecturer/submissions',
-                        ['submission_id' => $submission->ID_NOP_SANPHAM]
+                        ['submission_id' => $submission->ID_NOP_SANPHAM],
+                        'HIGH'
                     );
                 }
 

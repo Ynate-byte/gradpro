@@ -18,6 +18,7 @@ class Thongbao extends Model
         'TIEU_DE',
         'NOI_DUNG',
         'LOAI_THONGBAO',
+        'DO_UU_TIEN',
         'LIEN_KET',
         'DU_LIEU_GOC',
         'DA_DOC',

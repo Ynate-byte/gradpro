@@ -214,7 +214,10 @@ class LichHopController extends Controller
      */
     public function cancelMeeting(LichHop $lichhop)
     {
-        $isCreator = $lichhop->ID_NGUOITAO === Auth::id();
+        $user = Auth::user();
+        
+        // 1. Kiểm tra quyền (Người tạo hoặc Quản lý)
+        $isCreator = $lichhop->ID_NGUOITAO === $user->ID_NGUOIDUNG;
         $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
 
         if (!$isCreator && !$isManager) {
@@ -226,6 +229,26 @@ class LichHopController extends Controller
         }
 
         $lichhop->update(['TRANGTHAI' => 'Đã hủy']);
+
+        if ($user->giangvien || $isManager) {
+            $nhom = $lichhop->nhom;
+            
+            $recipientIds = $nhom->thanhviens->pluck('ID_NGUOIDUNG')->toArray();
+            
+            foreach ($recipientIds as $uid) {
+                if ($uid == $user->ID_NGUOIDUNG) continue; 
+
+                NotificationService::send(
+                    $uid,
+                    "Hủy lịch họp: {$lichhop->TIEUDE_LICHHOP}",
+                    "Giảng viên {$user->HODEM_VA_TEN} đã hủy cuộc họp dự kiến vào " . $lichhop->THOIGIAN_BATDAU->format('H:i d/m') . ".",
+                    'TASK',
+                    "/projects/my-group/schedule/{$nhom->ID_NHOM}",
+                    null,
+                    'URGENT'
+                );
+            }
+        }
 
         return response()->json(['message' => 'Đã hủy lịch họp thành công.']);
     }

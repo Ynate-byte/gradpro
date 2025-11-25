@@ -148,7 +148,8 @@ class DetaiAdminController extends Controller
                 $notiContent,
                 $notiType,
                 '/lecturer/thesis-topics',
-                ['topic_id' => $topic->ID_DETAI]
+                ['topic_id' => $topic->ID_DETAI],
+                'HIGH'
             );
         }
 

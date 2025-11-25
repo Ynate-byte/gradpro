@@ -390,7 +390,9 @@ class TopicAssignmentController extends Controller
                 "Phân công giám sát đề tài",
                 "Bạn được chỉ định làm GVHD cho đề tài: {$topic->TEN_DETAI}",
                 'ACADEMIC',
-                '/lecturer/thesis-topics'
+                '/lecturer/thesis-topics',
+                ['topic_id' => $topic->ID_DETAI],
+                'HIGH'
             );
         }
 

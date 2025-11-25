@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Auth;
 class NotificationController extends Controller
 {
     /**
-     * Lấy danh sách thông báo (có phân trang).
+     * Lấy danh sách thông báo (có phân trang & bộ lọc).
      */
     public function index(Request $request)
     {
@@ -19,12 +19,17 @@ class NotificationController extends Controller
         $query = Thongbao::where('ID_NGUOINHAN', $userId)
             ->orderBy('NGAY_TAO', 'desc');
 
-        // Lọc xem tất cả hay chỉ xem chưa đọc
+        // Lọc theo trạng thái đọc
         if ($request->has('filter') && $request->filter === 'unread') {
             $query->where('DA_DOC', false);
         }
 
-        $notifications = $query->paginate($request->per_page ?? 10);
+        // [MỚI] Lọc theo độ ưu tiên (Quan trọng)
+        if ($request->has('priority') && $request->priority === 'important') {
+            $query->whereIn('DO_UU_TIEN', ['HIGH', 'URGENT']);
+        }
+
+        $notifications = $query->paginate($request->per_page ?? 15);
 
         return response()->json($notifications);
     }

@@ -189,15 +189,16 @@ class QuotaController extends Controller
 
                 // Gửi thông báo
                 if ($request->SO_DETAI_QUOTA > 0 && $lecturer->nguoidung) {
-                NotificationService::send(
-                    $lecturer->nguoidung->ID_NGUOIDUNG,
-                    "Phân công chỉ tiêu hướng dẫn",
-                    "Trưởng bộ môn đã phân công cho bạn hướng dẫn tối đa {$request->SO_DETAI_QUOTA} đề tài.",
-                    'ACADEMIC',
-                    '/lecturer/quota-management', // Link đến trang xem quota của GV
-                    ['quota' => $request->SO_DETAI_QUOTA, 'plan_id' => $request->ID_KEHOACH]
-                );
-            }
+                    NotificationService::send(
+                        $lecturer->nguoidung->ID_NGUOIDUNG,
+                        "Phân công chỉ tiêu hướng dẫn",
+                        "Trưởng bộ môn đã phân công cho bạn hướng dẫn tối đa {$request->SO_DETAI_QUOTA} đề tài.",
+                        'ACADEMIC',
+                        '/lecturer/quota-management',
+                        ['quota' => $request->SO_DETAI_QUOTA, 'plan_id' => $request->ID_KEHOACH],
+                        'HIGH'
+                    );
+                }
             }
         });
 

@@ -229,7 +229,9 @@ class SubmissionController extends Controller
             "Bài nộp đã được duyệt",
             "GVHD đã xác nhận bài nộp của nhóm bạn.",
             'ACADEMIC',
-            '/projects/my-group'
+            '/projects/my-group',
+            null,
+            'HIGH'
         );
 
         $submission->load('phancong.nhom');
@@ -276,7 +278,9 @@ class SubmissionController extends Controller
             "Yêu cầu nộp lại sản phẩm",
             "Bài nộp bị từ chối. Lý do: {$request->ly_do}",
             'ACADEMIC',
-            '/projects/my-group'
+            '/projects/my-group',
+            null,
+            'URGENT'
         );
 
         $submission->load('phancong.nhom');

@@ -186,7 +186,9 @@ class QuotaController extends Controller
                         "Giao chỉ tiêu bộ môn",
                         "Admin đã giao chỉ tiêu {$request->SO_DETAI_QUOTA} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}.",
                         'ACADEMIC',
-                        '/lecturer/quota-management'
+                        '/lecturer/quota-management',
+                        null,
+                        'HIGH'
                     );
                 }
             }

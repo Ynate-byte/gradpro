@@ -707,13 +707,13 @@ class DetaiController extends Controller
                 NotificationService::send(
                     $lecturerId,
                     "Đề tài đã được đăng ký",
-                    "Nhóm '{$group->TEN_NHOM}' (Mã nhóm: {$group->ID_NHOM}) đã đăng ký đề tài: {$topic->TEN_DETAI}.",
+                    "Nhóm '{$group->TEN_NHOM}' (Mã nhóm: {$group->ID_NHOM}) vừa đăng ký đề tài của bạn: {$topic->TEN_DETAI}.",
                     'ACADEMIC',
                     '/lecturer/groups-management',
-                    ['topic_id' => $topic->ID_DETAI, 'group_id' => $group->ID_NHOM]
+                    ['topic_id' => $topic->ID_DETAI, 'group_id' => $group->ID_NHOM],
+                    'HIGH'
                 );
             }
-            // --- [END CHANGE] ---
         });
 
         ActivityLogger::log(

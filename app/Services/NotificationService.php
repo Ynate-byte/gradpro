@@ -15,14 +15,19 @@ class NotificationService
      * @param string $type LOAI_THONGBAO ('SYSTEM', 'GROUP', 'TASK', 'ACADEMIC')
      * @param string|null $link LIEN_KET
      * @param array|null $metaData DU_LIEU_GOC
+     * @param string $priority DO_UU_TIEN ('NORMAL', 'HIGH', 'URGENT')
      */
-    public static function send($receiverId, $title, $content, $type = 'SYSTEM', $link = null, $metaData = null)
+    public static function send($receiverId, $title, $content, $type = 'SYSTEM', $link = null, $metaData = null, $priority = 'NORMAL')
     {
         try {
             $validTypes = ['SYSTEM', 'GROUP', 'TASK', 'ACADEMIC'];
-            
             if (!in_array($type, $validTypes)) {
                 $type = 'SYSTEM';
+            }
+
+            $validPriorities = ['NORMAL', 'HIGH', 'URGENT'];
+            if (!in_array($priority, $validPriorities)) {
+                $priority = 'NORMAL';
             }
 
             Thongbao::create([
@@ -30,6 +35,7 @@ class NotificationService
                 'TIEU_DE'       => $title,
                 'NOI_DUNG'      => $content,
                 'LOAI_THONGBAO' => $type,
+                'DO_UU_TIEN'    => $priority,
                 'LIEN_KET'      => $link,
                 'DU_LIEU_GOC'   => $metaData,
                 'DA_DOC'        => false,
