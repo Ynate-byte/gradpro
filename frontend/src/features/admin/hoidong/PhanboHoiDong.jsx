@@ -158,6 +158,30 @@ const PhanboHoiDong = () => {
     return list;
   }, [allGroups, searchGroup, filterChuyenNganh, filterBoMon]);
 
+  const executeMoveGroup = async (groupToMove, targetCouncilId) => {
+      const targetCouncil = hoidongList.find(h => h.ID_HOIDONG === targetCouncilId);
+      const previousGroups = [...allGroups];
+
+      // Cập nhật UI lạc quan (Optimistic Update)
+      setAllGroups(prev =>
+        prev.map(g =>
+          g.ID_NHOM === groupToMove.ID_NHOM
+            ? { ...g, ID_HOIDONG: targetCouncilId, TEN_HOIDONG: targetCouncil?.TEN_HOIDONG }
+            : g
+        )
+      );
+
+      try {
+        await axiosClient.post("/admin/hoidong/phanbo-nhom", [
+          { ID_NHOM: groupToMove.ID_NHOM, ID_HOIDONG: targetCouncilId },
+        ]);
+        toast.success(`Đã chuyển nhóm "${groupToMove.TEN_NHOM}" sang ${targetCouncil?.TEN_HOIDONG}`);
+      } catch (error) {
+        setAllGroups(previousGroups);
+        toast.error("Lỗi khi chuyển nhóm. Đã hoàn tác.");
+      }
+  };
+
   const onGroupClick = (group) => {
     if (!selectedCouncilId) {
       toast.warning("Vui lòng chọn Hội đồng đích ở cột bên phải trước!");
@@ -167,34 +191,20 @@ const PhanboHoiDong = () => {
       toast.info("Nhóm này đã thuộc hội đồng đang chọn.");
       return;
     }
-    setDialogState({ isOpen: true, group });
+
+    if (group.ID_HOIDONG) {
+        setDialogState({ isOpen: true, group });
+    } else {
+        executeMoveGroup(group, selectedCouncilId);
+    }
   };
 
   const handleConfirmMove = async () => {
     const { group } = dialogState;
-    if (!group || !selectedCouncilId) return;
-
-    const targetCouncil = hoidongList.find(h => h.ID_HOIDONG === selectedCouncilId);
-    const previousGroups = [...allGroups];
-
-    setAllGroups(prev =>
-      prev.map(g =>
-        g.ID_NHOM === group.ID_NHOM
-          ? { ...g, ID_HOIDONG: selectedCouncilId, TEN_HOIDONG: targetCouncil?.TEN_HOIDONG }
-          : g
-      )
-    );
-    setDialogState({ isOpen: false, group: null });
-
-    try {
-      await axiosClient.post("/admin/hoidong/phanbo-nhom", [
-        { ID_NHOM: group.ID_NHOM, ID_HOIDONG: selectedCouncilId },
-      ]);
-      toast.success(`Đã chuyển nhóm "${group.TEN_NHOM}" sang ${targetCouncil?.TEN_HOIDONG}`);
-    } catch (error) {
-      setAllGroups(previousGroups);
-      toast.error("Lỗi khi chuyển nhóm. Đã hoàn tác.");
+    if (group && selectedCouncilId) {
+        await executeMoveGroup(group, selectedCouncilId);
     }
+    setDialogState({ isOpen: false, group: null });
   };
 
   const handleRemoveClick = (e, groupId, councilId) => {
@@ -247,17 +257,15 @@ const PhanboHoiDong = () => {
 
   return (
     <div className="p-4 md:p-8 h-[calc(100vh-4rem)] flex flex-col bg-muted/10 overflow-hidden">
-      {/* Thay đổi ở đây: Chuyển nút Phân bổ tự động sang phải, sát Select */}
+      {/* Header & Controls */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-0 gap-4 shrink-0">
         <div className="flex items-center gap-3">
-          {/* Sửa: Thêm chữ Quay lại và thay đổi size="icon" */}
           <Button variant="outline" onClick={() => navigate(-1)} className="bg-background">
             <ArrowLeft className="h-4 w-4 mr-2" /> Quay lại
           </Button>
         </div>
         
         <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-          {/* Sửa: Nút Phân bổ tự động */}
           <Button
             variant="default"
             className="bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
@@ -273,7 +281,6 @@ const PhanboHoiDong = () => {
           </Button>
         
           <div className="w-full sm:w-[250px] ml-auto">
-            {/* Select chọn kế hoạch */}
             <Select value={chonKehoach} onValueChange={setChonKehoach} disabled={loading}>
               <SelectTrigger className="bg-background shadow-sm">
                 <SelectValue placeholder="-- Chọn kế hoạch --" />
@@ -290,10 +297,8 @@ const PhanboHoiDong = () => {
         </div>
       </div>
       
-      {/* Thêm khoảng cách ở đây, tách biệt header và nội dung chính (Xóa khoảng cách giữa div chọn kế hoạch và phân bổ ở dưới) */}
       <div className="pt-6"></div>
 
-      {/* Nội dung chính - [SỬA]: min-h-0 để cho phép con bên trong cuộn */}
       {loading && !allGroups.length ? (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -304,7 +309,6 @@ const PhanboHoiDong = () => {
           <p>Vui lòng chọn kế hoạch để bắt đầu.</p>
         </div>
       ) : (
-        // [SỬA]: overflow-hidden ở đây để grid không tràn ra ngoài
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-0 overflow-hidden">
           
           {/* Cột trái: Danh sách nhóm */}
@@ -367,13 +371,19 @@ const PhanboHoiDong = () => {
                         const isAssignedToCurrent = group.ID_HOIDONG === selectedCouncilId;
                         const hasCouncil = !!group.ID_HOIDONG;
 
-                        const tenChuyenNganh = group.phancong_detai_nhom?.detai?.chuyennganh?.TEN_CHUYENNGANH 
-                                                 || group.TEN_CHUYENNGANH 
-                                                 || "Chưa xác định";
+                        // [LOGIC MỚI] Tra cứu fallback cho Chuyên ngành và Bộ môn
+                        // 1. Lấy ID từ group, nếu không có thì lấy từ detai (chuyên ngành) hoặc gvhd (bộ môn)
+                        // 2. Dùng ID để tra trong filterOptions lấy label
                         
-                        const tenBoMon = group.phancong_detai_nhom?.gvhd?.khoabomon?.TEN_KHOA_BOMON 
-                                             || group.TEN_KHOA_BOMON 
-                                             || "Chưa xác định";
+                        const rawMajorId = group.ID_CHUYENNGANH || group.phancong_detai_nhom?.detai?.ID_CHUYENNGANH;
+                        const tenChuyenNganh = group.TEN_CHUYENNGANH 
+                            || filterOptions.chuyennganh.find(o => o.value === String(rawMajorId))?.label
+                            || "Chưa xác định";
+                        
+                        const rawDeptId = group.ID_KHOA_BOMON || group.phancong_detai_nhom?.gvhd?.ID_KHOA_BOMON;
+                        const tenBoMon = group.TEN_KHOA_BOMON 
+                            || filterOptions.khoabomon.find(o => o.value === String(rawDeptId))?.label
+                            || "Chưa xác định";
 
                         return (
                           <div
@@ -606,7 +616,7 @@ const PhanboHoiDong = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog xác nhận GỠ nhóm (Thay thế window.confirm) */}
+      {/* Dialog xác nhận GỠ nhóm */}
       <AlertDialog open={removeDialogState.isOpen} onOpenChange={open => !open && setRemoveDialogState({ isOpen: false, groupId: null, councilId: null })}>
         <AlertDialogContent>
           <AlertDialogHeader>

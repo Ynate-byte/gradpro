@@ -18,6 +18,7 @@ import {
     SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
+import { ShieldCheck } from 'lucide-react';
 
 // --- Helper: Kiểm tra URL active ---
 const checkActive = (href, currentUrl) => {
@@ -216,6 +217,7 @@ export function AppSidebar() {
             { title: "Quản lý File", href: "/admin/files", icon: Folder },
             { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity },
             { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
+            { title: "Sao lưu dữ liệu", href: "/admin/backups", icon: ShieldCheck },
         ],
     };
 

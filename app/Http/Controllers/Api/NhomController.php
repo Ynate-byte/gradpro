@@ -117,7 +117,8 @@ class NhomController extends Controller
                     ->orderByRaw("CASE WHEN TRANGTHAI = 'Đang chờ' THEN 1 ELSE 2 END, NGAYTAO DESC");
                 },
 
-                'phancongDetaiNhom.detai'
+                'phancongDetaiNhom.detai.nguoiDexuat.nguoidung',
+                'phancongDetaiNhom.gvhd.nguoidung'
                 ])->find($thanhvien->ID_NHOM);
 
             if (!$nhom) {
@@ -893,7 +894,7 @@ class NhomController extends Controller
             'khoabomon',
             'phancongDetaiNhom.detai.nguoiDexuat.nguoidung', 
             'phancongDetaiNhom.gvhd.nguoidung' 
-        ]);
+        ]); 
 
         $assignment = $nhom->phancongDetaiNhom;
         if ($assignment) {

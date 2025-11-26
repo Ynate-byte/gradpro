@@ -70,6 +70,7 @@ const routeNameMap = {
     '/admin/users': 'Người dùng',
     '/admin/groups': 'Nhóm sinh viên',
     '/admin/news': 'Tin tức',
+    '/admin/backups': 'Sao lưu dữ liệu',
     
     '/admin/thesis-plans': 'Kế hoạch khóa luận',
     '/admin/thesis-plans/create': 'Tạo mới',

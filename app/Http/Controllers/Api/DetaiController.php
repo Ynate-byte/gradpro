@@ -690,7 +690,7 @@ class DetaiController extends Controller
             PhancongDetaiNhom::create([
                 'ID_NHOM' => $group->ID_NHOM,
                 'ID_DETAI' => $topic->ID_DETAI,
-                'ID_GVHD' => $topic->ID_NGUOI_DEXUAT, 
+                'ID_GVHD' => $topic->ID_NGUOI_DEXUAT,
                 'NGAY_PHANCONG' => now(),
                 'TRANGTHAI' => 'Đang thực hiện'
             ]);

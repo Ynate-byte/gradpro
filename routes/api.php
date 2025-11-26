@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\Student\StudentDashboardController;
 use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\FileManagerController;
 use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
+use App\Http\Controllers\Api\Admin\BackupController;
 
 /*
 |--------------------------------------------------------------------------
@@ -340,6 +341,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/history/cleanup', [HistoryController::class, 'cleanup']);
         Route::get('/giangvien', [GiangVienController::class, 'index']);
         Route::post('/notifications/broadcast', [AdminNotificationController::class, 'broadcast']);
+
+        //Backup & restore
+        Route::get('/backups', [BackupController::class, 'index']);
+        Route::post('/backups', [BackupController::class, 'create']);
+        Route::get('/backups/download', [BackupController::class, 'download']);
+        Route::post('/backups/delete', [BackupController::class, 'destroy']);
     });
 
     // =================================================================================

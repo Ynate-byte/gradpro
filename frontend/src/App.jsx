@@ -56,6 +56,8 @@ const GeneralSettingsPage = lazy(() => import('./features/admin/settings/General
 const AdminActivityLog = lazy(() => import('./features/admin/activity-log/index.jsx'));
 const NotificationPage = lazy(() => import('./features/notifications/index.jsx'));
 const FileManagerPage = lazy(() => import('./features/admin/file-manager/FileManager.jsx'));
+// [MỚI] Import trang Backup
+const BackupManagementPage = lazy(() => import('./features/admin/backup-management/index.jsx'));
 
 // Component placeholder cho các trang chưa có nội dung
 const PlaceholderPage = ({ title }) => (
@@ -253,6 +255,9 @@ function App() {
               {/*Route Nhật ký hệ thống */}
               <Route path="admin/system-logs" element={<AdminActivityLog />} />
               <Route path="admin/files" element={<FileManagerPage />} />
+              
+              {/* [MỚI] Route Sao lưu dữ liệu */}
+              <Route path="admin/backups" element={<BackupManagementPage />} />
             </>
           )}
         </Route>

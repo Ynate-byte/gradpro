@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Loader2, Eye, Star, Users, GraduationCap, Calendar, BookOpen, Clock, CheckCircle, AlertCircle, UserCheck, Crown } from "lucide-react";
+import { Loader2, Eye, Star, Users, GraduationCap, Calendar, BookOpen, Clock, CheckCircle, AlertCircle, Crown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
@@ -53,7 +53,7 @@ const GroupCard = ({ group, onViewDetails }) => {
     const statusConfig = getStatusConfig(TRANGTHAI);
     const StatusIcon = statusConfig.icon;
 
-    // Sử dụng danh sách thành viên từ API (có thể là thanhviens hoặc thanhvienNhom tùy response)
+    // Sử dụng danh sách thành viên từ API
     const members = nhom?.thanhviens || nhom?.thanhvienNhom || [];
 
     return (
@@ -67,7 +67,7 @@ const GroupCard = ({ group, onViewDetails }) => {
                                 {nhom?.TEN_NHOM || "Nhóm chưa đặt tên"}
                             </CardTitle>
                         </div>
-                        <p className="text-xs font-mono text-muted-foreground">#{nhom?.MA_NHOM || 'N/A'}</p>
+                        <p className="text-xs font-mono text-muted-foreground">Nhóm số: {nhom?.ID_NHOM || 'N/A'}</p>
                     </div>
                     <Badge variant="outline" className={cn("flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium shrink-0 transition-colors", statusConfig.color)}>
                         <StatusIcon className="w-3.5 h-3.5" />
@@ -151,9 +151,6 @@ const GroupCard = ({ group, onViewDetails }) => {
                         </PopoverContent>
                      </Popover>
                 </div>
-
-                {/* Đã xóa phần Avatar Stack ở đây */}
-
             </CardContent>
 
             <CardFooter className="p-4 bg-muted/10 border-t flex gap-3">
@@ -167,6 +164,8 @@ const GroupCard = ({ group, onViewDetails }) => {
                 <Button 
                     variant="default" 
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+                    // Logic đánh giá nên chuyển hướng sang trang đánh giá hoặc mở modal
+                    onClick={() => onViewDetails(nhom?.ID_NHOM)} 
                 >
                     <Star className="w-4 h-4 mr-2" /> Đánh giá
                 </Button>
@@ -189,8 +188,18 @@ const GroupsManagementPage = () => {
   const loadGroups = async () => {
     try {
       setLoading(true);
-      const response = await thesisTopicService.getGroupsForLecturer();
-      setGroups(response.data || []);
+      // API trả về Mảng trực tiếp, không phải object có key data
+      const data = await thesisTopicService.getGroupsForLecturer();
+      
+      // Kiểm tra xem data có phải là mảng không trước khi set state
+      if (Array.isArray(data)) {
+          setGroups(data);
+      } else if (data && Array.isArray(data.data)) {
+          // Fallback phòng trường hợp API thay đổi trả về paginate
+          setGroups(data.data);
+      } else {
+          setGroups([]);
+      }
     } catch (error) {
       console.error('Error loading groups:', error);
       toast.error('Không thể tải dữ liệu nhóm.');
@@ -200,7 +209,6 @@ const GroupsManagementPage = () => {
   };
 
   const handleViewDetails = (nhomId) => {
-    // Điều hướng đến trang chi tiết nhóm
     if (nhomId) {
         navigate(`/lecturer/groups-management/${nhomId}/details`);
     } else {
@@ -212,10 +220,6 @@ const GroupsManagementPage = () => {
     <div className="p-4 md:p-8 space-y-8 max-w-[1600px] mx-auto">
       {/* Header Section */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">Quản lý Nhóm hướng dẫn</h1>
-            <p className="text-muted-foreground mt-1">Theo dõi tiến độ và đánh giá các nhóm sinh viên.</p>
-        </div>
         <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800">
              <Users className="w-5 h-5 text-blue-600" />
              <span className="font-semibold text-blue-800 dark:text-blue-300">{groups.length}</span>
