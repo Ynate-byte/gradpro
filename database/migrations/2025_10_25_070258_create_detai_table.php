@@ -21,7 +21,7 @@ return new class extends Migration
             $table->unsignedBigInteger('ID_NGUOI_DEXUAT');
             $table->integer('SO_NHOM_TOIDA')->default(1);
             $table->integer('SO_NHOM_HIENTAI')->default(0);
-            $table->enum('TRANGTHAI', ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đã duyệt', 'Đã đầy', 'Đã khóa'])
+            $table->enum('TRANGTHAI', ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đã duyệt', 'Đã đầy', 'Đã khóa', 'Từ chối', 'Đang chỉnh sửa'])
                 ->default('Nháp');
             $table->unsignedBigInteger('ID_NGUOI_DUYET')->nullable();
             $table->timestamp('NGAY_DUYET')->nullable();

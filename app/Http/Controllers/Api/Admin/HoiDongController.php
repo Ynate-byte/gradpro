@@ -633,6 +633,8 @@ class HoiDongController extends Controller
             'khoaBomon',
             'giangviens.nguoidung', 
             'giangviens.khoabomon', 
+            'nhoms.thanhviens.nguoidung', 
+            'nhoms.diemHoiDong',
             'nhoms.phancongDetaiNhom.detai', 
             'nhoms.phancongDetaiNhom.gvhd.nguoidung' 
         ])->findOrFail($id);

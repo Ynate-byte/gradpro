@@ -9,13 +9,16 @@ class DiemHuongDan extends Model
 {
     use HasFactory;
 
-    protected $table = 'DIEM_HUONGDAN'; // Giữ nguyên chữ hoa như migration
+    protected $table = 'DIEM_HUONGDAN';
     protected $primaryKey = 'ID_DIEM_HD';
     public $timestamps = true;
 
-    protected $fillable = ['ID_NHOM', 'ID_GIANGVIEN', 'DIEM', 'NHANXET'];
+    protected $fillable = ['ID_NHOM', 'ID_GIANGVIEN', 'DIEM', 'NHANXET', 'DIEM_CHI_TIET'];
 
-    // 🔹 Quan hệ
+    protected $casts = [
+        'DIEM_CHI_TIET' => 'array',
+    ];
+
     public function nhom()
     {
         return $this->belongsTo(Nhom::class, 'ID_NHOM', 'ID_NHOM');

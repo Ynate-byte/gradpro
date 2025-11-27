@@ -11,9 +11,13 @@ class DiemHoiDong extends Model
 
     protected $table = 'DIEM_HOIDONG';
     protected $primaryKey = 'ID_DIEM_HDONG';
-    protected $fillable = ['ID_NHOM', 'ID_GIANGVIEN', 'DIEM', 'NHANXET'];
-    // public $timestamps = false; // Bảng gốc có timestamps
 
+    protected $fillable = ['ID_NHOM', 'ID_GIANGVIEN', 'DIEM', 'NHANXET', 'DIEM_CHI_TIET'];
+
+    protected $casts = [
+        'DIEM_CHI_TIET' => 'array',
+    ];
+    
     public function nhom()
     {
         return $this->belongsTo(Nhom::class, 'ID_NHOM', 'ID_NHOM');

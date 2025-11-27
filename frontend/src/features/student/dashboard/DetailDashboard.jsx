@@ -7,17 +7,18 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
     ArrowLeft, Calendar, Users, CheckCircle2, AlertTriangle, Clock, 
     LayoutDashboard, User, FileText, Flag, CheckSquare, Trophy, BarChart3,
-    Video, MapPin, CalendarDays, GraduationCap
+    Video, MapPin, CalendarDays, GraduationCap, ListTree, Info, X
 } from 'lucide-react';
 import { format, parseISO, isPast, isToday } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
-// --- 1. BIỂU ĐỒ ĐÓNG GÓP ---
+// --- 1. BIỂU ĐỒ ĐÓNG GÓP (Giữ nguyên) ---
 const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
 
 const ContributionChart = ({ data }) => {
@@ -93,6 +94,89 @@ const ContributionChart = ({ data }) => {
 };
 
 // --- 2. WIDGET SỨC KHỎE ĐỀ TÀI ---
+
+// Component Popover hiển thị điểm chi tiết
+const DetailedScorePopover = ({ details, members }) => {
+    if (!details || !Array.isArray(details) || details.length === 0) return null;
+
+    return (
+        <Popover>
+            <PopoverTrigger asChild>
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="h-6 w-6 text-muted-foreground hover:text-primary absolute -top-2 -right-2 p-0 bg-background rounded-full border shadow-sm"
+                    title="Xem điểm thành phần"
+                >
+                    <ListTree className="w-3 h-3"/>
+                </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-72 p-0" align="center" side="top">
+                <div className="px-3 py-2 bg-muted/50 border-b text-xs font-bold text-muted-foreground flex justify-between items-center">
+                    <span>Sinh viên</span>
+                    <span>Điểm</span>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto">
+                    {details.map((item, idx) => {
+                        // Tìm tên sinh viên trong danh sách thành viên nhóm
+                        // Logic: item.student_id là ID_NGUOIDUNG.
+                        const student = members.find(m => 
+                            String(m.ID_NGUOIDUNG) === String(item.student_id) || 
+                            String(m.nguoidung?.ID_NGUOIDUNG) === String(item.student_id)
+                        );
+                        
+                        const displayName = student?.nguoidung?.HODEM_VA_TEN || `ID: ${item.student_id}`;
+                        const mssv = student?.nguoidung?.MA_DINHDANH;
+
+                        return (
+                            <div key={idx} className="flex justify-between items-center px-3 py-2 text-xs border-b last:border-0 hover:bg-muted/20">
+                                <div className="flex flex-col overflow-hidden mr-2">
+                                    <span className="truncate font-medium text-foreground/90" title={displayName}>
+                                        {displayName}
+                                    </span>
+                                    {mssv && <span className="text-[10px] text-muted-foreground">{mssv}</span>}
+                                </div>
+                                <Badge variant="outline" className="font-bold text-primary border-primary/30 h-5 min-w-[30px] justify-center bg-primary/5">
+                                    {item.score}
+                                </Badge>
+                            </div>
+                        )
+                    })}
+                </div>
+                <div className="p-1.5 bg-yellow-50 text-[9px] text-yellow-700 text-center border-t border-yellow-100">
+                    * Điểm hiển thị bên ngoài là trung bình cộng.
+                </div>
+            </PopoverContent>
+        </Popover>
+    );
+};
+
+const GradeBadge = ({ label, score, details, members }) => {
+    const hasScore = score !== null && score !== undefined;
+    
+    // Parse details nếu nó là chuỗi JSON (phòng trường hợp backend trả về string thay vì array)
+    let parsedDetails = details;
+    if (typeof details === 'string') {
+        try { parsedDetails = JSON.parse(details); } catch (e) { parsedDetails = []; }
+    }
+    const hasDetails = parsedDetails && Array.isArray(parsedDetails) && parsedDetails.length > 0;
+
+    return (
+        <div className={cn(
+            "flex flex-col items-center justify-center p-3 rounded-lg border relative group transition-all",
+            hasScore ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-100 text-gray-400"
+        )}>
+            <span className="text-[10px] font-bold uppercase tracking-wide mb-1">{label}</span>
+            <span className="text-2xl font-bold">{hasScore ? Number(score).toFixed(1).replace(/[.,]0$/, '') : '-'}</span>
+            
+            {/* Hiển thị nút xem chi tiết nếu có điểm thành phần */}
+            {hasDetails && (
+                <DetailedScorePopover details={parsedDetails} members={members} />
+            )}
+        </div>
+    );
+};
+
 const HealthStatusItem = ({ label, value, status }) => {
     let icon = <Clock className="w-4 h-4 text-muted-foreground" />;
     let statusClass = "text-muted-foreground";
@@ -119,8 +203,27 @@ const HealthStatusItem = ({ label, value, status }) => {
     );
 };
 
-const ThesisHealthWidget = ({ health }) => {
+const ThesisHealthWidget = ({ health, group }) => {
     if (!health) return null;
+
+    // --- [SỬA LỖI QUAN TRỌNG] ---
+    // Laravel trả về snake_case (diem_huong_dan) mặc dù trong controller gọi diemHuongDan
+    // Cần kiểm tra cả 2 trường hợp để an toàn
+    
+    const getDetails = (relationName, snakeName) => {
+        const rel = group?.[relationName] || group?.[snakeName];
+        return rel?.[0]?.DIEM_CHI_TIET;
+    };
+
+    const guideDetails = getDetails('diemHuongDan', 'diem_huong_dan');
+    const reviewDetails = getDetails('diemPhanBien', 'diem_phan_bien');
+    
+    // Với hội đồng, có thể có nhiều người chấm. Lấy người đầu tiên có điểm chi tiết để hiển thị ví dụ
+    // Hoặc xử lý phức tạp hơn nếu cần. Ở đây ta lấy người đầu tiên.
+    const councilRel = group?.diemHoiDong || group?.diem_hoi_dong;
+    const councilDetails = councilRel?.[0]?.DIEM_CHI_TIET;
+
+    const members = group?.thanhviens || [];
 
     return (
         <div className="space-y-1">
@@ -140,32 +243,36 @@ const ThesisHealthWidget = ({ health }) => {
                 status={health.reviewer ? 'success' : 'default'} 
             />
             
-            <div className="mt-4 pt-2">
-                <p className="text-xs font-bold text-muted-foreground uppercase mb-2">Điểm số ghi nhận</p>
-                <div className="grid grid-cols-3 gap-2">
-                    <GradeBadge label="HD" score={health.grades?.guide} />
-                    <GradeBadge label="PB" score={health.grades?.review} />
-                    <GradeBadge label="HĐ" score={health.grades?.council} />
+            <div className="mt-5 pt-3 border-t border-dashed">
+                <p className="text-xs font-bold text-muted-foreground uppercase mb-3 flex items-center gap-2">
+                    Điểm số ghi nhận <Info className="w-3 h-3 cursor-help" />
+                </p>
+                <div className="grid grid-cols-3 gap-3">
+                    <GradeBadge 
+                        label="Hướng dẫn" 
+                        score={health.grades?.guide} 
+                        details={guideDetails} 
+                        members={members} 
+                    />
+                    <GradeBadge 
+                        label="Phản biện" 
+                        score={health.grades?.review} 
+                        details={reviewDetails} 
+                        members={members} 
+                    />
+                    <GradeBadge 
+                        label="Hội đồng" 
+                        score={health.grades?.council} 
+                        details={councilDetails} 
+                        members={members} 
+                    />
                 </div>
             </div>
         </div>
     );
 };
 
-const GradeBadge = ({ label, score }) => {
-    const hasScore = score !== null && score !== undefined;
-    return (
-        <div className={cn(
-            "flex flex-col items-center justify-center p-2 rounded-lg border",
-            hasScore ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-gray-50 border-gray-100 text-gray-400"
-        )}>
-            <span className="text-[10px] font-bold">{label}</span>
-            <span className="text-lg font-bold">{hasScore ? score : '-'}</span>
-        </div>
-    );
-};
-
-// --- WIDGET THÔNG TIN HỘI ĐỒNG ---
+// --- WIDGET THÔNG TIN HỘI ĐỒNG (Giữ nguyên) ---
 const CouncilInfoWidget = ({ group }) => {
     const defenseCouncil = group?.hoidongs?.find(c => c.LOAI === 'hoidong');
 
@@ -215,7 +322,6 @@ const CouncilInfoWidget = ({ group }) => {
                 </div>
             </div>
 
-            {/* Note nhỏ */}
              <div className="p-2 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 text-[10px] rounded border border-blue-100 dark:border-blue-800 flex gap-2 items-start">
                 <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
                 <span>Vui lòng có mặt trước 15 phút để chuẩn bị thiết bị.</span>
@@ -224,7 +330,7 @@ const CouncilInfoWidget = ({ group }) => {
     );
 };
 
-// --- 3. TIMELINE TÍCH HỢP ---
+// --- 3. TIMELINE TÍCH HỢP (Giữ nguyên) ---
 const IntegratedTimeline = ({ items }) => {
     if (!items || items.length === 0) {
         return <div className="py-8 text-center text-muted-foreground text-sm">Chưa có sự kiện nào sắp diễn ra.</div>;
@@ -350,7 +456,6 @@ export default function DetailDashboard() {
     const hasGroup = !!group;
 
     return (
-        // [FIX 1]: Bỏ h-screen và overflow-hidden để không tạo thanh cuộn lồng nhau
         <div className="flex flex-col min-h-full bg-gray-50/30 dark:bg-background">
             
             {/* HEADER */}
@@ -416,7 +521,7 @@ export default function DetailDashboard() {
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent className="pt-4">
-                                    <ThesisHealthWidget health={thesis_health} />
+                                    <ThesisHealthWidget health={thesis_health} group={group} />
                                 </CardContent>
                             </Card>
                         </div>
@@ -457,7 +562,7 @@ export default function DetailDashboard() {
 
                         {/* CỘT 3: HỘI ĐỒNG & TIMELINE (3/12) */}
                         <div className="md:col-span-12 lg:col-span-3 space-y-6">
-                            {/* [ĐÃ DI CHUYỂN] Card Hội đồng Bảo vệ */}
+                            {/* Card Hội đồng Bảo vệ */}
                             <Card>
                                 <CardHeader className="pb-2 border-b bg-blue-50/30 dark:bg-blue-900/10">
                                     <CardTitle className="text-base flex items-center gap-2 text-blue-700 dark:text-blue-400">
@@ -471,7 +576,6 @@ export default function DetailDashboard() {
                             </Card>
 
                             {/* Card Timeline */}
-                            {/* [FIX 2]: Bỏ h-full để Card không bị giãn ép gây tràn */}
                             <Card className="border-none shadow-none bg-transparent lg:bg-card lg:border lg:shadow-sm">
                                 <CardHeader className="pb-2 px-0 lg:px-6 lg:border-b">
                                     <CardTitle className="text-base flex items-center gap-2">

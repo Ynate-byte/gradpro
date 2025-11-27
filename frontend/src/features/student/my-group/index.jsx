@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
     BookCopy, CheckCircle, AlertTriangle, Crown,
     AlertCircle, UploadCloud, CalendarCheck, LayoutDashboard,
-    Mail, Phone // Icon đã được import đúng
+    Mail, Phone
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NoGroupView } from './components/NoGroupView';
@@ -32,7 +32,7 @@ import {
 import { TopicDetailsDialog } from './components/topic/TopicDetailsDialog';
 import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ActivityCard } from './components/ActivityCard';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO, isFuture } from 'date-fns';
@@ -208,6 +208,70 @@ export default function MyGroupPage() {
         return { upcomingMeetingsCount: validMeetings.length, upcomingTasksCount: tasksCount }; 
     }, [groupDetails?.meetings, groupDetails?.tasksCount]);
 
+    // [MỚI] Helper tính điểm cho từng sinh viên (ĐÃ SỬA LỖI KEY)
+    const getStudentGrades = (studentId, groupData) => {
+        if (!groupData) return null;
+
+        const plan = groupData.kehoach || {};
+        // Tỷ trọng mặc định
+        const wHD = parseFloat(plan.TYTRONG_DIEM_QUATRINH ?? 0.4);
+        const wPB = parseFloat(plan.TYTRONG_DIEM_PHANBIEN ?? 0.3);
+        const wHDONG = parseFloat(plan.TYTRONG_DIEM_HOIDONG ?? 0.3);
+
+        // Helper lấy điểm từ danh sách (xử lý cả JSON chi tiết)
+        const getScore = (records) => {
+            if (!records || records.length === 0) return null;
+            
+            let total = 0;
+            let count = 0;
+
+            records.forEach(record => {
+                let score = parseFloat(record.DIEM || 0);
+                // Nếu có điểm chi tiết, tìm điểm của sinh viên này
+                if (record.DIEM_CHI_TIET) {
+                    let details = record.DIEM_CHI_TIET;
+                    if (typeof details === 'string') {
+                        try { details = JSON.parse(details); } catch (e) {}
+                    }
+                    if (Array.isArray(details)) {
+                        const studentScore = details.find(s => String(s.student_id) === String(studentId));
+                        if (studentScore) {
+                            score = parseFloat(studentScore.score);
+                        }
+                    }
+                }
+                total += score;
+                count++;
+            });
+
+            return count === 0 ? null : (total / count);
+        };
+
+        // [SỬA LỖI CHÍNH]: Dùng key snake_case (hoặc thử cả 2 để an toàn)
+        const listHD = groupData.diem_huong_dan || groupData.diemHuongDan;
+        const listPB = groupData.diem_phan_bien || groupData.diemPhanBien;
+        const listHDONG = groupData.diem_hoi_dong || groupData.diemHoiDong;
+
+        const scoreHD = getScore(listHD);
+        const scorePB = getScore(listPB);
+        const scoreHDONG = getScore(listHDONG);
+
+        // Nếu chưa có điểm nào
+        if (scoreHD === null && scorePB === null && scoreHDONG === null) return null;
+
+        // Tính tổng
+        let final = 0;
+        if (scoreHD !== null) final += scoreHD * wHD;
+        if (scorePB !== null) final += scorePB * wPB;
+        if (scoreHDONG !== null) final += scoreHDONG * wHDONG;
+
+        return {
+            final: final.toFixed(2),
+            hd: scoreHD !== null ? scoreHD.toFixed(2) : '-',
+            pb: scorePB !== null ? scorePB.toFixed(2) : '-',
+            hdong: scoreHDONG !== null ? scoreHDONG.toFixed(2) : '-'
+        };
+    };
 
     if (isLoadingPlans) return <div className="p-4 md:p-8"><LoadingSkeleton /></div>;
 
@@ -306,13 +370,16 @@ export default function MyGroupPage() {
                         />
                     </div>
 
-                    {/* CỘT 3: DANH SÁCH THÀNH VIÊN (ĐÃ BỌC TRONG CARD) */}
+                    {/* CỘT 3: DANH SÁCH THÀNH VIÊN */}
                     <div className="lg:col-span-1 space-y-1">
                             <CardContent className="px-4 pb-4 pt-0 space-y-1">
                                 {groupData.thanhviens?.map(member => {
                                     const nguoidung = member.nguoidung;
                                     const isMemberLeader = member.ID_NGUOIDUNG === groupData.ID_NHOMTRUONG;
                                     const isSelf = member.ID_NGUOIDUNG === user.ID_NGUOIDUNG;
+
+                                    // Lấy điểm của sinh viên này
+                                    const grades = getStudentGrades(member.ID_NGUOIDUNG, groupData);
 
                                     return (
                                         <Popover key={member.ID_NGUOIDUNG}>
@@ -323,7 +390,7 @@ export default function MyGroupPage() {
                                                         isMemberLeader && "border-primary/50 bg-primary/5"
                                                     )}
                                                 >
-                                                    <div className="flex items-center gap-2 overflow-hidden">
+                                                    <div className="flex items-center gap-2 overflow-hidden flex-1">
                                                         <Avatar className="h-8 w-8 text-xs">
                                                             <AvatarFallback>{getInitials(nguoidung.HODEM_VA_TEN)}</AvatarFallback>
                                                         </Avatar>
@@ -335,6 +402,15 @@ export default function MyGroupPage() {
                                                             <span className="text-muted-foreground text-xs font-mono truncate block">{nguoidung.MA_DINHDANH}</span>
                                                         </div>
                                                     </div>
+                                                    
+                                                    {/* Hiển thị điểm tổng kết */}
+                                                    {grades && (
+                                                        <div className="ml-2">
+                                                            <Badge variant="secondary" className="text-xs font-bold bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+                                                                {grades.final}
+                                                            </Badge>
+                                                        </div>
+                                                    )}
                                                 </button>
                                             </PopoverTrigger>
                                             <PopoverContent className="w-72" align="end">
@@ -356,10 +432,37 @@ export default function MyGroupPage() {
                                                         </div>
                                                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
                                                             <Phone className="h-3 w-3" />
-                                                            {/* [FIX] Luôn hiển thị text nếu SĐT rỗng */}
                                                             <span>{nguoidung.SO_DIENTHOAI || 'Chưa cập nhật'}</span>
                                                         </div>
                                                     </div>
+
+                                                    {/* Hiển thị chi tiết điểm trong Popover */}
+                                                    {grades && (
+                                                        <>
+                                                            <Separator />
+                                                            <div className="space-y-2">
+                                                                <p className="text-xs font-semibold uppercase text-muted-foreground">Chi tiết điểm</p>
+                                                                <div className="grid grid-cols-2 gap-2 text-sm">
+                                                                    <div className="flex justify-between bg-muted/30 p-1.5 rounded">
+                                                                        <span>Hướng dẫn:</span>
+                                                                        <span className="font-medium">{grades.hd}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between bg-muted/30 p-1.5 rounded">
+                                                                        <span>Phản biện:</span>
+                                                                        <span className="font-medium">{grades.pb}</span>
+                                                                    </div>
+                                                                    <div className="flex justify-between bg-muted/30 p-1.5 rounded col-span-2">
+                                                                        <span>Hội đồng:</span>
+                                                                        <span className="font-medium">{grades.hdong}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex justify-between items-center bg-green-50 p-2 rounded border border-green-100 mt-1">
+                                                                    <span className="text-xs font-bold text-green-800">TỔNG KẾT:</span>
+                                                                    <span className="text-base font-bold text-green-700">{grades.final}</span>
+                                                                </div>
+                                                            </div>
+                                                        </>
+                                                    )}
                                                     
                                                     {isLeader && !isSelf && !hasTopic && (
                                                         <div className="pt-3 border-t mt-3">
@@ -413,7 +516,7 @@ export default function MyGroupPage() {
             {/* NỘI DUNG CHÍNH */}
             {groupDetails && isEligible ? (
                 hasGroup ? (
-                    <GroupManagementView
+                    <GroupManagementView 
                         groupData={groupDetails.groupData} 
                         planId={selectedPlanIdForDisplay}
                         plan={groupDetails.plan}
@@ -427,7 +530,7 @@ export default function MyGroupPage() {
 
             {/* DIALOGS */}
             {hasTopic && (
-                <TopicDetailsDialog
+                <TopicDetailsDialog 
                     phancong={phancong}
                     isOpen={isTopicDialogOpen}
                     setIsOpen={setIsTopicDialogOpen}

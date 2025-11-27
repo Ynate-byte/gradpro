@@ -18,6 +18,7 @@ use App\Models\DiemTongKet;
 use App\Models\PhancongDetaiNhom;
 use App\Services\ActivityLogger;
 use Carbon\Carbon;
+use App\Services\NotificationService;
 
 class ChamDiemController extends Controller
 {
@@ -43,6 +44,7 @@ class ChamDiemController extends Controller
             // === Xử lý sinh viên ===
             $sinhviens = $nhom->thanhviens->map(fn($tv) => [
                 'ID_SINHVIEN'  => $tv->nguoidung?->sinhvien?->ID_SINHVIEN,
+                'ID_NGUOIDUNG' => $tv->nguoidung?->ID_NGUOIDUNG,
                 'MA_DINHDANH'  => $tv->nguoidung?->MA_DINHDANH ?? 'N/A',
                 'HODEM_VA_TEN' => $tv->nguoidung?->HODEM_VA_TEN ?? 'Không rõ'
             ])->values();
@@ -224,9 +226,14 @@ class ChamDiemController extends Controller
     private function saveDiem(Request $request, Nhom $nhom, string $loai)
     {
         // 1. Validate dữ liệu đầu vào
+        // Cho phép nhận thêm DIEM_CHI_TIET và IS_INDIVIDUAL
         $validated = $request->validate([
             'DIEM' => 'required|numeric|min:0|max:10',
-            'NHANXET' => 'nullable|string|max:1000'
+            'NHANXET' => 'nullable|string|max:1000',
+            'IS_INDIVIDUAL' => 'boolean', // Cờ đánh dấu chấm riêng
+            'DIEM_CHI_TIET' => 'nullable|array', // Mảng chi tiết
+            'DIEM_CHI_TIET.*.student_id' => 'required_with:DIEM_CHI_TIET|integer',
+            'DIEM_CHI_TIET.*.score' => 'required_with:DIEM_CHI_TIET|numeric|min:0|max:10',
         ], [
             'DIEM.required' => 'Vui lòng nhập điểm.',
             'DIEM.numeric' => 'Điểm phải là số.',
@@ -241,7 +248,7 @@ class ChamDiemController extends Controller
         $giangvienId = $giangvien->ID_GIANGVIEN;
         $idNhom = $nhom->ID_NHOM;
 
-        // 2. Tải kế hoạch để kiểm tra thời gian
+        // 2. Tải kế hoạch để kiểm tra thời gian (Giữ nguyên logic cũ)
         $nhom->load('kehoach');
         $plan = $nhom->kehoach;
 
@@ -249,31 +256,18 @@ class ChamDiemController extends Controller
             return response()->json(['error' => 'Nhóm chưa thuộc kế hoạch nào.'], 404);
         }
 
-        // =================================================================
-        // 3. LOGIC KIỂM TRA THỜI GIAN (ĐÃ CẬP NHẬT)
-        // =================================================================
-
-        // A. Kiểm tra Thiết lập chung (Áp dụng cho cả HD, PB, HĐ)
-        // Admin/Giáo vụ có thể bỏ qua check này nếu muốn (ở đây tôi để Admin bypass)
+        // ... (Giữ nguyên đoạn code Kiểm tra thời gian/Feature Flag như cũ) ...
+        // --- BẮT ĐẦU ĐOẠN CHECK THỜI GIAN (COPY LẠI TỪ CODE CŨ CỦA BẠN) ---
         if (!$this->isAdmin() && !$plan->isFeatureActive('CHAM_DIEM')) {
             return response()->json(['error' => 'Cổng chấm điểm hiện đang đóng theo kế hoạch chung.'], 403);
         }
-
-        // B. Kiểm tra Riêng cho Hội đồng
         if ($loai === 'HOIDONG') {
-            // Tìm hội đồng bảo vệ của nhóm này
             $hoidong = $nhom->hoidongs()->where('LOAI', 'hoidong')->first();
-            
             if (!$hoidong || !$hoidong->NGAY_BAOCAO) {
                  return response()->json(['error' => 'Nhóm chưa được xếp lịch hội đồng hoặc chưa có ngày báo cáo.'], 403);
             }
-
-            // Logic mới: Chỉ cần KHÔNG TRƯỚC thời gian báo cáo
-            // Lấy đầu ngày báo cáo để so sánh
             $reportTime = \Carbon\Carbon::parse($hoidong->NGAY_BAOCAO)->startOfDay();
-            
             if (now()->lt($reportTime)) {
-                // Nếu chưa đến ngày báo cáo -> Chặn
                 if (!$this->isAdmin()) {
                     $fmtDate = $reportTime->format('d/m/Y');
                     return response()->json([
@@ -282,6 +276,8 @@ class ChamDiemController extends Controller
                 }
             }
         }
+        // --- KẾT THÚC ĐOẠN CHECK THỜI GIAN ---
+
         try {
             DB::beginTransaction();
             
@@ -298,40 +294,57 @@ class ChamDiemController extends Controller
             
             $model = $modelMap[$loai];
 
-            // 5. Lưu điểm vào CSDL
+            // 5. Chuẩn bị dữ liệu lưu
+            $dataToSave = [
+                'NHANXET' => $validated['NHANXET'] ?? null
+            ];
+
+            // Xử lý logic Chấm riêng hay Chấm chung
+            if ($request->boolean('IS_INDIVIDUAL') && !empty($validated['DIEM_CHI_TIET'])) {
+                // Nếu chấm riêng: Lưu mảng chi tiết và tính điểm trung bình để lưu vào cột DIEM (cho thống kê tổng quát)
+                $dataToSave['DIEM_CHI_TIET'] = $validated['DIEM_CHI_TIET'];
+                $dataToSave['DIEM'] = $validated['DIEM']; // Frontend đã tính trung bình gửi lên, hoặc ta tự tính lại ở đây cũng được
+            } else {
+                // Nếu chấm chung: Xóa chi tiết (hoặc set null), lưu điểm vào cột DIEM
+                $dataToSave['DIEM_CHI_TIET'] = null;
+                $dataToSave['DIEM'] = $validated['DIEM'];
+            }
+
+            // 6. Lưu vào CSDL
             $model::updateOrCreate(
                 [
                     'ID_NHOM' => $idNhom, 
                     'ID_GIANGVIEN' => $giangvienId
                 ],
-                [
-                    'DIEM' => $validated['DIEM'],
-                    'NHANXET' => $validated['NHANXET'] ?? null 
-                ]
+                $dataToSave
             );
             
-            // 6. Cập nhật điểm tổng kết cho nhóm ngay lập tức
+            // 7. Cập nhật điểm tổng kết cho nhóm ngay lập tức (Vẫn dùng logic tính trung bình nhóm để xếp loại nhóm)
             $this->capNhatTong($nhom);
             
+            // Log
             $logTitle = "Chấm điểm " . ($loai === 'HUONGDAN' ? 'Hướng dẫn' : ($loai === 'PHANBIEN' ? 'Phản biện' : 'Hội đồng'));
-            
+            $logDetail = [
+                'score' => $dataToSave['DIEM'], 
+                'comment' => $dataToSave['NHANXET'],
+                'is_individual' => $request->boolean('IS_INDIVIDUAL')
+            ];
+
             ActivityLogger::log(
                 'GRADE_' . $loai, 
-                "{$logTitle} nhóm {$nhom->TEN_NHOM}: {$validated['DIEM']} điểm",
-                [
-                    'score' => $validated['DIEM'], 
-                    'comment' => $validated['NHANXET'] ?? null 
-                ], 
+                "{$logTitle} nhóm {$nhom->TEN_NHOM}: " . ($request->boolean('IS_INDIVIDUAL') ? "Chi tiết theo SV" : "{$dataToSave['DIEM']} điểm"),
+                $logDetail, 
                 $idNhom,
                 'Star'
             );
 
+            // Thông báo
             $tenLoai = ($loai === 'HUONGDAN' ? 'Hướng dẫn' : ($loai === 'PHANBIEN' ? 'Phản biện' : 'Hội đồng'));
             foreach ($nhom->thanhviens as $tv) {
                 NotificationService::send(
                     $tv->ID_NGUOIDUNG,
                     "Đã có điểm {$tenLoai}",
-                    "Giảng viên đã nhập điểm {$tenLoai} cho nhóm bạn: {$validated['DIEM']} điểm.",
+                    "Giảng viên đã nhập điểm {$tenLoai} cho nhóm bạn.",
                     'ACADEMIC',
                     '/student/dashboard/' . $nhom->ID_KEHOACH,
                     null,
@@ -375,41 +388,42 @@ class ChamDiemController extends Controller
                                      ->where('ID_GIANGVIEN', $giangvienId)
                                      ->first();
                 
-                // Tạo tên thuộc tính động: diem_huongdan_hientai, diem_phanbien_hientai...
-                // Logic replace: App\Models\DiemHuongDan -> HuongDan -> diem_huongdan_hientai
-                $className = class_basename($scoreModel); // Lấy tên class (vd: DiemHuongDan)
-                $type = str_replace('Diem', '', $className); // Bỏ chữ Diem -> HuongDan
-                $attributeName = 'diem_' . strtolower($type) . '_hientai';
+                $className = class_basename($scoreModel);
+                $type = str_replace('Diem', '', $className);
                 
-                $nhom->{$attributeName} = $score ? $score->DIEM : null;
+                // Attribute điểm chung
+                $nhom->{'diem_' . strtolower($type) . '_hientai'} = $score ? $score->DIEM : null;
+                
+                // [MỚI] Attribute điểm chi tiết (JSON)
+                $nhom->{'diem_' . strtolower($type) . '_chitiet'} = $score ? $score->DIEM_CHI_TIET : null;
+                
                 return $nhom;
             });
         };
 
+        // [SỬA LỖI TẠI ĐÂY]: Thêm 'thanhviens.nguoidung' vào with()
+
         // 1. Lấy nhóm Hướng dẫn
-        // Điều kiện: Có trong phân công GVHD
         $nhomHuongDan = Nhom::whereHas('phancongDetaiNhom', function ($query) use ($giangvienId) {
             $query->where('ID_GVHD', $giangvienId);
         })
-        ->with(['phancongDetaiNhom.detai', 'kehoach']) // [QUAN TRỌNG]: Thêm 'kehoach'
+        ->with(['phancongDetaiNhom.detai', 'kehoach', 'thanhviens.nguoidung']) // <--- THÊM VÀO ĐÂY
         ->get();
 
         // 2. Lấy nhóm Phản biện
-        // Điều kiện: Có trong Hội đồng loại 'phanbien'
         $nhomPhanBien = Nhom::whereHas('hoidongs', function ($query) use ($giangvienId) {
             $query->where('LOAI', 'phanbien')
                 ->whereHas('giangviens', fn($q) => $q->where('HOIDONG_GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
-        ->with(['phancongDetaiNhom.detai', 'kehoach']) // [QUAN TRỌNG]: Thêm 'kehoach'
+        ->with(['phancongDetaiNhom.detai', 'kehoach', 'thanhviens.nguoidung']) // <--- THÊM VÀO ĐÂY
         ->get();
 
         // 3. Lấy nhóm Hội đồng (Bảo vệ)
-        // Điều kiện: Có trong Hội đồng loại 'hoidong'
         $nhomHoiDong = Nhom::whereHas('hoidongs', function ($query) use ($giangvienId) {
             $query->where('LOAI', 'hoidong')
                 ->whereHas('giangviens', fn($q) => $q->where('HOIDONG_GIANGVIEN.ID_GIANGVIEN', $giangvienId));
         })
-        ->with(['phancongDetaiNhom.detai', 'kehoach']) // [QUAN TRỌNG]: Thêm 'kehoach'
+        ->with(['phancongDetaiNhom.detai', 'kehoach', 'thanhviens.nguoidung']) // <--- THÊM VÀO ĐÂY
         ->get();
         
         // 4. Gắn điểm hiện tại vào từng Collection

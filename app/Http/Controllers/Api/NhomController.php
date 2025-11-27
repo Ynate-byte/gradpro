@@ -105,6 +105,7 @@ class NhomController extends Controller
                 'nhomtruong',
                 'chuyennganh',
                 'khoabomon',
+                'kehoach', // Quan trọng: Để lấy tỷ trọng điểm
                 
                 'yeucaus' => function($query) {
                     $query->with(['nguoidung' => function($q) {
@@ -118,7 +119,13 @@ class NhomController extends Controller
                 },
 
                 'phancongDetaiNhom.detai.nguoiDexuat.nguoidung',
-                'phancongDetaiNhom.gvhd.nguoidung'
+                'phancongDetaiNhom.gvhd.nguoidung',
+
+                // [THÊM MỚI] Load các bảng điểm để hiển thị cho sinh viên
+                'diemHuongDan',
+                'diemPhanBien',
+                'diemHoiDong'
+
                 ])->find($thanhvien->ID_NHOM);
 
             if (!$nhom) {

@@ -235,33 +235,38 @@ class StudentDashboardController extends Controller
         }
     }
 
-    // ... hàm getDetail giữ nguyên ...
-    public function getDetail(Request $request, $planId)
+public function getDetail(Request $request, $planId)
     {
-        // (Giữ nguyên logic getDetail như cũ vì nó đã đúng)
         try {
             $user = Auth::user();
             
+            // 1. Lấy thông tin kế hoạch
             $plan = KehoachKhoaluan::with(['mocThoigians' => function($q) {
                 $q->orderBy('NGAY_BATDAU', 'asc');
             }])->findOrFail($planId);
    
+            // 2. Lấy thông tin nhóm của sinh viên trong kế hoạch này
+            // [QUAN TRỌNG]: Load các quan hệ bảng điểm (diemHuongDan, diemPhanBien, diemHoiDong)
             $group = Nhom::where('ID_KEHOACH', $planId)
                 ->whereHas('thanhviens', function($q) use ($user) {
                     $q->where('THANHVIEN_NHOM.ID_NGUOIDUNG', $user->ID_NGUOIDUNG);
                 })
                 ->with([
                     'nhomtruong', 
-                    'thanhviens.nguoidung',
+                    'thanhviens.nguoidung', // Để map tên SV trong popup điểm chi tiết
                     'phancongDetaiNhom.gvhd.nguoidung',
                     'phancongDetaiNhom.detai',
+                    
+                    // Load bảng điểm để lấy DIEM_CHI_TIET
                     'diemHuongDan', 
                     'diemPhanBien',
                     'diemHoiDong',
+                    
                     'hoidongs.giangviens.nguoidung'
                 ])
                 ->first();
    
+            // 3. Xác định giai đoạn hiện tại (Timeline)
             $currentPhase = null;
             $now = Carbon::now();
             
@@ -277,6 +282,7 @@ class StudentDashboardController extends Controller
                 }
             }
    
+            // 4. Tính toán thống kê
             $memberContribution = [];
             $thesisHealth = null;
             $integratedTimeline = [];
@@ -301,7 +307,7 @@ class StudentDashboardController extends Controller
                     ];
                 });
 
-                // B. Sức khỏe đề tài
+                // B. Sức khỏe đề tài (Cập nhật lấy điểm từ quan hệ đã load)
                 $phanBien = $group->hoidongs->firstWhere('LOAI', 'phanbien');
                 $gvPhanBien = $phanBien && $phanBien->giangviens->isNotEmpty() ? $phanBien->giangviens->first() : null;
                 
@@ -317,7 +323,7 @@ class StudentDashboardController extends Controller
                     ]
                 ];
 
-                // C. TIMELINE
+                // C. Timeline & Task Stats (Giữ nguyên logic cũ)
                 foreach ($plan->mocThoigians as $moc) {
                     $integratedTimeline[] = [
                         'id' => 'moc_' . $moc->ID,
@@ -328,8 +334,8 @@ class StudentDashboardController extends Controller
                         'details' => $moc->MOTA 
                     ];
                 }
-
-                $tasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
+                // ... (Logic lấy tasks và meetings giữ nguyên) ...
+                 $tasks = CongViec::where('ID_NHOM', $group->ID_NHOM)
                     ->whereNotNull('NGAY_HETHAN')
                     ->where('TRANGTHAI', '!=', 'Hoàn thành')
                     ->where('TRANGTHAI', '!=', 'Đã hủy')
@@ -385,7 +391,7 @@ class StudentDashboardController extends Controller
                     'name' => $plan->TEN_DOT,
                     'current_phase' => $currentPhase
                 ],
-                'group' => $group,
+                'group' => $group, // Trả về group đã load đầy đủ relations
                 'my_stats' => $myTasksStats,
                 'member_contribution' => $memberContribution,
                 'thesis_health' => $thesisHealth,

@@ -20,7 +20,7 @@ class Detai extends Model
         'MA_DETAI',
         'TEN_DETAI',
         'MOTA',
-        'ID_KHOA_BOMON', // [SỬA] Thay ID_CHUYENNGANH bằng ID_KHOA_BOMON
+        'ID_KHOA_BOMON',
         'YEUCAU',
         'MUCTIEU',
         'KETQUA_MONGDOI',
