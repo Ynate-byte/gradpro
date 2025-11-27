@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react'; // Thêm useMemo nếu chưa có
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,11 @@ import {
 } from '@/components/ui/dialog';
 import {
     Loader2, UserPlus, Search, BookCopy, Lock, Filter,
-    AlertCircle, CheckCircle, BookOpen, Users, Info, FileText, Ban, User
+    AlertCircle, CheckCircle, BookOpen, Users, Info, FileText, Ban, User, Layers
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { thesisTopicService } from '@/api/thesisTopicService';
-import { getChuyenNganhs } from '@/api/userService';
+import { getKhoaBomons } from '@/api/userService';
 import { getMyActivePlans } from '@/api/groupService';
 import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { getThesisPlanById } from '@/api/thesisPlanService';
@@ -33,7 +33,7 @@ import { format, parseISO } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { useDebounce } from '@/hooks/useDebounce';
-import axios from '@/api/axiosConfig'; // Thêm import axios
+import axios from '@/api/axiosConfig';
 
 // --- Helper Functions ---
 const getLecturerName = (topic) => {
@@ -65,15 +65,23 @@ const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopic
     const progressColor = isFull ? "bg-red-500" : (progress >= 75 ? "bg-yellow-500" : "bg-blue-500");
     const lecturerName = getLecturerName(topic);
 
+    // [SỬA QUAN TRỌNG] Kiểm tra cả khoa_bomon (snake_case do Laravel trả về mặc định)
+    const departmentName = 
+        topic.khoa_bomon?.TEN_KHOA_BOMON || // Trường hợp Laravel trả về snake_case
+        topic.khoaBomon?.TEN_KHOA_BOMON || // Trường hợp Laravel trả về camelCase (ít gặp hơn ở default serializer)
+        topic.ten_bo_mon ||                // Trường hợp API custom trả về
+        'Chưa cập nhật bộ môn';
+
     return (
         <div className={`group flex flex-col md:flex-row items-center justify-between p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200 gap-4 ${isMyTopic ? 'border-l-4 border-l-green-500 bg-green-50/30' : 'border-l-4 border-l-transparent hover:border-l-blue-500'}`}>
-             
+              
             {/* 1. CỘT TRÁI: Thông tin */}
             <div className="w-full md:w-[40%] flex flex-col justify-center shrink-0 gap-1.5">
                 <div className="flex items-start gap-2">
                     <h3 
                         onClick={() => onViewDetails(topic.ID_DETAI)}
-                        className="text-[16px] font-bold text-blue-600 cursor-pointer hover:underline line-clamp-2 leading-tight"
+                        className="text-[16px] font-bold text-blue-600 cursor-pointer line-clamp-2 leading-tight underline-offset-2 hover:underline"
+                        style={{ textDecorationStyle: 'dashed' }}
                         title={topic.TEN_DETAI}
                     >
                         {topic.TEN_DETAI}
@@ -92,8 +100,11 @@ const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopic
                         <User className="h-3.5 w-3.5 text-blue-500" /> {lecturerName}
                     </span>
                     <span className="text-gray-300">|</span>
-                    <span className="truncate text-gray-500" title={topic.chuyennganh?.TEN_CHUYENNGANH}>
-                        {topic.chuyennganh?.TEN_CHUYENNGANH || 'Đa chuyên ngành'}
+                    
+                    {/* Hiển thị tên bộ môn */}
+                    <span className="truncate text-gray-500 flex items-center gap-1" title={departmentName}>
+                        <Layers className="h-3.5 w-3.5 text-indigo-500" />
+                        {departmentName}
                     </span>
                 </div>
                 
@@ -141,7 +152,7 @@ const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopic
     );
 };
 
-// --- Component: Dialog Chi tiết ---
+// --- Component: Dialog Chi tiết (Giữ nguyên logic, chỉ cập nhật departmentName) ---
 const TopicDetailDialog = ({ open, onOpenChange, topicId, isGroupLeader, onRegisterGroup, hasRegisteredTopic, canRegister }) => {
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -157,6 +168,13 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, isGroupLeader, onRegis
     }, [open, topicId]);
 
     if (!open) return null;
+
+    // [SỬA] Lấy tên bộ môn an toàn cho Dialog
+    const departmentName = 
+        topic?.khoa_bomon?.TEN_KHOA_BOMON || 
+        topic?.khoaBomon?.TEN_KHOA_BOMON || 
+        topic?.ten_bo_mon || 
+        'Chưa cập nhật';
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -189,10 +207,10 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, isGroupLeader, onRegis
                                         <Users className="h-4 w-4" /> {getLecturerName(topic)}
                                     </p>
                                 </div>
-                                <div className="p-3 bg-orange-50/50 rounded-lg border border-orange-100">
-                                    <p className="text-orange-600/80 text-xs uppercase font-bold mb-1">Chuyên ngành</p>
+                                <div className="p-3 bg-indigo-50/50 rounded-lg border border-indigo-100">
+                                    <p className="text-indigo-600/80 text-xs uppercase font-bold mb-1">Bộ môn</p>
                                     <p className="font-medium text-gray-900 flex items-center gap-2">
-                                        <BookOpen className="h-4 w-4" /> {topic.chuyennganh?.TEN_CHUYENNGANH || 'Tất cả'}
+                                        <Layers className="h-4 w-4" /> {departmentName}
                                     </p>
                                 </div>
                             </div>
@@ -246,6 +264,7 @@ const Section = ({ title, content }) => {
     );
 };
 
+// ... (RegisterConfirmDialog giữ nguyên)
 const RegisterConfirmDialog = ({ open, onOpenChange, topic, onSuccess }) => {
     const [loading, setLoading] = useState(false);
 
@@ -301,20 +320,23 @@ const RegisterConfirmDialog = ({ open, onOpenChange, topic, onSuccess }) => {
 
 // --- MAIN COMPONENT ---
 const StudentThesisTopicsPage = () => {
+    // ... (Logic trong Main Component giữ nguyên như file bạn gửi trước đó, chỉ đảm bảo import đúng)
+    // Lưu ý: Logic fetch đã được sửa trong câu trả lời trước đó để dùng department_id thay vì major_id
+    
     const [topics, setTopics] = useState([]);
     const [loading, setLoading] = useState(true);
     
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
-    const [selectedMajor, setSelectedMajor] = useState('all');
+    const [selectedDepartment, setSelectedDepartment] = useState('all'); 
     const [selectedPlan, setSelectedPlan] = useState('');
-    const [selectedLecturer, setSelectedLecturer] = useState('all'); // [MỚI] State cho GV
+    const [selectedLecturer, setSelectedLecturer] = useState('all');
     
     // Data sources
     const [plans, setPlans] = useState([]);
-    const [majors, setMajors] = useState([]);
-    const [lecturers, setLecturers] = useState([]); // [MỚI] Danh sách GV
+    const [departments, setDepartments] = useState([]); 
+    const [lecturers, setLecturers] = useState([]);
     
     // User context
     const [isGroupLeader, setIsGroupLeader] = useState(false);
@@ -334,14 +356,14 @@ const StudentThesisTopicsPage = () => {
     useEffect(() => {
         const initData = async () => {
             try {
-                const [plansRes, majorsRes] = await Promise.all([
+                const [plansRes, deptsRes] = await Promise.all([
                     getMyActivePlans(),
-                    getChuyenNganhs()
+                    getKhoaBomons() 
                 ]);
                 
                 const plansData = Array.isArray(plansRes) ? plansRes : (plansRes.data || []);
                 setPlans(plansData);
-                setMajors(majorsRes || []);
+                setDepartments(deptsRes || []); 
 
                 if (plansData.length > 0 && !selectedPlan) {
                     const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
@@ -373,7 +395,6 @@ const StudentThesisTopicsPage = () => {
                 const planDetails = await getThesisPlanById(selectedPlan);
                 setFullPlanData(planDetails);
 
-                // [MỚI] Load danh sách GV có đề tài trong kế hoạch này
                 const lecturersRes = await thesisTopicService.getSupervisorsByPlan(selectedPlan);
                 setLecturers(lecturersRes || []);
 
@@ -381,8 +402,8 @@ const StudentThesisTopicsPage = () => {
                 const params = {
                     plan_id: selectedPlan,
                     search: debouncedSearch,
-                    major_id: selectedMajor !== 'all' ? selectedMajor : undefined,
-                    lecturer_id: selectedLecturer !== 'all' ? selectedLecturer : undefined, // [MỚI] Thêm filter GV
+                    department_id: selectedDepartment !== 'all' ? selectedDepartment : undefined, 
+                    lecturer_id: selectedLecturer !== 'all' ? selectedLecturer : undefined,
                 };
                 const res = await thesisTopicService.getAvailableTopics(params);
                 setTopics(Array.isArray(res.data) ? res.data : (res.data.data || []));
@@ -395,7 +416,7 @@ const StudentThesisTopicsPage = () => {
         };
 
         fetchData();
-    }, [selectedPlan, debouncedSearch, selectedMajor, selectedLecturer]); // Thêm dependency selectedLecturer
+    }, [selectedPlan, debouncedSearch, selectedDepartment, selectedLecturer]);
 
     const checkGroupStatus = async () => {
         try {
@@ -445,7 +466,7 @@ const StudentThesisTopicsPage = () => {
                 </div>
                 
                 <div className="w-full md:w-auto">
-                     <Select value={selectedPlan} onValueChange={setSelectedPlan} disabled={plans.length === 0}>
+                      <Select value={selectedPlan} onValueChange={setSelectedPlan} disabled={plans.length === 0}>
                         <SelectTrigger className="w-full md:w-[300px] bg-white dark:bg-slate-950 shadow-sm border-blue-200/60">
                             <SelectValue placeholder={plans.length === 0 ? "Bạn chưa tham gia đợt nào" : "Chọn kế hoạch..."} />
                         </SelectTrigger>
@@ -488,29 +509,29 @@ const StudentThesisTopicsPage = () => {
                     />
                 </div>
 
-                {/* Filter by Major */}
+                {/* Filter by Department [SỬA] */}
                 <div className="md:col-span-1">
-                    <Select value={selectedMajor} onValueChange={setSelectedMajor} disabled={!selectedPlan}>
+                    <Select value={selectedDepartment} onValueChange={setSelectedDepartment} disabled={!selectedPlan}>
                         <SelectTrigger className="h-10 bg-slate-50/50 focus:bg-white transition-colors">
                             <div className="flex items-center gap-2 truncate">
                                 <Filter className="h-4 w-4 opacity-50 shrink-0" />
                                 <span className="truncate">
-                                    {selectedMajor === 'all' ? 'Tất cả chuyên ngành' : majors.find(m => m.ID_CHUYENNGANH == selectedMajor)?.TEN_CHUYENNGANH}
+                                    {selectedDepartment === 'all' ? 'Tất cả bộ môn' : departments.find(d => d.ID_KHOA_BOMON == selectedDepartment)?.TEN_KHOA_BOMON}
                                 </span>
                             </div>
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">Tất cả chuyên ngành</SelectItem>
-                            {majors.map((m) => (
-                                <SelectItem key={m.ID_CHUYENNGANH} value={String(m.ID_CHUYENNGANH)}>
-                                    {m.TEN_CHUYENNGANH}
+                            <SelectItem value="all">Tất cả bộ môn</SelectItem>
+                            {departments.map((d) => (
+                                <SelectItem key={d.ID_KHOA_BOMON} value={String(d.ID_KHOA_BOMON)}>
+                                    {d.TEN_KHOA_BOMON}
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                 </div>
 
-                {/* Filter by Lecturer [MỚI] */}
+                {/* Filter by Lecturer */}
                 <div className="md:col-span-1">
                     <Select value={selectedLecturer} onValueChange={setSelectedLecturer} disabled={!selectedPlan || lecturers.length === 0}>
                         <SelectTrigger className="h-10 bg-slate-50/50 focus:bg-white transition-colors">

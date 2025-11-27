@@ -6,7 +6,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Detai extends Model
 {
@@ -21,7 +20,7 @@ class Detai extends Model
         'MA_DETAI',
         'TEN_DETAI',
         'MOTA',
-        'ID_CHUYENNGANH',
+        'ID_KHOA_BOMON', // [SỬA] Thay ID_CHUYENNGANH bằng ID_KHOA_BOMON
         'YEUCAU',
         'MUCTIEU',
         'KETQUA_MONGDOI',
@@ -49,15 +48,16 @@ class Detai extends Model
     {
         return $this->belongsTo(KehoachKhoaluan::class, 'ID_KEHOACH', 'ID_KEHOACH');
     }
-     public function nguoidung(): BelongsTo
+    
+    public function nguoidung(): BelongsTo
     {
         return $this->belongsTo(Nguoidung::class, 'ID_NGUOIDUNG', 'ID_NGUOIDUNG');
     }
 
-
-    public function chuyennganh(): BelongsTo
+    // [SỬA] Đổi quan hệ từ Chuyên ngành sang Khoa/Bộ môn
+    public function khoaBomon(): BelongsTo
     {
-        return $this->belongsTo(Chuyennganh::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');
+        return $this->belongsTo(KhoaBomon::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
     }
 
     public function nguoiDexuat(): BelongsTo
@@ -99,7 +99,7 @@ class Detai extends Model
     public function scopeAvailableForRegistration($query)
     {
         return $query->where('TRANGTHAI', 'Đã duyệt')
-                    ->whereRaw('SO_NHOM_HIENTAI < SO_NHOM_TOIDA');
+                     ->whereRaw('SO_NHOM_HIENTAI < SO_NHOM_TOIDA');
     }
 
     // Methods

@@ -406,7 +406,7 @@ class TopicAssignmentController extends Controller
     {
         $query = PhancongGvDetai::with([
             'detai.nguoiDexuat.nguoidung',
-            'detai.chuyennganh',
+            'detai.khoaBomon',
             'detai.kehoachKhoaluan',
             'giangvien.nguoidung',
             'giangvien.khoabomon',

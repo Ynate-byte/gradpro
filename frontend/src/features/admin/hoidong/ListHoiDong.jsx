@@ -37,7 +37,7 @@ import {
   AlertCircle,
   Users,
   BookOpen,
-  Users2 // Import Users2 cho nút Phân bổ nhóm
+  Users2 
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -51,6 +51,7 @@ import { WorkloadStatsDialog } from "./WorkloadStatsDialog";
 import StatCard from "@/components/shared/StatCard";
 import { useTheme } from "@/components/theme-provider";
 import { Label } from "@/components/ui/label";
+import { getKhoaBomons } from "@/api/userService";
 
 const QUERY_KEY_HOIDONG = "adminHoiDong";
 const QUERY_KEY_STATS = "hoiDongStats";
@@ -67,7 +68,6 @@ const chamDiemOptions = [
   { label: "Chưa phân bổ nhóm", value: "chua_phan_bo" },
 ];
 
-// Variants animation
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -87,7 +87,6 @@ const getVariants = (shouldReduce) => {
     };
 };
 
-// Inline Edit Cell
 const EditableTextCell = ({ getValue, row, colId }) => {
     const initialValue = getValue() || "";
     const [value, setValue] = useState(initialValue);
@@ -182,7 +181,6 @@ const EditableTextCell = ({ getValue, row, colId }) => {
     );
 };
 
-// === COMPONENT CHÍNH ===
 const ListHoiDong = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -216,9 +214,9 @@ const ListHoiDong = () => {
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
     queryKey: [QUERY_KEY_FILTERS],
     queryFn: async () => {
-      const [khRes, cnRes] = await Promise.all([
+      const [khRes, deptRes] = await Promise.all([
         hoiDongService.getKeHoachOptions(),
-        hoiDongService.getChuyenNganhOptions(),
+        getKhoaBomons(),
       ]);
       return {
         kehoach: (khRes || []).map((kh) => ({
@@ -226,9 +224,9 @@ const ListHoiDong = () => {
           value: kh.ID_KEHOACH.toString(),
           ...kh,
         })),
-        chuyennganh: (cnRes || []).map((cn) => ({
-          label: cn.TEN_CHUYENNGANH,
-          value: cn.ID_CHUYENNGANH.toString(),
+        khoabomon: (deptRes || []).map((bm) => ({
+          label: bm.TEN_KHOA_BOMON,
+          value: bm.ID_KHOA_BOMON.toString(),
         })),
       };
     },
@@ -247,7 +245,6 @@ const ListHoiDong = () => {
     enabled: !!selectedPlanId,
   });
 
-  // Query Data
   const queryKey = [
     QUERY_KEY_HOIDONG,
     pagination,
@@ -266,7 +263,8 @@ const ListHoiDong = () => {
         sort: sorting.length > 0 ? `${sorting[0].id},${sorting[0].desc ? "desc" : "asc"}` : undefined,
         search: debouncedSearch,
         kehoach: selectedPlanId,
-        chuyennganh: columnFilters.find((f) => f.id === "chuyennganh")?.value,
+        // [SỬA] Sử dụng đúng key 'khoaBomon' để lấy giá trị filter
+        khoa_bomon_id: columnFilters.find((f) => f.id === "khoaBomon")?.value,
         loai: columnFilters.find((f) => f.id === "LOAI")?.value,
         trang_thai_cham_diem: columnFilters.find((f) => f.id === "trang_thai_cham_diem")?.value,
       }),
@@ -274,7 +272,6 @@ const ListHoiDong = () => {
     enabled: !!selectedPlanId,
   });
 
-  // Mutations
   const deleteMutation = useMutation({
     mutationFn: (ids) => Promise.all(ids.map((id) => hoiDongService.deleteHoiDong(id))),
     onSuccess: () => {
@@ -323,7 +320,6 @@ const ListHoiDong = () => {
     },
   });
 
-  // Column Definitions
   const columns = useMemo(
     () => [
       {
@@ -368,10 +364,11 @@ const ListHoiDong = () => {
         size: 100,
       },
       {
-        accessorKey: "chuyennganh",
-        header: "Chuyên ngành",
-        accessorFn: (row) => row.chuyennganh?.TEN_CHUYENNGANH,
-        cell: ({ row }) => row.original.chuyennganh?.TEN_CHUYENNGANH || "-",
+        // [SỬA] AccessorKey này sẽ tạo ra column ID là 'khoaBomon'
+        accessorKey: "khoaBomon", 
+        header: "Bộ môn",
+        accessorFn: (row) => row.khoaBomon?.TEN_KHOA_BOMON,
+        cell: ({ row }) => row.original.khoaBomon?.TEN_KHOA_BOMON || "-",
         size: 200,
       },
       {
@@ -689,11 +686,16 @@ const ListHoiDong = () => {
               searchPlaceholder="Tìm tên hội đồng..."
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
-              chuyenNganhFilterColumnId="chuyennganh"
-              chuyenNganhFilterOptions={filterOptions?.chuyennganh}
-              khoaBomonFilterColumnId="LOAI" 
-              khoaBomonFilterTitle="Loại Hội đồng"
-              khoaBomonFilterOptions={loaiOptions}
+              
+              // [SỬA] Truyền đúng ID column 'khoaBomon'
+              khoaBomonFilterColumnId="khoaBomon"
+              khoaBomonFilterOptions={filterOptions?.khoabomon}
+              khoaBomonFilterTitle="Bộ môn"
+
+              khoaBomonFilterColumnId2="LOAI" 
+              khoaBomonFilterTitle2="Loại Hội đồng"
+              khoaBomonFilterOptions2={loaiOptions} 
+              
               statusColumnId="trang_thai_cham_diem"
               statusOptions={chamDiemOptions}
               

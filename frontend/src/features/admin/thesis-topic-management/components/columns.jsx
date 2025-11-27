@@ -1,10 +1,9 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { DataTableRowActions } from "./row-actions"; // Sẽ tạo ở bước 3
+import { DataTableRowActions } from "./row-actions"; 
 import { Button } from "@/components/ui/button";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 
-// Hàm helper tạo badge (lấy từ file index.jsx cũ)
 const getStatusBadge = (status) => {
     const statusConfig = {
         "Nháp": { label: "Nháp", className: "bg-gray-100 text-gray-700" },
@@ -20,7 +19,6 @@ const getStatusBadge = (status) => {
     return <Badge variant="outline" className={`px-2 py-0.5 text-xs ${config.className}`}>{config.label}</Badge>;
 };
 
-// Hiển thị biểu tượng sắp xếp
 const SortIndicator = ({ column }) => {
     const sorted = column.getIsSorted();
     if (!sorted) {
@@ -88,18 +86,21 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
             return value.includes(row.getValue(id))
         },
     },
+    // [SỬA] Hiển thị cột Bộ môn
     {
-        accessorKey: "chuyennganh.TEN_CHUYENNGANH",
-        header: "Chuyên ngành",
+        accessorKey: "ten_bo_mon", // Backend trả về 'ten_bo_mon'
+        header: "Bộ môn",
         cell: ({ row }) => (
-            <div className="text-xs text-muted-foreground">
-                {row.original.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}
+            <div className="text-xs text-muted-foreground max-w-[120px] truncate" title={row.original.ten_bo_mon}>
+                {row.original.ten_bo_mon || 'N/A'}
             </div>
         )
     },
-    { // Cột ẩn để lọc
-        id: "chuyen_nganh_id",
-        accessorFn: row => String(row.original?.chuyennganh?.ID_CHUYENNGANH),
+    // [SỬA] Cột ẩn để lọc theo ID Bộ môn
+    { 
+        id: "department_id",
+        accessorFn: row => String(row.original?.ID_KHOA_BOMON || ''), 
+        enableHiding: true, 
     },
     {
         id: "actions",

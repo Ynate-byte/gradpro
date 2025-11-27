@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, BarChart3 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
@@ -10,34 +10,36 @@ import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
 import { getAllPlans } from "@/api/thesisPlanService";
-import { getChuyenNganhs } from "@/api/userService";
+import { getKhoaBomons } from "@/api/userService"; // [SỬA] Import getKhoaBomons
 import TopicDetailDialog from "../../../lecturer/thesis-topics/components/TopicDetailDialog";
 import RejectDialog from "./RejectDialog";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
+import TopicsChart from "../../dashboard/components/TopicsChart";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// ... (StatCard Component giữ nguyên như cũ)
+// StatCard Component (Giữ nguyên)
 const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasStatusDot }) => {
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
 
     return (
-        <motion.div
+        <motion.div 
             className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-md h-full"
             whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 300, damping: 15 }}
         >
-            <motion.div
+            <motion.div 
                 className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
                 initial={false}
                 animate={isReduced ? {} : {
                     scale: value === 'loading' ? [1, 1.1, 1] : 1,
                 }}
-                transition={{
-                    duration: 1.5,
-                    repeat: value === 'loading' ? Infinity : 0,
+                transition={{ 
+                    duration: 1.5, 
+                    repeat: value === 'loading' ? Infinity : 0, 
                     ease: "easeInOut"
                 }}
             >
@@ -68,7 +70,6 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
     );
 };
 
-// ... (getVariants, columnVisibility giữ nguyên)
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -94,8 +95,9 @@ const getVariants = (shouldReduce) => {
     };
 };
 
+// [SỬA] Cập nhật columnVisibility để ẩn ID bộ môn
 const columnVisibility = {
-    "chuyen_nganh_id": false,
+    "department_id": false,
 };
 
 const TopicManagementTabs = () => {
@@ -111,7 +113,9 @@ const TopicManagementTabs = () => {
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
     const [columnFilters, setColumnFilters] = useState([]);
     
-    const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
+    // [SỬA] Đổi tên state thành departmentOptions
+    const [departmentOptions, setDepartmentOptions] = useState([]);
+    
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
     const [sorting, setSorting] = useState([]);
     const [rowSelection, setRowSelection] = useState({});
@@ -130,13 +134,13 @@ const TopicManagementTabs = () => {
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // 1. Load Plans & Chuyen Nganh
+    // 1. Load Plans & Departments
     useEffect(() => {
         const init = async () => {
             try {
-                const [plansRes, cnRes] = await Promise.all([
+                const [plansRes, deptRes] = await Promise.all([
                     getAllPlans(),
-                    getChuyenNganhs().catch(() => [])
+                    getKhoaBomons().catch(() => []) // [SỬA] Gọi API lấy Bộ môn
                 ]);
                 
                 const plansList = plansRes || [];
@@ -147,10 +151,11 @@ const TopicManagementTabs = () => {
                     setSelectedPlanId(String(activePlan.ID_KEHOACH));
                 }
 
-                setChuyenNganhOptions(
-                    (cnRes || []).map(cn => ({
-                        label: cn.TEN_CHUYENNGANH,
-                        value: String(cn.ID_CHUYENNGANH)
+                // [SỬA] Map data Bộ môn
+                setDepartmentOptions(
+                    (deptRes || []).map(dept => ({
+                        label: dept.TEN_KHOA_BOMON,
+                        value: String(dept.ID_KHOA_BOMON)
                     }))
                 );
             } catch (error) {
@@ -202,9 +207,10 @@ const TopicManagementTabs = () => {
             const matchesTab = activeTab === "Tất cả" || t.TRANGTHAI === activeTab;
 
             const matchesFilters = columnFilters.every(filter => {
-                if (filter.id === 'chuyen_nganh_id') {
+                // [SỬA] Lọc theo department_id
+                if (filter.id === 'department_id') {
                     const filterValues = new Set(filter.value);
-                    return filterValues.has(String(t.chuyennganh?.ID_CHUYENNGANH));
+                    return filterValues.has(String(t.ID_KHOA_BOMON));
                 }
                 return true;
             });
@@ -373,10 +379,11 @@ const TopicManagementTabs = () => {
                     searchPlaceholder="Tìm theo tên, GV, mã..."
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
-                    chuyenNganhFilterColumnId="chuyen_nganh_id"
-                    
-                    // [FIX] Sử dụng đúng tên biến state đã khai báo
-                    chuyenNganhFilterOptions={chuyenNganhOptions}
+
+                    // [SỬA] Truyền props lọc Bộ môn
+                    khoaBomonFilterColumnId="department_id"
+                    khoaBomonFilterOptions={departmentOptions}
+                    khoaBomonFilterTitle="Bộ môn"
                     
                     columnVisibility={columnVisibility}
                     state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
@@ -445,10 +452,7 @@ const TopicManagementTabs = () => {
 
             <div className="flex-1 min-h-0 flex flex-col">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full space-y-4">
-                    {/* Dòng công cụ: Tabs Trạng thái (Trái) + Chọn Kế hoạch (Phải) */}
                     <div className="shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        
-                        {/* 1. Các Tab Trạng thái */}
                         <TabsList className={cn("transition-all duration-300 w-full md:w-auto justify-start bg-transparent p-0 h-auto gap-2 flex-wrap", isReduced && "transition-none")}>
                             {["Tất cả", "Chờ duyệt", "Đang chỉnh sửa", "Đã duyệt", "Yêu cầu chỉnh sửa", "Từ chối", "Nháp"].map(tab => (
                                 <TabsTrigger
@@ -464,7 +468,6 @@ const TopicManagementTabs = () => {
                             ))}
                         </TabsList>
 
-                        {/* 2. Chọn Kế hoạch */}
                         <div className="flex items-center gap-2 w-full md:w-auto">
                             <Filter className="h-4 w-4 text-muted-foreground hidden sm:block" />
                             <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>

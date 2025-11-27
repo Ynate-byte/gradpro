@@ -75,7 +75,9 @@ const TopicReviewerAssignmentPage = () => {
             const plansData = response.data || [];
             setPlans(plansData);
             if (plansData.length > 0 && !selectedPlan) {
-                setSelectedPlan(String(plansData[0].ID_KEHOACH));
+                // Ưu tiên chọn kế hoạch đang hoạt động nếu có
+                const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
+                setSelectedPlan(String(activePlan.ID_KEHOACH));
             }
         } catch (error) {
             console.error('Error loading plans:', error);
@@ -89,16 +91,20 @@ const TopicReviewerAssignmentPage = () => {
         if (!selectedPlan) return;
         setIsLoading(true);
         try {
+            // [FIX] Thêm params plan_id vào cả 2 request để backend tính toán đúng quota/số liệu
             const [topicsRes, lecturersRes] = await Promise.all([
-                axios.get(`/department-head/topic-assignments/available-topics-for-reviewers?plan_id=${selectedPlan}`),
-                axios.get('/department-head/topic-assignments/lecturers')
+                axios.get(`/department-head/topic-assignments/available-topics-for-reviewers`, {
+                    params: { plan_id: selectedPlan }
+                }),
+                axios.get('/department-head/topic-assignments/lecturers', {
+                    params: { plan_id: selectedPlan } // [QUAN TRỌNG] Đã thêm tham số này
+                })
             ]);
 
-            console.log('Topics response:', topicsRes.data);
-            console.log('Lecturers response:', lecturersRes.data);
-
             setTopics(topicsRes.data || []);
-            setLecturers(lecturersRes.data?.lecturers || []);
+            // API trả về { lecturers: [...] } hoặc mảng tùy cấu trúc, cần check kỹ response
+            // Dựa theo code backend cũ: return response()->json(['lecturers' => $result]);
+            setLecturers(lecturersRes.data?.lecturers || []); 
         } catch (error) {
             console.error('Error loading data:', error);
             toast.error('Lỗi khi tải dữ liệu đề tài và giảng viên');
@@ -129,7 +135,8 @@ const TopicReviewerAssignmentPage = () => {
                 assignments: selectedReviewers.map(reviewerId => ({
                     topic_id: selectedTopic.ID_DETAI,
                     reviewer_id: reviewerId
-                }))
+                })),
+                note: 'Phân công thủ công' // Thêm note nếu cần
             });
 
             toast.success('Phân công người góp ý thành công');
@@ -148,6 +155,11 @@ const TopicReviewerAssignmentPage = () => {
     const handleAutoAssign = async () => {
         if (!selectedPlan) {
             toast.error('Vui lòng chọn kế hoạch');
+            return;
+        }
+        
+        // Thêm confirm đơn giản
+        if(!window.confirm("Hệ thống sẽ tự động phân công ngẫu nhiên cho các đề tài CHƯA có người góp ý. Bạn có chắc chắn muốn tiếp tục?")) {
             return;
         }
 
@@ -250,6 +262,7 @@ const TopicReviewerAssignmentPage = () => {
 
         return (
             <div className="space-y-6" key={selectedPlan}>
+                {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <StatCard
                         icon={BookOpen}
@@ -278,6 +291,7 @@ const TopicReviewerAssignmentPage = () => {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Card Tự động phân công */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Tự động Phân công Người Góp ý</CardTitle>
@@ -287,11 +301,11 @@ const TopicReviewerAssignmentPage = () => {
                         </CardHeader>
                         <CardContent className="flex justify-between items-center">
                             <p className="text-sm text-muted-foreground">
-                                Sẽ phân công 1-2 người góp ý cho mỗi đề tài, đảm bảo không trùng với người đề xuất đề tài.
+                                Sẽ phân công 1 người góp ý cho mỗi đề tài, đảm bảo không trùng với người đề xuất đề tài.
                             </p>
                             <Button
                                 onClick={handleAutoAssign}
-                                disabled={isSubmitting}
+                                disabled={isSubmitting || processedData.stats.unassignedTopics === 0}
                                 variant="default"
                             >
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -300,6 +314,7 @@ const TopicReviewerAssignmentPage = () => {
                         </CardContent>
                     </Card>
 
+                    {/* Card Chi tiết phân công */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Chi tiết Phân công</CardTitle>
@@ -323,11 +338,12 @@ const TopicReviewerAssignmentPage = () => {
                     </Card>
                 </div>
 
+                {/* Danh sách đề tài Table */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Danh sách Đề tài Phân công Người Góp ý</CardTitle>
                         <CardDescription>
-                            Danh sách các đề tài trạng thái Chờ duyệt trong bộ môn. Có thể phân công thủ công hoặc chỉnh sửa người góp ý đã phân công.
+                            Danh sách các đề tài trạng thái Chờ duyệt hoặc Đang chỉnh sửa trong bộ môn.
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -336,56 +352,58 @@ const TopicReviewerAssignmentPage = () => {
                                 Không có đề tài nào cần phân công người góp ý.
                             </div>
                         ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead className="w-[25%]">Tên đề tài</TableHead>
-                                        <TableHead>GV Đề xuất</TableHead>
-                                        <TableHead>Người góp ý hiện tại</TableHead>
-                                        <TableHead className="text-center">Số lượng</TableHead>
-                                        <TableHead className="text-center">Hành động</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {topics.map(topic => (
-                                        <TableRow key={topic.ID_DETAI} className="hover:bg-muted/50">
-                                            <TableCell className="font-semibold max-w-xs truncate" title={topic.TEN_DETAI}>
-                                                {topic.TEN_DETAI}
-                                            </TableCell>
-                                            <TableCell className="text-sm">
-                                                {topic.nguoiDexuat?.nguoidung?.HODEM_VA_TEN || 'N/A'}
-                                            </TableCell>
-                                            <TableCell className="text-sm max-w-xs truncate" title={topic.reviewer_names || 'Chưa phân công'}>
-                                                {topic.reviewer_names || 'Chưa phân công'}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Badge variant={topic.reviewer_count > 0 ? 'default' : 'secondary'}>
-                                                    {topic.reviewer_count}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Button
-                                                    size="sm"
-                                                    onClick={() => handleAssignReviewers(topic)}
-                                                    variant="outline"
-                                                >
-                                                    {topic.reviewer_count > 0 ? (
-                                                        <>
-                                                            <Edit className="w-4 h-4 mr-1" />
-                                                            Chỉnh sửa
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Users className="w-4 h-4 mr-1" />
-                                                            Phân công
-                                                        </>
-                                                    )}
-                                                </Button>
-                                            </TableCell>
+                            <div className="rounded-md border">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[30%]">Tên đề tài</TableHead>
+                                            <TableHead>GV Đề xuất</TableHead>
+                                            <TableHead>Người góp ý hiện tại</TableHead>
+                                            <TableHead className="text-center">Số lượng</TableHead>
+                                            <TableHead className="text-center">Hành động</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {topics.map(topic => (
+                                            <TableRow key={topic.ID_DETAI} className="hover:bg-muted/50">
+                                                <TableCell className="font-semibold max-w-xs truncate" title={topic.TEN_DETAI}>
+                                                    {topic.TEN_DETAI}
+                                                </TableCell>
+                                                <TableCell className="text-sm">
+                                                    {topic.nguoiDexuat?.nguoidung?.HODEM_VA_TEN || 'N/A'}
+                                                </TableCell>
+                                                <TableCell className="text-sm max-w-xs truncate" title={topic.reviewer_names || 'Chưa phân công'}>
+                                                    {topic.reviewer_names || 'Chưa phân công'}
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={topic.reviewer_count > 0 ? 'default' : 'secondary'}>
+                                                        {topic.reviewer_count}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center">
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => handleAssignReviewers(topic)}
+                                                        variant="outline"
+                                                    >
+                                                        {topic.reviewer_count > 0 ? (
+                                                            <>
+                                                                <Edit className="w-4 h-4 mr-1" />
+                                                                Chỉnh sửa
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Users className="w-4 h-4 mr-1" />
+                                                                Phân công
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         )}
                     </CardContent>
                 </Card>
@@ -506,7 +524,7 @@ const TopicReviewerAssignmentPage = () => {
 
             {/* Lecturer Details Dialog */}
             <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-                <DialogContent className="sm:max-w-[800px]">
+                <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
                     <DialogHeader>
                         <DialogTitle>Chi tiết Phân công Người Góp ý</DialogTitle>
                         <DialogDescription>
@@ -514,7 +532,7 @@ const TopicReviewerAssignmentPage = () => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
+                    <div className="flex-1 overflow-y-auto">
                         {lecturerDetails.length === 0 ? (
                             <div className="py-4 text-center text-muted-foreground">
                                 Không có dữ liệu chi tiết.
@@ -582,11 +600,11 @@ const TopicReviewerAssignmentPage = () => {
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 max-h-[50vh] overflow-y-auto">
                         {selectedLecturer?.topics_list && selectedLecturer.topics_list.length > 0 ? (
                             <div className="space-y-2">
                                 {selectedLecturer.topics_list.map((topicName, index) => (
-                                    <div key={index} className="p-3 bg-muted/50 rounded-lg">
+                                    <div key={index} className="p-3 bg-muted/50 rounded-lg border">
                                         <div className="font-medium text-sm">{topicName}</div>
                                     </div>
                                 ))}

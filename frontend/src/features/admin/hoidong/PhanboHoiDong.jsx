@@ -37,11 +37,13 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { autoAssignGroups } from "@/api/adminHoiDongService";
+import { getKhoaBomons } from "@/api/userService"; 
 
 const PhanboHoiDong = () => {
   const [kehoach, setKehoach] = useState([]);
   const [hoidongList, setHoidongList] = useState([]);
   const [allGroups, setAllGroups] = useState([]);
+  
   const [filterOptions, setFilterOptions] = useState({ chuyennganh: [], khoabomon: [] });
 
   const [chonKehoach, setChonKehoach] = useState("");
@@ -68,7 +70,7 @@ const PhanboHoiDong = () => {
         const [khRes, cnRes, bmRes] = await Promise.all([
           axiosClient.get("/admin/hoidong/kehoach-options"),
           axiosClient.get("/admin/hoidong/chuyennganh-options"),
-          axiosClient.get("/khoa-bo-mons"),
+          getKhoaBomons(), 
         ]);
 
         setKehoach(khRes.data || []);
@@ -77,7 +79,7 @@ const PhanboHoiDong = () => {
             value: String(cn.ID_CHUYENNGANH),
             label: cn.TEN_CHUYENNGANH,
           })),
-          khoabomon: (bmRes.data || []).map(bm => ({
+          khoabomon: (bmRes || []).map(bm => ({
             value: String(bm.ID_KHOA_BOMON),
             label: bm.TEN_KHOA_BOMON,
           })),
@@ -152,8 +154,13 @@ const PhanboHoiDong = () => {
     if (filterChuyenNganh !== "all") {
       list = list.filter(g => String(g.ID_CHUYENNGANH) === filterChuyenNganh);
     }
+    
     if (filterBoMon !== "all") {
-      list = list.filter(g => String(g.ID_KHOA_BOMON) === filterBoMon);
+      list = list.filter(g => {
+          // Lọc dựa trên ID trả về từ backend
+          const deptId = g.ID_KHOA_BOMON; 
+          return String(deptId) === filterBoMon;
+      });
     }
     return list;
   }, [allGroups, searchGroup, filterChuyenNganh, filterBoMon]);
@@ -161,8 +168,6 @@ const PhanboHoiDong = () => {
   const executeMoveGroup = async (groupToMove, targetCouncilId) => {
       const targetCouncil = hoidongList.find(h => h.ID_HOIDONG === targetCouncilId);
       const previousGroups = [...allGroups];
-
-      // Cập nhật UI lạc quan (Optimistic Update)
       setAllGroups(prev =>
         prev.map(g =>
           g.ID_NHOM === groupToMove.ID_NHOM
@@ -371,19 +376,8 @@ const PhanboHoiDong = () => {
                         const isAssignedToCurrent = group.ID_HOIDONG === selectedCouncilId;
                         const hasCouncil = !!group.ID_HOIDONG;
 
-                        // [LOGIC MỚI] Tra cứu fallback cho Chuyên ngành và Bộ môn
-                        // 1. Lấy ID từ group, nếu không có thì lấy từ detai (chuyên ngành) hoặc gvhd (bộ môn)
-                        // 2. Dùng ID để tra trong filterOptions lấy label
-                        
-                        const rawMajorId = group.ID_CHUYENNGANH || group.phancong_detai_nhom?.detai?.ID_CHUYENNGANH;
-                        const tenChuyenNganh = group.TEN_CHUYENNGANH 
-                            || filterOptions.chuyennganh.find(o => o.value === String(rawMajorId))?.label
-                            || "Chưa xác định";
-                        
-                        const rawDeptId = group.ID_KHOA_BOMON || group.phancong_detai_nhom?.gvhd?.ID_KHOA_BOMON;
-                        const tenBoMon = group.TEN_KHOA_BOMON 
-                            || filterOptions.khoabomon.find(o => o.value === String(rawDeptId))?.label
-                            || "Chưa xác định";
+                        const tenChuyenNganh = group.TEN_CHUYENNGANH || "Chưa xác định";
+                        const tenBoMon = group.TEN_KHOA_BOMON || "Chưa xác định";
 
                         return (
                           <div
@@ -566,7 +560,7 @@ const PhanboHoiDong = () => {
                                                             ({assignedGroup.TEN_NHOM})
                                                         </p>
                                                     </div>
-                                                    <Button
+                                                    <Button 
                                                         variant="ghost" 
                                                         size="icon" 
                                                         className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover/item:opacity-100 transition-opacity"
@@ -596,7 +590,7 @@ const PhanboHoiDong = () => {
         </div>
       )}
 
-      {/* Dialog xác nhận chuyển nhóm */}
+      {/* Dialogs */}
       <AlertDialog open={dialogState.isOpen} onOpenChange={open => !open && setDialogState({ isOpen: false, group: null })}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -616,7 +610,6 @@ const PhanboHoiDong = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog xác nhận GỠ nhóm */}
       <AlertDialog open={removeDialogState.isOpen} onOpenChange={open => !open && setRemoveDialogState({ isOpen: false, groupId: null, councilId: null })}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -637,7 +630,6 @@ const PhanboHoiDong = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Dialog phân bổ tự động */}
       <AlertDialog open={isAutoAssignDialogOpen} onOpenChange={setIsAutoAssignDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -27,7 +27,6 @@ import {
   DialogTitle,
   DialogDescription
 } from "@/components/ui/dialog";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -39,6 +38,7 @@ import {
 } from "@/components/ui/table";
 
 import { getAutoCreateStats, createBulkByDepartment } from "@/api/adminHoiDongService"; 
+import { getKhoaBomons } from "@/api/userService";
 
 export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
   const [activeTab, setActiveTab] = useState("auto"); 
@@ -47,7 +47,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
   // --- STATE DỮ LIỆU CHUNG ---
   const [kehoach, setKehoach] = useState([]);
-  const [chuyennganh, setChuyennganh] = useState([]);
+  const [departments, setDepartments] = useState([]);
   
   // Form chung
   const [form, setForm] = useState({
@@ -55,7 +55,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
     TEN_HOIDONG: "",
     LOAI: "hoidong", 
     ID_KEHOACH: "",
-    ID_CHUYENNGANH: "",
+    ID_KHOA_BOMON: "",
     NGAY_BAOCAO: "",
     GIO_BAOCAO: "",
     PHONG: "",
@@ -83,6 +83,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                 ...prev,
                 soLuong: 1,
                 TEN_HOIDONG: "",
+                ID_KHOA_BOMON: "",
             }));
             setSelectedGV([]);
             setGvRoles({});
@@ -95,12 +96,12 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
   const fetchOptions = async () => {
     setLoading(true);
     try {
-      const [khRes, cnRes] = await Promise.all([
+      const [khRes, deptRes] = await Promise.all([
         axiosClient.get("/admin/hoidong/kehoach-options"),
-        axiosClient.get("/admin/hoidong/chuyennganh-options"),
+        getKhoaBomons(),
       ]);
       setKehoach(khRes.data || []);
-      setChuyennganh(cnRes.data || []);
+      setDepartments(deptRes || []);
       
       if (!form.ID_KEHOACH && khRes.data?.length > 0) {
           setForm(prev => ({ ...prev, ID_KEHOACH: String(khRes.data[0].ID_KEHOACH) }));
@@ -152,7 +153,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
       if (!form.ID_KEHOACH) return;
       setLoadingStats(true);
       try {
-          // Gọi API với thêm tham số type (LOAI)
           const data = await getAutoCreateStats(form.ID_KEHOACH, form.LOAI);
           
           const mappedData = data.map(item => ({
@@ -228,7 +228,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
       if (name === 'LOAI') { 
           setSelectedGV([]);
           setGvRoles({});
-          // Cập nhật prefix cho tab Auto nếu đang mở
           if (activeTab === 'auto' && deptStats.length > 0) {
              setDeptStats(prev => prev.map(item => ({
                  ...item,
@@ -248,7 +247,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
           return;
       }
 
-      // 1. TAB AUTO (TẠO HÀNG LOẠT THEO BỘ MÔN - LOGIC MỚI)
+      // 1. TAB AUTO
       if (activeTab === 'auto') {
           const itemsToCreate = deptStats
             .filter(d => d.suggested_councils > 0)
@@ -256,7 +255,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                 ID_KHOA_BOMON: d.ID_KHOA_BOMON,
                 quantity: d.suggested_councils,
                 prefix: d.prefix_name,
-                major_id: d.default_major_id
             }));
 
           if (itemsToCreate.length === 0) {
@@ -273,30 +271,10 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
           toast.success(`Đã tạo hội đồng cho ${itemsToCreate.length} bộ môn.`);
       } 
-      // 2. TAB QUICK (TẠO NHANH SL - LOGIC CŨ)
-      else if (activeTab === 'quick') {
-          if (!form.ID_CHUYENNGANH) {
-              toast.error("Vui lòng chọn Chuyên ngành.");
-              setIsSubmitting(false);
-              return;
-          }
-          
-          const payload = {
-            ...form, 
-            ID_KEHOACH: Number(form.ID_KEHOACH),
-            ID_CHUYENNGANH: Number(form.ID_CHUYENNGANH),
-            TEN_HOIDONG: form.TEN_HOIDONG || (form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : 'HĐ Phản biện'),
-            soLuong: Number(form.soLuong),
-            giangviens: [] // Rỗng
-          };
-          
-          await axiosClient.post("/admin/hoidong", payload);
-          toast.success(`Đã tạo nhanh ${form.soLuong} hội đồng.`);
-      }
-      // 3. TAB MANUAL (TẠO THỦ CÔNG CHI TIẾT - LOGIC CŨ)
+      // 2. TAB QUICK & MANUAL
       else {
-          if (!form.ID_CHUYENNGANH) {
-              toast.error("Vui lòng chọn Chuyên ngành.");
+          if (!form.ID_KHOA_BOMON) {
+              toast.error("Vui lòng chọn Khoa/Bộ môn.");
               setIsSubmitting(false);
               return;
           }
@@ -304,19 +282,25 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
           const payload = {
             ...form, 
             ID_KEHOACH: Number(form.ID_KEHOACH),
-            ID_CHUYENNGANH: Number(form.ID_CHUYENNGANH),
-            NGAY_BAOCAO: form.NGAY_BAOCAO || null,
-            GIO_BAOCAO: form.GIO_BAOCAO || null,
-            PHONG: form.PHONG || null,
-            TEN_HOIDONG: form.TEN_HOIDONG || null,
-            giangviens: selectedGV.map((id) => ({
+            ID_KHOA_BOMON: Number(form.ID_KHOA_BOMON),
+            TEN_HOIDONG: form.TEN_HOIDONG || (form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : 'HĐ Phản biện'),
+            
+            soLuong: activeTab === 'quick' ? Number(form.soLuong) : 1,
+            giangviens: activeTab === 'manual' ? selectedGV.map((id) => ({
               id,
               vaitro: form.LOAI === "phanbien" ? "phanbien" : gvRoles[id] || "thanhvien", 
-            }))
+            })) : [],
+            
+            NGAY_BAOCAO: activeTab === 'manual' ? (form.NGAY_BAOCAO || null) : null,
+            GIO_BAOCAO: activeTab === 'manual' ? (form.GIO_BAOCAO || null) : null,
+            PHONG: activeTab === 'manual' ? (form.PHONG || null) : null,
           };
-
+          
           await axiosClient.post("/admin/hoidong", payload);
-          toast.success("Đã tạo hội đồng thủ công thành công!");
+          toast.success(activeTab === 'quick' 
+              ? `Đã tạo nhanh ${form.soLuong} hội đồng.` 
+              : "Đã tạo hội đồng thủ công thành công!"
+          );
       }
 
       onSuccess(); 
@@ -330,22 +314,14 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
     }
   };
 
-  // Icon hiển thị trên Header
   const getTabIcon = () => {
       if (activeTab === 'auto') return <Database className="w-6 h-6" />;
       if (activeTab === 'quick') return <Zap className="w-6 h-6" />;
       return <PenTool className="w-6 h-6" />;
   }
-
-  const getTabTitle = () => {
-      if (activeTab === 'auto') return 'Tự động (Theo Bộ môn)';
-      if (activeTab === 'quick') return 'Tạo nhanh (Số lượng)';
-      return 'Thủ công (Chi tiết)';
-  }
-
   const getTabDesc = () => {
       if (activeTab === 'auto') return 'Tự động tính toán và tạo nhanh theo số liệu thực tế.';
-      if (activeTab === 'quick') return 'Tạo hàng loạt hội đồng rỗng cho một chuyên ngành.';
+      if (activeTab === 'quick') return 'Tạo hàng loạt hội đồng rỗng cho một bộ môn.';
       return 'Tạo từng hội đồng và chỉ định thành viên ngay.';
   }
 
@@ -369,9 +345,9 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
         <div className="flex-1 overflow-y-auto bg-muted/10">
             <div className="p-6">
-                {/* 1. Chọn Kế Hoạch & Loại (Global) */}
+                {/* 1. Chọn Kế Hoạch & Loại */}
                 <div className="bg-card rounded-xl border shadow-sm p-5 mb-6 grid grid-cols-1 md:grid-cols-2 gap-5">
-                     <div className="space-y-2">
+                      <div className="space-y-2">
                         <Label>Kế hoạch áp dụng <span className="text-destructive">*</span></Label>
                         <Select value={form.ID_KEHOACH} onValueChange={(v) => handleSelectChange("ID_KEHOACH", v)}>
                             <SelectTrigger className="bg-background"><SelectValue placeholder="Chọn kế hoạch..." /></SelectTrigger>
@@ -394,7 +370,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                     </div>
                 </div>
 
-                {/* 2. TABS: Auto vs Quick vs Manual */}
+                {/* 2. TABS */}
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-3 mb-6">
                         <TabsTrigger value="auto"><Sparkles className="w-4 h-4 mr-2" /> Tự động</TabsTrigger>
@@ -402,10 +378,9 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                         <TabsTrigger value="manual"><PenTool className="w-4 h-4 mr-2" /> Thủ công</TabsTrigger>
                     </TabsList>
                     
-                    {/* === TAB 1: AUTO (THÔNG MINH) === */}
+                    {/* === TAB 1: AUTO === */}
                     <TabsContent value="auto" className="space-y-4">
-                        <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
-                            {/* Thanh công cụ tính toán */}
+                         <div className="bg-card rounded-xl border shadow-sm overflow-hidden">
                             <div className="p-4 border-b bg-blue-50/50 flex flex-wrap items-center justify-between gap-4">
                                 <div className="flex items-center gap-4">
                                     <div className="flex items-center gap-2">
@@ -418,9 +393,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                             min={1}
                                         />
                                     </div>
-                                    <p className="text-xs text-muted-foreground italic hidden sm:block">
-                                        Tự động chia tổng số đề tài cho tỷ lệ này.
-                                    </p>
                                 </div>
                                 <Button variant="outline" size="sm" onClick={fetchAutoStats} disabled={loadingStats || !form.ID_KEHOACH}>
                                     <RefreshCw className={`w-4 h-4 mr-2 ${loadingStats ? 'animate-spin' : ''}`} />
@@ -428,24 +400,23 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                 </Button>
                             </div>
 
-                            {/* Bảng thống kê */}
                             <div className="relative min-h-[200px]">
-                                {loadingStats ? (
+                                {loadingStats && (
                                     <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 text-muted-foreground">
                                         <Loader2 className="h-6 w-6 animate-spin mr-2" /> Đang phân tích dữ liệu...
                                     </div>
-                                ) : null}
+                                )}
 
                                 {!form.ID_KEHOACH ? (
                                      <div className="h-40 flex flex-col items-center justify-center text-muted-foreground">
                                         <Info className="h-8 w-8 mb-2 opacity-50" />
                                         <p>Vui lòng chọn Kế hoạch trước.</p>
-                                    </div>
+                                     </div>
                                 ) : deptStats.length === 0 && !loadingStats ? (
-                                    <div className="h-40 flex flex-col items-center justify-center text-muted-foreground">
+                                     <div className="h-40 flex flex-col items-center justify-center text-muted-foreground">
                                         <Info className="h-8 w-8 mb-2 opacity-50" />
-                                        <p>Không có nhóm nào cần tạo hội đồng (đã nộp bài và chưa có HĐ) trong kế hoạch này.</p>
-                                    </div>
+                                        <p>Không có nhóm nào cần tạo hội đồng.</p>
+                                     </div>
                                 ) : (
                                     <Table>
                                         <TableHeader className="bg-muted/20">
@@ -468,7 +439,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                                             value={dept.prefix_name} 
                                                             onChange={(e) => handleDeptStatChange(dept.ID_KHOA_BOMON, 'prefix_name', e.target.value)}
                                                             className="h-8 text-sm bg-background"
-                                                            placeholder="VD: HĐ Bảo vệ..."
                                                         />
                                                     </TableCell>
                                                     <TableCell>
@@ -491,7 +461,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                         </div>
                     </TabsContent>
 
-                    {/* === TAB 2: QUICK (TẠO NHANH CŨ) === */}
+                    {/* === TAB 2: QUICK === */}
                     <TabsContent value="quick" className="space-y-4">
                         <div className="bg-card rounded-xl border shadow-sm p-5">
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
@@ -503,12 +473,12 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                     </div>
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Chuyên ngành <span className="text-destructive">*</span></Label>
-                                    <Select value={form.ID_CHUYENNGANH} onValueChange={(v) => handleSelectChange("ID_CHUYENNGANH", v)}>
-                                        <SelectTrigger><SelectValue placeholder="Chọn chuyên ngành..." /></SelectTrigger>
+                                    <Label>Khoa/Bộ môn <span className="text-destructive">*</span></Label>
+                                    <Select value={form.ID_KHOA_BOMON} onValueChange={(v) => handleSelectChange("ID_KHOA_BOMON", v)}>
+                                        <SelectTrigger><SelectValue placeholder="Chọn bộ môn..." /></SelectTrigger>
                                         <SelectContent>
-                                            {chuyennganh.map((c) => (
-                                                <SelectItem key={c.ID_CHUYENNGANH} value={String(c.ID_CHUYENNGANH)}>{c.TEN_CHUYENNGANH}</SelectItem>
+                                            {departments.map((c) => (
+                                                <SelectItem key={c.ID_KHOA_BOMON} value={String(c.ID_KHOA_BOMON)}>{c.TEN_KHOA_BOMON}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -524,7 +494,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                         </div>
                     </TabsContent>
 
-                    {/* === TAB 3: MANUAL (THỦ CÔNG) === */}
+                    {/* === TAB 3: MANUAL === */}
                     <TabsContent value="manual" className="space-y-4">
                         <div className="bg-card rounded-xl border shadow-sm p-5">
                              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-4">
@@ -533,12 +503,12 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                     <Input name="TEN_HOIDONG" value={form.TEN_HOIDONG} onChange={handleChange} placeholder="VD: HĐ Bảo vệ Nhóm 1" />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label>Chuyên ngành <span className="text-destructive">*</span></Label>
-                                    <Select value={form.ID_CHUYENNGANH} onValueChange={(v) => handleSelectChange("ID_CHUYENNGANH", v)}>
-                                        <SelectTrigger><SelectValue placeholder="Chọn chuyên ngành..." /></SelectTrigger>
+                                    <Label>Khoa/Bộ môn <span className="text-destructive">*</span></Label>
+                                    <Select value={form.ID_KHOA_BOMON} onValueChange={(v) => handleSelectChange("ID_KHOA_BOMON", v)}>
+                                        <SelectTrigger><SelectValue placeholder="Chọn bộ môn..." /></SelectTrigger>
                                         <SelectContent>
-                                            {chuyennganh.map((c) => (
-                                                <SelectItem key={c.ID_CHUYENNGANH} value={String(c.ID_CHUYENNGANH)}>{c.TEN_CHUYENNGANH}</SelectItem>
+                                            {departments.map((c) => (
+                                                <SelectItem key={c.ID_KHOA_BOMON} value={String(c.ID_KHOA_BOMON)}>{c.TEN_KHOA_BOMON}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -594,7 +564,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                                 
                                                 return (
                                                     <div key={gv.ID_GIANGVIEN} className={cn("flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors", isSelected && "bg-primary/5")}>
-                                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                         <div className="flex items-center gap-3 flex-1 min-w-0">
                                                             <Checkbox id={`gv-${gv.ID_GIANGVIEN}`} checked={isSelected} onCheckedChange={() => handleToggleGV(gv.ID_GIANGVIEN)} />
                                                             <div className="flex flex-col min-w-0">
                                                                 <label htmlFor={`gv-${gv.ID_GIANGVIEN}`} className="text-sm font-medium truncate cursor-pointer flex items-center gap-2">

@@ -61,17 +61,19 @@ class AdminDashboardController extends Controller
                 $targetTopics = ceil(($totalStudents / 3) * 1.5);
             }
 
-            // [QUERY MỚI] Thống kê chi tiết theo Bộ môn để vẽ biểu đồ
-            // Đếm số lượng đề tài đã tạo và số lượng đã được giao (có nhóm) theo từng khoa/bộ môn
+            // [QUERY MỚI - TỐI ƯU] Thống kê trực tiếp từ bảng DETAI dựa trên ID_KHOA_BOMON
             $deptStats = DB::table('KHOA_BOMON')
-                ->leftJoin('GIANGVIEN', 'KHOA_BOMON.ID_KHOA_BOMON', '=', 'GIANGVIEN.ID_KHOA_BOMON')
                 ->leftJoin('DETAI', function($join) use ($plan) {
-                    $join->on('GIANGVIEN.ID_GIANGVIEN', '=', 'DETAI.ID_NGUOI_DEXUAT')
+                    // Join trực tiếp ID_KHOA_BOMON giữa DETAI và KHOA_BOMON
+                    $join->on('KHOA_BOMON.ID_KHOA_BOMON', '=', 'DETAI.ID_KHOA_BOMON')
                          ->where('DETAI.ID_KEHOACH', '=', $plan->ID_KEHOACH);
                 })
                 ->select(
+                    'KHOA_BOMON.ID_KHOA_BOMON',
                     'KHOA_BOMON.TEN_KHOA_BOMON as name',
+                    // Đếm tổng số đề tài thuộc bộ môn này trong kế hoạch
                     DB::raw('COUNT(DETAI.ID_DETAI) as da_tao'),
+                    // Đếm số đề tài đã được giao cho nhóm
                     DB::raw('SUM(CASE WHEN DETAI.SO_NHOM_HIENTAI > 0 THEN 1 ELSE 0 END) as da_giao')
                 )
                 ->groupBy('KHOA_BOMON.ID_KHOA_BOMON', 'KHOA_BOMON.TEN_KHOA_BOMON')
@@ -91,7 +93,7 @@ class AdminDashboardController extends Controller
                 'groups_total' => $totalGroups,
                 'topics_current' => $totalTopics,
                 'topics_target' => $targetTopics,
-                'department_stats' => $deptStats // Trả về dữ liệu cho biểu đồ
+                'department_stats' => $deptStats 
             ];
         });
 
@@ -123,7 +125,6 @@ class AdminDashboardController extends Controller
             $workflow['council_percent'] = $totalGroupsAll > 0 ? round(($groupsWithCouncilAll / $totalGroupsAll) * 100) : 0;
             $workflow['grading_percent'] = $totalGroupsAll > 0 ? round(($groupsGradedAll / $totalGroupsAll) * 100) : 0;
             
-            // [QUAN TRỌNG] Số nhóm thiếu hội đồng để hiển thị bên frontend
             $workflow['groups_missing_council'] = max(0, $groupsWithTopicAll - $groupsWithCouncilAll);
         }
 
@@ -150,14 +151,13 @@ class AdminDashboardController extends Controller
 
     /**
      * API Nhắc nhở & Cảnh báo thông minh (To-Do List)
-     * [FIXED] Làm tròn thời gian hiển thị (Giờ/Ngày)
      */
     public function getReminders(Request $request)
     {
         $reminders = [];
         $now = Carbon::now();
 
-        // --- 1. CẢNH BÁO KẾ HOẠCH CẦN DUYỆT ---
+        // 1. CẢNH BÁO KẾ HOẠCH CẦN DUYỆT
         $plansPendingApproval = KehoachKhoaluan::where('TRANGTHAI', 'Chờ phê duyệt')->count();
         if ($plansPendingApproval > 0) {
             $reminders[] = [
@@ -171,7 +171,7 @@ class AdminDashboardController extends Controller
             ];
         }
 
-        // --- LẤY DANH SÁCH ID CÁC KẾ HOẠCH ĐANG CHẠY ---
+        // LẤY DANH SÁCH ID CÁC KẾ HOẠCH ĐANG CHẠY
         $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa'])
             ->with('mocThoigians')
             ->get();
@@ -182,20 +182,16 @@ class AdminDashboardController extends Controller
             return response()->json(['reminders' => []]);
         }
 
-        // --- 2. KIỂM TRA DEADLINE (FIXED LOGIC) ---
-        // Sử dụng giờ để so sánh chính xác hơn
+        // 2. KIỂM TRA DEADLINE
         $closestHoursDiff = 99999; 
         $closestPhase = null;
         $closestPlanName = '';
 
         foreach ($activePlans as $plan) {
             foreach ($plan->mocThoigians as $moc) {
-                // Chỉ check mốc đang diễn ra hoặc sắp tới
                 if ($now->lte($moc->NGAY_KETTHUC)) {
-                    // Tính khoảng cách bằng GIỜ
                     $hoursDiff = $now->diffInHours($moc->NGAY_KETTHUC, false);
                     
-                    // Nếu còn dưới 72 giờ (3 ngày) và là mốc gần nhất tìm thấy
                     if ($hoursDiff >= 0 && $hoursDiff <= 72 && $hoursDiff < $closestHoursDiff) {
                         $closestHoursDiff = $hoursDiff;
                         $closestPhase = $moc;
@@ -206,7 +202,6 @@ class AdminDashboardController extends Controller
         }
 
         if ($closestPhase) {
-            // Logic hiển thị thân thiện với con người
             if ($closestHoursDiff < 1) {
                 $timeLeftStr = "sắp kết thúc ngay bây giờ";
             } elseif ($closestHoursDiff < 24) {
@@ -227,7 +222,7 @@ class AdminDashboardController extends Controller
             ];
         }
 
-        // --- 3. CÔNG VIỆC CẦN DUYỆT (URGENT) ---
+        // 3. CÔNG VIỆC CẦN DUYỆT (URGENT)
 
         // A. Đề tài chờ duyệt
         $pendingTopics = Detai::whereIn('ID_KEHOACH', $activePlanIds)
@@ -263,7 +258,7 @@ class AdminDashboardController extends Controller
             ];
         }
 
-        // --- 4. CẢNH BÁO TIẾN ĐỘ (WARNING) ---
+        // 4. CẢNH BÁO TIẾN ĐỘ (WARNING)
 
         // A. Quota chưa phân xong
         $missingQuotaDepts = QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)
@@ -282,7 +277,7 @@ class AdminDashboardController extends Controller
             ];
         }
 
-        // B. Nhóm chưa có Hội đồng (Có đề tài + Đã nộp bài + Chưa có HĐ)
+        // B. Nhóm chưa có Hội đồng
         $groupsMissingCouncil = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
             ->has('phancongDetaiNhom') 
             ->whereHas('phancongDetaiNhom.submissions', function ($q) {
@@ -303,7 +298,7 @@ class AdminDashboardController extends Controller
             ];
         }
 
-        // C. Nhóm chưa có đề tài (Khi đã qua ngày bắt đầu đăng ký)
+        // C. Nhóm chưa có đề tài
         $plansStartedRegistration = [];
         foreach($activePlans as $plan) {
             $regPhase = $plan->mocThoigians->where('FEATURE_KEY', 'SV_DANGKY_DE')->first();

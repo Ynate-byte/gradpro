@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
+    Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,8 +9,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
     Send, BookOpen, User, Layers, Users,
     Target, Check, MessageSquare, Loader2,
-    CheckCircle, Edit, XCircle, ChevronLeft, ChevronRight, Keyboard,
-    Clock, Info
+    CheckCircle, Edit, XCircle, ChevronLeft, ChevronRight,
+    Clock, Info, AlertCircle // Đảm bảo import AlertCircle
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { thesisTopicService } from '@/api/thesisTopicService';
@@ -23,9 +20,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+// [THÊM] Import Alert components
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// --- COMPONENTS CON (SIMPLE & CLEAN) ---
-
+// --- HELPER COMPONENTS ---
 const CompactInfoItem = ({ icon: Icon, label, value }) => {
     if (!value) return null;
     return (
@@ -46,6 +44,7 @@ const CompactInfoItem = ({ icon: Icon, label, value }) => {
 };
 
 const ChatBubble = ({ user, message, isMe, time, role }) => (
+    // (Code ChatBubble giữ nguyên)
     <div className={cn("flex gap-3 max-w-[90%]", isMe ? "ml-auto flex-row-reverse" : "")}>
         <Avatar className="h-8 w-8 mt-1 border border-border">
             <AvatarImage src={user?.AVATAR_URL} />
@@ -70,8 +69,8 @@ const ChatBubble = ({ user, message, isMe, time, role }) => (
             <div className={cn(
                 "px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words shadow-sm",
                 isMe
-                    ? "bg-primary text-primary-foreground" // Màu xanh chủ đạo từ file CSS của bạn
-                    : "bg-secondary text-secondary-foreground border border-border" // Màu xám nhẹ
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-secondary text-secondary-foreground border border-border"
             )}>
                 {message}
             </div>
@@ -80,6 +79,7 @@ const ChatBubble = ({ user, message, isMe, time, role }) => (
 );
 
 const DialogLoadingSkeleton = () => (
+    // (Code Skeleton giữ nguyên)
     <div className="h-full flex flex-col p-6 space-y-6 bg-background">
         <div className="flex items-center gap-4">
             <Skeleton className="h-12 w-12 rounded-lg" />
@@ -96,7 +96,7 @@ const DialogLoadingSkeleton = () => (
 );
 
 const getStatusBadge = (status) => {
-    // Sử dụng các class utility thay vì hardcode màu gradient
+    // (Code StatusBadge giữ nguyên)
     let variant = "outline";
     let className = "border-border font-medium";
 
@@ -157,31 +157,25 @@ const TopicDetailDialog = ({
     const [newSuggestion, setNewSuggestion] = useState('');
     const [sendingState, setSendingState] = useState({});
 
-    // Refs
     const chatEndRef = useRef(null);
     const scrollAreaRef = useRef(null);
 
-    // --- XỬ LÝ PHÍM TẮT (ĐÃ FIX) ---
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (!open) return;
-
-            // QUAN TRỌNG: Kiểm tra xem người dùng có đang gõ phím không
             const activeEl = document.activeElement;
             const isTyping = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable;
-
-            if (isTyping) return; // Nếu đang gõ thì không làm gì cả (để phím mũi tên di chuyển con trỏ)
+            if (isTyping) return;
 
             if (e.key === 'ArrowLeft') {
                 if (hasPrevious && onPrevious) {
-                    e.preventDefault(); // Ngăn cuộn trang
+                    e.preventDefault();
                     onPrevious();
                 }
             }
-
             if (e.key === 'ArrowRight') {
                 if (hasNext && onNext) {
-                    e.preventDefault(); // Ngăn cuộn trang
+                    e.preventDefault();
                     onNext();
                 }
             }
@@ -191,7 +185,6 @@ const TopicDetailDialog = ({
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [open, hasPrevious, hasNext, onPrevious, onNext]);
 
-    // --- Load dữ liệu ---
     useEffect(() => {
         if (open && topicId) {
             loadTopicDetails(true);
@@ -202,7 +195,6 @@ const TopicDetailDialog = ({
         }
     }, [open, topicId]);
 
-    // --- Auto Scroll Chat ---
     useEffect(() => {
         if (topic?.goiyDetai && chatEndRef.current) {
             setTimeout(() => {
@@ -251,7 +243,6 @@ const TopicDetailDialog = ({
         try {
             await thesisTopicService.addReplyToSuggestion(suggestionId, { NOIDUNG: content });
             await loadTopicDetails(false);
-
             if (onDataChange) onDataChange();
         } catch (error) {
             toast.error("Gửi thất bại.");
@@ -301,7 +292,7 @@ const TopicDetailDialog = ({
                 ) : (
                     <div className="flex flex-col h-full overflow-hidden">
 
-                        {/* --- 1. HEADER (CLEAN & PRIMARY) --- */}
+                        {/* --- 1. HEADER --- */}
                         <DialogHeader className="px-6 py-4 border-b border-border shrink-0 flex flex-row items-center justify-between space-y-0 bg-background">
                             <div className="flex items-start gap-4 overflow-hidden">
                                 <div className="h-10 w-10 mt-1 flex items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
@@ -327,10 +318,41 @@ const TopicDetailDialog = ({
                             {/* CỘT TRÁI: THÔNG TIN */}
                             <ScrollArea className="flex-1 border-r border-border bg-card">
                                 <div className="p-6 space-y-8">
-                                    {/* Stats Cards - Simple Grid */}
+                                    
+                                    {/* [MỚI] HIỂN THỊ LÝ DO TỪ CHỐI / YÊU CẦU CHỈNH SỬA */}
+                                    {(topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && (
+                                        <Alert className={cn(
+                                            "mb-6",
+                                            topic.TRANGTHAI === 'Từ chối' 
+                                                ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" 
+                                                : "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
+                                        )}>
+                                            <AlertCircle className={cn(
+                                                "h-4 w-4",
+                                                topic.TRANGTHAI === 'Từ chối' ? "text-red-600" : "text-orange-600"
+                                            )} />
+                                            <AlertTitle className={cn(
+                                                "ml-2 font-semibold",
+                                                topic.TRANGTHAI === 'Từ chối' ? "text-red-800 dark:text-red-200" : "text-orange-800 dark:text-orange-200"
+                                            )}>
+                                                {topic.TRANGTHAI === 'Từ chối' ? 'Lý do từ chối:' : 'Yêu cầu chỉnh sửa:'}
+                                            </AlertTitle>
+                                            <AlertDescription className={cn(
+                                                "mt-2 text-sm pl-6", // Thêm padding left để thẳng hàng với text trên
+                                                topic.TRANGTHAI === 'Từ chối' ? "text-red-700 dark:text-red-300" : "text-orange-700 dark:text-orange-300"
+                                            )}>
+                                                {topic.LYDO_TUCHOI}
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    {/* Stats Cards */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
                                         <CompactInfoItem icon={User} label="Giảng viên" value={topic.ten_giang_vien} />
-                                        <CompactInfoItem icon={Layers} label="Chuyên ngành" value={topic.chuyennganh?.TEN_CHUYENNGANH} />
+                                        
+                                        {/* Chuyên ngành -> Bộ môn */}
+                                        <CompactInfoItem icon={Layers} label="Bộ môn" value={topic.ten_bo_mon || topic.khoaBomon?.TEN_KHOA_BOMON} />
+                                        
                                         <CompactInfoItem icon={Users} label="Nhóm tối đa" value={topic.SO_NHOM_TOIDA} />
                                         <CompactInfoItem icon={Clock} label="Đã đăng ký" value={`${topic.SO_NHOM_HIENTAI} nhóm`} />
                                     </div>
@@ -373,7 +395,7 @@ const TopicDetailDialog = ({
                                 </div>
                             </ScrollArea>
 
-                            {/* CỘT PHẢI: CHAT (Simpler) */}
+                            {/* CỘT PHẢI: CHAT */}
                             <div className="w-full lg:w-[400px] xl:w-[450px] flex flex-col border-l border-border bg-secondary/20">
                                 <div className="p-3 border-b border-border bg-background flex items-center justify-between shrink-0">
                                     <span className="font-semibold text-sm flex items-center gap-2 text-foreground">
@@ -404,7 +426,6 @@ const TopicDetailDialog = ({
                                                     {/* Replies */}
                                                     {thread.phanhois && thread.phanhois.map((reply) => (
                                                         <div key={reply.ID_PHANHOI} className="pl-8 relative">
-                                                            {/* Đường nối đơn giản */}
                                                             <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
                                                             <ChatBubble
                                                                 user={reply.giangvien?.nguoidung}
@@ -470,18 +491,15 @@ const TopicDetailDialog = ({
                             </div>
                         </div>
 
-                        {/* --- 3. FOOTER: Điều hướng & Hành động --- */}
+                        {/* --- 3. FOOTER --- */}
                         <div className="p-4 bg-background border-t border-border shrink-0">
                             <div className="flex items-center justify-between">
-
-                                {/* Left: Hint */}
                                 <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
                                     <div className="px-1.5 py-0.5 border border-border rounded bg-secondary font-mono">←</div>
                                     <div className="px-1.5 py-0.5 border border-border rounded bg-secondary font-mono">→</div>
                                     <span>Điều hướng</span>
                                 </div>
 
-                                {/* Center: Navigation */}
                                 <div className="flex gap-2">
                                     <Button
                                         variant="outline"
@@ -501,7 +519,6 @@ const TopicDetailDialog = ({
                                     </Button>
                                 </div>
 
-                                {/* Right: Actions */}
                                 <div className="flex gap-2">
                                     {showAdminActions && (
                                         <>
@@ -521,7 +538,6 @@ const TopicDetailDialog = ({
                                             </Button>
                                             <Button
                                                 onClick={() => onApprove(topic.ID_DETAI)}
-                                                // Sử dụng màu Primary của bạn (Blue) hoặc màu Green đặc thù cho nút Duyệt
                                                 className="bg-primary text-primary-foreground hover:bg-primary/90"
                                             >
                                                 <CheckCircle className="w-4 h-4 mr-2" /> Duyệt đề tài

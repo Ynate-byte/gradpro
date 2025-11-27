@@ -35,4 +35,14 @@ class KhoaBomon extends Model
     {
         return $this->hasMany(Chuyennganh::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
     }
+
+    public function detais()
+    {
+        return $this->hasMany(Detai::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
+    }
+
+    public function hoidongs()
+    {
+        return $this->hasMany(Hoidong::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
+    }
 }

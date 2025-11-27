@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('GOIY_DETAI', function (Blueprint $table) {
             $table->id('ID_GOIY');
             $table->unsignedBigInteger('ID_DETAI');
-            $table->unsignedBigInteger('ID_NGUOI_GOIY'); // ID_GIANGVIEN
+            $table->unsignedBigInteger('ID_NGUOI_GOIY');
             $table->text('NOIDUNG_GOIY');
             $table->timestamp('NGAYTAO')->nullable()->useCurrent();
 

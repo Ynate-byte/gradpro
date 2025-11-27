@@ -70,14 +70,11 @@ class TopicAssignmentController extends BaseTopicAssignmentController
             return response()->json(['message' => 'Department not found for user'], 400);
         }
 
-        // Get all pending topics from the department (both assigned and unassigned)
-        // Include both "Chờ duyệt" and "Đang chỉnh sửa" statuses, exclude "Nháp"
+        // [SỬA] Lọc đề tài trực tiếp theo ID_KHOA_BOMON
         $topics = Detai::where('ID_KEHOACH', $planId)
             ->whereIn('TRANGTHAI', ['Chờ duyệt', 'Đang chỉnh sửa'])
-            ->whereHas('nguoiDexuat', function($query) use ($departmentId) {
-                $query->where('ID_KHOA_BOMON', $departmentId);
-            })
-            ->with(['nguoiDexuat.nguoidung', 'chuyennganh', 'phancong_nguoi_gop_y.giangvien.nguoidung'])
+            ->where('ID_KHOA_BOMON', $departmentId) // Filter trực tiếp
+            ->with(['nguoiDexuat.nguoidung', 'khoaBomon', 'phancong_nguoi_gop_y.giangvien.nguoidung'])
             ->get();
 
         $result = $topics->map(function($topic) {
@@ -126,19 +123,17 @@ class TopicAssignmentController extends BaseTopicAssignmentController
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
         DB::transaction(function () use ($request, $currentUser, $departmentId) {
-            // [BƯỚC 1] Gom nhóm các yêu cầu theo ID Đề tài
-            // Ví dụ: Đề tài A có 2 giảng viên -> Gom thành 1 mảng chứa 2 giảng viên
+            // Gom nhóm các yêu cầu theo ID Đề tài
             $groupedAssignments = collect($request->assignments)->groupBy('topic_id');
 
             foreach ($groupedAssignments as $topicId => $items) {
                 $topic = Detai::with('nguoiDexuat')->findOrFail($topicId);
 
-                // Validate Topic Department
-                if ($topic->nguoiDexuat->ID_KHOA_BOMON !== $departmentId) {
-                    throw new \Exception("Đề tài {$topic->TEN_DETAI} không thuộc bộ môn của bạn");
+                // [SỬA] Validate Topic Department bằng ID_KHOA_BOMON
+                if ($topic->ID_KHOA_BOMON !== $departmentId) {
+                    throw new \Exception("Đề tài '{$topic->TEN_DETAI}' không thuộc bộ môn của bạn");
                 }
 
-                // Lấy danh sách ID giảng viên mới cần gán cho đề tài này
                 $reviewerIds = $items->pluck('reviewer_id')->unique();
 
                 // Validate từng giảng viên
@@ -153,10 +148,10 @@ class TopicAssignmentController extends BaseTopicAssignmentController
                     }
                 }
 
-                // [BƯỚC 2] Xóa TẤT CẢ phân công cũ của đề tài này 1 lần duy nhất
+                // Xóa TẤT CẢ phân công cũ của đề tài này 1 lần duy nhất
                 PhancongNguoiGopY::where('ID_DETAI', $topicId)->delete();
 
-                // [BƯỚC 3] Tạo lại các phân công mới (cho nhiều người)
+                // Tạo lại các phân công mới
                 foreach ($reviewerIds as $rId) {
                     PhancongNguoiGopY::create([
                         'ID_DETAI' => $topicId,
@@ -174,7 +169,7 @@ class TopicAssignmentController extends BaseTopicAssignmentController
                             "Phân công Người Góp ý",
                             "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
                             'ACADEMIC',
-                            '/projects/topics',
+                            '/projects/topics', // Link frontend
                             [
                                 'topic_name' => $topic->TEN_DETAI,
                                 'topic_id' => $topic->ID_DETAI,
@@ -211,13 +206,10 @@ class TopicAssignmentController extends BaseTopicAssignmentController
 
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        // Get all pending topics in the plan from this department
-        // Include both "Chờ duyệt" and "Đang chỉnh sửa" statuses, exclude "Nháp"
+        // [SỬA] Lọc đề tài theo ID_KHOA_BOMON
         $topics = Detai::where('ID_KEHOACH', $request->ID_KEHOACH)
             ->whereIn('TRANGTHAI', ['Chờ duyệt', 'Đang chỉnh sửa'])
-            ->whereHas('nguoiDexuat', function($query) use ($departmentId) {
-                $query->where('ID_KHOA_BOMON', $departmentId);
-            })
+            ->where('ID_KHOA_BOMON', $departmentId) // Filter trực tiếp
             ->whereDoesntHave('phancong_nguoi_gop_y')
             ->with('nguoiDexuat')
             ->get();
@@ -281,10 +273,10 @@ class TopicAssignmentController extends BaseTopicAssignmentController
                     throw new \Exception("Không đủ giảng viên để phân công cho đề tài: {$topic->TEN_DETAI}");
                 }
 
-                // Select 1 reviewer (balanced approach uses 1 reviewer per topic to ensure fairness)
+                // Select 1 reviewer
                 $selectedReviewer = $availableReviewers->random(1)->first();
 
-                // Check if already assigned
+                // Check if already assigned (double check)
                 $existingAssignment = PhancongNguoiGopY::where('ID_DETAI', $topic->ID_DETAI)
                     ->where('ID_GIANGVIEN', $selectedReviewer->ID_GIANGVIEN)
                     ->first();
@@ -303,19 +295,19 @@ class TopicAssignmentController extends BaseTopicAssignmentController
                     $assignmentCounts[$selectedReviewer->ID_GIANGVIEN]['count']++;
 
                     // Send notification to reviewer
-                    if ($selectedReviewer->nguoidung) { 
-                        Thongbao::create([
-                            'ID_NGUOINHAN' => $selectedReviewer->nguoidung->ID_NGUOIDUNG,
-                            'TIEU_DE' => 'Phân công Người Góp ý',
-                            'NOI_DUNG' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
-                            'LOAI_THONGBAO' => 'ACADEMIC',
-                            'LIEN_KET' => '/projects/topics', // Thêm link
-                            'DU_LIEU_GOC' => [
-                                'message' => "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                    if ($selectedReviewer->nguoidung) {
+                        NotificationService::send(
+                            $selectedReviewer->nguoidung->ID_NGUOIDUNG,
+                            "Phân công Người Góp ý (Tự động)",
+                            "Bạn đã được phân công góp ý đề tài: {$topic->TEN_DETAI}",
+                            'ACADEMIC',
+                            '/projects/topics',
+                            [
                                 'topic_name' => $topic->TEN_DETAI,
                                 'topic_id' => $topic->ID_DETAI,
                             ],
-                        ]);
+                            'HIGH'
+                        );
                     }
                 }
             }

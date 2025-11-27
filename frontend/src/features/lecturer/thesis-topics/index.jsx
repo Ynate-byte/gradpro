@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
     Plus, Send, BookOpen, Loader2, Users, CheckCircle, AlertTriangle, 
-    FileSignature, MessageSquare, Upload, RefreshCcw
+    FileSignature, MessageSquare, Upload, RefreshCcw, Filter
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -16,8 +16,8 @@ import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 // API Services
 import { thesisTopicService } from '@/api/thesisTopicService';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
-import { getThesisPlanById } from '@/api/thesisPlanService'; 
-import { getChuyenNganhs } from '@/api/userService';
+import { getThesisPlanById, getAllPlans } from '@/api/thesisPlanService'; 
+import { getKhoaBomons } from '@/api/userService';
 import axios from '@/api/axiosConfig';
 
 // UI Components
@@ -101,7 +101,6 @@ const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColo
     );
 };
 
-// --- Animation Variants ---
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -127,26 +126,20 @@ const getVariants = (shouldReduce) => {
     };
 };
 
+// Ẩn cột department_id
 const columnVisibility = {
-    "chuyen_nganh_id": false,
+    "department_id": false,
 };
 
-// === MAIN COMPONENT ===
 const ThesisTopicsPage = () => {
     const { user } = useAuth();
     
-    // Main Data States
-    const [topics, setTopics] = useState([]); // Danh sách đề tài (theo trang hiện tại)
+    const [topics, setTopics] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingStats, setLoadingStats] = useState(true);
     
-    // Stats Data States
     const [myQuota, setMyQuota] = useState(null);
-    const [supervisedTopicsCount, setSupervisedTopicsCount] = useState(0);
-    const [assignedReviewCount, setAssignedReviewCount] = useState(0);
-    const [contributedCount, setContributedCount] = useState(0);
-
-    // Dialog States
+    
     const [showCreateDialog, setShowCreateDialog] = useState(false);
     const [showImportDialog, setShowImportDialog] = useState(false);
     const [showTopicDetailDialog, setShowTopicDetailDialog] = useState(false);
@@ -155,45 +148,40 @@ const ThesisTopicsPage = () => {
     const [showRegisteredGroupsDialog, setShowRegisteredGroupsDialog] = useState(false);
     const [reuseDialogOpen, setReuseDialogOpen] = useState(false);
 
-    // Selection States
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopicForGroups, setSelectedTopicForGroups] = useState(null);
     const [editingTopic, setEditingTopic] = useState(null);
 
-    // Filter & Pagination States
     const [activeTab, setActiveTab] = useState('my');
     const [searchTerm, setSearchTerm] = useState('');
-    const debouncedSearchTerm = useDebounce(searchTerm, 500); // Debounce 500ms cho search server-side
+    const debouncedSearchTerm = useDebounce(searchTerm, 500);
     const [columnFilters, setColumnFilters] = useState([]);
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
-    const [serverPageCount, setServerPageCount] = useState(0); // Tổng số trang từ server
+    const [serverPageCount, setServerPageCount] = useState(0);
     const [sorting, setSorting] = useState([{ id: 'NGAYTAO', desc: true }]);
     const [rowSelection, setRowSelection] = useState({});
 
-    // Context Data States
     const [selectedPlan, setSelectedPlan] = useState('');
     const [currentPlanData, setCurrentPlanData] = useState(null); 
     const [plans, setPlans] = useState([]);
-    const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
+    
+    // State departmentOptions
+    const [departmentOptions, setDepartmentOptions] = useState([]);
 
-    // Navigation for Detail Dialog
     const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
 
-    // Motion & Theme
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // Feature Flag: Kiểm tra quyền GV_RA_DE
     const canSubmitApproval = useFeatureFlag(currentPlanData, 'GV_RA_DE');
 
-    // --- Kiểm tra quyền Import ---
     const role = user?.vaitro?.TEN_VAITRO;
     const positions = user?.giangvien?.chucvus || [];
     const canImport = role === 'Admin' || positions.length > 0; 
 
-    // 1. Load dữ liệu ban đầu (Kế hoạch, Chuyên ngành)
+    // 1. Load dữ liệu ban đầu
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -202,22 +190,21 @@ const ThesisTopicsPage = () => {
         setLoading(true);
         setLoadingStats(true);
         try {
-            const [plansRes, specRes] = await Promise.all([
-                axios.get('/admin/thesis-plans/list-all'),
-                getChuyenNganhs()
+            const [plansRes, deptRes] = await Promise.all([
+                getAllPlans(),
+                getKhoaBomons() 
             ]);
 
-            const plansData = plansRes.data || [];
+            const plansData = plansRes || []; 
             setPlans(plansData);
             
-            setChuyenNganhOptions(
-                (specRes || []).map(cn => ({
-                    label: cn.TEN_CHUYENNGANH,
-                    value: String(cn.ID_CHUYENNGANH)
+            setDepartmentOptions(
+                (deptRes || []).map(dept => ({
+                    label: dept.TEN_KHOA_BOMON,
+                    value: String(dept.ID_KHOA_BOMON)
                 }))
             );
 
-            // Tự động chọn kế hoạch đang hoạt động hoặc mới nhất
             if (plansData.length > 0 && !selectedPlan) {
                 const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
                 setSelectedPlan(String(activePlan.ID_KEHOACH));
@@ -233,40 +220,34 @@ const ThesisTopicsPage = () => {
         }
     };
 
-    // 2. Fetch Dữ liệu chính (Server-side Pagination & Filtering)
-    // Hàm này được gọi khi: selectedPlan, activeTab, pagination, sorting, filters thay đổi
+    // 2. Fetch Dữ liệu chính
     const fetchTopicsData = useCallback(async () => {
         if (!selectedPlan) return;
 
         setLoading(true);
         try {
-            // Map activeTab sang filter_mode
             let filterMode = 'all';
             if (activeTab === 'my') filterMode = 'my';
             if (activeTab === 'review') filterMode = 'review';
 
-            // Chuẩn bị params
             const params = {
                 plan_id: selectedPlan,
                 filter_mode: filterMode,
-                page: pagination.pageIndex + 1, // React Table dùng 0-based, Laravel dùng 1-based
+                page: pagination.pageIndex + 1,
                 per_page: pagination.pageSize,
                 search: debouncedSearchTerm,
-                // Có thể thêm sorting vào params nếu Backend hỗ trợ sort động
-                // sort_by: sorting[0]?.id,
-                // sort_dir: sorting[0]?.desc ? 'desc' : 'asc'
             };
 
-            // Xử lý Column Filters (Client filter -> Server param)
-            // Ví dụ: status, chuyên ngành
             const statusFilter = columnFilters.find(f => f.id === 'TRANGTHAI');
-            if (statusFilter) params.status = statusFilter.value; // Backend cần hỗ trợ nhận mảng hoặc giá trị đơn
+            if (statusFilter) params.status = statusFilter.value;
 
-            const majorFilter = columnFilters.find(f => f.id === 'chuyen_nganh_id');
-            if (majorFilter) params.major_id = majorFilter.value;
+            // Filter theo Department ID
+            const deptFilter = columnFilters.find(f => f.id === 'department_id');
+            if (deptFilter) params.department_id = deptFilter.value;
 
+            // [SỬA QUAN TRỌNG]: Đổi từ getAdminTopics sang getTopics để dùng đúng controller của User/Lecturer
             const response = await thesisTopicService.getTopics(params);
-            const { data, last_page, total } = response.data;
+            const { data, last_page } = response.data;
 
             setTopics(data || []);
             setServerPageCount(last_page || 1);
@@ -280,17 +261,15 @@ const ThesisTopicsPage = () => {
         }
     }, [selectedPlan, activeTab, pagination.pageIndex, pagination.pageSize, debouncedSearchTerm, columnFilters, sorting]);
 
-    // Trigger fetch khi các dependency thay đổi
     useEffect(() => {
         fetchTopicsData();
     }, [fetchTopicsData]);
 
-    // Reset về trang 1 khi đổi Plan, Tab hoặc Search
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [selectedPlan, activeTab, debouncedSearchTerm, columnFilters]);
 
-    // 3. Fetch Dữ liệu thống kê (Stats) & Thông tin kế hoạch (Chỉ khi đổi Plan)
+    // 3. Fetch Dữ liệu thống kê
     useEffect(() => {
         if (selectedPlan) {
             loadPlanStatsAndInfo(selectedPlan);
@@ -300,19 +279,13 @@ const ThesisTopicsPage = () => {
     const loadPlanStatsAndInfo = async (planId) => {
         setLoadingStats(true);
         try {
-            const [quotaRes, planDetailRes, supervisedRes] = await Promise.all([
+            const [quotaRes, planDetailRes] = await Promise.all([
                 lecturerQuotaService.getMyQuota({ plan_id: planId }),
                 getThesisPlanById(planId),
-                thesisTopicService.getSupervisedTopics({ plan_id: planId })
             ]);
 
             setMyQuota(quotaRes.data);
             setCurrentPlanData(planDetailRes);
-            setSupervisedTopicsCount(supervisedRes.data.total || 0);
-            
-            // [Tùy chọn] Lấy thống kê review riêng nếu API getMyQuota chưa trả về đủ
-            // Ở đây giả sử ta lấy tạm từ quotaRes hoặc phải gọi thêm API stats
-            // setAssignedReviewCount(...) 
 
         } catch (error) {
             console.error("Error loading plan stats:", error);
@@ -321,15 +294,15 @@ const ThesisTopicsPage = () => {
         }
     };
 
-    // --- CRUD Handlers ---
+    // ... (Các handlers CRUD giữ nguyên)
     const handleCreateTopic = async (topicData) => {
         try {
             await thesisTopicService.createTopic(topicData);
             toast.success("Tạo đề tài thành công!");
             setShowCreateDialog(false);
             setEditingTopic(null);
-            fetchTopicsData(); // Reload list
-            loadPlanStatsAndInfo(selectedPlan); // Reload stats
+            fetchTopicsData();
+            loadPlanStatsAndInfo(selectedPlan);
         } catch (error) {
             console.error('Error creating topic:', error);
             toast.error("Lỗi khi tạo đề tài.");
@@ -372,7 +345,6 @@ const ThesisTopicsPage = () => {
         }
     };
 
-    // --- Navigation Logic cho Detail Dialog ---
     const handleViewTopicDetails = (topicId) => {
         setSelectedTopicId(topicId);
         setShowTopicDetailDialog(true);
@@ -408,7 +380,6 @@ const ThesisTopicsPage = () => {
         setShowRegisteredGroupsDialog(true);
     };
 
-    // --- Columns Definition ---
     const columns = useMemo(() => getColumns({
         currentUserId: user?.giangvien?.ID_GIANGVIEN,
         onEdit: (topic) => { setEditingTopic(topic); setShowCreateDialog(true); },
@@ -419,7 +390,7 @@ const ThesisTopicsPage = () => {
         onViewRegisteredGroups: handleViewRegisteredGroups,
         isReviewTab: activeTab === 'review',
         canSubmitApproval: canSubmitApproval,
-    }), [user, activeTab, canSubmitApproval, topics]); // Thêm topics vào deps nếu cần update khi list thay đổi
+    }), [user, activeTab, canSubmitApproval, topics]);
 
     return (
         <motion.div 
@@ -429,10 +400,9 @@ const ThesisTopicsPage = () => {
             transition={{ duration: 0.3 }}
         >
             <div className="shrink-0 space-y-6">
-                {/* Top Bar: Title, Plan Select, Actions */}
+                {/* Top Bar */}
                 <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
                     <div className="flex items-center justify-between w-full gap-4">
-                        {/* Plan Selector */}
                         <Select
                             value={selectedPlan ? String(selectedPlan) : ""}
                             onValueChange={setSelectedPlan}
@@ -488,38 +458,46 @@ const ThesisTopicsPage = () => {
                     initial="hidden"
                     animate="visible"
                 >
-                    <StatCard 
-                        icon={Users} 
-                        title="Quota được giao" 
-                        value={loadingStats ? 'loading' : myQuota?.quota_assigned ?? 0} 
-                        description="Số đề tài tối đa" 
-                        iconBgClass="bg-blue-100 dark:bg-blue-900/30" 
-                        iconColorClass="text-blue-600 dark:text-blue-400" 
-                    />
-                    <StatCard 
-                        icon={FileSignature} 
-                        title="Tiến độ ra đề" 
-                        value={loadingStats ? 'loading' : `${myQuota?.topics_created ?? 0} / ${myQuota?.quota_assigned ?? 0}`} 
-                        description={loadingStats ? "..." : `Cần tạo thêm: ${myQuota?.topics_needed ?? 0}`} 
-                        iconBgClass="bg-green-100 dark:bg-green-900/30" 
-                        iconColorClass="text-green-600 dark:text-green-400" 
-                    />
-                    <StatCard 
-                        icon={CheckCircle} 
-                        title="Nhóm đã nhận HD" 
-                        value={loadingStats ? 'loading' : myQuota?.actual_assigned ?? 0} 
-                        description="Nhóm đang hướng dẫn" 
-                        iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" 
-                        iconColorClass="text-indigo-600 dark:text-indigo-400" 
-                    />
-                    <StatCard 
-                        icon={MessageSquare} 
-                        title="Góp ý phản biện" 
-                        value={loadingStats ? 'loading' : `${myQuota?.reviewed_count ?? 0} / ${myQuota?.total_reviews_assigned ?? 0}`} 
-                        description={loadingStats ? "..." : `Chưa góp ý: ${myQuota?.pending_reviews ?? 0}`} 
-                        iconBgClass="bg-purple-100 dark:bg-purple-900/30" 
-                        iconColorClass="text-purple-600 dark:text-purple-400" 
-                    />
+                    <motion.div variants={variants.item}>
+                        <StatCard 
+                            icon={Users} 
+                            title="Quota được giao" 
+                            value={loadingStats ? 'loading' : myQuota?.quota_assigned ?? 0} 
+                            description="Số đề tài tối đa" 
+                            iconBgClass="bg-blue-100 dark:bg-blue-900/30" 
+                            iconColorClass="text-blue-600 dark:text-blue-400" 
+                        />
+                    </motion.div>
+                    <motion.div variants={variants.item}>
+                        <StatCard 
+                            icon={FileSignature} 
+                            title="Tiến độ ra đề" 
+                            value={loadingStats ? 'loading' : `${myQuota?.topics_created ?? 0} / ${myQuota?.quota_assigned ?? 0}`} 
+                            description={loadingStats ? "..." : `Cần tạo thêm: ${myQuota?.topics_needed ?? 0}`} 
+                            iconBgClass="bg-green-100 dark:bg-green-900/30" 
+                            iconColorClass="text-green-600 dark:text-green-400" 
+                        />
+                    </motion.div>
+                    <motion.div variants={variants.item}>
+                        <StatCard 
+                            icon={CheckCircle} 
+                            title="Nhóm đã nhận HD" 
+                            value={loadingStats ? 'loading' : myQuota?.actual_assigned ?? 0} 
+                            description="Nhóm đang hướng dẫn" 
+                            iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" 
+                            iconColorClass="text-indigo-600 dark:text-indigo-400" 
+                        />
+                    </motion.div>
+                    <motion.div variants={variants.item}>
+                        <StatCard 
+                            icon={MessageSquare} 
+                            title="Góp ý phản biện" 
+                            value={loadingStats ? 'loading' : `${myQuota?.reviewed_count ?? 0} / ${myQuota?.total_reviews_assigned ?? 0}`} 
+                            description={loadingStats ? "..." : `Chưa góp ý: ${myQuota?.pending_reviews ?? 0}`} 
+                            iconBgClass="bg-purple-100 dark:bg-purple-900/30" 
+                            iconColorClass="text-purple-600 dark:text-purple-400" 
+                        />
+                    </motion.div>
                 </motion.div>
             </div>
 
@@ -547,38 +525,39 @@ const ThesisTopicsPage = () => {
                                 variants={variants.table} 
                                 initial="hidden" 
                                 animate="visible" 
-                                exit="exit"
+                                exit="exit" 
                                 className="h-full flex flex-col"
                             >
                                 <TabsContent value={activeTab} className="mt-0 h-full outline-none ring-0 flex flex-col">
-                                    {/* DataTable với Server-side Pagination */}
                                     <DataTable
                                         columns={columns}
                                         data={topics}
-                                        pageCount={serverPageCount} // Quan trọng: Tổng số trang từ server
+                                        pageCount={serverPageCount}
                                         loading={loading}
                                         
-                                        // Pagination State Control
                                         pagination={pagination}
                                         setPagination={setPagination}
                                         
-                                        // Filters State Control
                                         columnFilters={columnFilters}
                                         setColumnFilters={setColumnFilters}
                                         
-                                        // Sorting State Control
                                         sorting={sorting}
                                         setSorting={setSorting}
-
-                                        // Search Params
+                                        
+                                        onSuccess={() => {
+                                            fetchTopicsData();
+                                            loadPlanStatsAndInfo(selectedPlan);
+                                        }}
+                                        
                                         searchColumnId="TEN_DETAI"
                                         searchPlaceholder="Tìm theo tên, GV, mã..."
                                         searchTerm={searchTerm}
                                         onSearchChange={setSearchTerm}
 
-                                        // Filter Options (Client or Server logic supported by DataTable component structure)
-                                        chuyenNganhFilterColumnId="chuyen_nganh_id"
-                                        chuyenNganhFilterOptions={chuyenNganhOptions}
+                                        // [SỬA] Filter Bộ môn
+                                        khoaBomonFilterColumnId="department_id"
+                                        khoaBomonFilterOptions={departmentOptions}
+                                        khoaBomonFilterTitle="Bộ môn"
                                         
                                         statusColumnId="TRANGTHAI"
                                         statusOptions={[
@@ -588,7 +567,7 @@ const ThesisTopicsPage = () => {
                                             { value: "Đã duyệt", label: "Đã duyệt" },
                                             { value: "Từ chối", label: "Từ chối" },
                                         ]}
-
+                                        
                                         columnVisibility={columnVisibility}
                                         state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
                                         onRowSelectionChange={setRowSelection}
@@ -615,30 +594,15 @@ const ThesisTopicsPage = () => {
             />
 
             <Dialog open={showSubmitApprovalDialog} onOpenChange={setShowSubmitApprovalDialog}>
-                <DialogContent className="sm:max-w-[500px]">
+                 <DialogContent className="sm:max-w-[500px]">
                     <DialogHeader>
                         <DialogTitle>Gửi duyệt đề tài</DialogTitle>
-                        <DialogDescription>
-                            Bạn có chắc chắn muốn gửi đề tài này để duyệt không?
-                        </DialogDescription>
+                        <DialogDescription>Bạn có chắc chắn muốn gửi đề tài này để duyệt không?</DialogDescription>
                     </DialogHeader>
-                    <div className="py-4 text-sm text-gray-600">
-                        Sau khi gửi duyệt, đề tài sẽ chuyển sang trạng thái "Chờ duyệt".
-                    </div>
+                    <div className="py-4 text-sm text-gray-600">Sau khi gửi duyệt, đề tài sẽ chuyển sang trạng thái "Chờ duyệt".</div>
                     <DialogFooter>
-                        <div className="flex justify-end gap-2 w-full">
-                            <Button variant="outline" onClick={() => setShowSubmitApprovalDialog(false)}>
-                                Hủy
-                            </Button>
-                            <Button 
-                                onClick={() => {
-                                    handleSubmitForApproval(selectedTopicId);
-                                    setShowSubmitApprovalDialog(false);
-                                }}
-                            >
-                                Gửi duyệt
-                            </Button>
-                        </div>
+                        <Button variant="outline" onClick={() => setShowSubmitApprovalDialog(false)}>Hủy</Button>
+                        <Button onClick={() => { handleSubmitForApproval(selectedTopicId); setShowSubmitApprovalDialog(false); }}>Gửi duyệt</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -669,7 +633,7 @@ const ThesisTopicsPage = () => {
                         const res = await thesisTopicService.addSuggestion(selectedTopicId, { NOIDUNG_GOIY: suggestion });
                         toast.success(res.data.message || 'Góp ý đã được gửi!');
                         setShowSuggestionDialog(false);
-                        fetchTopicsData(); // Reload list to reflect status changes if any
+                        fetchTopicsData(); 
                     } catch (error) {
                         toast.error(error.response?.data?.message || 'Có lỗi khi gửi góp ý');
                         throw error;

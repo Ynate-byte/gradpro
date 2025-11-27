@@ -12,8 +12,6 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // First, we need to modify the enum to include 'Từ chối'
-        // Since MySQL doesn't support direct enum modification, we'll use raw SQL
         DB::statement("ALTER TABLE detai MODIFY COLUMN TRANGTHAI ENUM('Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đã duyệt', 'Đã đầy', 'Đã khóa', 'Từ chối') DEFAULT 'Nháp'");
     }
 

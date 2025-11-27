@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { DataTableRowActions } from "./row-actions";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
-// === Badge trạng thái (tái sử dụng) ===
+// === Badge trạng thái ===
 const getStatusBadge = (status) => {
     const statusConfig = {
         'Nháp': { label: "Nháp", className: "bg-gray-100 text-gray-700 border-gray-200" },
@@ -27,7 +27,6 @@ const getStatusBadge = (status) => {
     );
 };
 
-// === Icon sắp xếp ===
 const SortIndicator = ({ column }) => {
     const sorted = column.getIsSorted();
     if (!sorted) return <ArrowUpDown className="ml-2 h-4 w-4 text-muted-foreground opacity-50" />;
@@ -38,7 +37,6 @@ const SortIndicator = ({ column }) => {
     );
 };
 
-// === Cấu hình cột DataTable ===
 export const getColumns = ({
     currentUserId,
     onEdit,
@@ -48,7 +46,7 @@ export const getColumns = ({
     onAddSuggestion,
     onViewRegisteredGroups,
     isReviewTab = false,
-    canSubmitApproval = false, // Nhận biến Feature Flag
+    canSubmitApproval = false,
 }) => [
     {
         accessorKey: "TEN_DETAI",
@@ -71,7 +69,6 @@ export const getColumns = ({
                 >
                     {row.original.TEN_DETAI}
                 </button>
-                {/* Hiển thị mã đề tài nhỏ bên dưới nếu cần */}
                 <span className="text-[10px] text-muted-foreground">{row.original.MA_DETAI}</span>
             </div>
         ),
@@ -80,7 +77,6 @@ export const getColumns = ({
         accessorKey: "ten_giang_vien",
         header: "GV Đề xuất",
         cell: ({ row }) => {
-            // Ép kiểu String để so sánh an toàn
             const isOwner = String(row.original.ID_NGUOI_DEXUAT) === String(currentUserId);
             return (
                 <div
@@ -103,19 +99,24 @@ export const getColumns = ({
         cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
         filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
+    
+    // [SỬA] Cột Bộ môn (Thay thế Chuyên ngành)
     {
-        accessorKey: "chuyennganh.TEN_CHUYENNGANH",
-        header: "Chuyên ngành",
+        accessorKey: "ten_bo_mon",
+        header: "Bộ môn",
         cell: ({ row }) => (
-            <div className="text-xs text-muted-foreground max-w-[150px] truncate" title={row.original.chuyennganh?.TEN_CHUYENNGANH}>
-                {row.original.chuyennganh?.TEN_CHUYENNGANH || "N/A"}
+            <div className="text-xs text-muted-foreground max-w-[150px] truncate" title={row.original.ten_bo_mon}>
+                {row.original.ten_bo_mon || "N/A"}
             </div>
         ),
     },
+    // [SỬA] Cột ẩn để lọc theo ID Bộ môn
     {
-        id: "chuyen_nganh_id",
-        accessorFn: (row) => String(row.chuyennganh?.ID_CHUYENNGANH || ""),
+        id: "department_id",
+        accessorFn: (row) => String(row.original?.ID_KHOA_BOMON || ""),
+        enableHiding: true,
     },
+
     {
         accessorKey: "SO_NHOM_HIENTAI",
         header: () => <div className="text-center">Đã ĐK</div>,
@@ -134,23 +135,15 @@ export const getColumns = ({
         },
     },
     
-    // --- CỘT TRẠNG THÁI GÓP Ý (Chỉ hiện ở Tab 'Cần góp ý') ---
     ...(isReviewTab ? [{
         id: "contribution_status",
         header: "Trạng thái góp ý",
         cell: ({ row }) => {
             const topic = row.original;
-            
-            // 1. Lấy danh sách phân công review của đề tài này
             const assignments = topic.phancong_nguoi_gop_y || [];
-            
-            // 2. Tìm phân công của CHÍNH TÔI (currentUserId là ID_GIANGVIEN)
-            // Chuyển về String để so sánh an toàn
             const myAssignment = assignments.find(a => 
                 String(a.ID_GIANGVIEN) === String(currentUserId)
             );
-
-            // 3. Kiểm tra trạng thái trong bảng phân công
             const isCompleted = myAssignment?.TRANGTHAI === 'Hoàn thành';
 
             return (
@@ -174,19 +167,14 @@ export const getColumns = ({
         cell: ({ row }) => {
             const topic = row.original;
             const isOwner = String(topic.ID_NGUOI_DEXUAT) === String(currentUserId);
-            
-            // Logic hiển thị nút Gửi duyệt (Quick Action)
-            // Cho phép gửi khi: Nháp, Yêu cầu chỉnh sửa, HOẶC Đang chỉnh sửa
             const showSubmit = ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI) && isOwner;
 
             return (
                 <div className="flex items-center gap-1 justify-end">
-                    {/* Nút gửi duyệt nhanh (Quick Action) */}
                     {showSubmit && (
                         <TooltipProvider>
                             <Tooltip>
                                 <TooltipTrigger asChild>
-                                    {/* Wrap trong span để tooltip hoạt động ngay cả khi button disabled */}
                                     <span tabIndex={-1} className="inline-block">
                                         <Button
                                             size="icon"

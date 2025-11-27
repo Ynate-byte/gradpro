@@ -19,7 +19,7 @@ class DetaiAdminController extends Controller
     {
         $query = Detai::with([
             'nguoiDexuat.nguoidung',
-            'chuyennganh',
+            'khoaBomon',
             'kehoachKhoaluan',
             'goiyDetai.nguoiGoiy.nguoidung'
         ]);
@@ -45,11 +45,16 @@ class DetaiAdminController extends Controller
             });
         }
 
+        if ($request->has('department_id')) {
+            $query->where('ID_KHOA_BOMON', $request->department_id);
+        }
+
         $topics = $query->orderBy('NGAYTAO', 'desc')->get();
 
         // Thêm tên giảng viên để hiển thị
         $topics->transform(function ($topic) {
             $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
+            $topic->ten_bo_mon = $topic->khoaBomon?->TEN_KHOA_BOMON ?? 'N/A';
             return $topic;
         });
 

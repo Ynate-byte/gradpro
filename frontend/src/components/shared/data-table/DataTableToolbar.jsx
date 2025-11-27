@@ -44,11 +44,13 @@ export function DataTableToolbar({
   hedaotaoFilterOptions,
   chuyenNganhFilterColumnId,
   chuyenNganhFilterOptions,
+  
+  // Props cho bộ môn
   khoaBomonFilterColumnId,
   khoaBomonFilterOptions,
   khoaBomonFilterTitle,
   
-  // Nhận props bộ lọc chức vụ
+  // Props cho chức vụ
   chucVuFilterColumnId,
   chucVuFilterOptions,
   
@@ -113,6 +115,7 @@ export function DataTableToolbar({
     ? selectedRolesRaw 
     : (selectedRolesRaw ? [selectedRolesRaw] : []);
 
+  // Logic cũ: Chỉ hiện bộ lọc sinh viên/giảng viên khi chọn Role tương ứng
   const showStudentFilters = selectedRoles.includes('Sinh viên') || selectedRoles.length === 0;
   const showLecturerFilters = selectedRoles.includes('Giảng viên') || selectedRoles.length === 0;
 
@@ -189,8 +192,9 @@ export function DataTableToolbar({
         />
     ) : null,
 
-    // --- Bộ lọc RIÊNG cho GIẢNG VIÊN ---
-    (khoaBomonFilterOptions && showLecturerFilters) ? (
+    // --- Bộ lọc RIÊNG cho GIẢNG VIÊN & QUẢN LÝ ĐỀ TÀI ---
+    // [UPDATED] Luôn hiển thị nếu có options (để dùng cho trang Quản lý Đề tài)
+    (khoaBomonFilterOptions) ? (
         <DataTableFacetedFilterGroup
             key="khoa_bomon_filter"
             column={table.getColumn(khoaBomonFilterColumnId || "khoa_bomon_id")}
@@ -212,7 +216,7 @@ export function DataTableToolbar({
 
   ].filter(Boolean);
 
-  // [SỬA LỖI] Thêm "|| []" để tránh lỗi undefined reading 'filter'
+  // Tính toán số lượng bộ lọc đang active
   const activeFilterCount = (table.getState().columnFilters || []).filter(
     f => f.id !== searchColumnId
   ).length;
@@ -228,7 +232,7 @@ export function DataTableToolbar({
       ...(namhocFilterOptions || []),
       ...(hockyFilterOptions || []),
       ...(hedaotaoFilterOptions || []),
-      ...(chucVuFilterOptions || []), 
+      ...(chucVuFilterOptions || []),
     ];
     return new Map(options.map(opt => [String(opt.value), opt.label]));
   }, [
@@ -238,7 +242,6 @@ export function DataTableToolbar({
   ]);
 
   const selectedFilterLabels = useMemo(() => {
-    // [SỬA LỖI] Thêm "|| []" để tránh lỗi undefined
     const filters = table.getState().columnFilters || [];
     const labels = [];
     

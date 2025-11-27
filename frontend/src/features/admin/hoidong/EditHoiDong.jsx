@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import {
   Loader2, ArrowLeft, Search, Save, Trash2, ShieldAlert,
   Users, Settings, GraduationCap, Calendar, MapPin, BookCopy,
-  LayoutTemplate, Briefcase, Info, User
+  LayoutTemplate, Info, User
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
@@ -46,6 +46,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { getKhoaBomons } from "@/api/userService";
 
 const EditHoiDong = () => {
   const { id } = useParams();
@@ -65,12 +66,12 @@ const EditHoiDong = () => {
     GIO_BAOCAO: "",
     PHONG: "",
     ID_KEHOACH: "",
-    ID_CHUYENNGANH: "",
+    ID_KHOA_BOMON: "",
     LOAI: "hoidong",
   });
 
   const [kehoach, setKehoach] = useState([]);
-  const [chuyennganh, setChuyennganh] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [availableGiangvien, setAvailableGiangvien] = useState([]);
   const [originalAssignedGV, setOriginalAssignedGV] = useState([]);
   const [selectedGV, setSelectedGV] = useState([]);
@@ -82,15 +83,15 @@ const EditHoiDong = () => {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [hoidongRes, kehoachRes, chuyennganhRes] = await Promise.all([
+      const [hoidongRes, kehoachRes, deptRes] = await Promise.all([
         axiosClient.get(`/admin/hoidong/${id}`),
         axiosClient.get("/admin/hoidong/kehoach-options"),
-        axiosClient.get("/admin/hoidong/chuyennganh-options"),
+        getKhoaBomons(),
       ]);
 
       const hd = hoidongRes.data;
       setKehoach(kehoachRes.data || []);
-      setChuyennganh(chuyennganhRes.data || []);
+      setDepartments(deptRes || []);
       setAssignedNhoms(hd.nhoms || []);
 
       const originalGVs = (hd.giangviens || []).map((gv) => ({
@@ -116,7 +117,7 @@ const EditHoiDong = () => {
         GIO_BAOCAO: hd.GIO_BAOCAO || "",
         PHONG: hd.PHONG || "",
         ID_KEHOACH: hd.ID_KEHOACH || "",
-        ID_CHUYENNGANH: hd.ID_CHUYENNGANH || "",
+        ID_KHOA_BOMON: hd.ID_KHOA_BOMON || "",
         LOAI: hd.LOAI || "hoidong",
       });
     } catch (err) {
@@ -251,7 +252,7 @@ const EditHoiDong = () => {
       const payload = {
         ...form,
         ID_KEHOACH: Number(form.ID_KEHOACH),
-        ID_CHUYENNGANH: Number(form.ID_CHUYENNGANH),
+        ID_KHOA_BOMON: Number(form.ID_KHOA_BOMON),
         NGAY_BAOCAO: form.NGAY_BAOCAO || null,
         GIO_BAOCAO: form.GIO_BAOCAO || null,
         PHONG: form.PHONG || null,
@@ -361,7 +362,6 @@ const EditHoiDong = () => {
         </div>
       </div>
 
-      {/* 2. MAIN CONTENT WRAPPER */}
       <div className="flex-1 flex overflow-hidden">
           
           {/* CỘT TRÁI: Sidebar */}
@@ -436,12 +436,12 @@ const EditHoiDong = () => {
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label className="text-xs font-medium">Chuyên ngành</Label>
-                                <Select value={String(form.ID_CHUYENNGANH)} onValueChange={(v) => handleSelectChange("ID_CHUYENNGANH", v)}>
-                                    <SelectTrigger className="h-9 text-sm bg-muted/10 border-dashed border-border"><SelectValue placeholder="Chọn chuyên ngành" /></SelectTrigger>
+                                <Label className="text-xs font-medium">Khoa/Bộ môn</Label>
+                                <Select value={String(form.ID_KHOA_BOMON)} onValueChange={(v) => handleSelectChange("ID_KHOA_BOMON", v)}>
+                                    <SelectTrigger className="h-9 text-sm bg-muted/10 border-dashed border-border"><SelectValue placeholder="Chọn bộ môn" /></SelectTrigger>
                                     <SelectContent>
-                                        {chuyennganh.map((c) => (
-                                            <SelectItem key={c.ID_CHUYENNGANH} value={String(c.ID_CHUYENNGANH)}>{c.TEN_CHUYENNGANH}</SelectItem>
+                                        {departments.map((c) => (
+                                            <SelectItem key={c.ID_KHOA_BOMON} value={String(c.ID_KHOA_BOMON)}>{c.TEN_KHOA_BOMON}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -455,7 +455,6 @@ const EditHoiDong = () => {
           {/* CỘT PHẢI: Content */}
           <main className="flex-1 flex flex-col min-w-0 bg-muted/10 overflow-hidden">
              <Tabs defaultValue="members" className="flex-1 flex flex-col h-full overflow-hidden">
-                {/* [Header Tabs] */}
                 <div className="px-6 pt-4 shrink-0">
                     <TabsList className="bg-background border shadow-sm h-11 p-1 w-full justify-start rounded-xl">
                         <TabsTrigger value="members" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary rounded-lg px-4 h-full font-semibold flex-1 md:flex-none">
@@ -513,11 +512,8 @@ const EditHoiDong = () => {
                                             </TableRow>
                                         ) : combinedFilteredGV.length > 0 ? (
                                             combinedFilteredGV.map((gv) => {
-                                                const isOriginalMember = originalAssignedGV.some((oGv) => oGv.ID_GIANGVIEN === gv.ID_GIANGVIEN);
-                                                // Không disable giảng viên đã có hội đồng khác
-                                                // Chỉ hiển thị badge thông báo số lượng
-                                                const hoidongCount = gv.HOIDONGS ? gv.HOIDONGS.length : 0;
                                                 const isSelected = selectedGV.includes(gv.ID_GIANGVIEN);
+                                                const hoidongCount = gv.HOIDONGS ? gv.HOIDONGS.length : 0;
 
                                                 return (
                                                     <TableRow 
@@ -531,7 +527,6 @@ const EditHoiDong = () => {
                                                             <Checkbox 
                                                                 checked={isSelected}
                                                                 onCheckedChange={() => handleToggleGiangVien(gv.ID_GIANGVIEN)}
-                                                                // Đã bỏ disable
                                                                 className="data-[state=checked]:bg-primary data-[state=checked]:border-primary w-5 h-5 rounded"
                                                             />
                                                         </TableCell>
@@ -543,7 +538,6 @@ const EditHoiDong = () => {
                                                                 </span>
                                                                 <div className="flex items-center gap-2">
                                                                     <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-mono text-muted-foreground border-muted-foreground/30">{gv.MA_GIANGVIEN}</Badge>
-                                                                    {/* [SỬA ĐỔI]: HIỂN THỊ SỐ LƯỢNG HỘI ĐỒNG BẰNG BADGE */}
                                                                     {hoidongCount > 0 && (
                                                                         <Badge 
                                                                             variant="outline" 
@@ -560,26 +554,28 @@ const EditHoiDong = () => {
                                                         </TableCell>
                                                         <TableCell className="py-2">
                                                             {isSelected && (
-                                                                <Select 
-                                                                    value={form.LOAI === 'phanbien' ? 'phanbien' : (gvRoles[gv.ID_GIANGVIEN] || 'thanhvien')}
-                                                                    onValueChange={(v) => handleRoleChange(gv.ID_GIANGVIEN, v)}
-                                                                    disabled={form.LOAI === 'phanbien'}
-                                                                >
-                                                                    <SelectTrigger className="h-9 text-xs w-full border-primary/30 bg-background shadow-sm focus:ring-primary/20">
-                                                                        <SelectValue />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent>
-                                                                        {form.LOAI === 'hoidong' ? (
-                                                                            <>
-                                                                                <SelectItem value="chutich">Chủ tịch</SelectItem>
-                                                                                <SelectItem value="thuky">Thư ký</SelectItem>
-                                                                                <SelectItem value="thanhvien">Thành viên</SelectItem>
-                                                                            </>
-                                                                        ) : (
-                                                                            <SelectItem value="phanbien">Phản biện</SelectItem>
-                                                                        )}
-                                                                    </SelectContent>
-                                                                </Select>
+                                                                <div className="w-[110px]">
+                                                                    <Select 
+                                                                        value={form.LOAI === 'phanbien' ? 'phanbien' : (gvRoles[gv.ID_GIANGVIEN] || 'thanhvien')}
+                                                                        onValueChange={(v) => handleRoleChange(gv.ID_GIANGVIEN, v)}
+                                                                        disabled={form.LOAI === 'phanbien'}
+                                                                    >
+                                                                        <SelectTrigger className="h-9 text-xs w-full border-primary/30 bg-background shadow-sm focus:ring-primary/20">
+                                                                            <SelectValue />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            {form.LOAI === 'hoidong' ? (
+                                                                                <>
+                                                                                    <SelectItem value="chutich">Chủ tịch</SelectItem>
+                                                                                    <SelectItem value="thuky">Thư ký</SelectItem>
+                                                                                    <SelectItem value="thanhvien">Thành viên</SelectItem>
+                                                                                </>
+                                                                            ) : (
+                                                                                <SelectItem value="phanbien">Phản biện</SelectItem>
+                                                                            )}
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
                                                             )}
                                                         </TableCell>
                                                     </TableRow>
@@ -597,7 +593,7 @@ const EditHoiDong = () => {
                     </Card>
                 </TabsContent>
 
-                {/* Tab 3: Các nhóm - [SỬA ĐỔI: DÙNG TABLE + POPOVER] */}
+                {/* Tab 3: Các nhóm */}
                 <TabsContent value="groups" className="hidden flex-1 flex-col min-h-0 p-6 mt-0 data-[state=active]:flex overflow-hidden">
                     {assignedNhoms.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-4 bg-background rounded-xl border border-dashed shadow-sm">
@@ -679,9 +675,8 @@ const EditHoiDong = () => {
                                                             variant="ghost" 
                                                             size="icon" 
                                                             className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                            onClick={() => handleXoaNhom(nhom.ID_NHOM)}
-                                                            disabled={deletingGroupId === nhom.ID_NHOM}
-                                                            title="Gỡ nhóm khỏi hội đồng"
+                                                            onClick={(e) => handleXoaNhom(nhom.ID_NHOM)}
+                                                            title="Gỡ nhóm khỏi hội đồng này"
                                                         >
                                                             {deletingGroupId === nhom.ID_NHOM ? (
                                                                 <Loader2 className="h-4 w-4 animate-spin"/>
@@ -695,7 +690,7 @@ const EditHoiDong = () => {
                                         })}
                                     </TableBody>
                                 </Table>
-                             </ScrollArea>
+                            </ScrollArea>
                         </div>
                     )}
                 </TabsContent>

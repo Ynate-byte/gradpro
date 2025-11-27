@@ -21,13 +21,6 @@ class Chuyennganh extends Model
         'MOTA',
         'TRANGTHAI_KICHHOAT',
     ];
-
-    public function giangviens()
-    {
-        // Giả định giảng viên cũng có ID_CHUYENNGANH (nếu không, quan hệ này sẽ không hoạt động)
-        return $this->hasMany(Giangvien::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');
-    }
-
     public function hoidongs()
     {
         return $this->hasMany(Hoidong::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');

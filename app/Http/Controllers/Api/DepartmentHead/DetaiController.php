@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\DepartmentHead;
 
 use App\Http\Controllers\Api\Admin\DetaiAdminController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use App\Models\Detai;
 
 class DetaiController extends DetaiAdminController
 {
@@ -14,23 +16,20 @@ class DetaiController extends DetaiAdminController
     {
         $currentUser = auth()->user();
 
-        // [UPDATE] Check if user is department head using N-N relation logic
-        // Cần đảm bảo user là giảng viên để lấy ID_KHOA_BOMON
+        // Check if user is department head
         if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        $query = \App\Models\Detai::with([
+        $query = Detai::with([
             'nguoiDexuat.nguoidung',
-            'chuyennganh',
+            'khoaBomon', // Load quan hệ Khoa/Bộ môn
             'kehoachKhoaluan',
             'goiyDetai.nguoiGoiy.nguoidung'
         ])
-        ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-            $q->where('ID_KHOA_BOMON', $departmentId);
-        });
+        ->where('ID_KHOA_BOMON', $departmentId);
 
         // Filter by status
         if ($request->has('status')) {
@@ -71,26 +70,22 @@ class DetaiController extends DetaiAdminController
     {
         $currentUser = auth()->user();
 
-        // [UPDATE] Check if user is department head
         if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
 
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        $topics = \App\Models\Detai::with([
+        $topics = Detai::with([
             'nguoiDexuat.nguoidung',
-            'chuyennganh',
+            'khoaBomon',
             'goiyDetai.nguoiGoiy.nguoidung'
         ])
         ->where('TRANGTHAI', 'Chờ duyệt')
-        ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-            $q->where('ID_KHOA_BOMON', $departmentId);
-        })
+        ->where('ID_KHOA_BOMON', $departmentId)
         ->orderBy('NGAYTAO', 'asc')
         ->get();
 
-        // Add lecturer name for display
         $topics->transform(function ($topic) {
             $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
             return $topic;
@@ -106,7 +101,6 @@ class DetaiController extends DetaiAdminController
     {
         $currentUser = auth()->user();
 
-        // [UPDATE] Check if user is department head
         if (!$currentUser->giangvien || !in_array('TRUONG_BOMON', $this->getUserPositionCodes())) {
             return response()->json(['message' => 'Chỉ trưởng bộ môn mới có quyền truy cập chức năng này'], 403);
         }
@@ -114,41 +108,31 @@ class DetaiController extends DetaiAdminController
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
         $stats = [
-            'total_topics' => \App\Models\Detai::whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                $q->where('ID_KHOA_BOMON', $departmentId);
-            })->count(),
-            'draft_topics' => \App\Models\Detai::where('TRANGTHAI', 'Nháp')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'pending_topics' => \App\Models\Detai::where('TRANGTHAI', 'Chờ duyệt')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'approved_topics' => \App\Models\Detai::where('TRANGTHAI', 'Đã duyệt')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'rejected_topics' => \App\Models\Detai::where('TRANGTHAI', 'Từ chối')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'edit_requested_topics' => \App\Models\Detai::where('TRANGTHAI', 'Yêu cầu chỉnh sửa')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'full_topics' => \App\Models\Detai::where('TRANGTHAI', 'Đã đầy')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'locked_topics' => \App\Models\Detai::where('TRANGTHAI', 'Đã khóa')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
-            'topics_with_suggestions' => \App\Models\Detai::whereHas('goiyDetai')
-                ->whereHas('nguoiDexuat', function($q) use ($departmentId) {
-                    $q->where('ID_KHOA_BOMON', $departmentId);
-                })->count(),
+            'total_topics' => Detai::where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'draft_topics' => Detai::where('TRANGTHAI', 'Nháp')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'pending_topics' => Detai::where('TRANGTHAI', 'Chờ duyệt')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'approved_topics' => Detai::where('TRANGTHAI', 'Đã duyệt')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'rejected_topics' => Detai::where('TRANGTHAI', 'Từ chối')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'edit_requested_topics' => Detai::where('TRANGTHAI', 'Yêu cầu chỉnh sửa')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'full_topics' => Detai::where('TRANGTHAI', 'Đã đầy')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'locked_topics' => Detai::where('TRANGTHAI', 'Đã khóa')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
+            
+            'topics_with_suggestions' => Detai::whereHas('goiyDetai')
+                ->where('ID_KHOA_BOMON', $departmentId)->count(),
         ];
 
         return response()->json($stats);

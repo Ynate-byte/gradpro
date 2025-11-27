@@ -6,26 +6,28 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getAllPlans } from '@/api/thesisPlanService';
-import { getChuyenNganhs } from '@/api/userService';
+import { getKhoaBomons } from '@/api/userService'; // [SỬA] Import
 import {
     Loader2, Save, BookType, Layers, FileText,
     Target, CheckSquare, Award, Users, Calendar, Edit, Plus
 } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import ReuseTopicDialog from './ReuseTopicDialog';  
+import ReuseTopicDialog from './ReuseTopicDialog';
+
 const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
     const [loading, setLoading] = useState(false);
     const [dataLoading, setDataLoading] = useState(false);
     const [plans, setPlans] = useState([]);
-    const [majors, setMajors] = useState([]);
+    const [departments, setDepartments] = useState([]); // [SỬA] departments state
     const [error, setError] = useState(null);
     const [reuseDialogOpen, setReuseDialogOpen] = useState(false);
+    
     const [formData, setFormData] = useState({
         ID_KEHOACH: '',
         TEN_DETAI: '',
         MOTA: '',
-        ID_CHUYENNGANH: '',
+        ID_KHOA_BOMON: '', // [SỬA] ID_KHOA_BOMON
         YEUCAU: '',
         MUCTIEU: '',
         KETQUA_MONGDOI: '',
@@ -40,7 +42,8 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
                     ID_KEHOACH: topic.ID_KEHOACH ? String(topic.ID_KEHOACH) : '',
                     TEN_DETAI: topic.TEN_DETAI || '',
                     MOTA: topic.MOTA || '',
-                    ID_CHUYENNGANH: topic.ID_CHUYENNGANH ? String(topic.ID_CHUYENNGANH) : '',
+                    // [SỬA] Map dữ liệu bộ môn
+                    ID_KHOA_BOMON: topic.ID_KHOA_BOMON ? String(topic.ID_KHOA_BOMON) : '',
                     YEUCAU: topic.YEUCAU || '',
                     MUCTIEU: topic.MUCTIEU || '',
                     KETQUA_MONGDOI: topic.KETQUA_MONGDOI || '',
@@ -51,7 +54,7 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
                     ID_KEHOACH: '',
                     TEN_DETAI: '',
                     MOTA: '',
-                    ID_CHUYENNGANH: '',
+                    ID_KHOA_BOMON: '', // [SỬA]
                     YEUCAU: '',
                     MUCTIEU: '',
                     KETQUA_MONGDOI: '',
@@ -65,19 +68,19 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
         setDataLoading(true);
         setError(null);
         try {
-            const [plansData, majorsData] = await Promise.all([
+            const [plansData, deptData] = await Promise.all([
                 getAllPlans(),
-                getChuyenNganhs()
+                getKhoaBomons() // [SỬA] Lấy danh sách bộ môn
             ]);
             setPlans(plansData || []);
-            setMajors(majorsData || []);
+            setDepartments(deptData || []); // [SỬA] Set departments
 
             if (!topic && plansData && plansData.length > 0 && !formData.ID_KEHOACH) {
                 setFormData(prev => ({ ...prev, ID_KEHOACH: String(plansData[0].ID_KEHOACH) }));
             }
         } catch (error) {
             console.error('Error loading data:', error);
-            setError('Không thể tải dữ liệu kế hoạch/chuyên ngành. Vui lòng thử lại.');
+            setError('Không thể tải dữ liệu kế hoạch/bộ môn. Vui lòng thử lại.');
         } finally {
             setDataLoading(false);
         }
@@ -104,10 +107,9 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            {/* [LAYOUT] Max width lớn hơn, bo góc mềm mại, shadow sâu */}
             <DialogContent className="max-w-3xl w-full h-[90vh] p-0 flex flex-col overflow-hidden bg-background gap-0 sm:rounded-xl shadow-2xl border-border/60">
-
-                {/* 1. HEADER */}
+                
+                {/* HEADER */}
                 <DialogHeader className="px-8 py-6 border-b bg-muted/10 shrink-0">
                     <div className="flex items-center gap-4">
                         <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
@@ -126,7 +128,7 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
                     </div>
                 </DialogHeader>
 
-                {/* 2. BODY (SCROLLABLE) */}
+                {/* BODY */}
                 <div className="flex-1 overflow-y-auto custom-scrollbar">
                     <div className="px-8 py-6">
 
@@ -139,7 +141,7 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
 
                         <form id="create-topic-form" onSubmit={handleSubmit} className="space-y-8">
 
-                            {/* BLOCK 1: BỐI CẢNH (KẾ HOẠCH & CHUYÊN NGÀNH) */}
+                            {/* BLOCK 1: BỐI CẢNH */}
                             <div className="bg-secondary/30 p-5 rounded-xl border border-border/50 space-y-4">
                                 <h4 className="text-xs font-bold uppercase text-muted-foreground tracking-wider mb-3">Thiết lập chung</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -165,22 +167,23 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
                                         </Select>
                                     </div>
 
+                                    {/* [SỬA] Dropdown chọn Bộ môn */}
                                     <div className="space-y-2.5">
-                                        <Label htmlFor="ID_CHUYENNGANH" className="flex items-center gap-2 text-sm font-semibold">
-                                            <Layers className="w-4 h-4 text-indigo-500" /> Chuyên ngành
+                                        <Label htmlFor="ID_KHOA_BOMON" className="flex items-center gap-2 text-sm font-semibold">
+                                            <Layers className="w-4 h-4 text-indigo-500" /> Khoa/Bộ môn <span className="text-red-500">*</span>
                                         </Label>
                                         <Select
-                                            value={formData.ID_CHUYENNGANH}
-                                            onValueChange={(value) => handleInputChange('ID_CHUYENNGANH', value)}
+                                            value={formData.ID_KHOA_BOMON}
+                                            onValueChange={(value) => handleInputChange('ID_KHOA_BOMON', value)}
                                             disabled={dataLoading}
                                         >
-                                            <SelectTrigger id="ID_CHUYENNGANH" className="bg-background h-10">
-                                                <SelectValue placeholder={dataLoading ? "Đang tải..." : "Chọn chuyên ngành (Tùy chọn)"} />
+                                            <SelectTrigger id="ID_KHOA_BOMON" className="bg-background h-10">
+                                                <SelectValue placeholder={dataLoading ? "Đang tải..." : "Chọn khoa/bộ môn"} />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {majors.map((major) => (
-                                                    <SelectItem key={major.ID_CHUYENNGANH} value={String(major.ID_CHUYENNGANH)}>
-                                                        {major.TEN_CHUYENNGANH}
+                                                {departments.map((dept) => (
+                                                    <SelectItem key={dept.ID_KHOA_BOMON} value={String(dept.ID_KHOA_BOMON)}>
+                                                        {dept.TEN_KHOA_BOMON}
                                                     </SelectItem>
                                                 ))}
                                             </SelectContent>
@@ -290,7 +293,7 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
                     </div>
                 </div>
 
-                {/* 3. FOOTER (Fixed) */}
+                {/* FOOTER */}
                 <DialogFooter className="px-8 py-5 border-t bg-background shrink-0 flex items-center justify-between sm:justify-end gap-3">
                     <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading} className="h-10 px-6">
                         Hủy bỏ
@@ -313,7 +316,6 @@ const CreateTopicDialog = ({ open, onOpenChange, onSubmit, topic = null }) => {
                         onOpenChange(false);
                     }}
                 />
-
             </DialogContent>
         </Dialog>
     );

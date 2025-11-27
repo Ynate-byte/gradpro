@@ -12,8 +12,8 @@ return new class extends Migration
             $table->id('ID_QUOTA');
             $table->unsignedBigInteger('ID_KEHOACH');
             $table->unsignedBigInteger('ID_GIANGVIEN');
-            $table->unsignedBigInteger('ID_NGUOI_PHANCONG'); // Admin phân công
-            $table->integer('SO_DETAI_QUOTA')->default(0); // Số đề tài được phép đề xuất
+            $table->unsignedBigInteger('ID_NGUOI_PHANCONG');
+            $table->integer('SO_DETAI_QUOTA')->default(0);
             $table->timestamp('NGAY_PHANCONG')->useCurrent();
             $table->text('GHICHU')->nullable();
             $table->enum('TRANGTHAI', ['Đang phân công', 'Hoàn thành', 'Ngừng phân công'])

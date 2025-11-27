@@ -1,9 +1,16 @@
 import axiosConfig from './axiosConfig';
 
 const thesisTopicService = {
-    // Get all topics with optional filters
+    // Get all topics with optional filters (Admin/General)
     getTopics: async (params = {}) => {
         const response = await axiosConfig.get('/detai', { params });
+        return response;
+    },
+
+    // [SỬA] Admin: Get all topics (Hỗ trợ lọc department_id)
+    getAdminTopics: async (params = {}) => {
+        // params có thể chứa: plan_id, department_id, status, search
+        const response = await axiosConfig.get('/admin/detai', { params });
         return response;
     },
 
@@ -61,7 +68,7 @@ const thesisTopicService = {
         return response;
     },
     
-    // Thêm hàm mới để gọi controller PhanhoiGoiyController
+    // Reply to suggestion
     addReplyToSuggestion: async (suggestionId, replyData) => {
         const response = await axiosConfig.post(`/detai/goiy/${suggestionId}/reply`, replyData);
         return response;
@@ -85,12 +92,6 @@ const thesisTopicService = {
         return response;
     },
 
-    // Admin: Get all topics for review
-    getAdminTopics: async (params = {}) => {
-        const response = await axiosConfig.get('/admin/detai', { params });
-        return response;
-    },
-
     // Admin: Get pending topics
     getPendingTopics: async () => {
         const response = await axiosConfig.get('/admin/detai/pending');
@@ -103,7 +104,7 @@ const thesisTopicService = {
         return response;
     },
 
-    // Admin: Approve or reject topic
+    // Admin: Approve or reject topic (Wrapper)
     adminApproveOrReject: async (id, data) => {
         const response = await axiosConfig.post(`/admin/detai/${id}/approve-reject`, data);
         return response;
@@ -121,7 +122,7 @@ const thesisTopicService = {
         return response;
     },
 
-    // Get group status (has registered topic or not)
+    // Get group status
     getGroupStatus: async () => {
         const response = await axiosConfig.get('/group-status');
         return response;
@@ -152,13 +153,7 @@ const thesisTopicService = {
         return response;
     },
 
-    // Evaluate group (for lecturers)
-    evaluateGroup: async (id, evaluationData) => {
-        const response = await axiosConfig.post(`/nhom/${id}/evaluate`, evaluationData);
-        return response;
-    },
-
-    // --- [ĐÃ SỬA LỖI TẠI ĐÂY: Thay axios -> axiosConfig] ---
+    // Import functions
     downloadImportTemplate: () => {
         return axiosConfig.get('/detai/import/template', { responseType: 'blob' });
     },

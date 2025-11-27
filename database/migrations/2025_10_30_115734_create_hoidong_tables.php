@@ -8,38 +8,36 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // 🔹 Bảng HỘI ĐỒNG
         Schema::create('HOIDONG', function (Blueprint $table) {
             $table->id('ID_HOIDONG');
             $table->string('TEN_HOIDONG', 100);
             $table->enum('LOAI', ['phanbien', 'hoidong']);
             $table->unsignedBigInteger('ID_KEHOACH')->nullable();
-            $table->unsignedBigInteger('ID_CHUYENNGANH')->nullable();
+            
+            $table->unsignedBigInteger('ID_KHOA_BOMON')->nullable();
+
             $table->date('NGAY_BAOCAO')->nullable();
             $table->time('GIO_BAOCAO')->nullable();
             $table->string('PHONG', 50)->nullable();
             $table->timestamps();
 
-            // Ràng buộc khóa ngoại
             $table->foreign('ID_KEHOACH')
                 ->references('ID_KEHOACH')
                 ->on('KEHOACH_KHOALUAN')
                 ->onDelete('set null');
 
-            $table->foreign('ID_CHUYENNGANH')
-                ->references('ID_CHUYENNGANH')
-                ->on('CHUYENNGANH')
+            $table->foreign('ID_KHOA_BOMON')
+                ->references('ID_KHOA_BOMON')
+                ->on('KHOA_BOMON')
                 ->onDelete('set null');
         });
 
-        // 🔹 Bảng pivot: HỘI ĐỒNG - GIẢNG VIÊN
         Schema::create('HOIDONG_GIANGVIEN', function (Blueprint $table) {
             $table->unsignedBigInteger('ID_HOIDONG');
             $table->unsignedBigInteger('ID_GIANGVIEN');
             $table->enum('VAITRO', ['chutich', 'thuky', 'thanhvien', 'phanbien'])->default('thanhvien');
             $table->timestamps();
 
-            // Ràng buộc khóa ngoại
             $table->foreign('ID_HOIDONG')
                 ->references('ID_HOIDONG')
                 ->on('HOIDONG')
@@ -49,8 +47,6 @@ return new class extends Migration
                 ->references('ID_GIANGVIEN')
                 ->on('GIANGVIEN')
                 ->onDelete('cascade');
-
-            // ✅ Đảm bảo không trùng vai trò của cùng GV trong 1 hội đồng
             $table->unique(['ID_HOIDONG', 'ID_GIANGVIEN']);
         });
     }

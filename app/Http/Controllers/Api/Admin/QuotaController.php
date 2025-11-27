@@ -16,7 +16,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Log;
 use Exception;
 use App\Services\NotificationService;
@@ -31,6 +30,9 @@ class QuotaController extends Controller
             $totalStudents = SinhvienThamgia::where('ID_KEHOACH', $planId)->count();
             $totalGroups = Nhom::where('ID_KEHOACH', $planId)->count();
             $expectedGroups = ceil($totalStudents / 3);
+            
+            // Lấy danh sách khoa/bộ môn và thống kê số nhóm thuộc về bộ môn đó
+            // (Dựa vào ID_KHOA_BOMON của nhóm)
             $departments = KhoaBomon::with(['giangvien', 'nhoms' => function ($q) use ($planId) {
                 $q->where('ID_KEHOACH', $planId);
             }])->get()->map(function ($dept) {
@@ -94,20 +96,21 @@ class QuotaController extends Controller
                 ->where('TRANGTHAI', 'Đang phân công')
                 ->first();
 
+            // [THAY ĐỔI]: Đếm số lượng đề tài đã tạo trực tiếp theo ID_KHOA_BOMON
             $actualCreated = Detai::where('ID_KEHOACH', $planId)
-                ->whereHas('nguoiDexuat', function ($q) use ($dept) {
-                    $q->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON);
-                })
+                ->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON)
                 ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt', 'Nháp'])
                 ->count();
 
+            // Thống kê số nhóm thuộc bộ môn này
             $totalGroups = Nhom::where('ID_KEHOACH', $planId)
                 ->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON)
                 ->count();
 
+            // Thống kê số nhóm đã có đề tài thuộc bộ môn này
+            // Logic: Nhóm -> Phân công -> Đề tài (check ID_KHOA_BOMON của đề tài)
             $groupsWithTopics = Nhom::where('ID_KEHOACH', $planId)
-                ->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON)
-                ->whereHas('phancongDetaiNhom.detai.nguoiDexuat', function ($q) use ($dept) {
+                ->whereHas('phancongDetaiNhom.detai', function ($q) use ($dept) {
                     $q->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON);
                 })
                 ->count();
@@ -171,89 +174,37 @@ class QuotaController extends Controller
             }
             
             if ($request->SO_DETAI_QUOTA > 0) {
-                $department = KhoaBomon::find($request->ID_KHOA_BOMON);
-                
-                $headOfDepartment = Giangvien::where('ID_KHOA_BOMON', $request->ID_KHOA_BOMON)
-                    ->whereHas('chucvus', function ($q) {
-                        $q->where('MA_CHUCVU', 'TRUONG_BOMON');
-                    })
-                    ->with('nguoidung')
-                    ->first();
-
-                if ($headOfDepartment && $headOfDepartment->nguoidung) {
-                    NotificationService::send(
-                        $headOfDepartment->nguoidung->ID_NGUOIDUNG,
-                        "Giao chỉ tiêu bộ môn",
-                        "Admin đã giao chỉ tiêu {$request->SO_DETAI_QUOTA} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}.",
-                        'ACADEMIC',
-                        '/lecturer/quota-management',
-                        null,
-                        'HIGH'
-                    );
-                }
+                $this->sendNotification($request->ID_KHOA_BOMON, $request->ID_KEHOACH, $request->SO_DETAI_QUOTA);
             }
         });
 
         return response()->json(['message' => 'Cập nhật quota cho khoa/bộ môn thành công']);
     }
 
-    private function updateSingleDepartment(Request $request, $currentUser)
-    {
-        DB::transaction(function () use ($request, $currentUser) {
-            $existingQuota = QuotaKhoaBomon::where('ID_KEHOACH', $request->ID_KEHOACH)
-                ->where('ID_KHOA_BOMON', $request->ID_KHOA_BOMON)
-                ->first();
-
-            if ($existingQuota) {
-                if ($request->SO_DETAI_QUOTA == 0) {
-                    $existingQuota->delete();
-                } else {
-                    $existingQuota->update([
-                        'SO_DETAI_QUOTA' => $request->SO_DETAI_QUOTA,
-                        'GHICHU' => $request->GHICHU,
-                        'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
-                    ]);
-                }
-            } elseif ($request->SO_DETAI_QUOTA > 0) {
-                QuotaKhoaBomon::create([
-                    'ID_KEHOACH' => $request->ID_KEHOACH,
-                    'ID_KHOA_BOMON' => $request->ID_KHOA_BOMON,
-                    'SO_DETAI_QUOTA' => $request->SO_DETAI_QUOTA,
-                    'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
-                    'GHICHU' => $request->GHICHU,
-                    'TRANGTHAI' => 'Đang phân công',
-                ]);
-
-                $this->sendNotification($request->ID_KHOA_BOMON, $request->ID_KEHOACH, $request->SO_DETAI_QUOTA);
-            }
-        });
-
-        return response()->json(['message' => 'Cập nhật quota (thủ công) cho khoa/bộ môn thành công']);
-    }
-
     private function sendNotification($departmentId, $planId, $quota)
     {
         try {
             $department = KhoaBomon::find($departmentId);
-            $departmentHead = Giangvien::where('ID_KHOA_BOMON', $departmentId)
+            // Tìm trưởng bộ môn
+            $departmentHeads = Giangvien::where('ID_KHOA_BOMON', $departmentId)
                 ->whereHas('chucvus', function ($q) {
                     $q->where('MA_CHUCVU', 'TRUONG_BOMON');
                 })
-                ->first();
+                ->with('nguoidung')
+                ->get();
 
-            if ($departmentHead && $departmentHead->nguoidung) {
-                Thongbao::create([
-                    'ID_NGUOINHAN' => $departmentHead->nguoidung->ID_NGUOIDUNG,
-                    'TIEU_DE' => 'Phân công Quota Đề tài',
-                    'NOI_DUNG' => "Bạn đã được phân công {$quota} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}",
-                    'LOAI_THONGBAO' => 'ACADEMIC',
-                    'DU_LIEU_GOC' => [
-                        'message' => "Bạn đã được phân công {$quota} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}",
-                        'department_name' => $department->TEN_KHOA_BOMON,
-                        'quota' => $quota,
-                        'plan_id' => $planId,
-                    ],
-                ]);
+            foreach ($departmentHeads as $head) {
+                if ($head->nguoidung) {
+                    NotificationService::send(
+                        $head->nguoidung->ID_NGUOIDUNG,
+                        "Giao chỉ tiêu bộ môn",
+                        "Admin đã giao chỉ tiêu {$quota} đề tài cho bộ môn {$department->TEN_KHOA_BOMON}.",
+                        'ACADEMIC',
+                        '/department-head/quotas',
+                        ['plan_id' => $planId],
+                        'HIGH'
+                    );
+                }
             }
         } catch (Exception $e) {
             Log::error('Lỗi khi gửi thông báo phân công quota: ' . $e->getMessage());
@@ -272,7 +223,6 @@ class QuotaController extends Controller
 
         $currentUser = Auth::user();
         
-        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
         if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -288,11 +238,17 @@ class QuotaController extends Controller
 
                 $expectedGroups = ceil($totalStudents / 3);
                 $totalTopics = ceil($expectedGroups * 1.5);
-                $departments = KhoaBomon::with(['giangvien'])->whereHas('giangvien')->get();
+                
+                // Lấy các bộ môn có giảng viên
+                $departments = KhoaBomon::withCount('giangvien')
+                    ->having('giangvien_count', '>', 0)
+                    ->get();
+
                 if ($departments->isEmpty()) {
                     throw new \Exception('Không có khoa/bộ môn nào có giảng viên');
                 }
 
+                // Chia đều quota
                 $topicsPerDepartment = floor($totalTopics / $departments->count());
                 $remainingTopics = $totalTopics % $departments->count();
 
@@ -381,7 +337,6 @@ class QuotaController extends Controller
 
         $currentUser = Auth::user();
 
-        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
         if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
@@ -396,7 +351,6 @@ class QuotaController extends Controller
     {
         $currentUser = Auth::user();
 
-        // [SỬA ĐỔI] Sử dụng logic check quyền mới (N-N)
         if (!$this->isAdmin() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }

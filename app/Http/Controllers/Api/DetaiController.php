@@ -32,7 +32,7 @@ class DetaiController extends Controller
         // 1. Eager Loading: Tải trước các quan hệ cần thiết
         $query = Detai::with([
             'nguoiDexuat.nguoidung',
-            'chuyennganh',
+            'khoaBomon', // [SỬA] Load Bộ môn thay vì Chuyên ngành
             'kehoachKhoaluan',
             'phancongDetaiNhom.nhom.thanhvienNhom.nguoidung',
             'phancongDetaiNhom.nhom.nhomtruong',
@@ -55,6 +55,11 @@ class DetaiController extends Controller
             if ($request->has('plan_id')) {
                 $query->where('ID_KEHOACH', $request->plan_id);
             }
+            
+            // [LƯU Ý] Sinh viên vẫn có thể lọc đề tài theo Bộ môn nếu muốn
+            if ($request->has('department_id')) {
+                $query->where('ID_KHOA_BOMON', $request->department_id);
+            }
         } 
         // --- LOGIC CHO GIẢNG VIÊN / ADMIN / GIÁO VỤ ---
         else if ($isLecturer || $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
@@ -64,29 +69,22 @@ class DetaiController extends Controller
                 $query->where('ID_KEHOACH', $request->plan_id);
             }
 
-            // [QUAN TRỌNG] Xử lý Filter Mode (Server-side filtering)
+            // [QUAN TRỌNG] Xử lý Filter Mode
             if ($lecturerId) {
                 $filterMode = $request->input('filter_mode', 'all'); // Mặc định là 'all'
 
                 if ($filterMode === 'review') {
                     // MODE: Cần góp ý (Review)
-                    // Chỉ lấy các đề tài mà giảng viên này có trong danh sách phân công góp ý
                     $query->whereHas('phancong_nguoi_gop_y', function ($subQ) use ($lecturerId) {
                         $subQ->where('ID_GIANGVIEN', $lecturerId);
                     });
                 } 
                 elseif ($filterMode === 'my') {
                     // MODE: Đề tài của tôi
-                    // Chỉ lấy đề tài do chính giảng viên đề xuất
                     $query->where('ID_NGUOI_DEXUAT', $lecturerId);
                 } 
                 else {
-                    // MODE: Tất cả (All)
-                    // Lấy: 
-                    // 1. Đề tài KHÔNG PHẢI NHÁP (của người khác)
-                    // 2. Đề tài CỦA TÔI (kể cả Nháp)
-                    // 3. Đề tài ĐƯỢC PHÂN CÔNG GÓP Ý (kể cả Nháp nếu được gán)
-                    
+                    // MODE: Tất cả (All) - Logic phức hợp
                     $query->where(function ($q) use ($lecturerId) {
                         // Nhóm 1: Của người khác nhưng không phải Nháp
                         $q->where('ID_NGUOI_DEXUAT', '!=', $lecturerId)
@@ -102,12 +100,11 @@ class DetaiController extends Controller
                     });
                 }
             } else {
-                // Nếu là Admin thuần (không phải GV), mặc định ẩn Nháp của người khác
-                // (Trừ khi Admin muốn xem hết để quản lý, ở đây giả sử Admin xem như GV thường nhưng quyền cao hơn)
+                // Nếu là Admin thuần, mặc định ẩn Nháp của người khác
                 $query->where('TRANGTHAI', '<>', 'Nháp');
             }
 
-            // Lọc theo Trạng thái (nếu có)
+            // Lọc theo Trạng thái
             if ($request->has('status') && $request->status !== 'Tất cả') {
                 if (is_array($request->status)) {
                     $query->whereIn('TRANGTHAI', $request->status);
@@ -116,14 +113,14 @@ class DetaiController extends Controller
                 }
             }
 
-            // Lọc theo ID Giảng viên cụ thể (nếu cần)
+            // Lọc theo ID Giảng viên cụ thể
             if ($request->has('lecturer_id') && $request->lecturer_id !== $lecturerId) {
                 $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
             }
 
-            // Lọc theo Chuyên ngành
-            if ($request->has('major_id')) {
-                $query->where('ID_CHUYENNGANH', $request->major_id);
+            // [SỬA] Lọc theo Bộ môn (Thay vì Chuyên ngành)
+            if ($request->has('department_id')) {
+                $query->where('ID_KHOA_BOMON', $request->department_id);
             }
         }
 
@@ -144,14 +141,13 @@ class DetaiController extends Controller
 
         $topics->getCollection()->transform(function ($topic) {
             $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
+            $topic->ten_bo_mon = $topic->khoaBomon?->TEN_KHOA_BOMON ?? 'N/A'; // [SỬA] Return tên bộ môn
             return $topic;
         });
 
         return response()->json($topics);
     }
 
-    // ... (Các hàm khác giữ nguyên như file gốc của bạn) ...
-    
     /**
      * Lấy danh sách đề tài đã duyệt của giảng viên đang đăng nhập
      */
@@ -164,11 +160,11 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        $query = Detai::with(['kehoachKhoaluan', 'chuyennganh'])
+        $query = Detai::with(['kehoachKhoaluan', 'khoaBomon']) // [SỬA] Load khoaBomon
             ->where('TRANGTHAI', 'Đã duyệt')
             ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
-            ->select('DETAI.*') // cần select để groupBy hoạt động đúng
-            ->groupBy('DETAI.ID_DETAI'); // Quan trọng: chỉ lấy mỗi đề tài 1 lần
+            ->select('DETAI.*') 
+            ->groupBy('DETAI.ID_DETAI'); 
 
         $topics = $query->orderBy('TEN_DETAI', 'asc')->get();
 
@@ -177,7 +173,6 @@ class DetaiController extends Controller
 
     /**
      * Tái sử dụng đề tài đã duyệt cho một kế hoạch khác
-     * Body params: existing_topic_id, new_plan_id
      */
     public function reuseApprovedTopic(Request $request)
     {
@@ -203,13 +198,16 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Chỉ có thể tái sử dụng đề tài đã duyệt của chính bạn'], 403);
         }
 
-        // Tạo đề tài mới copy dữ liệu từ đề tài cũ nhưng kế hoạch mới và trạng thái Đã duyệt
+        // Tạo đề tài mới copy dữ liệu từ đề tài cũ
         $newTopic = Detai::create([
             'ID_KEHOACH' => $request->new_plan_id,
             'MA_DETAI' => 'DT' . date('Y') . strtoupper(substr(md5(uniqid()), 0, 6)),
             'TEN_DETAI' => $existingTopic->TEN_DETAI,
             'MOTA' => $existingTopic->MOTA,
-            'ID_CHUYENNGANH' => $existingTopic->ID_CHUYENNGANH,
+            
+            // [SỬA] Copy Bộ môn
+            'ID_KHOA_BOMON' => $existingTopic->ID_KHOA_BOMON,
+            
             'YEUCAU' => $existingTopic->YEUCAU,
             'MUCTIEU' => $existingTopic->MUCTIEU,
             'KETQUA_MONGDOI' => $existingTopic->KETQUA_MONGDOI,
@@ -240,7 +238,10 @@ class DetaiController extends Controller
             'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
             'TEN_DETAI' => 'required|string|max:255',
             'MOTA' => 'required|string',
-            'ID_CHUYENNGANH' => 'nullable|exists:CHUYENNGANH,ID_CHUYENNGANH',
+            
+            // [SỬA] Validate Bộ môn thay vì Chuyên ngành
+            'ID_KHOA_BOMON' => 'required|exists:KHOA_BOMON,ID_KHOA_BOMON',
+            
             'YEUCAU' => 'nullable|string',
             'MUCTIEU' => 'nullable|string',
             'KETQUA_MONGDOI' => 'nullable|string',
@@ -251,15 +252,13 @@ class DetaiController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Lấy giảng viên hiện tại
         $currentUser = Auth::user();
-        $lecturer = $currentUser->giangvien; // Sử dụng quan hệ
+        $lecturer = $currentUser->giangvien;
 
         if (!$lecturer) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Tạo mã đề tài ngẫu nhiên
         $topicCode = 'DT' . date('Y') . strtoupper(substr(md5(uniqid()), 0, 6));
 
         $topic = Detai::create([
@@ -267,7 +266,10 @@ class DetaiController extends Controller
             'MA_DETAI' => $topicCode,
             'TEN_DETAI' => $request->TEN_DETAI,
             'MOTA' => $request->MOTA,
-            'ID_CHUYENNGANH' => $request->ID_CHUYENNGANH,
+            
+            // [SỬA] Lưu ID_KHOA_BOMON
+            'ID_KHOA_BOMON' => $request->ID_KHOA_BOMON,
+            
             'YEUCAU' => $request->YEUCAU,
             'MUCTIEU' => $request->MUCTIEU,
             'KETQUA_MONGDOI' => $request->KETQUA_MONGDOI,
@@ -284,7 +286,7 @@ class DetaiController extends Controller
             'FileText'
         );
 
-        return response()->json($topic->load(['nguoiDexuat.nguoidung', 'chuyennganh']), 201);
+        return response()->json($topic->load(['nguoiDexuat.nguoidung', 'khoaBomon']), 201);
     }
 
     /**
@@ -294,12 +296,12 @@ class DetaiController extends Controller
     {
         $topic = Detai::with([
             'nguoiDexuat.nguoidung',
-            'chuyennganh',
+            'khoaBomon', // [SỬA]
             'kehoachKhoaluan',
             'goiyDetai' => function ($query) {
                 $query->with([
-                        'giangvien.nguoidung', // Người góp ý
-                        'phanhois.giangvien.nguoidung' // Những người phản hồi
+                        'giangvien.nguoidung', 
+                        'phanhois.giangvien.nguoidung'
                        ])
                        ->orderBy('NGAYTAO', 'asc');
             },
@@ -314,11 +316,9 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Đảm bảo goiyDetai luôn là mảng
         $topic->goiyDetai = $topic->goiyDetai ?? [];
-
-        // Thêm tên giảng viên để hiển thị
         $topic->ten_giang_vien = $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A';
+        $topic->ten_bo_mon = $topic->khoaBomon?->TEN_KHOA_BOMON ?? 'N/A'; // [SỬA] Return tên bộ môn
 
         return response()->json($topic);
     }
@@ -329,35 +329,31 @@ class DetaiController extends Controller
     public function update(Request $request, $id)
     {
         $topic = Detai::findOrFail($id);
-
-        // Kiểm tra nếu người dùng là người đề xuất hoặc admin
         $currentUser = Auth::user();
         $lecturer = $currentUser->giangvien;
 
         $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
-        // [CẬP NHẬT] Sử dụng helper isAdmin() thay vì check chuỗi
         $isAdmin = $this->isAdmin();
 
         if (!$isProposer && !$isAdmin) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Không thể cập nhật nếu đã được duyệt
         if ($topic->TRANGTHAI === 'Đã duyệt' && !$isAdmin) {
             return response()->json(['message' => 'Không thể cập nhật đề tài đã duyệt'], 403);
         }
 
-        // Cho phép chỉnh sửa nếu trạng thái là "Đang chỉnh sửa"
-        if ($topic->TRANGTHAI === 'Đang chỉnh sửa' && !$isAdmin) {
-            if (!$isProposer) {
-                return response()->json(['message' => 'Không thể cập nhật đề tài đang được chỉnh sửa bởi người dùng khác'], 403);
-            }
+        if ($topic->TRANGTHAI === 'Đang chỉnh sửa' && !$isAdmin && !$isProposer) {
+            return response()->json(['message' => 'Không thể cập nhật đề tài đang được chỉnh sửa bởi người dùng khác'], 403);
         }
 
         $validator = Validator::make($request->all(), [
             'TEN_DETAI' => 'sometimes|required|string|max:255',
             'MOTA' => 'sometimes|required|string',
-            'ID_CHUYENNGANH' => 'nullable|exists:CHUYENNGANH,ID_CHUYENNGANH',
+            
+            // [SỬA] Validate Bộ môn
+            'ID_KHOA_BOMON' => 'nullable|exists:KHOA_BOMON,ID_KHOA_BOMON',
+            
             'YEUCAU' => 'nullable|string',
             'MUCTIEU' => 'nullable|string',
             'KETQUA_MONGDOI' => 'nullable|string',
@@ -368,23 +364,18 @@ class DetaiController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // [SỬA] Cập nhật ID_KHOA_BOMON
         $topic->update($request->only([
-            'TEN_DETAI', 'MOTA', 'ID_CHUYENNGANH', 'YEUCAU', 'MUCTIEU', 'KETQUA_MONGDOI', 'SO_NHOM_TOIDA'
+            'TEN_DETAI', 'MOTA', 'ID_KHOA_BOMON', 'YEUCAU', 'MUCTIEU', 'KETQUA_MONGDOI', 'SO_NHOM_TOIDA'
         ]));
 
-        // Nếu được cập nhật bởi người đề xuất, đặt lại trạng thái về nháp nếu bị từ chối
-        if ($isProposer && $topic->TRANGTHAI === 'Yêu cầu chỉnh sửa') {
-            $topic->update(['TRANGTHAI' => 'Nháp']);
-        }
-
-        // Nếu được cập nhật bởi người đề xuất và trạng thái là "Chờ duyệt", chuyển sang "Đang chỉnh sửa"
-        if ($isProposer && $topic->TRANGTHAI === 'Chờ duyệt') {
-            $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
-        }
-
-        // Nếu được cập nhật bởi người đề xuất và trạng thái là "Đang chỉnh sửa", chuyển lại thành "Chờ duyệt"
-        if ($isProposer && $topic->TRANGTHAI === 'Đang chỉnh sửa') {
-            $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
+        if ($isProposer && in_array($topic->TRANGTHAI, ['Yêu cầu chỉnh sửa', 'Chờ duyệt', 'Đang chỉnh sửa'])) {
+            $newState = ($topic->TRANGTHAI === 'Yêu cầu chỉnh sửa') ? 'Nháp' : 
+                       (($topic->TRANGTHAI === 'Chờ duyệt') ? 'Đang chỉnh sửa' : 'Chờ duyệt');
+            
+            if ($topic->TRANGTHAI !== $newState) {
+                 $topic->update(['TRANGTHAI' => $newState]);
+            }
         }
 
         ActivityLogger::log(
@@ -395,7 +386,7 @@ class DetaiController extends Controller
             'Edit'
         );
 
-        return response()->json($topic->load(['nguoiDexuat.nguoidung', 'chuyennganh']));
+        return response()->json($topic->load(['nguoiDexuat.nguoidung', 'khoaBomon']));
     }
 
     /**
@@ -416,7 +407,7 @@ class DetaiController extends Controller
         }
 
         if (!in_array($topic->TRANGTHAI, ['Nháp', 'Đang chỉnh sửa'])) {
-            return response()->json(['message' => 'Đề tài phải ở trạng thái nháp hoặc đang chỉnh sửa để gửi duyệt'], 400);
+            return response()->json(['message' => 'Đề tài phải ở trạng thái nháp hoặc đang chỉnh sửa để gửi duyệt. Hãy sửa đề tài để chuyển trạng thái!'], 400);
         }
         
         if ($topic->kehoachKhoaluan && !$topic->kehoachKhoaluan->isFeatureActive('GV_RA_DE')) {
@@ -426,6 +417,7 @@ class DetaiController extends Controller
         $topic->update(['TRANGTHAI' => 'Chờ duyệt']);
 
         try {
+            // Tìm người duyệt (Admin/Trưởng khoa/Giáo vụ)
             $approvers = Nguoidung::where('TRANGTHAI_KICHHOAT', true)
                 ->where(function($query) {
                     $query->whereHas('vaitro', function($q) {
@@ -474,7 +466,6 @@ class DetaiController extends Controller
     {
         $currentUser = Auth::user();
         
-        // [CẬP NHẬT] Sử dụng helper isAdmin()
         if (!$this->isAdmin()) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
@@ -512,7 +503,6 @@ class DetaiController extends Controller
      */
     public function addSuggestion(Request $request, $id)
     {
-        // Kiểm tra dữ liệu đầu vào
         $validator = Validator::make($request->all(), [
             'NOIDUNG_GOIY' => 'required|string|min:1|max:1000',
         ], [
@@ -525,24 +515,18 @@ class DetaiController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // Tìm đề tài
         $topic = Detai::findOrFail($id);
-
-        // Lấy người dùng hiện tại
         $currentUser = Auth::user();
-
-        // Kiểm tra nếu người dùng là giảng viên
-        $lecturer = $currentUser->giangvien; // Sử dụng quan hệ
+        $lecturer = $currentUser->giangvien;
+        
         if (!$lecturer) {
             return response()->json(['message' => 'Chỉ giảng viên mới có thể góp ý đề tài'], 403);
         }
 
-        // Kiểm tra trạng thái đề tài
         if (!in_array($topic->TRANGTHAI, ['Nháp', 'Chờ duyệt', 'Đang chỉnh sửa', 'Yêu cầu chỉnh sửa'])) {
             return response()->json(['message' => 'Không thể góp ý cho đề tài đã được duyệt hoặc đã khóa.'], 403);
         }
 
-        // Tạo góp ý
         $suggestion = GoiyDetai::create([
             'ID_DETAI' => $id,
             'ID_NGUOI_GOIY' => $lecturer->ID_GIANGVIEN,
@@ -555,12 +539,10 @@ class DetaiController extends Controller
             ->where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
             ->first();
 
-        // Nếu có phân công và trạng thái chưa hoàn thành -> Cập nhật thành Hoàn thành
         if ($assignment && $assignment->TRANGTHAI !== 'Hoàn thành') {
             $assignment->update(['TRANGTHAI' => 'Hoàn thành']);
         }
 
-        // Nếu đề tài đang ở trạng thái "Chờ duyệt", chuyển sang "Đang chỉnh sửa"
         if ($topic->TRANGTHAI === 'Chờ duyệt') {
             $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
         }
@@ -573,7 +555,6 @@ class DetaiController extends Controller
             'MessageSquare'
         );
 
-        // Tải lại các quan hệ cho phản hồi
         $suggestion->load(['giangvien.nguoidung']);
 
         return response()->json([
@@ -591,7 +572,7 @@ class DetaiController extends Controller
             'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH'
         ]);
 
-        $query = Detai::with(['nguoiDexuat.nguoidung', 'chuyennganh'])
+        $query = Detai::with(['nguoiDexuat.nguoidung', 'khoaBomon'])
             ->where('TRANGTHAI', 'Đã duyệt')
             ->where('ID_KEHOACH', $request->plan_id);
 
@@ -599,8 +580,9 @@ class DetaiController extends Controller
             $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
         }
 
-        if ($request->filled('major_id') && $request->major_id !== 'all') {
-            $query->where('ID_CHUYENNGANH', $request->major_id);
+        // [SỬA] Lọc theo Bộ môn (Thay vì chuyên ngành)
+        if ($request->filled('department_id') && $request->department_id !== 'all') {
+            $query->where('ID_KHOA_BOMON', $request->department_id);
         }
 
         if ($request->filled('search')) {
@@ -615,7 +597,7 @@ class DetaiController extends Controller
     }
 
     /**
-     *  Lấy danh sách Giảng viên có đề tài trong kế hoạch (để làm bộ lọc)
+     * Lấy danh sách Giảng viên có đề tài trong kế hoạch (để làm bộ lọc)
      */
     public function getSupervisorsByPlan(Request $request)
     {
@@ -631,7 +613,6 @@ class DetaiController extends Controller
         ->get()
         ->map(function($gv) {
             $name = $gv->nguoidung ? $gv->nguoidung->HODEM_VA_TEN : ('GV #' . $gv->ID_GIANGVIEN);
-            
             return [
                 'ID_GIANGVIEN' => $gv->ID_GIANGVIEN,
                 'HODEM_VA_TEN' => $name
@@ -643,7 +624,6 @@ class DetaiController extends Controller
 
     /**
      * Đăng ký nhóm cho đề tài (Chỉ nhóm trưởng)
-     * [ĐÃ SỬA LỖI] Kiểm tra đề tài và nhóm phải cùng 1 kế hoạch
      */
     public function registerGroup(Request $request, $topicId)
     {
@@ -732,7 +712,7 @@ class DetaiController extends Controller
     public function getRegisteredGroups(Request $request)
     {
         $currentUser = Auth::user();
-        $lecturer = $currentUser->giangvien; // Sử dụng quan hệ
+        $lecturer = $currentUser->giangvien;
 
         if (!$lecturer) {
             return response()->json(['message' => 'Không được phép'], 403);
@@ -747,7 +727,6 @@ class DetaiController extends Controller
             $q->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN);
         });
 
-        // Lọc theo đề tài
         if ($request->has('topic_id')) {
             $query->where('ID_DETAI', $request->topic_id);
         }
@@ -791,10 +770,8 @@ class DetaiController extends Controller
             return response()->json(['hasRegisteredTopic' => false, 'topic' => null]);
         }
 
-        // Đầu tiên tìm kiếm với vai trò nhóm trưởng
         $group = Nhom::where('ID_NHOMTRUONG', $currentUser->ID_NGUOIDUNG)->first();
 
-        // Nếu không phải nhóm trưởng, kiểm tra xem có phải là thành viên
         if (!$group) {
             $memberGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
             if ($memberGroup) {
@@ -825,10 +802,8 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Đầu tiên tìm kiếm với vai trò nhóm trưởng
         $group = Nhom::where('ID_NHOMTRUONG', $currentUser->ID_NGUOIDUNG)->first();
 
-        // Nếu không phải nhóm trưởng, kiểm tra xem có phải là thành viên
         if (!$group) {
             $memberGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $currentUser->ID_NGUOIDUNG)->first();
             if ($memberGroup) {
@@ -840,8 +815,7 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Bạn không thuộc nhóm nào'], 403);
         }
 
-        // Tìm phân công đề tài đã đăng ký
-        $assignment = PhancongDetaiNhom::with(['detai.nguoiDexuat.nguoidung', 'detai.chuyennganh'])
+        $assignment = PhancongDetaiNhom::with(['detai.nguoiDexuat.nguoidung', 'detai.khoaBomon']) // [SỬA] Load khoaBomon
             ->where('ID_NHOM', $group->ID_NHOM)
             ->first();
 
@@ -858,23 +832,21 @@ class DetaiController extends Controller
     public function getSupervisedTopics(Request $request)
     {
         $currentUser = Auth::user();
-        $lecturer = $currentUser->giangvien; // Sử dụng quan hệ
+        $lecturer = $currentUser->giangvien;
 
         if (!$lecturer) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        $query = Detai::with(['nguoiDexuat.nguoidung', 'chuyennganh', 'kehoachKhoaluan'])
+        $query = Detai::with(['nguoiDexuat.nguoidung', 'khoaBomon', 'kehoachKhoaluan']) // [SỬA]
             ->whereHas('phancongDetaiNhom', function ($q) use ($lecturer) {
                 $q->where('ID_GVHD', $lecturer->ID_GIANGVIEN);
             });
 
-        // Lọc theo trạng thái
         if ($request->has('status')) {
             $query->where('TRANGTHAI', $request->status);
         }
 
-        // Lọc theo kế hoạch
         if ($request->has('plan_id')) {
             $query->where('ID_KEHOACH', $request->plan_id);
         }
@@ -890,23 +862,21 @@ class DetaiController extends Controller
     public function getGroupsForLecturer()
     {
         $currentUser = Auth::user();
-        $lecturer = $currentUser->giangvien; // Sử dụng quan hệ
+        $lecturer = $currentUser->giangvien;
 
         if (!$lecturer) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // [FIX LỖI] Sử dụng ID_GVHD thay vì ID_NGUOI_DEXUAT
-        // Và bỏ filter plan cũ để lấy tất cả các nhóm đang hoạt động
         $assignments = PhancongDetaiNhom::with([
             'nhom.thanhviens.nguoidung',
             'nhom.nhomtruong',
-            'nhom.kehoach', // Load thêm kế hoạch để hiển thị tên đợt
+            'nhom.kehoach',
             'detai.nguoiDexuat.nguoidung',
-            'detai.chuyennganh',
+            'detai.khoaBomon', // [SỬA] Load khoaBomon
             'gvhd.nguoidung'
         ])
-        ->where('ID_GVHD', $lecturer->ID_GIANGVIEN) // <--- SỬA TẠI ĐÂY: Lọc theo người hướng dẫn
+        ->where('ID_GVHD', $lecturer->ID_GIANGVIEN)
         ->orderBy('NGAY_PHANCONG', 'desc')
         ->get();
 
@@ -919,20 +889,16 @@ class DetaiController extends Controller
     public function destroy($id)
     {
         $topic = Detai::findOrFail($id);
-
-        // Kiểm tra quyền
         $currentUser = Auth::user();
-        $lecturer = $currentUser->giangvien; // Sử dụng quan hệ
+        $lecturer = $currentUser->giangvien;
 
         $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
-        // [CẬP NHẬT] Sử dụng helper isAdmin()
         $isAdmin = $this->isAdmin();
 
         if (!$isProposer && !$isAdmin) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        // Không thể xóa nếu đã duyệt hoặc có nhóm đăng ký
         if ($topic->TRANGTHAI === 'Đã duyệt' || $topic->SO_NHOM_HIENTAI > 0) {
             return response()->json(['message' => 'Không thể xóa đề tài đã duyệt hoặc đề tài đã có nhóm đăng ký'], 403);
         }
@@ -977,7 +943,7 @@ class DetaiController extends Controller
         ]);
 
         try {
-            $import = new \App\Imports\TopicsImport($request->ID_KEHOACH);
+            $import = new TopicsImport($request->ID_KEHOACH);
             
             Excel::import($import, $request->file('file'));
 
@@ -1022,7 +988,7 @@ class DetaiController extends Controller
                     'YEUCAU' => $row['YEUCAU'],
                     'MUCTIEU' => $row['MUCTIEU'] ?? '',
                     'KETQUA_MONGDOI' => $row['KETQUA_MONGDOI'] ?? '',
-                    'ID_CHUYENNGANH' => $row['ID_CHUYENNGANH'],
+                    'ID_KHOA_BOMON' => $row['ID_KHOA_BOMON'] ?? null,                     
                     'SO_NHOM_TOIDA' => $row['SO_NHOM_TOIDA'] ?? 1,
                     'ID_NGUOI_DEXUAT' => $row['ID_NGUOI_DEXUAT'],
                     'TRANGTHAI' => $row['TRANGTHAI'] ?? 'Nháp',

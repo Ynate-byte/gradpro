@@ -12,20 +12,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('news', function (Blueprint $table) {
-            $table->id(); // id auto-increment primary key
+            $table->id();
             $table->string('title');
-            $table->longText('content'); // Sử dụng longText cho nội dung dài
-            $table->string('category')->nullable(); // Thêm cột category, cho phép null
-            $table->string('cover_image')->nullable(); // Ảnh bìa (tên file hoặc path)
-            $table->string('pdf_file')->nullable(); // File PDF (tên file hoặc path)
+            $table->longText('content');
+            $table->string('category')->nullable();
+            $table->string('cover_image')->nullable();
+            $table->string('pdf_file')->nullable();
 
-            // Foreign keys đến bảng NGUOIDUNG, sử nullOnDelete để không xóa tin khi người dùng bị xóa
             $table->foreignId('created_by')->nullable()->constrained('NGUOIDUNG', 'ID_NGUOIDUNG')->nullOnDelete();
             $table->foreignId('updated_by')->nullable()->constrained('NGUOIDUNG', 'ID_NGUOIDUNG')->nullOnDelete();
             $table->foreignId('deleted_by')->nullable()->constrained('NGUOIDUNG', 'ID_NGUOIDUNG')->nullOnDelete();
 
-            $table->timestamps(); // Tự động thêm created_at và updated_at
-            $table->softDeletes(); // Tự động thêm cột deleted_at (nullable timestamp)
+            $table->timestamps();
+            $table->softDeletes();
         });
     }
 

@@ -8,7 +8,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        // ==================== BẢNG NHÓM ====================
+        //BẢNG NHÓM
         Schema::create('NHOM', function (Blueprint $table) {
             $table->id('ID_NHOM');
             $table->unsignedBigInteger('ID_KEHOACH');
@@ -31,7 +31,7 @@ return new class extends Migration
             $table->foreign('ID_KHOA_BOMON')->references('ID_KHOA_BOMON')->on('KHOA_BOMON')->nullOnDelete();
         });
 
-        // ==================== BẢNG THÀNH VIÊN ====================
+        //  BẢNG THÀNH VIÊN 
         Schema::create('THANHVIEN_NHOM', function (Blueprint $table) {
             $table->id('ID_THANHVIEN');
             $table->unsignedBigInteger('ID_NHOM');
@@ -44,7 +44,7 @@ return new class extends Migration
             $table->foreign('ID_NGUOIDUNG')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->cascadeOnDelete();
         });
 
-        // ==================== BẢNG LỜI MỜI ====================
+        //  BẢNG LỜI MỜI 
         Schema::create('LOIMOI_NHOM', function (Blueprint $table) {
             $table->id('ID_LOIMOI');
             $table->unsignedBigInteger('ID_NHOM');
@@ -61,7 +61,7 @@ return new class extends Migration
             $table->foreign('ID_NGUOIMOI')->references('ID_NGUOIDUNG')->on('NGUOIDUNG')->cascadeOnDelete();
         });
 
-        // ==================== BẢNG YÊU CẦU VÀO NHÓM ====================
+        //  BẢNG YÊU CẦU VÀO NHÓM 
         Schema::create('YEUCAU_VAONHOM', function (Blueprint $table) {
             $table->id('ID_YEUCAU');
             $table->unsignedBigInteger('ID_NHOM');

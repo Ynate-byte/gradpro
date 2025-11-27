@@ -11,13 +11,12 @@ class Hoidong extends Model
 
     protected $table = 'HOIDONG';
     protected $primaryKey = 'ID_HOIDONG';
-    // public $timestamps = false; // Bảng gốc có timestamps
 
     protected $fillable = [
         'TEN_HOIDONG',
         'LOAI',
         'ID_KEHOACH',
-        'ID_CHUYENNGANH',
+        'ID_KHOA_BOMON', // [SỬA] Thay ID_CHUYENNGANH bằng ID_KHOA_BOMON
         'NGAY_BAOCAO',
         'GIO_BAOCAO',
         'PHONG',
@@ -32,11 +31,11 @@ class Hoidong extends Model
     }
 
     /**
-     * 🔹 Quan hệ: Hội đồng thuộc về 1 chuyên ngành
+     * 🔹 [SỬA] Quan hệ: Hội đồng thuộc về 1 Khoa/Bộ môn
      */
-    public function chuyennganh()
+    public function khoaBomon()
     {
-        return $this->belongsTo(Chuyennganh::class, 'ID_CHUYENNGANH', 'ID_CHUYENNGANH');
+        return $this->belongsTo(KhoaBomon::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
     }
 
     /**
@@ -69,7 +68,6 @@ class Hoidong extends Model
 
     /**
      * 🔹 Lấy danh sách giảng viên theo vai trò trong hội đồng
-     * -> $hoidong->getGiangviensByRole('Chủ tịch');
      */
     public function getGiangviensByRole($role)
     {
