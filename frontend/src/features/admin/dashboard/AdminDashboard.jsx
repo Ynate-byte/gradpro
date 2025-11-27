@@ -535,9 +535,7 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                {/* --- 4. CỘT PHẢI (4/12) --- */}
                 <div className="xl:col-span-4 space-y-8">
-                    {/* A. THEO DÕI RỦI RO */}
                     <div className="space-y-4">
                         <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
                              <Activity className="w-3 h-3" /> Theo dõi Rủi ro
@@ -550,14 +548,16 @@ export default function AdminDashboard() {
                                 colorClass="text-red-600 bg-red-100 dark:bg-red-900/30"
                                 onClick={() => navigate('/admin/groups/ungrouped-students')} 
                             />
+                            
                             <RiskMetric 
-                                label="GV chưa đủ Quota" 
-                                value={risks.lecturers_missing_quota || 0} 
+                                label="Bộ môn chưa xong Quota" 
+                                value={risks.departments_missing_quota || 0} 
                                 icon={AlertOctagon} 
                                 colorClass="text-orange-600 bg-orange-100 dark:bg-orange-900/30"
                                 onClick={() => navigate('/admin/quota-management')}
                             />
-                             <RiskMetric 
+
+                            <RiskMetric 
                                 label="Nhóm thiếu Hội đồng" 
                                 value={risks.groups_no_council || 0} 
                                 icon={GraduationCap} 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Eye, Filter } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 const CouncilTable = ({ data, onViewDetail }) => {
   if (!data || data.length === 0) {
@@ -37,16 +38,20 @@ const CouncilTable = ({ data, onViewDetail }) => {
               <TableCell className="font-medium">
                 <div className="flex flex-col">
                   <span className="text-primary font-semibold group-hover:underline">{h.TEN_HOIDONG}</span>
-                  {/* [SỬA] Hiển thị Tên Khoa/Bộ môn */}
                   <span className="text-xs text-muted-foreground md:hidden">{h.TEN_KHOA_BOMON}</span>
                 </div>
               </TableCell>
               <TableCell>
                 <Badge
                   variant={h.LOAI === "phanbien" ? "secondary" : "default"}
-                  className={h.LOAI === "phanbien" ? "bg-orange-100 text-orange-700 hover:bg-orange-200" : "bg-blue-100 text-blue-700 hover:bg-blue-200"}
+                  className={cn(
+                    "capitalize font-medium",
+                    h.LOAI === "phanbien" && "bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200",
+                    h.LOAI === "hoidong" && "bg-blue-100 text-blue-700 hover:bg-blue-200 border-blue-200",
+                    h.LOAI === "hoidong5" && "bg-purple-100 text-purple-700 hover:bg-purple-200 border-purple-200"
+                  )}
                 >
-                  {h.LOAI === "phanbien" ? "Phản biện" : "Hội đồng"}
+                  {h.LOAI === "phanbien" ? "Phản biện" : (h.LOAI === "hoidong5" ? "Bảo vệ (5)" : "Bảo vệ (3)")}
                 </Badge>
               </TableCell>
               <TableCell className="text-muted-foreground max-w-[200px] truncate" title={h.TEN_KEHOACH}>

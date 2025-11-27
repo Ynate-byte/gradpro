@@ -11,6 +11,7 @@ use App\Models\Giangvien;
 use App\Models\ThanhvienNhom;
 use App\Models\PhancongNguoiGopY;
 use App\Models\Nguoidung;
+use App\Models\QuotaGiangvien;
 use App\Imports\TopicsImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -232,6 +233,7 @@ class DetaiController extends Controller
     /**
      * Lưu một đề tài khóa luận mới.
      */
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -239,7 +241,6 @@ class DetaiController extends Controller
             'TEN_DETAI' => 'required|string|max:255',
             'MOTA' => 'required|string',
             
-            // [SỬA] Validate Bộ môn thay vì Chuyên ngành
             'ID_KHOA_BOMON' => 'required|exists:KHOA_BOMON,ID_KHOA_BOMON',
             
             'YEUCAU' => 'nullable|string',
@@ -261,32 +262,65 @@ class DetaiController extends Controller
 
         $topicCode = 'DT' . date('Y') . strtoupper(substr(md5(uniqid()), 0, 6));
 
-        $topic = Detai::create([
-            'ID_KEHOACH' => $request->ID_KEHOACH,
-            'MA_DETAI' => $topicCode,
-            'TEN_DETAI' => $request->TEN_DETAI,
-            'MOTA' => $request->MOTA,
-            
-            // [SỬA] Lưu ID_KHOA_BOMON
-            'ID_KHOA_BOMON' => $request->ID_KHOA_BOMON,
-            
-            'YEUCAU' => $request->YEUCAU,
-            'MUCTIEU' => $request->MUCTIEU,
-            'KETQUA_MONGDOI' => $request->KETQUA_MONGDOI,
-            'ID_NGUOI_DEXUAT' => $lecturer->ID_GIANGVIEN,
-            'SO_NHOM_TOIDA' => $request->SO_NHOM_TOIDA ?? 1,
-            'TRANGTHAI' => 'Nháp',
-        ]);
+        DB::beginTransaction();
+        try {
+            $topic = Detai::create([
+                'ID_KEHOACH' => $request->ID_KEHOACH,
+                'MA_DETAI' => $topicCode,
+                'TEN_DETAI' => $request->TEN_DETAI,
+                'MOTA' => $request->MOTA,
+                
+                'ID_KHOA_BOMON' => $request->ID_KHOA_BOMON,
+                
+                'YEUCAU' => $request->YEUCAU,
+                'MUCTIEU' => $request->MUCTIEU,
+                'KETQUA_MONGDOI' => $request->KETQUA_MONGDOI,
+                'ID_NGUOI_DEXUAT' => $lecturer->ID_GIANGVIEN,
+                'SO_NHOM_TOIDA' => $request->SO_NHOM_TOIDA ?? 1,
+                'TRANGTHAI' => 'Nháp',
+            ]);
 
-        ActivityLogger::log(
-            'PROPOSE_TOPIC',
-            "Đề xuất đề tài mới: {$topic->TEN_DETAI}",
-            ['topic_code' => $topicCode],
-            null,
-            'FileText'
-        );
+            $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $request->ID_KEHOACH)
+                ->where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
+                ->first();
 
-        return response()->json($topic->load(['nguoiDexuat.nguoidung', 'khoaBomon']), 201);
+            if ($quotaGV && $quotaGV->TRANGTHAI === 'Đang phân công') {
+                $createdCount = Detai::where('ID_KEHOACH', $request->ID_KEHOACH)
+                    ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
+                    ->count();
+
+                // Nếu số đề tài đã tạo >= Quota được giao -> Chuyển sang Hoàn thành
+                if ($createdCount >= $quotaGV->SO_DETAI_QUOTA) {
+                    $quotaGV->update(['TRANGTHAI' => 'Hoàn thành']);
+                    
+                    if ($currentUser) {
+                         NotificationService::send(
+                            $currentUser->ID_NGUOIDUNG,
+                            "Hoàn thành chỉ tiêu đề tài",
+                            "Bạn đã đề xuất đủ số lượng đề tài theo chỉ tiêu được giao ({$createdCount}/{$quotaGV->SO_DETAI_QUOTA}).",
+                            'ACADEMIC',
+                            '/lecturer/thesis-topics'
+                        );
+                    }
+                }
+            }
+
+            ActivityLogger::log(
+                'PROPOSE_TOPIC',
+                "Đề xuất đề tài mới: {$topic->TEN_DETAI}",
+                ['topic_code' => $topicCode],
+                null,
+                'FileText'
+            );
+
+            DB::commit();
+            return response()->json($topic->load(['nguoiDexuat.nguoidung', 'khoaBomon']), 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Lỗi tạo đề tài: ' . $e->getMessage());
+            return response()->json(['message' => 'Lỗi khi tạo đề tài: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -903,9 +937,33 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Không thể xóa đề tài đã duyệt hoặc đề tài đã có nhóm đăng ký'], 403);
         }
 
-        $topic->delete();
+        DB::beginTransaction();
+        try {
+            $planId = $topic->ID_KEHOACH;
+            $lecturerId = $topic->ID_NGUOI_DEXUAT;
 
-        return response()->json(['message' => 'Đề tài đã xóa thành công']);
+            $topic->delete();
+
+            $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)
+                ->where('ID_GIANGVIEN', $lecturerId)
+                ->first();
+
+            if ($quotaGV && $quotaGV->TRANGTHAI === 'Hoàn thành') {
+                $currentCount = Detai::where('ID_KEHOACH', $planId)
+                    ->where('ID_NGUOI_DEXUAT', $lecturerId)
+                    ->count();
+                
+                if ($currentCount < $quotaGV->SO_DETAI_QUOTA) {
+                    $quotaGV->update(['TRANGTHAI' => 'Đang phân công']);
+                }
+            }
+
+            DB::commit();
+            return response()->json(['message' => 'Đề tài đã xóa thành công']);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Lỗi xóa đề tài'], 500);
+        }
     }
 
     private function canImportTopics()

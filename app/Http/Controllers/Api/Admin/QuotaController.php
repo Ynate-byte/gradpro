@@ -231,6 +231,7 @@ class QuotaController extends Controller
 
         try {
             DB::transaction(function () use ($planId, $currentUser) {
+                // 1. Tính toán tổng số lượng cần thiết
                 $totalStudents = SinhvienThamgia::where('ID_KEHOACH', $planId)->count();
                 if ($totalStudents === 0) {
                     throw new \Exception('Không có sinh viên nào tham gia kế hoạch này');
@@ -239,16 +240,16 @@ class QuotaController extends Controller
                 $expectedGroups = ceil($totalStudents / 3);
                 $totalTopics = ceil($expectedGroups * 1.5);
                 
-                // Lấy các bộ môn có giảng viên
-                $departments = KhoaBomon::withCount('giangvien')
-                    ->having('giangvien_count', '>', 0)
+                // 2. Lấy danh sách bộ môn có giảng viên (SỬA LỖI: Dùng whereHas thay vì having để tương thích tốt hơn)
+                $departments = KhoaBomon::whereHas('giangvien')
+                    ->where('TRANGTHAI_KICHHOAT', true)
                     ->get();
 
                 if ($departments->isEmpty()) {
                     throw new \Exception('Không có khoa/bộ môn nào có giảng viên');
                 }
 
-                // Chia đều quota
+                // 3. Chia đều quota
                 $topicsPerDepartment = floor($totalTopics / $departments->count());
                 $remainingTopics = $totalTopics % $departments->count();
 
@@ -271,6 +272,7 @@ class QuotaController extends Controller
                             'SO_DETAI_QUOTA' => $assignment['quota'],
                             'GHICHU' => 'Tự động phân công theo kế hoạch',
                             'ID_NGUOI_PHANCONG' => $currentUser->ID_NGUOIDUNG,
+                            'TRANGTHAI' => 'Đang phân công' 
                         ]);
                     } else {
                         QuotaKhoaBomon::create([

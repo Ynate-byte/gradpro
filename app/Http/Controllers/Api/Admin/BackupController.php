@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
 
 class BackupController extends Controller
@@ -67,8 +68,14 @@ class BackupController extends Controller
             // Tăng thời gian thực thi lên 5 phút để tránh timeout khi nén file
             set_time_limit(300); 
 
+            // Kiểm tra và xóa thư mục tạm 'backup-temp' nếu nó còn tồn tại do lần chạy trước bị lỗi
+            $tempPath = storage_path('app/backup-temp');
+            if (File::exists($tempPath)) {
+                File::deleteDirectory($tempPath);
+                Log::info("Đã dọn dẹp thư mục tạm cũ: " . $tempPath);
+            }
+
             if ($option === 'db') {
-                // CHỈ BACKUP DATABASE (Rất nhanh)
                 Artisan::call('backup:run --only-db --disable-notifications');
                 $message = 'Đã tạo bản sao lưu Cơ sở dữ liệu thành công!';
             } else {
@@ -84,6 +91,12 @@ class BackupController extends Controller
             return response()->json(['message' => $message]);
 
         } catch (\Exception $e) {
+            // Nếu có lỗi xảy ra, cũng cố gắng dọn dẹp lại lần nữa để lần sau không bị kẹt
+            $tempPath = storage_path('app/backup-temp');
+            if (File::exists($tempPath)) {
+                File::deleteDirectory($tempPath);
+            }
+
             Log::error("Backup Failed: " . $e->getMessage());
             return response()->json(['message' => 'Lỗi khi tạo backup: ' . $e->getMessage()], 500);
         }

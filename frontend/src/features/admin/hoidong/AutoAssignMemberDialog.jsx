@@ -34,7 +34,8 @@ import { autoAssignMembers } from '@/api/adminHoiDongService';
 
 // Schema validation cho Modal phân công
 const assignSchema = z.object({
-    LOAI: z.enum(['hoidong', 'phanbien'], { message: "Vui lòng chọn loại Hội đồng." }),
+    // [UPDATED] Thêm 'hoidong5' vào enum
+    LOAI: z.enum(['hoidong', 'hoidong5', 'phanbien'], { message: "Vui lòng chọn loại Hội đồng." }),
     ID_KEHOACH: z.string({ message: "Vui lòng chọn Kế hoạch." }),
     replaceExisting: z.boolean().default(false),
 });
@@ -51,12 +52,14 @@ export const AutoAssignMemberDialog = ({ isOpen, setIsOpen, selectedPlanId, plan
 
     // Reset form khi plan ID thay đổi hoặc modal mở/đóng
     useEffect(() => {
-        form.reset({
-            LOAI: 'hoidong',
-            ID_KEHOACH: selectedPlanId || '',
-            replaceExisting: false,
-        });
-    }, [selectedPlanId, isOpen]);
+        if (isOpen) {
+            form.reset({
+                LOAI: 'hoidong',
+                ID_KEHOACH: selectedPlanId || '',
+                replaceExisting: false,
+            });
+        }
+    }, [selectedPlanId, isOpen, form]);
 
     const planOptionsFormatted = useMemo(() => {
         if (!planOptions) return [];
@@ -139,8 +142,10 @@ export const AutoAssignMemberDialog = ({ isOpen, setIsOpen, selectedPlanId, plan
                                             </SelectTrigger>
                                         </FormControl>
                                         <SelectContent>
-                                            <SelectItem value="hoidong">Hội đồng Bảo vệ</SelectItem>
-                                            <SelectItem value="phanbien">Hội đồng Phản biện</SelectItem>
+                                            <SelectItem value="hoidong">Hội đồng Bảo vệ (3 người)</SelectItem>
+                                            {/* [UPDATED] Thêm tùy chọn 5 người */}
+                                            <SelectItem value="hoidong5">Hội đồng Bảo vệ (5 người)</SelectItem>
+                                            <SelectItem value="phanbien">Hội đồng Phản biện (1 người)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                     <FormMessage />

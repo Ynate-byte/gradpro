@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle } from 'lucide-react';
+import { Loader2, Users, BookOpen, Layers, Info, AlertTriangle, Save, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
 import axios from '@/api/axiosConfig';
@@ -75,6 +75,7 @@ const containerVariants = {
 const QuotaManager = () => {
   const [departmentQuotaInfo, setDepartmentQuotaInfo] = useState({});
   const [lecturers, setLecturers] = useState([]);
+  const [originalLecturers, setOriginalLecturers] = useState([]); // [MỚI] Để so sánh thay đổi
   const [selectedLecturerId, setSelectedLecturerId] = useState('');
   const [quotaAmount, setQuotaAmount] = useState('');
   const [note, setNote] = useState('');
@@ -82,6 +83,7 @@ const QuotaManager = () => {
   const [plans, setPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false); // [MỚI] Trạng thái thay đổi
 
   useEffect(() => {
     loadPlans();
@@ -93,10 +95,23 @@ const QuotaManager = () => {
     } else {
       setDepartmentQuotaInfo({});
       setLecturers([]);
+      setOriginalLecturers([]);
+      setHasChanges(false);
     }
   }, [selectedPlan]);
 
-  // Update quota amount when lecturer is selected
+  // [MỚI] Kiểm tra thay đổi
+  useEffect(() => {
+    if (lecturers.length === 0 || originalLecturers.length === 0) {
+        setHasChanges(false);
+        return;
+    }
+    // So sánh đơn giản qua chuỗi JSON
+    const isDifferent = JSON.stringify(lecturers) !== JSON.stringify(originalLecturers);
+    setHasChanges(isDifferent);
+  }, [lecturers, originalLecturers]);
+
+  // Update quota amount when lecturer is selected (Left panel)
   useEffect(() => {
     if (selectedLecturerId && lecturers.length > 0) {
       const selectedLecturer = lecturers.find(gv => gv.ID_GIANGVIEN === parseInt(selectedLecturerId));
@@ -132,6 +147,9 @@ const QuotaManager = () => {
       const response = await lecturerQuotaService.getLecturers({ plan_id: selectedPlan });
       setDepartmentQuotaInfo(response.data);
       setLecturers(response.data.lecturers || []);
+      // [MỚI] Sao chép dữ liệu gốc
+      setOriginalLecturers(JSON.parse(JSON.stringify(response.data.lecturers || []))); 
+      setHasChanges(false);
     } catch (error) {
       toast.error(error.response?.data?.message || 'Lỗi khi tải dữ liệu giảng viên');
       console.error(error);
@@ -186,60 +204,90 @@ const QuotaManager = () => {
     }
   };
 
-  const handleAdjustQuota = async (lecturerId, newQuota) => {
-    if (newQuota < 0) return;
-
-    setIsSubmitting(true);
-    try {
-      // Gọi API cập nhật quota
-      await lecturerQuotaService.assignLecturerQuota({
-        ID_KEHOACH: selectedPlan,
-        ID_GIANGVIEN: lecturerId,
-        SO_DETAI_QUOTA: newQuota,
-        GHICHU: 'Điều chỉnh nhanh từ bảng'
-      });
-
-      toast.success('Cập nhật quota thành công');
-
-      // ✅ Cập nhật lại state cục bộ, không reload toàn bộ
-      setLecturers((prevLecturers) =>
-        prevLecturers.map((gv) =>
-          gv.ID_GIANGVIEN === lecturerId
-            ? { ...gv, quota_assigned: newQuota }
+  // [MỚI] Hàm cập nhật local state (cho nút +/- và input)
+  const handleLocalChange = (lecturerId, newQuota) => {
+    setLecturers(prev => 
+        prev.map(gv => 
+            gv.ID_GIANGVIEN === lecturerId 
+            ? { ...gv, quota_assigned: newQuota } 
             : gv
         )
-      );
+    );
+  };
 
-      // ✅ Cập nhật tổng thông tin bộ môn (nếu có liên quan)
-      setDepartmentQuotaInfo((prevInfo) => {
-        if (!prevInfo || !prevInfo.department_quota) return prevInfo;
+  // [MỚI] Hàm lưu ngay lập tức 1 dòng (dùng cho phím Enter)
+  const handleSaveSingleRow = async (lecturerId, newQuota) => {
+    if (newQuota < 0) return;
+    setIsSubmitting(true);
+    try {
+        await lecturerQuotaService.assignLecturerQuota({
+            ID_KEHOACH: selectedPlan,
+            ID_GIANGVIEN: lecturerId,
+            SO_DETAI_QUOTA: newQuota,
+            GHICHU: 'Cập nhật nhanh'
+        });
+        toast.success('Đã lưu quota.');
 
-        const totalAssigned = prevInfo.lecturers
-          ? prevInfo.lecturers.reduce(
-            (sum, gv) =>
-              sum +
-              (gv.ID_GIANGVIEN === lecturerId ? newQuota : gv.quota_assigned || 0),
-            0
-          )
-          : 0;
+        // Cập nhật lại original để tắt trạng thái "Thay đổi" cho dòng này
+        setOriginalLecturers(prev => 
+            prev.map(gv => 
+                gv.ID_GIANGVIEN === lecturerId 
+                ? { ...gv, quota_assigned: newQuota } 
+                : gv
+            )
+        );
+        
+        // Load lại để update số liệu tổng bộ môn (nếu cần chính xác tuyệt đối từ server)
+        // Hoặc update local nếu muốn nhanh
+        loadData(); 
 
-        return {
-          ...prevInfo,
-          lecturers: prevInfo.lecturers.map((gv) =>
-            gv.ID_GIANGVIEN === lecturerId
-              ? { ...gv, quota_assigned: newQuota }
-              : gv
-          ),
-          total_assigned: totalAssigned
-        };
-      });
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Lỗi khi cập nhật quota');
+        toast.error(error.response?.data?.message || 'Lỗi khi lưu quota');
     } finally {
-      setIsSubmitting(false);
+        setIsSubmitting(false);
     }
   };
 
+  // [MỚI] Nút Reset
+  const handleResetChanges = () => {
+      setLecturers(JSON.parse(JSON.stringify(originalLecturers)));
+      setHasChanges(false);
+      toast.info("Đã hủy các thay đổi chưa lưu.");
+  };
+
+  // [MỚI] Nút Lưu tất cả
+  const handleSaveAll = async () => {
+      setIsSubmitting(true);
+      try {
+          const changedLecturers = lecturers.filter((gv, index) => {
+              return gv.quota_assigned !== originalLecturers[index].quota_assigned;
+          });
+
+          if (changedLecturers.length === 0) {
+              toast.info("Không có thay đổi nào để lưu.");
+              return;
+          }
+
+          const promises = changedLecturers.map(gv => 
+              lecturerQuotaService.assignLecturerQuota({
+                  ID_KEHOACH: selectedPlan,
+                  ID_GIANGVIEN: gv.ID_GIANGVIEN,
+                  SO_DETAI_QUOTA: gv.quota_assigned,
+                  GHICHU: 'Cập nhật hàng loạt'
+              })
+          );
+
+          await Promise.all(promises);
+          toast.success(`Đã cập nhật thành công ${changedLecturers.length} giảng viên.`);
+          loadData();
+          
+      } catch (error) {
+          console.error("Lỗi lưu hàng loạt:", error);
+          toast.error("Có lỗi xảy ra khi lưu dữ liệu.");
+      } finally {
+          setIsSubmitting(false);
+      }
+  };
 
   const getQuotaStatus = (quota, actual) => {
     if (quota === 0) return <Badge variant="outline">Chưa phân công</Badge>;
@@ -252,7 +300,7 @@ const QuotaManager = () => {
       return (
         <div className="flex flex-col items-center justify-center h-64 text-blue-500">
           <Loader2 className="h-8 w-8 animate-spin mb-4" />
-          <p>Đang tải dữ liệu bộ môn...</p>
+          <p>Đang tải dữ liệu kế hoạch...</p>
         </div>
       );
     }
@@ -268,8 +316,10 @@ const QuotaManager = () => {
     }
 
     const totalDeptQuota = departmentQuotaInfo.department_quota || 0;
+    // [MỚI] Tính tổng real-time từ state lecturers
     const totalAssignedToLecturers = lecturers.reduce((sum, gv) => sum + (gv.quota_assigned || 0), 0);
     const remainingForDept = totalDeptQuota - totalAssignedToLecturers;
+    const isLoadingData = isLoading || isSubmitting;
 
     return (
       <motion.div
@@ -336,73 +386,53 @@ const QuotaManager = () => {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>Điều chỉnh Thủ công (Giảng viên)</CardTitle>
-            <CardDescription>
-              Cập nhật số lượng quota đề tài tối đa cho từng giảng viên.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-              <div>
-                <label className="block text-sm font-medium mb-1">Giảng viên</label>
-                <Select
-                  value={selectedLecturerId ? String(selectedLecturerId) : ""}
-                  onValueChange={(value) => setSelectedLecturerId(value)}
-                  disabled={!selectedPlan || isLoading || isSubmitting || lecturers.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn giảng viên" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {lecturers.map(gv => (
-                      <SelectItem key={gv.ID_GIANGVIEN} value={String(gv.ID_GIANGVIEN)}>
-                        {gv.TEN_GIANGVIEN} ({gv.HOCVI})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Quota (Số đề tài)</label>
-                <Input
-                  type="number"
-                  placeholder="Số lượng"
-                  value={quotaAmount}
-                  onChange={(e) => setQuotaAmount(e.target.value)}
-                  min="0"
-                  disabled={!selectedPlan || isLoading || isSubmitting}
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium mb-1">Ghi chú (tùy chọn)</label>
-                <Textarea
-                  placeholder="Lý do điều chỉnh (nếu có)"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  rows={1}
-                  disabled={!selectedPlan || isLoading || isSubmitting}
-                />
-              </div>
-
-              <Button
-                onClick={handleAssignQuota}
-                disabled={!selectedLecturerId || quotaAmount === '' || !selectedPlan || isLoading || isSubmitting}
-              >
-                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Cập nhật ({quotaAmount || 0})
-              </Button>
+          <CardHeader className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+            <div>
+              <CardTitle>Điều chỉnh Thủ công (Giảng viên)</CardTitle>
+              <CardDescription>
+                Cập nhật số lượng quota đề tài tối đa cho từng giảng viên.
+              </CardDescription>
             </div>
-          </CardContent>
-        </Card>
+            {/* --- [MỚI] PHẦN NÚT BẤM LƯU & TỔNG CỘNG --- */}
+            <div className="flex items-center gap-3">
+                {/* Tổng số lượng */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md border border-border/50 shadow-sm">
+                    <span className="text-sm text-muted-foreground font-medium">Tổng cộng:</span>
+                    <span className={cn(
+                        "text-lg font-bold", 
+                        totalAssignedToLecturers > totalDeptQuota ? "text-orange-600" : "text-primary"
+                    )}>
+                        {totalAssignedToLecturers}
+                    </span>
+                </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Bảng Chi tiết Quota Giảng viên</CardTitle>
-            <CardDescription>Tổng hợp quota đã được giao và tình trạng sử dụng đề tài của từng giảng viên.</CardDescription>
+                {hasChanges && (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleResetChanges}
+                        disabled={isSubmitting}
+                        className="text-muted-foreground"
+                    >
+                        <RotateCcw className="h-4 w-4 mr-2" /> Hủy
+                    </Button>
+                )}
+
+                <Button 
+                    onClick={handleSaveAll}
+                    disabled={!hasChanges || isSubmitting}
+                    className={cn("transition-all", hasChanges ? "animate-pulse shadow-lg" : "opacity-50")}
+                >
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                    Lưu thay đổi
+                </Button>
+            </div>
           </CardHeader>
+          
+          {/* [FIX] Phần manual assign đơn lẻ bên trái đã được tích hợp vào bảng hoặc giữ lại nếu muốn */}
+          {/* Ở đây tôi ẩn phần form nhập đơn lẻ đi để dùng Bảng trực tiếp cho tiện, giống Admin */}
+          {/* Nếu bạn vẫn muốn giữ form nhập đơn lẻ, có thể để lại CardContent cũ */}
+          
           <CardContent>
             {lecturers.length === 0 ? (
               <div className="py-4 text-center text-muted-foreground">
@@ -430,19 +460,8 @@ const QuotaManager = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              const newValue = Math.max(0, (gv.quota_assigned || 0) - 1);
-                              // Update local state immediately for real-time feedback
-                              setLecturers((prevLecturers) =>
-                                prevLecturers.map((lecturer) =>
-                                  lecturer.ID_GIANGVIEN === gv.ID_GIANGVIEN
-                                    ? { ...lecturer, quota_assigned: newValue }
-                                    : lecturer
-                                )
-                              );
-                              handleAdjustQuota(gv.ID_GIANGVIEN, newValue);
-                            }}
-                            disabled={(gv.quota_assigned || 0) <= 0 || isSubmitting}
+                            onClick={() => handleLocalChange(gv.ID_GIANGVIEN, Math.max(0, (gv.quota_assigned || 0) - 1))}
+                            disabled={isLoadingData}
                             className="h-6 w-6 p-0"
                           >
                             -
@@ -453,54 +472,29 @@ const QuotaManager = () => {
                             type="number"
                             min="0"
                             value={gv.quota_assigned || 0}
-                            className="w-16 text-center border rounded-md h-7 focus:outline-none focus:ring-2 focus:ring-primary"
+                            className="w-16 text-center border rounded-md h-7 focus:outline-none focus:ring-2 focus:ring-primary bg-background"
                             disabled={isSubmitting}
                             onChange={(e) => {
                               const value = parseInt(e.target.value, 10);
-                              if (!isNaN(value) && value >= 0) {
-                                // Update local state immediately for real-time feedback
-                                setLecturers((prevLecturers) =>
-                                  prevLecturers.map((lecturer) =>
-                                    lecturer.ID_GIANGVIEN === gv.ID_GIANGVIEN
-                                      ? { ...lecturer, quota_assigned: value }
-                                      : lecturer
-                                  )
-                                );
-                              }
+                              handleLocalChange(gv.ID_GIANGVIEN, isNaN(value) ? 0 : value);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
-                                const value = parseInt(e.target.value, 10);
-                                if (!isNaN(value) && value >= 0) {
-                                  handleAdjustQuota(gv.ID_GIANGVIEN, value);
-                                }
+                                const value = parseInt(e.target.value, 10) || 0;
+                                handleSaveSingleRow(gv.ID_GIANGVIEN, value);
+                                e.target.blur();
                               }
                             }}
-                            onBlur={(e) => {
-                              const value = parseInt(e.target.value, 10);
-                              if (!isNaN(value) && value >= 0) {
-                                handleAdjustQuota(gv.ID_GIANGVIEN, value);
-                              }
-                            }}
+                            // Lưu ý: Admin có onBlur save, ở đây ta dùng nút Lưu hoặc Enter để an toàn hơn, 
+                            // hoặc có thể thêm onBlur={...} gọi handleSaveSingleRow nếu muốn.
                           />
 
                           {/* Nút tăng */}
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                              const newValue = (gv.quota_assigned || 0) + 1;
-                              // Update local state immediately for real-time feedback
-                              setLecturers((prevLecturers) =>
-                                prevLecturers.map((lecturer) =>
-                                  lecturer.ID_GIANGVIEN === gv.ID_GIANGVIEN
-                                    ? { ...lecturer, quota_assigned: newValue }
-                                    : lecturer
-                                )
-                              );
-                              handleAdjustQuota(gv.ID_GIANGVIEN, newValue);
-                            }}
-                            disabled={isSubmitting}
+                            onClick={() => handleLocalChange(gv.ID_GIANGVIEN, (gv.quota_assigned || 0) + 1)}
+                            disabled={isLoadingData}
                             className="h-6 w-6 p-0"
                           >
                             +

@@ -67,12 +67,12 @@ export const getChuyenNganhOptions = () => {
  * @param {number} id - ID của Hội đồng.
  * @returns {Promise<object>} Dữ liệu Hội đồng sau khi nâng cấp.
  */
-export const upgradePhanBienToHoiDong = (id) => {
-    return axiosClient.post(`/admin/hoidong/${id}/upgrade-to-hoidong`).then(res => res.data);
+export const upgradePhanBienToHoiDong = (id, targetType = 'hoidong') => {
+    return axiosClient.post(`/admin/hoidong/${id}/upgrade-to-hoidong`, { target_type: targetType }).then(res => res.data);
 };
 
-export const bulkUpgradeHoiDong = (ids) => {
-  return axiosClient.post('/admin/hoidong/bulk-upgrade', { ids }).then(res => res.data);
+export const bulkUpgradeHoiDong = (ids, targetType = 'hoidong') => {
+  return axiosClient.post('/admin/hoidong/bulk-upgrade', { ids, target_type: targetType }).then(res => res.data);
 };
 
 // [THÊM MỚI] Hàm service phân công tự động

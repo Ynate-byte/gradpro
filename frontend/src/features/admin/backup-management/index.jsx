@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
@@ -10,12 +10,26 @@ import {
     DropdownMenuItem, 
     DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
+import { 
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Download, Trash2, Database, HardDrive, Loader2, ShieldCheck, AlertTriangle, ChevronDown, FileArchive } from 'lucide-react';
 import { getBackups, createBackup, deleteBackup, downloadBackupLink } from '@/api/adminBackupService';
 import { toast } from 'sonner';
 
 export default function BackupPage() {
     const queryClient = useQueryClient();
+    
+    // State cho Dialog xóa
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [backupToDelete, setBackupToDelete] = useState(null);
 
     // 1. Lấy danh sách backup
     const { data: backups, isLoading } = useQuery({
@@ -44,9 +58,12 @@ export default function BackupPage() {
         onSuccess: () => {
             toast.success("Đã xóa file backup.");
             queryClient.invalidateQueries(['backups']);
+            setDeleteDialogOpen(false); // Đóng dialog sau khi xóa thành công
+            setBackupToDelete(null);
         },
         onError: (err) => {
             toast.error("Lỗi xóa: " + (err.response?.data?.message || err.message));
+            setDeleteDialogOpen(false); // Đóng dialog nếu lỗi
         }
     });
 
@@ -65,6 +82,11 @@ export default function BackupPage() {
         } catch (error) {
             toast.error("Không thể tải file.");
         }
+    };
+
+    const confirmDelete = (backup) => {
+        setBackupToDelete(backup);
+        setDeleteDialogOpen(true);
     };
 
     return (
@@ -175,13 +197,9 @@ export default function BackupPage() {
                                                         </Button>
                                                         <Button 
                                                             variant="ghost" 
-                                                            size="sm"
+                                                            size="sm" 
                                                             className="h-8 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                                            onClick={() => {
-                                                                if(confirm(`Xóa vĩnh viễn bản backup này?\n\n${backup.name}`)) {
-                                                                    deleteMutation.mutate(backup.path);
-                                                                }
-                                                            }}
+                                                            onClick={() => confirmDelete(backup)}
                                                             disabled={deleteMutation.isPending}
                                                             title="Xóa vĩnh viễn"
                                                         >
@@ -209,6 +227,29 @@ export default function BackupPage() {
                     </div>
                 </div>
             </div>
+
+            {/* Dialog Xác nhận Xóa */}
+            <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Xóa bản sao lưu?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Hành động này không thể hoàn tác. Bản sao lưu <strong>{backupToDelete?.name}</strong> sẽ bị xóa vĩnh viễn khỏi hệ thống.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={deleteMutation.isPending}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => deleteMutation.mutate(backupToDelete?.path)}
+                            disabled={deleteMutation.isPending}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Xóa vĩnh viễn
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

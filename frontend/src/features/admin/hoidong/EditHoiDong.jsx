@@ -191,7 +191,12 @@ const EditHoiDong = () => {
       return;
     }
     if (form.LOAI === "hoidong" && !isSelected && selectedGV.length >= 3) {
-      toast.warning("Hội đồng bảo vệ chỉ được chọn tối đa 3 giảng viên.");
+      toast.warning("Hội đồng bảo vệ (3 người) chỉ được chọn tối đa 3 giảng viên.");
+      return;
+    }
+    // [UPDATED] Logic cho 5 người
+    if (form.LOAI === "hoidong5" && !isSelected && selectedGV.length >= 5) {
+      toast.warning("Hội đồng bảo vệ (5 người) chỉ được chọn tối đa 5 giảng viên.");
       return;
     }
 
@@ -215,7 +220,8 @@ const EditHoiDong = () => {
 
   const handleRoleChange = (idGV, role) => {
     if (form.LOAI === "phanbien") return;
-    if (form.LOAI === "hoidong") {
+    // [UPDATED] Cho phép role hoidong và hoidong5 giống nhau
+    if (form.LOAI === "hoidong" || form.LOAI === "hoidong5") {
       if (role === "phanbien") {
         toast.error("Không thể chọn 'Phản biện' cho Hội đồng bảo vệ.");
         return;
@@ -328,8 +334,9 @@ const EditHoiDong = () => {
             <div>
                 <div className="flex items-center gap-3">
                     <h1 className="text-xl font-bold text-foreground tracking-tight">{form.TEN_HOIDONG}</h1>
+                    {/* [UPDATED] Hiển thị Badge loại hội đồng */}
                     <Badge variant={form.LOAI === 'phanbien' ? 'secondary' : 'default'} className="font-medium px-2.5 py-0.5 text-xs rounded-md shadow-sm">
-                        {form.LOAI === 'phanbien' ? 'Phản biện' : 'Bảo vệ'}
+                        {form.LOAI === 'phanbien' ? 'Phản biện' : (form.LOAI === 'hoidong5' ? 'HĐ Bảo vệ (5 người)' : 'HĐ Bảo vệ (3 người)')}
                     </Badge>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1 font-medium">
@@ -385,6 +392,8 @@ const EditHoiDong = () => {
                                     <SelectTrigger className="h-10 border-muted-foreground/20"><SelectValue /></SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="hoidong">Hội đồng Bảo vệ (3 người)</SelectItem>
+                                        {/* [UPDATED] Thêm option hoidong5 */}
+                                        <SelectItem value="hoidong5">Hội đồng Bảo vệ (5 người)</SelectItem>
                                         <SelectItem value="phanbien">Phản biện (1 người)</SelectItem>
                                     </SelectContent>
                                 </Select>
@@ -482,7 +491,8 @@ const EditHoiDong = () => {
                             </div>
                             <div className="ml-auto text-sm text-muted-foreground">
                                 <Badge variant="secondary" className="text-xs font-normal">
-                                    Đã chọn: <strong className="text-primary">{selectedGV.length}</strong> / {form.LOAI === 'hoidong' ? '3' : '1'}
+                                    {/* [UPDATED] Hiển thị giới hạn số lượng đúng theo loại */}
+                                    Đã chọn: <strong className="text-primary">{selectedGV.length}</strong> / {form.LOAI === 'hoidong' ? '3' : (form.LOAI === 'hoidong5' ? '5' : '1')}
                                 </Badge>
                             </div>
                         </div>
@@ -564,7 +574,7 @@ const EditHoiDong = () => {
                                                                             <SelectValue />
                                                                         </SelectTrigger>
                                                                         <SelectContent>
-                                                                            {form.LOAI === 'hoidong' ? (
+                                                                            {form.LOAI === 'hoidong' || form.LOAI === 'hoidong5' ? (
                                                                                 <>
                                                                                     <SelectItem value="chutich">Chủ tịch</SelectItem>
                                                                                     <SelectItem value="thuky">Thư ký</SelectItem>

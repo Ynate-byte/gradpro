@@ -25,6 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // [MỚI] Import RadioGroup
+import { Label } from "@/components/ui/label"; // [MỚI] Import Label
 import {
   Loader2,
   PlusCircle,
@@ -50,7 +52,6 @@ import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
 import { WorkloadStatsDialog } from "./WorkloadStatsDialog";
 import StatCard from "@/components/shared/StatCard";
 import { useTheme } from "@/components/theme-provider";
-import { Label } from "@/components/ui/label";
 import { getKhoaBomons } from "@/api/userService";
 
 const QUERY_KEY_HOIDONG = "adminHoiDong";
@@ -58,7 +59,8 @@ const QUERY_KEY_STATS = "hoiDongStats";
 const QUERY_KEY_FILTERS = "hoidongFilterOptions";
 
 const loaiOptions = [
-  { label: "Hội đồng", value: "hoidong" },
+  { label: "Hội đồng Bảo vệ (3)", value: "hoidong" },
+  { label: "Hội đồng Bảo vệ (5)", value: "hoidong5" },
   { label: "Phản biện", value: "phanbien" },
 ];
 
@@ -87,6 +89,7 @@ const getVariants = (shouldReduce) => {
     };
 };
 
+// Component cho phép sửa nhanh tên/phòng ngay trên bảng
 const EditableTextCell = ({ getValue, row, colId }) => {
     const initialValue = getValue() || "";
     const [value, setValue] = useState(initialValue);
@@ -202,6 +205,9 @@ const ListHoiDong = () => {
   const [isSingleUpgradeAlertOpen, setIsSingleUpgradeAlertOpen] = useState(false);
   const [upgradeTarget, setUpgradeTarget] = useState(null);
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
+  
+  // [MỚI] State để chọn loại hội đồng khi nâng cấp
+  const [upgradeType, setUpgradeType] = useState("hoidong"); 
 
   const currentLoaiFilter = columnFilters.find(f => f.id === "LOAI")?.value?.[0];
 
@@ -288,8 +294,9 @@ const ListHoiDong = () => {
     },
   });
 
+  // [UPDATED] Upgrade Mutation có truyền type
   const upgradeMutation = useMutation({
-    mutationFn: (ids) => hoiDongService.bulkUpgradeHoiDong(ids),
+    mutationFn: (ids) => hoiDongService.bulkUpgradeHoiDong(ids, upgradeType),
     onSuccess: (data) => {
       toast.success(data.message || "Nâng cấp hàng loạt thành công!");
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
@@ -304,8 +311,9 @@ const ListHoiDong = () => {
     },
   });
 
+  // [UPDATED] Single Upgrade Mutation có truyền type
   const singleUpgradeMutation = useMutation({
-    mutationFn: (id) => hoiDongService.upgradePhanBienToHoiDong(id),
+    mutationFn: (id) => hoiDongService.upgradePhanBienToHoiDong(id, upgradeType),
     onSuccess: (data) => {
       toast.success(data.message || "Nâng cấp thành công!");
       queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
@@ -353,15 +361,21 @@ const ListHoiDong = () => {
       {
         accessorKey: "LOAI",
         header: "Loại",
-        cell: ({ row }) => (
-          <Badge
-            variant={row.original.LOAI === "phanbien" ? "secondary" : "default"}
-            className="capitalize"
-          >
-            {row.original.LOAI === "phanbien" ? "Phản biện" : "Hội đồng"}
-          </Badge>
-        ),
-        size: 100,
+        cell: ({ row }) => {
+            const loai = row.original.LOAI;
+            return (
+              <Badge
+                variant={loai === "phanbien" ? "secondary" : "default"}
+                className={cn(
+                    "capitalize",
+                    loai === "hoidong5" && "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                )}
+              >
+                {loai === "phanbien" ? "Phản biện" : (loai === 'hoidong5' ? "Bảo vệ (5)" : "Bảo vệ (3)")}
+              </Badge>
+            );
+        },
+        size: 120,
       },
       {
         // [SỬA] AccessorKey này sẽ tạo ra column ID là 'khoaBomon'
@@ -442,9 +456,10 @@ const ListHoiDong = () => {
                   size="icon"
                   onClick={() => {
                     setUpgradeTarget(hoidong);
+                    setUpgradeType("hoidong"); // Reset default
                     setIsSingleUpgradeAlertOpen(true);
                   }}
-                  title="Nâng cấp lên Hội đồng Bảo vệ (3 thành viên)"
+                  title="Nâng cấp lên Hội đồng Bảo vệ"
                 >
                   <ArrowUp className="h-4 w-4" />
                 </Button>
@@ -507,7 +522,10 @@ const ListHoiDong = () => {
               variant="outline"
               size="sm"
               className="h-8"
-              onClick={() => setIsUpgradeAlertOpen(true)}
+              onClick={() => {
+                setUpgradeType("hoidong"); // Reset
+                setIsUpgradeAlertOpen(true);
+              }}
               disabled={upgradeMutation.isPending || deleteMutation.isPending}
           >
               <ArrowUp className="mr-2 h-4 w-4" />
@@ -577,7 +595,7 @@ const ListHoiDong = () => {
               value={isLoadingStats ? 'loading' : stats?.totalBaoVe} 
               iconBgClass="bg-green-100" 
               iconColorClass="text-green-600"
-              isActive={currentLoaiFilter === 'hoidong'}
+              isActive={currentLoaiFilter === 'hoidong' || currentLoaiFilter === 'hoidong5'}
               onClick={() => handleStatCardClick('LOAI', 'hoidong')}
             />
           </motion.div>
@@ -727,31 +745,67 @@ const ListHoiDong = () => {
         <AlertDialog open={isUpgradeAlertOpen} onOpenChange={setIsUpgradeAlertOpen}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Xác nhận nâng cấp hàng loạt</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Bạn có chắc chắn muốn nâng cấp <b>{Object.keys(rowSelection).length}</b> hội đồng phản biện đã chọn lên thành Hội đồng bảo vệ không?
-                    <br className="my-2"/>
-                    <span className="text-sm text-muted-foreground italic">Lưu ý: Loại hội đồng sẽ chuyển từ "Phản biện" sang "Hội đồng" (yêu cầu 3 thành viên).</span>
-                  </AlertDialogDescription>
+                    <AlertDialogTitle>Xác nhận nâng cấp hàng loạt</AlertDialogTitle>
+                    <AlertDialogDescription asChild>
+                      <div className="space-y-3">
+                        <p>Bạn có chắc chắn muốn nâng cấp <b>{Object.keys(rowSelection).length}</b> hội đồng phản biện đã chọn?</p>
+                        
+                        <div className="bg-muted/50 p-3 rounded-md border">
+                          <Label className="mb-2 block text-xs font-bold uppercase">Nâng cấp lên loại:</Label>
+                          <RadioGroup value={upgradeType} onValueChange={setUpgradeType} className="flex flex-col gap-2">
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="hoidong" id="bulk-up-3" />
+                              <Label htmlFor="bulk-up-3" className="cursor-pointer">Hội đồng Bảo vệ (3 người)</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="hoidong5" id="bulk-up-5" />
+                              <Label htmlFor="bulk-up-5" className="cursor-pointer">Hội đồng Bảo vệ (5 người)</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                        
+                        <p className="text-sm text-muted-foreground italic">
+                          Lưu ý: Giảng viên phản biện hiện tại sẽ được chuyển thành "Thành viên".
+                        </p>
+                      </div>
+                    </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Hủy</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>
-                    Xác nhận
-                  </AlertDialogAction>
+                    <AlertDialogCancel>Hủy</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>
+                      Xác nhận
+                    </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
 
         {/* Dialog Nâng cấp đơn lẻ */}
         <AlertDialog open={isSingleUpgradeAlertOpen} onOpenChange={setIsSingleUpgradeAlertOpen}>
-             <AlertDialogContent>
+              <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Nâng cấp lên Hội đồng Bảo vệ</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Hội đồng <b>{upgradeTarget?.TEN_HOIDONG}</b> sẽ được chuyển từ loại <b>Phản biện</b> sang <b>Hội đồng bảo vệ</b>.
-                    <br className="my-2"/>
-                    <span className="text-sm text-muted-foreground">Giảng viên phản biện hiện tại sẽ được giữ lại với vai trò "Thành viên". Bạn cần bổ sung thêm Chủ tịch và Thư ký sau khi nâng cấp.</span>
+                  <AlertDialogDescription asChild>
+                     <div className="space-y-3">
+                        <p>Hội đồng <b>{upgradeTarget?.TEN_HOIDONG}</b> sẽ được chuyển từ loại <b>Phản biện</b> sang <b>Hội đồng bảo vệ</b>.</p>
+                        
+                        <div className="bg-muted/50 p-3 rounded-md border">
+                          <Label className="mb-2 block text-xs font-bold uppercase">Chọn loại đích:</Label>
+                          <RadioGroup value={upgradeType} onValueChange={setUpgradeType} className="flex flex-col gap-2">
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="hoidong" id="single-up-3" />
+                              <Label htmlFor="single-up-3" className="cursor-pointer">Hội đồng 3 thành viên</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value="hoidong5" id="single-up-5" />
+                              <Label htmlFor="single-up-5" className="cursor-pointer">Hội đồng 5 thành viên</Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+
+                        <p className="text-sm text-muted-foreground italic">
+                          Giảng viên phản biện hiện tại sẽ được giữ lại với vai trò "Thành viên". Bạn cần bổ sung thêm các thành viên còn lại sau khi nâng cấp.
+                        </p>
+                     </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

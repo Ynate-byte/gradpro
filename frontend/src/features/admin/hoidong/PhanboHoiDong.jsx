@@ -17,8 +17,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { 
-    Loader2, ArrowLeft, Search, User, Users, CheckCircle2, ArrowRight, Sparkles, 
-    X, BookOpen, GraduationCap, Building2, AlertCircle 
+  Loader2, ArrowLeft, Search, User, Users, CheckCircle2, ArrowRight, Sparkles, 
+  X, BookOpen, GraduationCap, Building2, AlertCircle 
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -502,7 +502,7 @@ const PhanboHoiDong = () => {
                                 {hd.TEN_HOIDONG}
                               </h4>
                               <Badge variant={hd.LOAI === 'phanbien' ? 'secondary' : 'default'} className="text-[10px] px-1.5 h-5">
-                                {hd.LOAI === 'phanbien' ? 'Phản biện' : 'Hội đồng'}
+                                {hd.LOAI === 'phanbien' ? 'Phản biện' : (hd.LOAI === 'hoidong5' ? 'HĐ Bảo vệ (5)' : 'HĐ Bảo vệ (3)')}
                               </Badge>
                             </div>
 
@@ -647,6 +647,11 @@ const PhanboHoiDong = () => {
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="hoidong" id="opt-hd" />
                       <Label htmlFor="opt-hd" className="cursor-pointer">Hội đồng Bảo vệ</Label>
+                    </div>
+                    {/* [UPDATED] Thêm tùy chọn Hội đồng 5 người */}
+                    <div className="flex items-center space-x-2">
+                      <RadioGroupItem value="hoidong5" id="opt-hd5" />
+                      <Label htmlFor="opt-hd5" className="cursor-pointer">Hội đồng Bảo vệ (5 người)</Label>
                     </div>
                     <div className="flex items-center space-x-2">
                       <RadioGroupItem value="phanbien" id="opt-pb" />

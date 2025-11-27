@@ -313,8 +313,8 @@ const QuotaManager = () => {
     }
 
     const totalRequired = statistics.overview?.required_topics || 0;
+    // Tính tổng real-time dựa trên state 'departments'
     const totalAssigned = departments.reduce((sum, dept) => sum + (dept.quota_assigned || 0), 0);
-    const remainingQuota = totalRequired - totalAssigned;
     const isLoadingData = isLoading || isSubmitting;
 
     return (
@@ -331,7 +331,7 @@ const QuotaManager = () => {
           initial="hidden"
           animate="visible"
         >
-          {/* Stat Cards (Giữ nguyên) */}
+          {/* Stat Cards */}
           <StatCard
             icon={Users}
             title="Tổng sinh viên"
@@ -364,7 +364,6 @@ const QuotaManager = () => {
             iconBgClass="bg-green-100 dark:bg-green-900/30"
             iconColorClass="text-green-600 dark:text-green-400"
           />
-
         </motion.div>
 
         <Card>
@@ -400,8 +399,19 @@ const QuotaManager = () => {
               </CardDescription>
             </div>
             
-            <div className="flex items-center gap-2">
-                 {hasChanges && (
+            <div className="flex items-center gap-3">
+                {/* --- HIỂN THỊ TỔNG SỐ LƯỢNG --- */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 rounded-md border border-border/50 shadow-sm">
+                    <span className="text-sm text-muted-foreground font-medium">Tổng cộng:</span>
+                    <span className={cn(
+                        "text-lg font-bold", 
+                        totalAssigned > totalRequired ? "text-orange-600" : "text-primary"
+                    )}>
+                        {totalAssigned}
+                    </span>
+                </div>
+
+                {hasChanges && (
                     <Button 
                         variant="outline" 
                         size="sm" 
@@ -464,7 +474,7 @@ const QuotaManager = () => {
                               const val = parseInt(e.target.value, 10);
                               handleLocalChange(dept.ID_KHOA_BOMON, isNaN(val) ? 0 : val);
                             }}
-                            // [MỚI] Bắt sự kiện Enter để lưu ngay
+                            // Bắt sự kiện Enter để lưu ngay
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 const val = parseInt(e.target.value, 10) || 0;

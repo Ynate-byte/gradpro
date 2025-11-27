@@ -158,7 +158,8 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
           const mappedData = data.map(item => ({
               ...item,
               suggested_councils: Math.ceil(item.group_count / ratio) || 1,
-              prefix_name: `${form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : 'HĐ Phản biện'} - ${item.MA_KHOA_BOMON}`
+              // [UPDATED] Hiển thị prefix đúng theo loại
+              prefix_name: `${form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : (form.LOAI === 'hoidong5' ? 'HĐ Bảo vệ (5)' : 'HĐ Phản biện')} - ${item.MA_KHOA_BOMON}`
           }));
           setDeptStats(mappedData);
       } catch (error) {
@@ -182,11 +183,16 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
 
   const handleToggleGV = (id) => {
     const isSelected = selectedGV.includes(id);
+    
     if (form.LOAI === "phanbien" && !isSelected && selectedGV.length >= 1) { 
       return toast.warning("Hội đồng phản biện chỉ được chọn 1 người.");
     }
     if (form.LOAI === "hoidong" && !isSelected && selectedGV.length >= 3) { 
-      return toast.warning("Hội đồng bảo vệ tối đa 3 người.");
+      return toast.warning("Hội đồng bảo vệ (3 người) tối đa 3 thành viên.");
+    }
+    // [UPDATED] Logic giới hạn cho hoidong5
+    if (form.LOAI === "hoidong5" && !isSelected && selectedGV.length >= 5) { 
+      return toast.warning("Hội đồng bảo vệ (5 người) tối đa 5 thành viên.");
     }
 
     setSelectedGV((prev) => {
@@ -205,7 +211,8 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
   };
 
   const handleRoleChange = (id, role) => {
-    if (form.LOAI === "hoidong") { 
+    // [UPDATED] Cho phép chọn vai trò cho cả hoidong và hoidong5
+    if (form.LOAI === "hoidong" || form.LOAI === "hoidong5") { 
       const otherRoles = Object.keys(gvRoles).filter((gvId) => gvId != id).map((gvId) => gvRoles[gvId]);
       if ((role === "chutich" && otherRoles.includes("chutich")) || (role === "thuky" && otherRoles.includes("thuky"))) {
         return toast.warning(`Vai trò này đã có người đảm nhiệm.`);
@@ -231,7 +238,7 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
           if (activeTab === 'auto' && deptStats.length > 0) {
              setDeptStats(prev => prev.map(item => ({
                  ...item,
-                 prefix_name: `${value === 'hoidong' ? 'HĐ Bảo vệ' : 'HĐ Phản biện'} - ${item.MA_KHOA_BOMON}`
+                 prefix_name: `${value === 'hoidong' ? 'HĐ Bảo vệ' : (value === 'hoidong5' ? 'HĐ Bảo vệ (5)' : 'HĐ Phản biện')} - ${item.MA_KHOA_BOMON}`
              })));
           }
       }
@@ -283,7 +290,8 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
             ...form, 
             ID_KEHOACH: Number(form.ID_KEHOACH),
             ID_KHOA_BOMON: Number(form.ID_KHOA_BOMON),
-            TEN_HOIDONG: form.TEN_HOIDONG || (form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : 'HĐ Phản biện'),
+            // [UPDATED] Placeholder logic trong code
+            TEN_HOIDONG: form.TEN_HOIDONG || (form.LOAI === 'phanbien' ? 'HĐ Phản biện' : 'HĐ Bảo vệ'),
             
             soLuong: activeTab === 'quick' ? Number(form.soLuong) : 1,
             giangviens: activeTab === 'manual' ? selectedGV.map((id) => ({
@@ -363,8 +371,9 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                         <Select value={form.LOAI} onValueChange={(v) => handleSelectChange("LOAI", v)}>
                             <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="hoidong">Hội đồng Bảo vệ (3 người)</SelectItem>
                                 <SelectItem value="phanbien">Hội đồng Phản biện (1 người)</SelectItem>
+                                <SelectItem value="hoidong">Hội đồng Bảo vệ (3 người)</SelectItem>
+                                <SelectItem value="hoidong5">Hội đồng Bảo vệ (5 người)</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -486,7 +495,8 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                              </div>
                              <div className="space-y-2">
                                 <Label>Tên định danh (Prefix)</Label>
-                                <Input name="TEN_HOIDONG" value={form.TEN_HOIDONG} onChange={handleChange} placeholder={`VD: ${form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : 'HĐ Phản biện'}...`} />
+                                {/* [UPDATED] Placeholder */}
+                                <Input name="TEN_HOIDONG" value={form.TEN_HOIDONG} onChange={handleChange} placeholder={`VD: ${form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : (form.LOAI === 'hoidong5' ? 'HĐ Bảo vệ (5)' : 'HĐ Phản biện')}...`} />
                                 <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                     <Info className="w-3 h-3"/> Hệ thống sẽ tự động thêm số thứ tự (1, 2, 3...) vào sau tên này.
                                 </p>
@@ -587,7 +597,8 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
                                                                 >
                                                                     <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                                                                     <SelectContent>
-                                                                        {form.LOAI === 'hoidong' ? (
+                                                                        {/* [UPDATED] Cho phép chọn vai trò cho hoidong5 */}
+                                                                        {form.LOAI === 'hoidong' || form.LOAI === 'hoidong5' ? (
                                                                             <>
                                                                                 <SelectItem value="chutich">Chủ tịch</SelectItem>
                                                                                 <SelectItem value="thuky">Thư ký</SelectItem>

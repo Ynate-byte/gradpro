@@ -40,20 +40,19 @@ class QuotaController extends Controller
         // 1. Lấy Quota tổng của Bộ môn
         $departmentQuota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
             ->where('ID_KHOA_BOMON', $departmentId)
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->first();
+            ->first(); // Lấy bản ghi, bất kể trạng thái (Đang phân công hay Hoàn thành đều cần xem)
 
         // 2. Lấy tất cả giảng viên trong bộ môn
         $lecturers = Giangvien::where('ID_KHOA_BOMON', $departmentId)
             ->with(['nguoidung'])
             ->get();
 
-        // 3. Tính tổng quota đã phân công cho các GV
+        // 3. Tính tổng quota đã phân công cho các GV (để tính số còn lại)
         $totalAssigned = QuotaGiangvien::where('ID_KEHOACH', $planId)
             ->whereHas('giangvien', function($q) use ($departmentId) {
                 $q->where('ID_KHOA_BOMON', $departmentId);
             })
-            ->where('TRANGTHAI', 'Đang phân công')
+            // Lấy tất cả quota đã gán, kể cả GV đó đã hoàn thành hay chưa
             ->sum('SO_DETAI_QUOTA');
 
         $departmentQuotaValue = $departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0;
@@ -62,7 +61,6 @@ class QuotaController extends Controller
             // Quota cá nhân
             $quota = QuotaGiangvien::where('ID_KEHOACH', $planId)
                 ->where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
-                ->where('TRANGTHAI', 'Đang phân công')
                 ->first();
 
             // Số đề tài đã tạo (Tính cả Đã duyệt & Chờ duyệt)
@@ -75,8 +73,10 @@ class QuotaController extends Controller
             $lecturerAssigned = $quota ? $quota->SO_DETAI_QUOTA : 0;
             
             // Quota còn lại có thể phân (Của bộ môn)
-            // = Tổng bộ môn - (Tổng đã phân - Quota của chính người này)
-            $availableQuota = $departmentQuotaValue - ($totalAssigned - $lecturerAssigned);
+            // = Tổng bộ môn - (Tổng đã phân cho tất cả - Quota hiện tại của người này) + Quota hiện tại của người này (để edit)
+            // Thực ra đơn giản là: (Quota Bộ Môn - Tổng đã phân)
+            // Nhưng ở UI, khi edit 1 người, ta cần biết "thêm được bao nhiêu nữa".
+            $availableQuota = $departmentQuotaValue - $totalAssigned;
 
             return [
                 'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
@@ -85,14 +85,39 @@ class QuotaController extends Controller
                 'HOCVI' => $lecturer->HOCVI,
                 'quota_assigned' => $lecturerAssigned,
                 'topics_created' => $actualCreated,
-                'available_quota' => max(0, $availableQuota),
+                'available_quota' => max(0, $availableQuota), // Số dư của bộ môn để phân thêm
             ];
         });
 
         return response()->json([
             'department_quota' => $departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0,
+            'department_quota_status' => $departmentQuota ? $departmentQuota->TRANGTHAI : 'Chưa có',
+            'total_assigned' => $totalAssigned,
             'lecturers' => $result,
         ]);
+    }
+
+    /**
+     * Helper: Kiểm tra và cập nhật trạng thái Quota của Bộ môn
+     * Nếu tổng đã phân >= Tổng được giao => Hoàn thành
+     */
+    private function checkAndCompleteDepartmentQuota($planId, $departmentId)
+    {
+        $deptQuota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
+            ->where('ID_KHOA_BOMON', $departmentId)
+            ->first();
+
+        if ($deptQuota && $deptQuota->TRANGTHAI === 'Đang phân công') {
+            // Tính tổng số đã phân cho các giảng viên trong bộ môn
+            $totalAssigned = QuotaGiangvien::where('ID_KEHOACH', $planId)
+                ->whereHas('giangvien', fn($q) => $q->where('ID_KHOA_BOMON', $departmentId))
+                ->sum('SO_DETAI_QUOTA');
+
+            // Nếu đã phân đủ hoặc dư so với chỉ tiêu bộ môn
+            if ($totalAssigned >= $deptQuota->SO_DETAI_QUOTA) {
+                $deptQuota->update(['TRANGTHAI' => 'Hoàn thành']);
+            }
+        }
     }
 
     /**
@@ -126,31 +151,29 @@ class QuotaController extends Controller
         // Kiểm tra xem có vượt quá quota bộ môn không
         $departmentQuota = QuotaKhoaBomon::where('ID_KEHOACH', $request->ID_KEHOACH)
             ->where('ID_KHOA_BOMON', $departmentId)
-            ->where('TRANGTHAI', 'Đang phân công')
             ->first();
 
         if (!$departmentQuota) {
             return response()->json(['message' => 'Chưa có quota phân công cho bộ môn trong kế hoạch này'], 400);
         }
 
-        // Tính tổng đã phân cho NHỮNG NGƯỜI KHÁC
+        // Tính tổng đã phân cho NHỮNG NGƯỜI KHÁC (trừ người đang sửa)
         $totalAssignedToOthers = QuotaGiangvien::where('ID_KEHOACH', $request->ID_KEHOACH)
             ->whereHas('giangvien', function($q) use ($departmentId) {
                 $q->where('ID_KHOA_BOMON', $departmentId);
             })
             ->where('ID_GIANGVIEN', '!=', $request->ID_GIANGVIEN)
-            ->where('TRANGTHAI', 'Đang phân công')
             ->sum('SO_DETAI_QUOTA');
 
         $availableQuota = $departmentQuota->SO_DETAI_QUOTA - $totalAssignedToOthers;
 
         if ($request->SO_DETAI_QUOTA > $availableQuota) {
             return response()->json([
-                'message' => "Quota vượt quá giới hạn bộ môn. Còn lại: {$availableQuota}"
+                'message' => "Quota vượt quá giới hạn bộ môn. Tối đa cho GV này là: {$availableQuota}"
             ], 400);
         }
 
-        DB::transaction(function () use ($request, $currentUser, $lecturer) {
+        DB::transaction(function () use ($request, $currentUser, $lecturer, $departmentId) {
             $existingQuota = QuotaGiangvien::where('ID_KEHOACH', $request->ID_KEHOACH)
                 ->where('ID_GIANGVIEN', $request->ID_GIANGVIEN)
                 ->first();
@@ -176,6 +199,9 @@ class QuotaController extends Controller
                 ]);
             }
 
+            // [LOGIC MỚI] Kiểm tra xem Bộ môn đã xong nhiệm vụ chưa
+            $this->checkAndCompleteDepartmentQuota($request->ID_KEHOACH, $departmentId);
+
             if ($request->SO_DETAI_QUOTA > 0 && $lecturer->nguoidung) {
                 NotificationService::send(
                     $lecturer->nguoidung->ID_NGUOIDUNG,
@@ -193,7 +219,7 @@ class QuotaController extends Controller
     }
 
     /**
-     * [TRƯỞNG BỘ MÔN] Tự động phân bổ đều quota
+     * [TRƯỞNG BỘ MÔN] Tự động phân bổ đều quota cho tất cả giảng viên
      */
     public function autoAssignLecturerQuotas(Request $request)
     {
@@ -217,7 +243,6 @@ class QuotaController extends Controller
             DB::transaction(function () use ($planId, $departmentId, $currentUser) {
                 $departmentQuota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
                     ->where('ID_KHOA_BOMON', $departmentId)
-                    ->where('TRANGTHAI', 'Đang phân công')
                     ->first();
 
                 if (!$departmentQuota) {
@@ -229,11 +254,13 @@ class QuotaController extends Controller
                     throw new \Exception('Không có giảng viên nào trong bộ môn');
                 }
 
+                // Tính toán chia đều
                 $topicsPerLecturer = floor($departmentQuota->SO_DETAI_QUOTA / $lecturers->count());
                 $remainingTopics = $departmentQuota->SO_DETAI_QUOTA % $lecturers->count();
 
                 $assignments = [];
                 foreach ($lecturers as $index => $lecturer) {
+                    // Phân phối phần dư cho những người đầu tiên
                     $lecturerTopics = $topicsPerLecturer + ($index < $remainingTopics ? 1 : 0);
                     $assignments[] = [
                         'lecturer_id' => $lecturer->ID_GIANGVIEN,
@@ -275,6 +302,10 @@ class QuotaController extends Controller
                         );
                     }
                 }
+
+                // [LOGIC MỚI] Sau khi auto assign xong, chắc chắn bộ môn đã hoàn thành nhiệm vụ
+                // Vì auto assign luôn chia hết 100% quota của bộ môn
+                $departmentQuota->update(['TRANGTHAI' => 'Hoàn thành']);
             });
 
             return response()->json(['message' => 'Tự động phân công đề tài cho giảng viên thành công']);
@@ -306,8 +337,7 @@ class QuotaController extends Controller
         // 1. Quota cá nhân
         $quota = QuotaGiangvien::where('ID_KEHOACH', $planId)
             ->where('ID_GIANGVIEN', $lecturerId)
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->first();
+            ->first(); // Lấy luôn để xem status
 
         // 2. Đếm số đề tài GV đã tạo
         $topicsCreated = Detai::where('ID_KEHOACH', $planId)
@@ -323,15 +353,13 @@ class QuotaController extends Controller
         // 4. Quota Bộ Môn
         $departmentQuota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
             ->where('ID_KHOA_BOMON', $departmentId)
-            ->where('TRANGTHAI', 'Đang phân công')
-            ->first();
+            ->first(); // Lấy luôn để xem status
 
         // 5. Tổng quota đã phân công trong Bộ Môn
         $totalDepartmentAssigned = QuotaGiangvien::where('ID_KEHOACH', $planId)
             ->whereHas('giangvien', function($q) use ($departmentId) {
                 $q->where('ID_KHOA_BOMON', $departmentId);
             })
-            ->where('TRANGTHAI', 'Đang phân công')
             ->sum('SO_DETAI_QUOTA');
         
         // 6. [THỐNG KÊ REVIEW]
@@ -360,6 +388,7 @@ class QuotaController extends Controller
         return response()->json([
             // Hướng dẫn
             'quota_assigned' => $quotaAssigned,
+            'quota_status' => $quota ? $quota->TRANGTHAI : null,
             'topics_created' => $topicsCreated,
             'topics_needed' => $topicsNeeded,
             'actual_assigned' => $actualAssigned,
@@ -367,6 +396,7 @@ class QuotaController extends Controller
             
             // Bộ môn
             'department_quota' => $departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0,
+            'department_status' => $departmentQuota ? $departmentQuota->TRANGTHAI : null,
             'department_assigned' => $totalDepartmentAssigned,
             'department_remaining' => ($departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0) - $totalDepartmentAssigned,
             

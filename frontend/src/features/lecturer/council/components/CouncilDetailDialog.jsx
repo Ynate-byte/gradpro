@@ -174,7 +174,7 @@ const CouncilDetailDialog = ({ councilId, open, onOpenChange }) => {
                                     {/* Ngày */}
                                     <div className="flex items-center justify-between px-3 py-2 bg-background rounded border shadow-sm h-9">
                                         <div className="flex items-center gap-2 text-xs text-muted-foreground"><Calendar className="h-3.5 w-3.5" /> Ngày</div>
-                                        {isEditing ? <Input type="date" value={formData.NGAY_BAOCAO} onChange={e => setFormData({...formData, NGAY_BAOCAO: e.target.value})} className="h-6 w-28 text-xs bg-white border-0 p-0 text-right" /> : <span className="font-semibold text-xs">{formatDate(council.NGAY_BAOCAO)}</span>}
+                                        {isEditing ? <Input type="date" value={formData.NGAY_BAOCAO} onChange={e => setFormData({...formData, NGAY_BAOCAO: e.target.value})} className="h-6 w-30 text-xs bg-white border-0 p-0 text-right" /> : <span className="font-semibold text-xs">{formatDate(council.NGAY_BAOCAO)}</span>}
                                     </div>
                                     {/* Giờ */}
                                     <div className="flex items-center justify-between px-3 py-2 bg-background rounded border shadow-sm h-9">

@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('HOIDONG', function (Blueprint $table) {
             $table->id('ID_HOIDONG');
             $table->string('TEN_HOIDONG', 100);
-            $table->enum('LOAI', ['phanbien', 'hoidong']);
+            $table->enum('LOAI', ['phanbien', 'hoidong', 'hoidong5']);
             $table->unsignedBigInteger('ID_KEHOACH')->nullable();
             
             $table->unsignedBigInteger('ID_KHOA_BOMON')->nullable();

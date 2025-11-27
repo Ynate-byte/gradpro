@@ -52,7 +52,11 @@ class AdminDashboardController extends Controller
             // Thống kê cơ bản
             $totalGroups = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->count();
             $groupsWithTopic = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->has('phancongDetaiNhom')->count();
-            $totalTopics = Detai::where('ID_KEHOACH', $plan->ID_KEHOACH)->count();
+            
+            // [CẬP NHẬT YÊU CẦU 1] Chỉ đếm Đề tài "Đã duyệt"
+            $approvedTopics = Detai::where('ID_KEHOACH', $plan->ID_KEHOACH)
+                ->where('TRANGTHAI', 'Đã duyệt')
+                ->count();
             
             // Target topics (Quota)
             $targetTopics = QuotaKhoaBomon::where('ID_KEHOACH', $plan->ID_KEHOACH)->sum('SO_DETAI_QUOTA');
@@ -61,23 +65,23 @@ class AdminDashboardController extends Controller
                 $targetTopics = ceil(($totalStudents / 3) * 1.5);
             }
 
-            // [QUERY MỚI - TỐI ƯU] Thống kê trực tiếp từ bảng DETAI dựa trên ID_KHOA_BOMON
+            // Thống kê theo Bộ môn (Chỉ lấy đề tài đã duyệt hoặc chờ duyệt để phản ánh thực tế)
             $deptStats = DB::table('KHOA_BOMON')
                 ->leftJoin('DETAI', function($join) use ($plan) {
-                    // Join trực tiếp ID_KHOA_BOMON giữa DETAI và KHOA_BOMON
                     $join->on('KHOA_BOMON.ID_KHOA_BOMON', '=', 'DETAI.ID_KHOA_BOMON')
-                         ->where('DETAI.ID_KEHOACH', '=', $plan->ID_KEHOACH);
+                         ->where('DETAI.ID_KEHOACH', '=', $plan->ID_KEHOACH)
+                         ->where('DETAI.TRANGTHAI', '=', 'Đã duyệt'); // Chỉ tính đề tài đã duyệt
                 })
                 ->select(
                     'KHOA_BOMON.ID_KHOA_BOMON',
                     'KHOA_BOMON.TEN_KHOA_BOMON as name',
-                    // Đếm tổng số đề tài thuộc bộ môn này trong kế hoạch
+                    // Đếm số đề tài ĐÃ DUYỆT thuộc bộ môn này
                     DB::raw('COUNT(DETAI.ID_DETAI) as da_tao'),
                     // Đếm số đề tài đã được giao cho nhóm
                     DB::raw('SUM(CASE WHEN DETAI.SO_NHOM_HIENTAI > 0 THEN 1 ELSE 0 END) as da_giao')
                 )
                 ->groupBy('KHOA_BOMON.ID_KHOA_BOMON', 'KHOA_BOMON.TEN_KHOA_BOMON')
-                ->havingRaw('COUNT(DETAI.ID_DETAI) > 0') // Chỉ lấy bộ môn có dữ liệu
+                ->havingRaw('COUNT(DETAI.ID_DETAI) > 0')
                 ->get();
 
             return [
@@ -91,7 +95,7 @@ class AdminDashboardController extends Controller
                 'phase_actors' => $currentPhase ? $currentPhase->VAITRO_THUCHIEN : null,
                 'groups_registered' => $groupsWithTopic,
                 'groups_total' => $totalGroups,
-                'topics_current' => $totalTopics,
+                'topics_current' => $approvedTopics, // Trả về số lượng Đã duyệt
                 'topics_target' => $targetTopics,
                 'department_stats' => $deptStats 
             ];
@@ -117,15 +121,28 @@ class AdminDashboardController extends Controller
             $workflow['topic_percent'] = $totalTopicsAll > 0 ? round(($approvedTopicsAll / $totalTopicsAll) * 100) : 0;
 
             // C. Council & Grading
+            // [CẬP NHẬT YÊU CẦU 2] Workflow cho Hội đồng chỉ tính trên nhóm ĐÃ NỘP BÀI XONG
             $totalGroupsAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)->count();
-            $groupsWithTopicAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)->has('phancongDetaiNhom')->count();
-            $groupsWithCouncilAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)->has('hoidongs')->count();
+            
+            $groupsReadyForCouncil = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
+                ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                    $q->where('TRANGTHAI', 'Đã xác nhận');
+                })
+                ->count();
+
+            $groupsWithCouncilAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
+                ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                    $q->where('TRANGTHAI', 'Đã xác nhận');
+                })
+                ->has('hoidongs')
+                ->count();
+
             $groupsGradedAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)->has('diemTongKet')->count();
 
-            $workflow['council_percent'] = $totalGroupsAll > 0 ? round(($groupsWithCouncilAll / $totalGroupsAll) * 100) : 0;
+            $workflow['council_percent'] = $groupsReadyForCouncil > 0 ? round(($groupsWithCouncilAll / $groupsReadyForCouncil) * 100) : 0;
             $workflow['grading_percent'] = $totalGroupsAll > 0 ? round(($groupsGradedAll / $totalGroupsAll) * 100) : 0;
             
-            $workflow['groups_missing_council'] = max(0, $groupsWithTopicAll - $groupsWithCouncilAll);
+            $workflow['groups_missing_council'] = max(0, $groupsReadyForCouncil - $groupsWithCouncilAll);
         }
 
         // 4. Actions & Risks
@@ -137,8 +154,17 @@ class AdminDashboardController extends Controller
         $risks = [
             'students_no_group' => Nguoidung::whereHas('sinhvien.cacDotThamGia', fn($q) => $q->whereIn('ID_KEHOACH', $activePlanIds))
                 ->whereDoesntHave('thanhvienNhom.nhom', fn($q) => $q->whereIn('ID_KEHOACH', $activePlanIds))->count(),
-            'lecturers_missing_quota' => 0,
-            'groups_no_council' => Nhom::whereIn('ID_KEHOACH', $activePlanIds)->has('phancongDetaiNhom')->doesntHave('hoidongs')->count()
+            
+                'departments_missing_quota' => QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)
+                ->where('TRANGTHAI', 'Đang phân công')
+                ->count(),
+
+            'groups_no_council' => Nhom::whereIn('ID_KEHOACH', $activePlanIds)
+                ->whereHas('phancongDetaiNhom.submissions', function ($q) {
+                    $q->where('TRANGTHAI', 'Đã xác nhận');
+                })
+                ->doesntHave('hoidongs')
+                ->count()
         ];
 
         return response()->json([
@@ -278,8 +304,8 @@ class AdminDashboardController extends Controller
         }
 
         // B. Nhóm chưa có Hội đồng
+        // [CẬP NHẬT YÊU CẦU 2] Cũng áp dụng logic chỉ đếm nhóm đã nộp bài cho phần nhắc nhở
         $groupsMissingCouncil = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
-            ->has('phancongDetaiNhom') 
             ->whereHas('phancongDetaiNhom.submissions', function ($q) {
                 $q->where('TRANGTHAI', 'Đã xác nhận');
             })
