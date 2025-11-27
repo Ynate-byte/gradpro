@@ -1,7 +1,7 @@
 import React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Calendar, GraduationCap, X } from "lucide-react";
+import { Search, Calendar, Layers, X } from "lucide-react"; // [SỬA] Dùng icon Layers thay GraduationCap
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
@@ -9,7 +9,7 @@ import {
 const FilterBar = ({
   searchTerm, setSearchTerm,
   filter, setFilter,
-  kehoach, chuyennganh,
+  kehoach, bomon, // [SỬA] Props bomon
   handleReset
 }) => {
   return (
@@ -45,27 +45,28 @@ const FilterBar = ({
           </SelectContent>
         </Select>
 
+        {/* [SỬA] Select cho Bộ môn */}
         <Select
-          value={filter.chuyennganh}
-          onValueChange={(value) => setFilter({ ...filter, chuyennganh: value === "all" ? "" : value })}
+          value={filter.bomon}
+          onValueChange={(value) => setFilter({ ...filter, bomon: value === "all" ? "" : value })}
         >
           <SelectTrigger className="w-[200px] bg-background">
             <div className="flex items-center gap-2 truncate">
-              <GraduationCap className="h-4 w-4 text-muted-foreground" />
-              <SelectValue placeholder="Tất cả chuyên ngành" />
+              <Layers className="h-4 w-4 text-muted-foreground" />
+              <SelectValue placeholder="Tất cả bộ môn" />
             </div>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Tất cả chuyên ngành</SelectItem>
-            {chuyennganh.map((c) => (
-              <SelectItem key={c.ID_CHUYENNGANH} value={String(c.ID_CHUYENNGANH)}>
-                {c.TEN_CHUYENNGANH}
+            <SelectItem value="all">Tất cả bộ môn</SelectItem>
+            {bomon.map((bm) => (
+              <SelectItem key={bm.ID_KHOA_BOMON} value={String(bm.ID_KHOA_BOMON)}>
+                {bm.TEN_KHOA_BOMON}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        {(filter.kehoach || filter.chuyennganh || searchTerm) && (
+        {(filter.kehoach || filter.bomon || searchTerm) && (
           <Button variant="ghost" size="icon" onClick={handleReset} title="Xóa bộ lọc">
             <X className="h-4 w-4" />
           </Button>

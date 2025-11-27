@@ -16,9 +16,11 @@ const ListHoiDong = () => {
   const { user } = useAuth();
   const [hoidong, setHoidong] = useState([]);
   const [kehoach, setKehoach] = useState([]);
-  const [chuyennganh, setChuyennganh] = useState([]);
+  // [SỬA] Đổi state từ chuyennganh sang bomon
+  const [bomon, setBomon] = useState([]);
   
-  const [filter, setFilter] = useState({ kehoach: "", chuyennganh: "" });
+  // [SỬA] Filter key: chuyennganh -> bomon
+  const [filter, setFilter] = useState({ kehoach: "", bomon: "" });
   const [searchTerm, setSearchTerm] = useState("");
   
   const [page, setPage] = useState(1);
@@ -35,15 +37,17 @@ const ListHoiDong = () => {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      const [hdRes, khRes, cnRes] = await Promise.all([
+      // [SỬA] Gọi API lấy danh sách Bộ môn (Thay vì chuyên ngành)
+      // Giả định backend đã có endpoint này hoặc dùng /khoa-bo-mons
+      const [hdRes, khRes, bmRes] = await Promise.all([
         axiosClient.get("/giangvien/my-hoidong"),
         axiosClient.get("/admin/hoidong/kehoach-options"),
-        axiosClient.get("/admin/hoidong/chuyennganh-options"),
+        axiosClient.get("/khoa-bo-mons"), // Hoặc endpoint cụ thể options nếu có
       ]);
       
       setHoidong(hdRes.data || []);
       setKehoach(khRes.data || []);
-      setChuyennganh(cnRes.data || []);
+      setBomon(bmRes.data || []);
     } catch (err) {
       console.error("Lỗi khi tải dữ liệu:", err);
       toast.error("Không thể tải dữ liệu từ máy chủ!");
@@ -59,9 +63,10 @@ const ListHoiDong = () => {
   const filteredHoiDong = useMemo(() => {
     return hoidong.filter((h) => {
       const matchKeHoach = !filter.kehoach || String(h.ID_KEHOACH) === String(filter.kehoach);
-      const matchChuyenNganh = !filter.chuyennganh || String(h.ID_CHUYENNGANH) === String(filter.chuyennganh);
+      // [SỬA] So sánh ID_KHOA_BOMON
+      const matchBomon = !filter.bomon || String(h.ID_KHOA_BOMON) === String(filter.bomon);
       const matchSearch = !searchTerm || h.TEN_HOIDONG.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchKeHoach && matchChuyenNganh && matchSearch;
+      return matchKeHoach && matchBomon && matchSearch;
     });
   }, [hoidong, filter, searchTerm]);
 
@@ -72,7 +77,7 @@ const ListHoiDong = () => {
   );
 
   const handleReset = () => {
-    setFilter({ kehoach: "", chuyennganh: "" });
+    setFilter({ kehoach: "", bomon: "" });
     setSearchTerm("");
   };
 
@@ -106,7 +111,8 @@ const ListHoiDong = () => {
           <FilterBar 
             searchTerm={searchTerm} setSearchTerm={setSearchTerm}
             filter={filter} setFilter={setFilter}
-            kehoach={kehoach} chuyennganh={chuyennganh}
+            kehoach={kehoach} 
+            bomon={bomon} // [SỬA] Truyền props bomon
             handleReset={handleReset}
           />
         </CardHeader>

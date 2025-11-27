@@ -67,7 +67,7 @@ const CouncilDetailDialog = ({ councilId, open, onOpenChange }) => {
         PHONG: council.PHONG || "",
         LOAI: council.LOAI,
         ID_KEHOACH: council.ID_KEHOACH,
-        ID_CHUYENNGANH: council.ID_CHUYENNGANH,
+        ID_KHOA_BOMON: council.ID_KHOA_BOMON,
         giangviens: council.giangviens
       });
     }

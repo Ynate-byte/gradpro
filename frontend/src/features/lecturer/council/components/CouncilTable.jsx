@@ -37,7 +37,8 @@ const CouncilTable = ({ data, onViewDetail }) => {
               <TableCell className="font-medium">
                 <div className="flex flex-col">
                   <span className="text-primary font-semibold group-hover:underline">{h.TEN_HOIDONG}</span>
-                  <span className="text-xs text-muted-foreground md:hidden">{h.TEN_CHUYENNGANH}</span>
+                  {/* [SỬA] Hiển thị Tên Khoa/Bộ môn */}
+                  <span className="text-xs text-muted-foreground md:hidden">{h.TEN_KHOA_BOMON}</span>
                 </div>
               </TableCell>
               <TableCell>

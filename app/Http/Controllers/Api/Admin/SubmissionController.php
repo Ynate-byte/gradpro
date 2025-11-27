@@ -54,23 +54,38 @@ class SubmissionController extends Controller
             $submissionTable = (new NopSanpham)->getTable();
 
             $query = NopSanpham::query()->with([
-                'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH', // Lấy thêm MA_DINHDANH để search
+                'nguoiNop:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH',
                 'phancong.nhom:ID_NHOM,TEN_NHOM,ID_KEHOACH',
                 'phancong.detai:ID_DETAI,TEN_DETAI',
                 'phancong.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN' 
             ]);
 
-            // Phân quyền dữ liệu
-            if (!($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa())) {
-                if ($user->giangvien) {
-                    $gvId = $user->giangvien->ID_GIANGVIEN;
-                    $query->whereHas('phancong', function($q) use ($gvId) {
-                        $q->where('ID_GVHD', $gvId);
-                    });
-                } else {
-                    return response()->json(['data' => []]);
+            // --- [FIX QUAN TRỌNG: LOGIC PHÂN QUYỀN & LỌC] ---
+
+            // 1. Nếu request có lecturer_id (do Frontend gửi lên), LỌC LUÔN theo đó
+            if ($request->filled('lecturer_id')) {
+                $gvId = $request->lecturer_id;
+                $query->whereHas('phancong', function($q) use ($gvId) {
+                    $q->where('ID_GVHD', $gvId);
+                });
+            } 
+            // 2. Nếu KHÔNG có lecturer_id, kiểm tra quyền xem tất cả
+            else {
+                $canViewAll = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
+                
+                // Nếu KHÔNG có quyền xem tất cả, bắt buộc lọc theo GV hiện tại
+                if (!$canViewAll) {
+                    if ($user->giangvien) {
+                        $gvId = $user->giangvien->ID_GIANGVIEN;
+                        $query->whereHas('phancong', function($q) use ($gvId) {
+                            $q->where('ID_GVHD', $gvId);
+                        });
+                    } else {
+                        return response()->json(['data' => [], 'meta' => ['total' => 0]]);
+                    }
                 }
             }
+            // --------------------------------------------------
 
             // Lọc theo trạng thái
             if ($request->filled('trangthai') && $request->trangthai !== 'Tất cả') {
@@ -84,19 +99,16 @@ class SubmissionController extends Controller
                 });
             }
 
-            // [MỚI] Logic tìm kiếm (Search)
+            // Logic tìm kiếm (Search)
             if ($request->filled('search')) {
                 $search = $request->search;
                 $query->where(function($q) use ($search) {
-                    // Tìm theo tên đề tài
                     $q->whereHas('phancong.detai', function($subQ) use ($search) {
                         $subQ->where('TEN_DETAI', 'like', '%' . $search . '%');
                     })
-                    // Tìm theo tên nhóm
                     ->orWhereHas('phancong.nhom', function($subQ) use ($search) {
                         $subQ->where('TEN_NHOM', 'like', '%' . $search . '%');
                     })
-                    // Tìm theo tên hoặc mã sinh viên nộp
                     ->orWhereHas('nguoiNop', function($subQ) use ($search) {
                         $subQ->where('HODEM_VA_TEN', 'like', '%' . $search . '%')
                              ->orWhere('MA_DINHDANH', 'like', '%' . $search . '%');
@@ -134,10 +146,22 @@ class SubmissionController extends Controller
     public function getStatistics(Request $request)
     {
         $planId = $request->plan_id;
+        $user = Auth::user();
+
+        // --- [FIX] XÁC ĐỊNH QUYỀN HẠN ĐỂ LỌC SỐ LIỆU ---
+        // Nếu không phải Admin/GVu/TKhoa thì lấy ID giảng viên để lọc
+        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
+        $gvId = ($user->giangvien && !$isManager) ? $user->giangvien->ID_GIANGVIEN : null;
+        // -----------------------------------------------
 
         // 1. Tính tổng số nhóm ĐANG THỰC HIỆN đề tài (Đây là những nhóm CẦN nộp bài)
         $assignmentsQuery = PhancongDetaiNhom::query()
-            ->where('TRANGTHAI', 'Đang thực hiện'); // Chỉ tính nhóm đang làm, bỏ qua nhóm đã hủy/hoàn thành
+            ->where('TRANGTHAI', 'Đang thực hiện');
+
+        // [FIX] Nếu là GV thường -> Chỉ đếm nhóm mình hướng dẫn
+        if ($gvId) {
+            $assignmentsQuery->where('ID_GVHD', $gvId);
+        }
 
         if ($planId && $planId !== 'all') {
             $assignmentsQuery->whereHas('nhom', function($q) use ($planId) {
@@ -148,10 +172,16 @@ class SubmissionController extends Controller
         $totalActiveGroups = $assignmentsQuery->count();
 
         // 2. Tính số nhóm ĐÃ NỘP (ít nhất 1 lần)
-        // Dùng distinct ID_PHANCONG vì một nhóm có thể nộp nhiều lần
         $submittedQuery = NopSanpham::query()
             ->whereIn('TRANGTHAI', ['Chờ xác nhận', 'Đã xác nhận', 'Yêu cầu nộp lại'])
             ->distinct('ID_PHANCONG');
+
+        // [FIX] Nếu là GV thường -> Chỉ đếm bài nộp của nhóm mình
+        if ($gvId) {
+            $submittedQuery->whereHas('phancong', function($q) use ($gvId) {
+                $q->where('ID_GVHD', $gvId);
+            });
+        }
 
         if ($planId && $planId !== 'all') {
             $submittedQuery->whereHas('phancong.nhom', function($q) use ($planId) {
@@ -163,6 +193,14 @@ class SubmissionController extends Controller
 
         // 3. Tính số lượng theo từng trạng thái cụ thể
         $baseSubmissionQuery = NopSanpham::query();
+
+        // [FIX] Nếu là GV thường -> Chỉ đếm bài nộp của nhóm mình
+        if ($gvId) {
+            $baseSubmissionQuery->whereHas('phancong', function($q) use ($gvId) {
+                $q->where('ID_GVHD', $gvId);
+            });
+        }
+
         if ($planId && $planId !== 'all') {
             $baseSubmissionQuery->whereHas('phancong.nhom', function($q) use ($planId) {
                 $q->where('ID_KEHOACH', $planId);

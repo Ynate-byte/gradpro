@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import StatCard from '@/components/shared/StatCard';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from '@/contexts/AuthContext'; // [QUAN TRỌNG]
 
 const planStatusColors = {
     'Bản nháp': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
@@ -27,6 +28,8 @@ const planStatusColors = {
 };
 
 export default function SubmissionManagementPage() {
+  const { user } = useAuth();
+
   // --- State Quản lý dữ liệu ---
   const [submissions, setSubmissions] = useState([]);
   const [pageCount, setPageCount] = useState(0);
@@ -86,6 +89,10 @@ export default function SubmissionManagementPage() {
   // --- 4. Load danh sách bài nộp ---
   const fetchData = useCallback(() => {
     setLoading(true);
+    
+    // [FIX] Kiểm tra xem có phải đang ở trang lecturer không
+    const isLecturerRoute = window.location.pathname.includes('/lecturer');
+
     const params = {
       page: pagination.pageIndex + 1,
       per_page: pagination.pageSize,
@@ -93,6 +100,8 @@ export default function SubmissionManagementPage() {
       plan_id: selectedPlanId === 'all' ? undefined : selectedPlanId,
       trangthai: activeTab === 'Tất cả' ? undefined : activeTab,
       search: debouncedSearch,
+      // [FIX] Nếu là trang GV, gửi kèm ID GVHD
+      lecturer_id: (isLecturerRoute && user?.giangvien) ? user.giangvien.ID_GIANGVIEN : undefined
     };
 
     getSubmissions(params)
@@ -102,7 +111,7 @@ export default function SubmissionManagementPage() {
       })
       .catch(() => toast.error("Lỗi khi tải danh sách phiếu nộp."))
       .finally(() => setLoading(false));
-  }, [pagination, sorting, selectedPlanId, activeTab, debouncedSearch]);
+  }, [pagination, sorting, selectedPlanId, activeTab, debouncedSearch, user]);
 
   useEffect(() => {
     fetchData();
@@ -210,7 +219,7 @@ export default function SubmissionManagementPage() {
                 </TabsList>
 
                 <div className="flex items-center w-full sm:w-auto gap-2">
-                     <Select onValueChange={setSelectedPlanId} value={selectedPlanId || 'all'}>
+                      <Select onValueChange={setSelectedPlanId} value={selectedPlanId || 'all'}>
                         <SelectTrigger className="w-full sm:w-[350px] h-8 text-sm bg-background shadow-sm border-muted-foreground/20">
                             <div className='flex items-center gap-2 truncate'>
                                 <BookCopy className='h-3.5 w-3.5 text-muted-foreground shrink-0' />
