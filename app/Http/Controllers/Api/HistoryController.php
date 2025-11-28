@@ -62,20 +62,20 @@ class HistoryController extends Controller
             // Tạo mới (Các hành động tạo, đăng ký, nộp, mời, gửi yêu cầu)
             $created = LichSuHoatDong::where('ID_NGUOIDUNG', $userId)
                 ->where(function($q) {
-                    $q->where('LOAI_HANH_DONG', 'like', '%CREATE%')     
+                    $q->where('LOAI_HANH_DONG', 'like', '%CREATE%')      
                       ->orWhere('LOAI_HANH_DONG', 'like', '%REGISTER%') 
-                      ->orWhere('LOAI_HANH_DONG', 'like', '%SUBMIT%')   
-                      ->orWhere('LOAI_HANH_DONG', 'like', '%INVITE%')   
-                      ->orWhere('LOAI_HANH_DONG', 'like', '%REQUEST%')  
-                      ->orWhere('LOAI_HANH_DONG', 'like', '%JOIN%');    
+                      ->orWhere('LOAI_HANH_DONG', 'like', '%SUBMIT%')    
+                      ->orWhere('LOAI_HANH_DONG', 'like', '%INVITE%')    
+                      ->orWhere('LOAI_HANH_DONG', 'like', '%REQUEST%')   
+                      ->orWhere('LOAI_HANH_DONG', 'like', '%JOIN%');     
                 })->count();
 
             // Cập nhật (Sửa, chuyển, đổi mật khẩu)
             $updated = LichSuHoatDong::where('ID_NGUOIDUNG', $userId)
                 ->where(function($q) {
                     $q->where('LOAI_HANH_DONG', 'like', '%UPDATE%')
-                      ->orWhere('LOAI_HANH_DONG', 'like', '%MOVE%')      
-                      ->orWhere('LOAI_HANH_DONG', 'like', '%CHANGE%')    
+                      ->orWhere('LOAI_HANH_DONG', 'like', '%MOVE%')       
+                      ->orWhere('LOAI_HANH_DONG', 'like', '%CHANGE%')     
                       ->orWhere('LOAI_HANH_DONG', 'like', '%TRANSFER%'); 
                 })->count();
 
@@ -295,5 +295,91 @@ class HistoryController extends Controller
             'message' => "Dọn dẹp thành công. Đã xóa {$deletedCount} bản ghi.",
             'deleted_count' => $deletedCount
         ]);
+    }
+
+    /**
+     * Lấy dữ liệu so sánh thông minh.
+     * [FIXED] Xử lý vấn đề thời gian không khớp khi chỉnh sửa nhanh ngay sau khi tạo
+     */
+    public function getComparisonData(Request $request, $topicId)
+    {
+        $topic = \App\Models\Detai::findOrFail($topicId);
+
+        // 1. Tìm MỐC THỜI GIAN ADMIN YÊU CẦU SỬA (Hoặc Duyệt/Từ chối gần nhất)
+        // Đây là điểm mốc quan trọng nhất. Chúng ta muốn xem GV đã sửa gì KỂ TỪ KHI Admin yêu cầu.
+        $lastAdminAction = LichSuHoatDong::where(function($q) use ($topicId) {
+                $q->whereJsonContains('CHI_TIET->topic_id', (int)$topicId)
+                ->orWhereJsonContains('CHI_TIET->topic_id', (string)$topicId)
+                ->orWhereJsonContains('CHI_TIET->model_id', (int)$topicId);
+            })
+            ->whereIn('LOAI_HANH_DONG', ['REJECT_TOPIC', 'REQUEST_EDIT', 'APPROVE_TOPIC'])
+            ->orderBy('NGAY_TAO', 'desc')
+            ->first();
+
+        // 2. Xác định mốc thời gian cắt (Cutoff)
+        if ($lastAdminAction) {
+             // Nếu có Admin yêu cầu: Lấy mốc đó, trừ đi 5 phút để tránh lệch giây
+             $cutoffDate = \Carbon\Carbon::parse($lastAdminAction->NGAY_TAO)->subMinutes(5);
+        } else {
+             // [FIX QUAN TRỌNG]: Nếu chưa có Admin tác động (tức là Đề tài mới tạo)
+             // Lấy ngày tạo đề tài và TRỪ ĐI 24 GIỜ.
+             // Điều này đảm bảo dù bạn vừa tạo xong và sửa ngay lập tức (cách nhau 1s),
+             // hệ thống vẫn coi log sửa đó là "nằm sau" mốc thời gian này.
+             $cutoffDate = \Carbon\Carbon::parse($topic->NGAYTAO)->subHours(24);
+        }
+
+        // 3. Lấy các log UPDATE xảy ra SAU mốc thời gian trên
+        $updateLogs = LichSuHoatDong::where(function($q) use ($topicId) {
+                $q->whereJsonContains('CHI_TIET->topic_id', (int)$topicId)
+                ->orWhereJsonContains('CHI_TIET->topic_id', (string)$topicId)
+                ->orWhereJsonContains('CHI_TIET->model_id', (int)$topicId);
+            })
+            ->where('LOAI_HANH_DONG', 'UPDATE_TOPIC')
+            ->where('NGAY_TAO', '>=', $cutoffDate) 
+            ->orderBy('NGAY_TAO', 'asc') // Lấy cũ nhất trước để tìm giá trị gốc ban đầu
+            ->get();
+
+        $consolidatedChanges = [];
+
+        foreach ($updateLogs as $log) {
+            // Decode JSON log
+            $details = is_string($log->CHI_TIET) ? json_decode($log->CHI_TIET, true) : $log->CHI_TIET;
+            
+            if (isset($details['changes']) && is_array($details['changes'])) {
+                foreach ($details['changes'] as $change) {
+                    // Kiểm tra cấu trúc change
+                    if (!isset($change['field'])) continue;
+                    
+                    $field = $change['field'];
+                    
+                    // [LOGIC]: Chỉ lấy giá trị 'old' của lần thay đổi ĐẦU TIÊN tìm thấy
+                    // Đây chính là giá trị gốc tại thời điểm tạo hoặc lúc Admin yêu cầu sửa
+                    if (!array_key_exists($field, $consolidatedChanges)) {
+                        $consolidatedChanges[$field] = $change['old'] ?? null;
+                    }
+                }
+            }
+        }
+
+        return response()->json($consolidatedChanges);
+    }
+
+    /**
+     * Lấy lịch sử hoạt động của một đề tài cụ thể.
+     * API: GET /api/history/topic/{topicId}
+     */
+    public function getTopicHistory(Request $request, $topicId)
+    {
+        $query = LichSuHoatDong::where(function($q) use ($topicId) {
+                $q->whereJsonContains('CHI_TIET->topic_id', (int)$topicId)
+                  ->orWhereJsonContains('CHI_TIET->topic_id', (string)$topicId) // [FIX] Hỗ trợ string
+                  ->orWhereJsonContains('CHI_TIET->model_id', (int)$topicId);
+            })
+            ->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN')
+            ->orderBy('NGAY_TAO', 'desc');
+
+        $history = $query->paginate($request->input('per_page', 20));
+
+        return response()->json($history);
     }
 }

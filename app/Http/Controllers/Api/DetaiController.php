@@ -366,6 +366,7 @@ class DetaiController extends Controller
         $currentUser = Auth::user();
         $lecturer = $currentUser->giangvien;
 
+        // 1. Kiểm tra quyền (Giữ nguyên)
         $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
         $isAdmin = $this->isAdmin();
 
@@ -381,13 +382,11 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Không thể cập nhật đề tài đang được chỉnh sửa bởi người dùng khác'], 403);
         }
 
+        // 2. Validate dữ liệu
         $validator = Validator::make($request->all(), [
             'TEN_DETAI' => 'sometimes|required|string|max:255',
             'MOTA' => 'sometimes|required|string',
-            
-            // [SỬA] Validate Bộ môn
             'ID_KHOA_BOMON' => 'nullable|exists:KHOA_BOMON,ID_KHOA_BOMON',
-            
             'YEUCAU' => 'nullable|string',
             'MUCTIEU' => 'nullable|string',
             'KETQUA_MONGDOI' => 'nullable|string',
@@ -398,27 +397,58 @@ class DetaiController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // [SỬA] Cập nhật ID_KHOA_BOMON
-        $topic->update($request->only([
+        // 3. Lấy dữ liệu gốc
+        $originalData = $topic->getOriginal();
+
+        // 4. Đổ dữ liệu mới vào model (nhưng chưa lưu)
+        $topic->fill($request->only([
             'TEN_DETAI', 'MOTA', 'ID_KHOA_BOMON', 'YEUCAU', 'MUCTIEU', 'KETQUA_MONGDOI', 'SO_NHOM_TOIDA'
         ]));
 
+        // 5. [FIX LỖI QUAN TRỌNG] Sử dụng getDirty() thay vì getChanges()
+        if ($topic->isDirty()) {
+            // getDirty() trả về mảng các trường bị thay đổi [key => newValue]
+            $dirtyFields = $topic->getDirty(); 
+            $details = [];
+
+            foreach ($dirtyFields as $key => $newValue) {
+                // Bỏ qua các trường timestamp tự động
+                if (in_array($key, ['updated_at', 'NGAYCAPNHAT'])) continue;
+
+                $details[] = [
+                    'field' => $key,
+                    'old' => $originalData[$key] ?? '', // Giá trị cũ
+                    'new' => $newValue                  // Giá trị mới
+                ];
+            }
+
+            // Bây giờ mới Lưu
+            $topic->save();
+
+            // Ghi log nếu có thay đổi thực sự
+            if (!empty($details)) {
+                ActivityLogger::log(
+                    'UPDATE_TOPIC',
+                    "Cập nhật đề tài: {$topic->TEN_DETAI}",
+                    [
+                        'changes' => $details, 
+                        'topic_id' => (int)$topic->ID_DETAI // Cast int cho chắc chắn
+                    ],
+                    null, // Không cần ID nhóm
+                    'Edit'
+                );
+            }
+        }
+
+        // 6. Xử lý chuyển trạng thái (Giữ nguyên)
         if ($isProposer && in_array($topic->TRANGTHAI, ['Yêu cầu chỉnh sửa', 'Chờ duyệt', 'Đang chỉnh sửa'])) {
             $newState = ($topic->TRANGTHAI === 'Yêu cầu chỉnh sửa') ? 'Nháp' : 
                        (($topic->TRANGTHAI === 'Chờ duyệt') ? 'Đang chỉnh sửa' : 'Chờ duyệt');
             
             if ($topic->TRANGTHAI !== $newState) {
-                 $topic->update(['TRANGTHAI' => $newState]);
+                $topic->update(['TRANGTHAI' => $newState]);
             }
         }
-
-        ActivityLogger::log(
-            'UPDATE_TOPIC',
-            "Cập nhật đề tài: {$topic->TEN_DETAI}",
-            ['topic_id' => $topic->ID_DETAI],
-            null,
-            'Edit'
-        );
 
         return response()->json($topic->load(['nguoiDexuat.nguoidung', 'khoaBomon']));
     }
@@ -505,7 +535,7 @@ class DetaiController extends Controller
         }
         
         $validator = Validator::make($request->all(), [
-            'action' => 'required|in:approve,reject',
+            'action' => 'required|in:approve,reject,request_edit', // [SỬA] Thêm request_edit cho rõ ràng
             'reason' => 'nullable|string',
         ]);
 
@@ -522,14 +552,41 @@ class DetaiController extends Controller
                 'NGAY_DUYET' => now(),
                 'LYDO_TUCHOI' => null,
             ]);
-        } else {
+
+            ActivityLogger::log(
+                'APPROVE_TOPIC',
+                "Đã duyệt đề tài: {$topic->TEN_DETAI}",
+                ['topic_id' => $topic->ID_DETAI],
+                null,
+                'CheckCircle'
+            );
+        } 
+        else {
+            
+            $isReject = $request->action === 'reject';
+            $status = $isReject ? 'Từ chối' : 'Yêu cầu chỉnh sửa';
+            $logAction = $isReject ? 'REJECT_TOPIC' : 'REQUEST_EDIT';
+            $logMessage = $isReject ? "Từ chối đề tài: {$topic->TEN_DETAI}" : "Yêu cầu chỉnh sửa đề tài: {$topic->TEN_DETAI}";
+            $icon = $isReject ? 'XCircle' : 'Edit';
+
             $topic->update([
-                'TRANGTHAI' => 'Yêu cầu chỉnh sửa',
+                'TRANGTHAI' => $status,
                 'LYDO_TUCHOI' => $request->reason,
             ]);
+
+            ActivityLogger::log(
+                $logAction,
+                $logMessage,
+                [
+                    'topic_id' => $topic->ID_DETAI,
+                    'reason' => $request->reason
+                ],
+                null,
+                $icon
+            );
         }
 
-        return response()->json(['message' => 'Đề tài đã ' . ($request->action === 'approve' ? 'được duyệt' : 'bị từ chối')]);
+        return response()->json(['message' => 'Thao tác thành công']);
     }
 
     /**
@@ -943,7 +1000,7 @@ class DetaiController extends Controller
             $lecturerId = $topic->ID_NGUOI_DEXUAT;
 
             $topic->delete();
-
+            
             $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)
                 ->where('ID_GIANGVIEN', $lecturerId)
                 ->first();

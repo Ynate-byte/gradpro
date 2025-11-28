@@ -1,5 +1,5 @@
 import React from 'react';
-import { format } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import {
     LogIn, LogOut, UserCog, KeyRound, Users, UserMinus, UserPlus, UserCheck,
@@ -67,23 +67,42 @@ const DetailRenderer = ({ type, details }) => {
     if (details.changes && Array.isArray(details.changes)) {
         return (
             <div className="mt-1.5 flex flex-col gap-1 bg-muted/40 p-2 rounded border text-[11px]">
-                {details.changes.slice(0, 2).map((change, idx) => (
-                    <div key={idx} className="flex items-center gap-1.5">
-                        <span className="font-medium text-muted-foreground min-w-[60px]">
-                            {FIELD_MAP[change.field] || change.field}:
-                        </span>
-                        <span className="line-through opacity-60 text-red-500 truncate max-w-[80px]">
-                            {change.old ?? '-'}
-                        </span>
-                        <ArrowRight className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
-                        <span className="text-green-600 font-medium truncate max-w-[80px]">
-                            {change.new ?? '-'}
-                        </span>
-                    </div>
-                ))}
-                {details.changes.length > 2 && (
-                    <span className="text-[10px] text-muted-foreground italic pl-1">
-                        ...và {details.changes.length - 2} thay đổi khác
+                {details.changes.slice(0, 3).map((change, idx) => { // Giới hạn hiển thị 3 dòng đầu
+                    const fieldName = FIELD_MAP[change.field] || change.field;
+                    
+                    // Kiểm tra độ dài để hiển thị rút gọn
+                    const oldText = String(change.old || '(Trống)');
+                    const newText = String(change.new || '(Trống)');
+                    const isLong = oldText.length > 30 || newText.length > 30;
+
+                    return (
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 border-b border-dashed last:border-0 pb-1 last:pb-0">
+                            <span className="font-semibold text-muted-foreground min-w-[80px]">
+                                {fieldName}:
+                            </span>
+                            
+                            {isLong ? (
+                                <span className="text-muted-foreground italic">
+                                    (Đã thay đổi nội dung chi tiết)
+                                </span>
+                            ) : (
+                                <div className="flex items-center gap-1.5">
+                                    <span className="line-through opacity-60 text-red-600 truncate max-w-[100px] bg-red-50 px-1 rounded">
+                                        {oldText}
+                                    </span>
+                                    <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                                    <span className="text-green-600 font-medium truncate max-w-[100px] bg-green-50 px-1 rounded">
+                                        {newText}
+                                    </span>
+                                </div>
+                            )}
+                        </div>
+                    );
+                })}
+                
+                {details.changes.length > 3 && (
+                    <span className="text-[10px] text-muted-foreground italic pl-1 pt-1 block">
+                        ...và {details.changes.length - 3} thay đổi khác
                     </span>
                 )}
             </div>
@@ -133,7 +152,8 @@ const getColorClass = (actionType) => {
         
         case actionType === 'REGISTER_TOPIC': 
         case actionType === 'PROPOSE_TOPIC': 
-        case actionType === 'ASSIGN_TOPIC': return 'text-blue-600 border-blue-200 bg-blue-50';
+        case actionType === 'ASSIGN_TOPIC': 
+        case actionType === 'UPDATE_TOPIC': return 'text-blue-600 border-blue-200 bg-blue-50';
 
         case actionType === 'SUBMIT_PRODUCT': 
         case actionType === 'CONFIRM_SUBMISSION': return 'text-green-600 border-green-200 bg-green-50';
@@ -179,7 +199,6 @@ const HistoryTimeline = ({ items, isLoading }) => {
             <div className="relative pl-4 border-l-2 border-muted ml-3 space-y-6 py-2">
                 {items.map((item) => {
                     const IconComponent = iconMap[item.ICON] || Activity;
-                    // Parse JSON an toàn
                     const details = typeof item.CHI_TIET === 'string' 
                         ? JSON.parse(item.CHI_TIET) 
                         : (item.CHI_TIET || {});
@@ -228,7 +247,6 @@ const HistoryTimeline = ({ items, isLoading }) => {
                                                 <span className="text-muted-foreground font-normal">{item.TIEU_DE}</span>
                                             </p>
                                             
-                                            {/* Render Chi tiết thay đổi */}
                                             <DetailRenderer type={item.LOAI_HANH_DONG} details={details} />
                                         </div>
                                     </div>

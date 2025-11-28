@@ -67,6 +67,8 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/history/personal', [HistoryController::class, 'getPersonalHistory']);
     // Đặt route này ở đây để đảm bảo nó được load
     Route::get('/history/group/{groupId}', [HistoryController::class, 'getGroupHistory']);
+    Route::get('/history/topic/{topicId}', [HistoryController::class, 'getTopicHistory']);
+    Route::get('/history/topic/{topicId}/comparison', [HistoryController::class, 'getComparisonData']);
 
     // =================================================================================
     // C. QUẢN LÝ NGƯỜI DÙNG (CRUD Chung)

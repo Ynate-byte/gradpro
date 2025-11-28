@@ -1,76 +1,107 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-    Dialog, DialogContent, DialogHeader, DialogTitle,
+    Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Separator } from '@/components/ui/separator';
 import {
     Send, BookOpen, User, Layers, Users,
     Target, Check, MessageSquare, Loader2,
     CheckCircle, Edit, XCircle, ChevronLeft, ChevronRight,
-    Clock, Info, AlertCircle // Đảm bảo import AlertCircle
+    Clock, Info, AlertCircle, Save, X, Edit3, ArrowRight
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { thesisTopicService } from '@/api/thesisTopicService';
-import { toast } from 'sonner';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-// [THÊM] Import Alert components
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// --- HELPER COMPONENTS ---
-const CompactInfoItem = ({ icon: Icon, label, value }) => {
-    if (!value) return null;
+// --- API Services ---
+import { useAuth } from '@/contexts/AuthContext';
+import { thesisTopicService } from '@/api/thesisTopicService';
+import { getTopicHistory } from '@/api/historyService';
+import { getKhoaBomons } from '@/api/userService';
+import axiosClient from '@/api/axiosConfig';
+import { toast } from 'sonner';
+
+// --- Shared Components ---
+import InlineDiff from '@/components/shared/InlineDiff';
+import HistoryTimeline from '@/components/shared/HistoryTimeline';
+
+// ==========================================
+// 1. CÁC COMPONENT UI NHỎ (HELPER)
+// ==========================================
+
+const MetadataCard = ({ icon: Icon, label, value, oldValue }) => {
+    // [FIX LOGIC SO SÁNH]: Kiểm tra kỹ oldValue có tồn tại trong API trả về không (undefined nghĩa là không có log thay đổi)
+    // Nếu oldValue khác undefined và khác value hiện tại -> Có thay đổi
+    const hasDiff = (oldValue !== undefined) && (String(oldValue || '') !== String(value || ''));
+
     return (
-        <div className="flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border border-border">
-            <div className="p-2 rounded-md bg-background text-primary shadow-sm border border-border shrink-0">
-                <Icon className="w-4 h-4" />
+        <div className={cn(
+            "flex flex-col gap-1 p-3 rounded-xl border transition-all h-full justify-center",
+            hasDiff 
+                ? "bg-amber-50 border-amber-200 dark:bg-amber-900/20 dark:border-amber-800" 
+                : "bg-card border-border shadow-sm"
+        )}>
+            <div className="flex items-center gap-2 text-muted-foreground">
+                <Icon className="w-3.5 h-3.5" />
+                <span className="text-[10px] uppercase font-bold tracking-wider">{label}</span>
             </div>
-            <div className="min-w-0 flex-1">
-                <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wide mb-0.5">
-                    {label}
-                </p>
-                <p className="font-medium text-foreground truncate text-sm" title={value}>
-                    {value}
-                </p>
+            
+            <div className="text-sm font-medium text-foreground truncate">
+                {hasDiff ? (
+                    <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                        <span className="line-through text-red-500 decoration-red-500 bg-red-50 dark:bg-red-950/50 px-1.5 rounded text-xs" title="Giá trị cũ">
+                            {oldValue || "(Trống)"}
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/50 px-1.5 rounded font-bold text-xs border border-green-200 dark:border-green-800" title="Giá trị mới">
+                            {value || "(Trống)"}
+                        </span>
+                    </div>
+                ) : (
+                    <span title={value}>{value || "—"}</span>
+                )}
             </div>
         </div>
     );
 };
 
 const ChatBubble = ({ user, message, isMe, time, role }) => (
-    // (Code ChatBubble giữ nguyên)
     <div className={cn("flex gap-3 max-w-[90%]", isMe ? "ml-auto flex-row-reverse" : "")}>
-        <Avatar className="h-8 w-8 mt-1 border border-border">
+        <Avatar className="h-8 w-8 mt-1 border border-border shrink-0">
             <AvatarImage src={user?.AVATAR_URL} />
-            <AvatarFallback className={cn("text-xs font-medium", isMe ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
+            <AvatarFallback className={cn("text-xs font-bold", isMe ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground")}>
                 {getInitials(user?.HODEM_VA_TEN)}
             </AvatarFallback>
         </Avatar>
         <div className={cn("flex flex-col gap-1", isMe ? "items-end" : "items-start")}>
             <div className="flex items-center gap-2 px-1">
-                <span className="text-xs font-medium text-foreground">
+                <span className="text-xs font-semibold text-foreground">
                     {user?.HODEM_VA_TEN || 'Người dùng'}
                 </span>
                 {role && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground font-medium border border-border">
+                    <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 rounded-sm">
                         {role}
-                    </span>
+                    </Badge>
                 )}
                 <span className="text-[10px] text-muted-foreground">
                     {time ? formatDistanceToNow(new Date(time), { addSuffix: true, locale: vi }) : ''}
                 </span>
             </div>
             <div className={cn(
-                "px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words shadow-sm",
+                "px-3.5 py-2.5 rounded-2xl text-sm whitespace-pre-wrap break-words shadow-sm leading-relaxed",
                 isMe
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-secondary text-secondary-foreground border border-border"
+                    ? "bg-primary text-primary-foreground rounded-tr-none"
+                    : "bg-muted/80 text-foreground border border-border/50 rounded-tl-none"
             )}>
                 {message}
             </div>
@@ -78,48 +109,18 @@ const ChatBubble = ({ user, message, isMe, time, role }) => (
     </div>
 );
 
-const DialogLoadingSkeleton = () => (
-    // (Code Skeleton giữ nguyên)
-    <div className="h-full flex flex-col p-6 space-y-6 bg-background">
-        <div className="flex items-center gap-4">
-            <Skeleton className="h-12 w-12 rounded-lg" />
-            <div className="space-y-2 flex-1">
-                <Skeleton className="h-6 w-1/3" />
-                <Skeleton className="h-4 w-1/4" />
-            </div>
-        </div>
-        <div className="grid grid-cols-4 gap-4">
-            {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-16 rounded-lg" />)}
-        </div>
-        <Skeleton className="flex-1 w-full rounded-lg" />
-    </div>
-);
-
 const getStatusBadge = (status) => {
-    // (Code StatusBadge giữ nguyên)
-    let variant = "outline";
-    let className = "border-border font-medium";
-
-    switch (status) {
-        case 'Đã duyệt':
-            className = "bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800";
-            break;
-        case 'Chờ duyệt':
-            className = "bg-yellow-100 text-yellow-700 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800";
-            break;
-        case 'Yêu cầu chỉnh sửa':
-            className = "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400 dark:border-orange-800";
-            break;
-        case 'Từ chối':
-        case 'Đã khóa':
-            className = "bg-destructive/10 text-destructive border-destructive/20";
-            break;
-        default:
-            className = "bg-secondary text-secondary-foreground border-border";
-    }
+    const styles = {
+        'Đã duyệt': "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-green-800",
+        'Chờ duyệt': "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-yellow-800",
+        'Yêu cầu chỉnh sửa': "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400",
+        'Từ chối': "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400",
+        'Nháp': "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400",
+    };
+    const defaultStyle = "bg-secondary text-secondary-foreground border-border";
 
     return (
-        <Badge variant={variant} className={cn("px-2.5 py-0.5 text-xs shadow-none", className)}>
+        <Badge variant="outline" className={cn("px-2.5 py-0.5 text-xs font-semibold shadow-none border", styles[status] || defaultStyle)}>
             {status}
         </Badge>
     );
@@ -132,7 +133,9 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 };
 
-// --- COMPONENT CHÍNH ---
+// ==========================================
+// 2. COMPONENT CHÍNH
+// ==========================================
 
 const TopicDetailDialog = ({
     open,
@@ -149,309 +152,519 @@ const TopicDetailDialog = ({
     onDataChange
 }) => {
     const { user } = useAuth();
+    
+    // Data States
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [comparisonData, setComparisonData] = useState(null); 
+    const [departments, setDepartments] = useState([]);
 
-    // State chat
+    // UI States
+    const [activeTab, setActiveTab] = useState('info'); // 'info' | 'history'
+    const [isEditing, setIsEditing] = useState(false);
+    const [editFormData, setEditFormData] = useState({});
+    const [isSaving, setIsSaving] = useState(false);
+
+    // History States
+    const [historyItems, setHistoryItems] = useState([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
+
+    // Chat States
     const [replyInputs, setReplyInputs] = useState({});
     const [newSuggestion, setNewSuggestion] = useState('');
-    const [sendingState, setSendingState] = useState({});
+    const [isSending, setIsSending] = useState(false);
 
+    // Refs
     const chatEndRef = useRef(null);
     const scrollAreaRef = useRef(null);
 
-    useEffect(() => {
-        const handleKeyDown = (e) => {
-            if (!open) return;
-            const activeEl = document.activeElement;
-            const isTyping = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable;
-            if (isTyping) return;
+    // --- Permission Check ---
+    const isOwner = topic && String(topic.ID_NGUOI_DEXUAT) === String(user?.giangvien?.ID_GIANGVIEN);
+    const isAdmin = ['Admin', 'Giáo vụ', 'Trưởng khoa'].includes(user?.vaitro?.TEN_VAITRO);
+    
+    const canEdit = topic && ((isOwner && ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI)) || isAdmin);
+    const canComment = topic && !['Đã duyệt', 'Từ chối', 'Đã khóa', 'Đã đầy'].includes(topic.TRANGTHAI);
 
-            if (e.key === 'ArrowLeft') {
-                if (hasPrevious && onPrevious) {
-                    e.preventDefault();
-                    onPrevious();
-                }
-            }
-            if (e.key === 'ArrowRight') {
-                if (hasNext && onNext) {
-                    e.preventDefault();
-                    onNext();
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [open, hasPrevious, hasNext, onPrevious, onNext]);
+    // --- EFFECTS ---
 
     useEffect(() => {
         if (open && topicId) {
             loadTopicDetails(true);
+            loadDepartments();
+            
+            // [FIX]: Luôn load so sánh để hiển thị diff cho cả Admin và GV
+            loadComparison(); 
+            
+            if (activeTab === 'history') loadHistory();
         } else if (!open) {
             setTopic(null);
-            setReplyInputs({});
+            setComparisonData(null);
+            setIsEditing(false);
             setNewSuggestion('');
+            setHistoryItems([]);
+            setActiveTab('info');
         }
     }, [open, topicId]);
 
     useEffect(() => {
-        if (topic?.goiyDetai && chatEndRef.current) {
-            setTimeout(() => {
-                chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-            }, 100);
+        if (open && topicId && activeTab === 'history') {
+            loadHistory();
         }
-    }, [topic?.goiyDetai?.length, topic?.goiyDetai?.map(t => t.phanhois?.length).join(',')]);
+    }, [activeTab, topicId]);
 
-    const loadTopicDetails = async (showLoading = false) => {
+    useEffect(() => {
+        if (topic?.goiyDetai && chatEndRef.current) {
+            setTimeout(() => chatEndRef.current.scrollIntoView({ behavior: "smooth" }), 100);
+        }
+    }, [topic?.goiyDetai?.length, isEditing]);
+
+    // --- DATA FETCHING ---
+
+    const loadTopicDetails = async (showLoader = false) => {
         try {
-            if (showLoading) setLoading(true);
-            const response = await thesisTopicService.getTopicById(topicId);
-            setTopic(response.data);
+            if (showLoader) setLoading(true);
+            const res = await thesisTopicService.getTopicById(topicId);
+            setTopic(res.data);
+            setEditFormData({
+                TEN_DETAI: res.data.TEN_DETAI,
+                MOTA: res.data.MOTA,
+                ID_KHOA_BOMON: res.data.ID_KHOA_BOMON ? String(res.data.ID_KHOA_BOMON) : '',
+                YEUCAU: res.data.YEUCAU || '',
+                MUCTIEU: res.data.MUCTIEU || '',
+                KETQUA_MONGDOI: res.data.KETQUA_MONGDOI || '',
+                SO_NHOM_TOIDA: res.data.SO_NHOM_TOIDA || 1
+            });
         } catch (error) {
-            console.error('Error loading details:', error);
             toast.error("Không thể tải chi tiết đề tài.");
         } finally {
-            if (showLoading) setLoading(false);
+            if (showLoader) setLoading(false);
         }
     };
 
-    const handleSendReply = async (suggestionId) => {
-        const content = replyInputs[suggestionId]?.trim();
-        if (!content) return;
-
-        const tempReply = {
-            ID_PHANHOI: Date.now(),
-            NOIDUNG: content,
-            created_at: new Date().toISOString(),
-            ID_GIANGVIEN: user?.giangvien?.ID_GIANGVIEN,
-            giangvien: { nguoidung: user }
-        };
-
-        setTopic(prev => ({
-            ...prev,
-            goiyDetai: prev.goiyDetai.map(g => {
-                if (g.ID_GOIY === suggestionId) {
-                    return { ...g, phanhois: [...(g.phanhois || []), tempReply] };
-                }
-                return g;
-            })
-        }));
-
-        setReplyInputs(prev => ({ ...prev, [suggestionId]: '' }));
-
+    const loadComparison = async () => {
         try {
-            await thesisTopicService.addReplyToSuggestion(suggestionId, { NOIDUNG: content });
-            await loadTopicDetails(false);
-            if (onDataChange) onDataChange();
+            const res = await axiosClient.get(`/history/topic/${topicId}/comparison`);
+            setComparisonData(res.data || {});
         } catch (error) {
-            toast.error("Gửi thất bại.");
+            console.error("Comparison load error", error);
         }
     };
 
-    const handleSendNewSuggestion = async () => {
-        const content = newSuggestion.trim();
-        if (!content) return;
+    const loadDepartments = async () => {
+        try {
+            const res = await getKhoaBomons();
+            setDepartments(res || []);
+        } catch (error) {}
+    };
 
-        const tempThread = {
-            ID_GOIY: Date.now(),
-            NOIDUNG_GOIY: content,
-            NGAYTAO: new Date().toISOString(),
-            ID_GIANGVIEN: user?.giangvien?.ID_GIANGVIEN,
+    const loadHistory = async () => {
+        if (!topicId) return;
+        setHistoryLoading(true);
+        try {
+            const res = await getTopicHistory(topicId, { per_page: 50 });
+            setHistoryItems(res.data || []);
+        } catch (error) {
+            console.error("Failed to load history", error);
+        } finally {
+            setHistoryLoading(false);
+        }
+    };
+
+    // --- HELPER: Lấy tên bộ môn từ ID ---
+    const getDepartmentName = (id) => {
+        if (!id) return null;
+        const dept = departments.find(d => String(d.ID_KHOA_BOMON) === String(id));
+        return dept ? dept.TEN_KHOA_BOMON : `ID: ${id}`;
+    };
+
+    // --- ACTION HANDLERS ---
+
+    const handleSave = async () => {
+        if (!editFormData.TEN_DETAI || !editFormData.MOTA) {
+            toast.error("Vui lòng điền tên và mô tả.");
+            return;
+        }
+        setIsSaving(true);
+        try {
+            const res = await thesisTopicService.updateTopic(topicId, editFormData);
+            setTopic(res.data);
+            toast.success("Cập nhật thành công.");
+            setIsEditing(false);
+            if (onDataChange) onDataChange();
+            
+            // Load lại so sánh sau khi lưu
+            loadComparison();
+        } catch (error) {
+            toast.error("Cập nhật thất bại.");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleCancelEdit = () => {
+        setEditFormData({
+            TEN_DETAI: topic.TEN_DETAI,
+            MOTA: topic.MOTA,
+            ID_KHOA_BOMON: topic.ID_KHOA_BOMON ? String(topic.ID_KHOA_BOMON) : '',
+            YEUCAU: topic.YEUCAU || '',
+            MUCTIEU: topic.MUCTIEU || '',
+            KETQUA_MONGDOI: topic.KETQUA_MONGDOI || '',
+            SO_NHOM_TOIDA: topic.SO_NHOM_TOIDA || 1
+        });
+        setIsEditing(false);
+    };
+    
+    const handleInputChange = (field, value) => {
+        setEditFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    // --- CHAT LOGIC ---
+    const sendMessage = async (content, parentId = null) => {
+        if (!content.trim()) return;
+        
+        const newMsg = {
+            ID_GOIY: parentId || Date.now(),
+            ID_PHANHOI: Date.now(),
+            NOIDUNG: content, NOIDUNG_GOIY: content,
+            NGAYTAO: new Date().toISOString(), created_at: new Date().toISOString(),
             giangvien: { nguoidung: user },
+            ID_GIANGVIEN: user?.giangvien?.ID_GIANGVIEN,
             phanhois: []
         };
 
-        setTopic(prev => ({
-            ...prev,
-            goiyDetai: [...(prev.goiyDetai || []), tempThread]
-        }));
-
-        setNewSuggestion('');
-        setSendingState(prev => ({ ...prev, NEW: true }));
+        if (parentId) {
+             setTopic(prev => ({
+                ...prev,
+                goiyDetai: prev.goiyDetai.map(g => g.ID_GOIY === parentId ? { ...g, phanhois: [...(g.phanhois||[]), newMsg] } : g)
+             }));
+             setReplyInputs(prev => ({...prev, [parentId]: ''}));
+        } else {
+            setTopic(prev => ({ ...prev, goiyDetai: [...(prev.goiyDetai||[]), newMsg] }));
+            setNewSuggestion('');
+            setIsSending(true);
+        }
 
         try {
-            await thesisTopicService.addSuggestion(topic.ID_DETAI, { NOIDUNG_GOIY: content });
-            await loadTopicDetails(false);
-            if (onDataChange) onDataChange();
-        } catch (error) {
-            toast.error("Lỗi khi gửi tin nhắn.");
+            if (parentId) await thesisTopicService.addReplyToSuggestion(parentId, { NOIDUNG: content });
+            else await thesisTopicService.addSuggestion(topicId, { NOIDUNG_GOIY: content });
+            
+            loadTopicDetails(false);
+            if(onDataChange) onDataChange();
+        } catch(e) {
+            toast.error("Gửi tin nhắn thất bại");
         } finally {
-            setSendingState(prev => ({ ...prev, NEW: false }));
+            setIsSending(false);
         }
     };
 
-    const canComment = topic && ['Nháp', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI);
+    // --- RENDER HELPER: FIELD WITH DIFF ---
+    const renderField = (key, label, icon, isArea = false) => {
+        const currentValue = topic[key] || "";
+
+        // [FIX LOGIC]: Kiểm tra chính xác sự tồn tại của key trong comparisonData
+        const hasHistoryData = comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, key);
+        const rawOldValue = hasHistoryData ? comparisonData[key] : undefined;
+        
+        // Chỉ hiện diff nếu có history data và giá trị khác nhau
+        const hasDiff = hasHistoryData && 
+                        (String(rawOldValue || '') !== String(currentValue || '')) && 
+                        !isEditing;
+
+        const displayOldValue = rawOldValue || ""; 
+
+        if (isEditing) {
+            return (
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">{label}</Label>
+                    {isArea ? (
+                        <Textarea 
+                            value={editFormData[key]} 
+                            onChange={e => setEditFormData({...editFormData, [key]: e.target.value})} 
+                            rows={5}
+                            className="bg-background font-normal"
+                        />
+                    ) : (
+                        <Input 
+                            value={editFormData[key]} 
+                            onChange={e => setEditFormData({...editFormData, [key]: e.target.value})} 
+                            className="bg-background font-normal"
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        if (!currentValue && !hasDiff) return null;
+
+        return (
+            <div className={cn(
+                "group relative rounded-lg border p-4 transition-all",
+                hasDiff 
+                    ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800" 
+                    : "bg-card border-border hover:border-primary/20"
+            )}>
+                {hasDiff && (
+                    <div className="absolute -top-2.5 left-3 px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] font-bold uppercase rounded-full border border-amber-200 flex items-center gap-1 shadow-sm z-10">
+                        <Edit3 className="w-3 h-3" /> Thay đổi
+                    </div>
+                )}
+                
+                <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-2">
+                    {icon} {label}
+                </h4>
+                
+                <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                    {hasDiff ? (
+                        <InlineDiff oldValue={displayOldValue} newValue={currentValue} />
+                    ) : (
+                        currentValue
+                    )}
+                </div>
+            </div>
+        );
+    };
+
+    // --- RENDER MAIN ---
+    if (loading || !topic) {
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="max-w-5xl h-[80vh] flex items-center justify-center">
+                    <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                </DialogContent>
+            </Dialog>
+        );
+    }
 
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-[95vw] lg:max-w-[85vw] xl:max-w-7xl h-[90vh] p-0 flex flex-col bg-background gap-0 overflow-hidden border border-border shadow-2xl sm:rounded-xl">
-
-                {loading || !topic ? (
-                    <DialogLoadingSkeleton />
-                ) : (
-                    <div className="flex flex-col h-full overflow-hidden">
-
-                        {/* --- 1. HEADER --- */}
-                        <DialogHeader className="px-6 py-4 border-b border-border shrink-0 flex flex-row items-center justify-between space-y-0 bg-background">
-                            <div className="flex items-start gap-4 overflow-hidden">
-                                <div className="h-10 w-10 mt-1 flex items-center justify-center rounded-lg bg-primary/10 text-primary shrink-0">
-                                    <BookOpen className="h-5 w-5" />
-                                </div>
-                                <div className="min-w-0">
-                                    <DialogTitle className="text-lg font-bold text-foreground leading-tight mb-1.5">
-                                        {topic.TEN_DETAI}
-                                    </DialogTitle>
-                                    <div className="flex items-center gap-3">
-                                        <code className="text-[11px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground font-mono border border-border">
-                                            {topic.MA_DETAI}
-                                        </code>
-                                        {getStatusBadge(topic.TRANGTHAI)}
-                                    </div>
-                                </div>
+        <Dialog open={open} onOpenChange={(v) => {
+            if (!v && isEditing) { setIsEditing(false); }
+            onOpenChange(v);
+        }}>
+            <DialogContent className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-[1400px] h-[90vh] p-0 flex flex-col bg-background gap-0 overflow-hidden border-none shadow-2xl sm:rounded-2xl">
+                
+                {/* 1. HEADER */}
+                <DialogHeader className="px-6 py-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0 flex flex-row items-center justify-between space-y-0 z-10">
+                    <div className="flex items-start gap-4 overflow-hidden flex-1">
+                        <div className="h-12 w-12 mt-1 rounded-xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950 dark:to-indigo-950 border border-blue-100 dark:border-blue-900 flex items-center justify-center text-primary shrink-0 shadow-sm">
+                            <BookOpen className="h-6 w-6" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            {isEditing ? (
+                                <Input 
+                                    value={editFormData.TEN_DETAI}
+                                    onChange={e => setEditFormData({...editFormData, TEN_DETAI: e.target.value})}
+                                    className="text-lg font-bold h-10 px-3 border-primary/50 bg-accent/50"
+                                    placeholder="Nhập tên đề tài..."
+                                />
+                            ) : (
+                                <DialogTitle className="text-xl font-bold text-foreground leading-tight mb-1.5 line-clamp-1">
+                                    {topic.TEN_DETAI}
+                                </DialogTitle>
+                            )}
+                            
+                            <div className="flex items-center gap-3 mt-1.5">
+                                <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-5 border-border/50">{topic.MA_DETAI}</Badge>
+                                {getStatusBadge(topic.TRANGTHAI)}
                             </div>
-                        </DialogHeader>
+                        </div>
+                    </div>
 
-                        {/* --- 2. BODY: SPLIT VIEW --- */}
-                        <div className="flex flex-1 overflow-hidden">
+                    {/* Actions Top Right */}
+                    <div className="flex items-center gap-2 ml-4">
+                        {!isEditing && canEdit && (
+                            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="h-9 border-dashed border-primary/50 text-primary hover:bg-primary/5">
+                                <Edit className="w-4 h-4 mr-2" /> Chỉnh sửa
+                            </Button>
+                        )}
+                        {isEditing && (
+                            <div className="flex gap-2 animate-in fade-in slide-in-from-right-5 duration-200">
+                                <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Hủy</Button>
+                                <Button size="sm" onClick={handleSave} disabled={isSaving} className="bg-primary text-primary-foreground shadow-md">
+                                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />} Lưu
+                                </Button>
+                            </div>
+                        )}
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => onOpenChange(false)}>
+                            <X className="w-5 h-5 text-muted-foreground" />
+                        </Button>
+                    </div>
+                </DialogHeader>
 
-                            {/* CỘT TRÁI: THÔNG TIN */}
-                            <ScrollArea className="flex-1 border-r border-border bg-card">
-                                <div className="p-6 space-y-8">
+                {/* 2. TAB NAVIGATION */}
+                <div className="px-6 border-b border-border bg-background/50 backdrop-blur-sm sticky top-0 z-10">
+                    <div className="flex gap-6">
+                        <button 
+                            onClick={() => { setActiveTab('info'); if(isEditing) handleCancelEdit(); }}
+                            className={cn(
+                                "py-3 text-sm font-medium border-b-2 transition-colors outline-none",
+                                activeTab === 'info' 
+                                    ? "border-primary text-primary" 
+                                    : "border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            Thông tin & Thảo luận
+                        </button>
+                        <button 
+                            onClick={() => { setActiveTab('history'); if(isEditing) handleCancelEdit(); }}
+                            className={cn(
+                                "py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 outline-none",
+                                activeTab === 'history' 
+                                    ? "border-primary text-primary" 
+                                    : "border-transparent text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            <Clock className="w-4 h-4" /> Lịch sử thay đổi
+                        </button>
+                    </div>
+                </div>
+
+                {/* 3. BODY CONTENT */}
+                <div className="flex-1 overflow-hidden bg-secondary/10 relative">
+                    
+                    {/* === TAB 1: THÔNG TIN & THẢO LUẬN === */}
+                    {activeTab === 'info' && (
+                        <div className="flex h-full animate-in fade-in duration-300">
+                            
+                            {/* CỘT TRÁI: NỘI DUNG CHÍNH */}
+                            <ScrollArea className="flex-1 h-full">
+                                <div className="p-6 max-w-5xl mx-auto space-y-8">
                                     
-                                    {/* [MỚI] HIỂN THỊ LÝ DO TỪ CHỐI / YÊU CẦU CHỈNH SỬA */}
-                                    {(topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && (
-                                        <Alert className={cn(
-                                            "mb-6",
-                                            topic.TRANGTHAI === 'Từ chối' 
-                                                ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800" 
-                                                : "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800"
-                                        )}>
-                                            <AlertCircle className={cn(
-                                                "h-4 w-4",
-                                                topic.TRANGTHAI === 'Từ chối' ? "text-red-600" : "text-orange-600"
-                                            )} />
-                                            <AlertTitle className={cn(
-                                                "ml-2 font-semibold",
-                                                topic.TRANGTHAI === 'Từ chối' ? "text-red-800 dark:text-red-200" : "text-orange-800 dark:text-orange-200"
-                                            )}>
-                                                {topic.TRANGTHAI === 'Từ chối' ? 'Lý do từ chối:' : 'Yêu cầu chỉnh sửa:'}
+                                    {/* Alert: Lý do từ chối / yêu cầu sửa */}
+                                    {!isEditing && (topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && (
+                                        <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 shadow-sm">
+                                            <AlertCircle className="h-4 w-4" />
+                                            <AlertTitle className="ml-2 font-bold">
+                                                {topic.TRANGTHAI === 'Từ chối' ? 'Đề tài bị từ chối' : 'Yêu cầu chỉnh sửa từ quản lý'}
                                             </AlertTitle>
-                                            <AlertDescription className={cn(
-                                                "mt-2 text-sm pl-6", // Thêm padding left để thẳng hàng với text trên
-                                                topic.TRANGTHAI === 'Từ chối' ? "text-red-700 dark:text-red-300" : "text-orange-700 dark:text-orange-300"
-                                            )}>
+                                            <AlertDescription className="mt-2 pl-6 text-sm opacity-90">
                                                 {topic.LYDO_TUCHOI}
                                             </AlertDescription>
                                         </Alert>
                                     )}
 
-                                    {/* Stats Cards */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-                                        <CompactInfoItem icon={User} label="Giảng viên" value={topic.ten_giang_vien} />
+                                    {/* Metadata Grid */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <MetadataCard icon={User} label="Giảng viên" value={topic.ten_giang_vien} />
                                         
-                                        {/* Chuyên ngành -> Bộ môn */}
-                                        <CompactInfoItem icon={Layers} label="Bộ môn" value={topic.ten_bo_mon || topic.khoaBomon?.TEN_KHOA_BOMON} />
-                                        
-                                        <CompactInfoItem icon={Users} label="Nhóm tối đa" value={topic.SO_NHOM_TOIDA} />
-                                        <CompactInfoItem icon={Clock} label="Đã đăng ký" value={`${topic.SO_NHOM_HIENTAI} nhóm`} />
+                                        {isEditing ? (
+                                            <div className="flex flex-col gap-1 p-3 rounded-xl border bg-card shadow-sm">
+                                                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                                                    <Layers className="w-3.5 h-3.5" />
+                                                    <span className="text-[10px] uppercase font-bold tracking-wider">Bộ môn</span>
+                                                </div>
+                                                <Select value={editFormData.ID_KHOA_BOMON} onValueChange={v => setEditFormData({...editFormData, ID_KHOA_BOMON: v})}>
+                                                    <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
+                                                    <SelectContent>{departments.map(d => <SelectItem key={d.ID_KHOA_BOMON} value={String(d.ID_KHOA_BOMON)}>{d.TEN_KHOA_BOMON}</SelectItem>)}</SelectContent>
+                                                </Select>
+                                            </div>
+                                        ) : (
+                                            <MetadataCard 
+                                                icon={Layers} 
+                                                label="Bộ môn" 
+                                                value={topic.ten_bo_mon || topic.khoaBomon?.TEN_KHOA_BOMON} 
+                                                oldValue={comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, 'ID_KHOA_BOMON') 
+                                                    ? getDepartmentName(comparisonData.ID_KHOA_BOMON) 
+                                                    : undefined} 
+                                            />
+                                        )}
+
+                                        {isEditing ? (
+                                             <div className="flex flex-col gap-1 p-3 rounded-xl border bg-card shadow-sm">
+                                                <div className="flex items-center gap-2 text-muted-foreground mb-1">
+                                                    <Users className="w-3.5 h-3.5" />
+                                                    <span className="text-[10px] uppercase font-bold tracking-wider">Nhóm tối đa</span>
+                                                </div>
+                                                <Input type="number" className="h-8 text-sm" value={editFormData.SO_NHOM_TOIDA} onChange={e => setEditFormData({...editFormData, SO_NHOM_TOIDA: e.target.value})} />
+                                            </div>
+                                        ) : (
+                                            <MetadataCard 
+                                                icon={Users} 
+                                                label="Nhóm tối đa" 
+                                                value={topic.SO_NHOM_TOIDA} 
+                                                oldValue={comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, 'SO_NHOM_TOIDA') 
+                                                    ? comparisonData.SO_NHOM_TOIDA 
+                                                    : undefined} 
+                                            />
+                                        )}
+
+                                        <MetadataCard icon={Clock} label="Đã đăng ký" value={`${topic.SO_NHOM_HIENTAI} nhóm`} />
                                     </div>
 
-                                    {/* Yêu cầu & Kết quả */}
-                                    {(topic.YEUCAU || topic.KETQUA_MONGDOI) && (
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {topic.YEUCAU && (
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm uppercase tracking-wide">
-                                                        <Check className="w-4 h-4 text-primary" /> Yêu cầu
-                                                    </div>
-                                                    <div className="text-sm text-muted-foreground leading-relaxed bg-secondary/30 p-4 rounded-lg border border-border/50">
-                                                        {topic.YEUCAU}
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {topic.KETQUA_MONGDOI && (
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center gap-2 text-foreground font-semibold text-sm uppercase tracking-wide">
-                                                        <Target className="w-4 h-4 text-primary" /> Kết quả mong đợi
-                                                    </div>
-                                                    <div className="text-sm text-muted-foreground leading-relaxed bg-secondary/30 p-4 rounded-lg border border-border/50">
-                                                        {topic.KETQUA_MONGDOI}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
+                                    <Separator />
 
-                                    {/* Mô tả chi tiết */}
-                                    <div className="space-y-3">
-                                        <h3 className="text-base font-bold text-foreground flex items-center gap-2">
-                                            <Info className="w-4 h-4 text-muted-foreground" /> Mô tả chi tiết
-                                        </h3>
-                                        <div className="text-sm text-foreground leading-7 whitespace-pre-wrap bg-background p-4 border border-border rounded-lg shadow-sm">
-                                            {topic.MOTA}
+                                    {/* Nội dung chi tiết */}
+                                    <div className="grid grid-cols-1 gap-8">
+                                        <div className="grid md:grid-cols-2 gap-6">
+                                            {renderField('YEUCAU', 'Yêu cầu kiến thức', <Check className="w-4 h-4" />, true)}
+                                            {renderField('KETQUA_MONGDOI', 'Kết quả mong đợi', <Target className="w-4 h-4" />, true)}
                                         </div>
+                                        
+                                        {renderField('MUCTIEU', 'Mục tiêu đề tài', <Target className="w-4 h-4 text-red-500" />, true)}
+                                        {renderField('MOTA', 'Mô tả chi tiết', <Info className="w-4 h-4 text-blue-500" />, true)}
                                     </div>
+
+                                    {/* Padding bottom để không bị che bởi footer nếu màn hình nhỏ */}
+                                    <div className="h-10"></div>
                                 </div>
                             </ScrollArea>
 
-                            {/* CỘT PHẢI: CHAT */}
-                            <div className="w-full lg:w-[400px] xl:w-[450px] flex flex-col border-l border-border bg-secondary/20">
-                                <div className="p-3 border-b border-border bg-background flex items-center justify-between shrink-0">
-                                    <span className="font-semibold text-sm flex items-center gap-2 text-foreground">
-                                        <MessageSquare className="w-4 h-4 text-primary" /> Thảo luận ({topic.goiyDetai?.length || 0})
-                                    </span>
+                            {/* CỘT PHẢI: THẢO LUẬN (LUÔN HIỂN THỊ) */}
+                            <div className="w-[380px] xl:w-[420px] flex flex-col border-l border-border bg-background transition-all duration-300 ease-in-out">
+                                <div className="p-4 border-b border-border flex items-center gap-2 bg-muted/20">
+                                    <MessageSquare className="w-4 h-4 text-primary" />
+                                    <h3 className="font-bold text-sm">Thảo luận ({topic.goiyDetai?.length || 0})</h3>
                                 </div>
 
-                                <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+                                <ScrollArea className="flex-1 p-4 bg-muted/5" ref={scrollAreaRef}>
                                     <div className="space-y-6">
-                                        {(!topic.goiyDetai || topic.goiyDetai.length === 0) ? (
-                                            <div className="flex flex-col items-center justify-center py-12 text-center opacity-50">
-                                                <div className="p-4 rounded-full bg-secondary mb-3">
-                                                    <MessageSquare className="w-8 h-8 text-muted-foreground" />
-                                                </div>
-                                                <p className="text-sm text-muted-foreground">Chưa có thảo luận nào</p>
+                                        {!topic.goiyDetai?.length ? (
+                                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-10 opacity-60">
+                                                <MessageSquare className="w-10 h-10 mb-2 stroke-1" />
+                                                <p className="text-sm">Chưa có thảo luận nào</p>
                                             </div>
                                         ) : (
                                             topic.goiyDetai.map((thread) => (
-                                                <div key={thread.ID_GOIY} className="space-y-3 relative group">
-                                                    <ChatBubble
-                                                        user={thread.giangvien?.nguoidung}
-                                                        message={thread.NOIDUNG_GOIY}
+                                                <div key={thread.ID_GOIY} className="space-y-3 mb-6">
+                                                    {/* Main Comment */}
+                                                    <ChatBubble 
+                                                        user={thread.giangvien?.nguoidung} 
+                                                        message={thread.NOIDUNG_GOIY} 
+                                                        time={thread.NGAYTAO} 
                                                         isMe={thread.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN}
-                                                        time={thread.NGAYTAO}
                                                         role="Người góp ý"
                                                     />
-
+                                                    
                                                     {/* Replies */}
-                                                    {thread.phanhois && thread.phanhois.map((reply) => (
-                                                        <div key={reply.ID_PHANHOI} className="pl-8 relative">
-                                                            <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-border" />
-                                                            <ChatBubble
-                                                                user={reply.giangvien?.nguoidung}
-                                                                message={reply.NOIDUNG}
+                                                    <div className="pl-4 space-y-3 border-l-2 border-border/50 ml-4">
+                                                        {thread.phanhois?.map(reply => (
+                                                            <ChatBubble 
+                                                                key={reply.ID_PHANHOI}
+                                                                user={reply.giangvien?.nguoidung} 
+                                                                message={reply.NOIDUNG} 
+                                                                time={reply.created_at} 
                                                                 isMe={reply.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN}
-                                                                time={reply.created_at}
-                                                                role={reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT ? "Tác giả" : null}
+                                                                role={reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT ? 'Tác giả' : null}
                                                             />
-                                                        </div>
-                                                    ))}
+                                                        ))}
+                                                    </div>
 
-                                                    {/* Reply Input Inline */}
+                                                    {/* Reply Input */}
                                                     {canComment && (
-                                                        <div className="pl-8 pt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
-                                                            <div className="flex gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    placeholder="Trả lời..."
-                                                                    className="flex-1 bg-background border border-input rounded-md text-xs px-3 py-1.5 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                                        <div className="pl-8">
+                                                            <div className="relative">
+                                                                <Input 
+                                                                    placeholder="Nhập câu trả lời..." 
+                                                                    className="h-9 text-xs pr-8 bg-background rounded-full shadow-sm focus-visible:ring-1"
                                                                     value={replyInputs[thread.ID_GOIY] || ''}
-                                                                    onChange={(e) => setReplyInputs(prev => ({ ...prev, [thread.ID_GOIY]: e.target.value }))}
-                                                                    onKeyDown={(e) => e.key === 'Enter' && handleSendReply(thread.ID_GOIY)}
+                                                                    onChange={e => setReplyInputs({...replyInputs, [thread.ID_GOIY]: e.target.value})}
+                                                                    onKeyDown={e => e.key === 'Enter' && sendMessage(e.target.value, thread.ID_GOIY)}
                                                                 />
-                                                                <Button size="icon" className="h-7 w-7" variant="ghost" onClick={() => handleSendReply(thread.ID_GOIY)}>
-                                                                    <Send className="w-3 h-3 text-muted-foreground" />
-                                                                </Button>
+                                                                <button 
+                                                                    onClick={() => sendMessage(replyInputs[thread.ID_GOIY], thread.ID_GOIY)}
+                                                                    className="absolute right-1.5 top-1.5 text-primary hover:text-primary/80"
+                                                                >
+                                                                    <Send className="w-3.5 h-3.5" />
+                                                                </button>
                                                             </div>
                                                         </div>
                                                     )}
@@ -462,93 +675,81 @@ const TopicDetailDialog = ({
                                     </div>
                                 </ScrollArea>
 
+                                {/* New Message Input */}
                                 {canComment && (
-                                    <div className="p-3 bg-background border-t border-border">
-                                        <div className="relative flex items-end gap-2">
-                                            <Textarea
-                                                placeholder="Nhập nội dung thảo luận mới..."
-                                                className="min-h-[44px] max-h-[120px] resize-none text-sm bg-secondary/30 focus:bg-background border-transparent focus:border-input pr-10 shadow-none"
+                                    <div className="p-3 border-t bg-background">
+                                        <div className="relative shadow-sm rounded-xl border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
+                                            <Textarea 
+                                                placeholder="Nhập nội dung thảo luận mới..." 
+                                                className="min-h-[50px] max-h-[120px] w-full resize-none border-0 bg-transparent py-3 pl-3 pr-10 text-sm placeholder:text-muted-foreground focus-visible:ring-0"
                                                 value={newSuggestion}
-                                                onChange={(e) => setNewSuggestion(e.target.value)}
-                                                onKeyDown={(e) => {
+                                                onChange={e => setNewSuggestion(e.target.value)}
+                                                onKeyDown={e => {
                                                     if (e.key === 'Enter' && !e.shiftKey) {
                                                         e.preventDefault();
-                                                        handleSendNewSuggestion();
+                                                        sendMessage(newSuggestion);
                                                     }
                                                 }}
                                             />
-                                            <Button
-                                                size="icon"
-                                                className="absolute right-1 bottom-1 h-8 w-8"
-                                                disabled={!newSuggestion.trim() || sendingState['NEW']}
-                                                onClick={handleSendNewSuggestion}
-                                            >
-                                                {sendingState['NEW'] ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                            </Button>
+                                            <div className="absolute bottom-2 right-2">
+                                                <Button 
+                                                    size="icon" 
+                                                    className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+                                                    disabled={!newSuggestion.trim() || isSending}
+                                                    onClick={() => sendMessage(newSuggestion)}
+                                                >
+                                                    {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
                             </div>
                         </div>
+                    )}
 
-                        {/* --- 3. FOOTER --- */}
-                        <div className="p-4 bg-background border-t border-border shrink-0">
-                            <div className="flex items-center justify-between">
-                                <div className="hidden md:flex items-center gap-2 text-xs text-muted-foreground">
-                                    <div className="px-1.5 py-0.5 border border-border rounded bg-secondary font-mono">←</div>
-                                    <div className="px-1.5 py-0.5 border border-border rounded bg-secondary font-mono">→</div>
-                                    <span>Điều hướng</span>
+                    {/* === TAB 2: LỊCH SỬ THAY ĐỔI === */}
+                    {activeTab === 'history' && (
+                        <div className="h-full p-6 overflow-y-auto custom-scrollbar bg-background animate-in fade-in duration-300">
+                            <div className="max-w-3xl mx-auto">
+                                <div className="mb-6 flex items-center gap-2 text-muted-foreground">
+                                    <Clock className="w-5 h-5" />
+                                    <h3 className="text-lg font-semibold text-foreground">Lịch sử hoạt động của đề tài</h3>
                                 </div>
-
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={onPrevious}
-                                        disabled={!onPrevious || !hasPrevious}
-                                        className="w-28"
-                                    >
-                                        <ChevronLeft className="w-4 h-4 mr-1" /> Trước
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={onNext}
-                                        disabled={!onNext || !hasNext}
-                                        className="w-28"
-                                    >
-                                        Sau <ChevronRight className="w-4 h-4 ml-1" />
-                                    </Button>
-                                </div>
-
-                                <div className="flex gap-2">
-                                    {showAdminActions && (
-                                        <>
-                                            <Button
-                                                variant="ghost"
-                                                onClick={() => onReject(topic)}
-                                                className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                                            >
-                                                <XCircle className="w-4 h-4 mr-2" /> Từ chối
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                onClick={() => onRequestEdit(topic)}
-                                                className="text-orange-600 border-orange-200 hover:bg-orange-50 hover:text-orange-700 dark:text-orange-400 dark:border-orange-900 dark:hover:bg-orange-900/20"
-                                            >
-                                                <Edit className="w-4 h-4 mr-2" /> Yêu cầu sửa
-                                            </Button>
-                                            <Button
-                                                onClick={() => onApprove(topic.ID_DETAI)}
-                                                className="bg-primary text-primary-foreground hover:bg-primary/90"
-                                            >
-                                                <CheckCircle className="w-4 h-4 mr-2" /> Duyệt đề tài
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
+                                <HistoryTimeline items={historyItems} isLoading={historyLoading} />
                             </div>
                         </div>
+                    )}
+                </div>
+
+                {/* 4. FOOTER: NAVIGATION & MAIN ACTIONS */}
+                <div className="px-6 py-4 border-t bg-background shrink-0 flex items-center justify-between z-10">
+                    {/* Navigation */}
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={onPrevious} disabled={!onPrevious || !hasPrevious} className="w-9 p-0 rounded-full border-dashed">
+                            <ChevronLeft className="w-4 h-4" />
+                        </Button>
+                        <span className="text-xs font-mono text-muted-foreground px-2">Điều hướng</span>
+                        <Button variant="outline" size="sm" onClick={onNext} disabled={!onNext || !hasNext} className="w-9 p-0 rounded-full border-dashed">
+                            <ChevronRight className="w-4 h-4" />
+                        </Button>
                     </div>
-                )}
+
+                    {/* Main Actions */}
+                    {!isEditing && showAdminActions && (
+                        <div className="flex gap-3">
+                             <Button variant="ghost" onClick={() => onReject(topic)} className="text-destructive hover:bg-destructive/10 hover:text-destructive h-9">
+                                <XCircle className="w-4 h-4 mr-2" /> Từ chối
+                            </Button>
+                            <Button variant="outline" onClick={() => onRequestEdit(topic)} className="h-9 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800">
+                                <Edit className="w-4 h-4 mr-2" /> Yêu cầu sửa
+                            </Button>
+                            <Button onClick={() => onApprove(topic.ID_DETAI)} className="h-9 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all">
+                                <CheckCircle className="w-4 h-4 mr-2" /> Duyệt đề tài
+                            </Button>
+                        </div>
+                    )}
+                </div>
             </DialogContent>
         </Dialog>
     );

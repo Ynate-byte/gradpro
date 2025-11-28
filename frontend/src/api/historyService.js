@@ -28,3 +28,12 @@ export const getSystemHistory = (params) => {
 export const cleanupLogs = (data) => {
     return axiosClient.post('/admin/history/cleanup', data).then(res => res.data);
 };
+
+/**
+ * Lấy lịch sử hoạt động của một đề tài.
+ * @param {number} topicId
+ * @param {object} params
+ */
+export const getTopicHistory = (topicId, params) => {
+    return axiosClient.get(`/history/topic/${topicId}`, { params }).then(res => res.data);
+};
