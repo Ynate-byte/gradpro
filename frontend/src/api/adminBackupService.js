@@ -18,3 +18,7 @@ export const downloadBackupLink = (path) => {
         responseType: 'blob' 
     });
 };
+
+export const restoreBackup = (path) => {
+    return axiosClient.post('/admin/backups/restore', { path }).then(res => res.data);
+};

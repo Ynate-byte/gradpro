@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\DB; // <--- Bắt buộc có dòng này
 use Carbon\Carbon;
+use ZipArchive; // <--- Bắt buộc có dòng này
 
 class BackupController extends Controller
 {
@@ -17,15 +19,11 @@ class BackupController extends Controller
      */
     public function index()
     {
-        // Lấy tên ứng dụng để xác định thư mục lưu backup
-        // Spatie backup thường lưu trong storage/app/[APP_NAME]
         $backupFolder = env('APP_NAME', 'Laravel'); 
 
         $disk = Storage::disk('local');
         
-        // Kiểm tra thư mục có tồn tại không
         if (!$disk->exists($backupFolder)) {
-            // Nếu không thấy, thử tìm thư mục 'Laravel' mặc định
             if ($disk->exists('Laravel')) {
                 $backupFolder = 'Laravel';
             } else {
@@ -37,11 +35,10 @@ class BackupController extends Controller
         $backups = [];
 
         foreach ($files as $file) {
-            // Chỉ lấy file .zip
             if (str_ends_with($file, '.zip')) {
                 $backups[] = [
                     'name' => basename($file),
-                    'path' => $file, // Đường dẫn tương đối để download/delete
+                    'path' => $file,
                     'size' => $this->formatSize($disk->size($file)),
                     'created_at' => Carbon::createFromTimestamp($disk->lastModified($file))->format('H:i d/m/Y'),
                     'age' => Carbon::createFromTimestamp($disk->lastModified($file))->diffForHumans()
@@ -49,7 +46,6 @@ class BackupController extends Controller
             }
         }
 
-        // Sắp xếp: Mới nhất lên đầu
         usort($backups, fn($a, $b) => $b['created_at'] <=> $a['created_at']);
 
         return response()->json($backups);
@@ -57,41 +53,33 @@ class BackupController extends Controller
 
     /**
      * Tạo bản backup mới
-     * Nhận tham số 'option': 'full' hoặc 'db'
      */
     public function create(Request $request)
     {
-        // Mặc định là full nếu không chọn
         $option = $request->input('option', 'full'); 
 
         try {
-            // Tăng thời gian thực thi lên 5 phút để tránh timeout khi nén file
             set_time_limit(300); 
 
-            // Kiểm tra và xóa thư mục tạm 'backup-temp' nếu nó còn tồn tại do lần chạy trước bị lỗi
             $tempPath = storage_path('app/backup-temp');
             if (File::exists($tempPath)) {
                 File::deleteDirectory($tempPath);
-                Log::info("Đã dọn dẹp thư mục tạm cũ: " . $tempPath);
             }
 
             if ($option === 'db') {
                 Artisan::call('backup:run --only-db --disable-notifications');
                 $message = 'Đã tạo bản sao lưu Cơ sở dữ liệu thành công!';
             } else {
-                // BACKUP TOÀN BỘ (Database + Files)
                 Artisan::call('backup:run --disable-notifications');
                 $message = 'Đã tạo bản sao lưu Toàn hệ thống thành công!';
             }
             
-            // Ghi log kết quả
             $output = Artisan::output();
             Log::info("Backup Created ($option): " . $output);
 
             return response()->json(['message' => $message]);
 
         } catch (\Exception $e) {
-            // Nếu có lỗi xảy ra, cũng cố gắng dọn dẹp lại lần nữa để lần sau không bị kẹt
             $tempPath = storage_path('app/backup-temp');
             if (File::exists($tempPath)) {
                 File::deleteDirectory($tempPath);
@@ -129,6 +117,90 @@ class BackupController extends Controller
 
         Storage::disk('local')->delete($path);
         return response()->json(['message' => 'Đã xóa bản backup thành công.']);
+    }
+
+    /**
+     * [MỚI] Phục hồi dữ liệu từ file backup (Chỉ phục hồi Database)
+     */
+    public function restore(Request $request)
+    {
+        $path = $request->input('path');
+        $disk = Storage::disk('local');
+
+        if (!$path || !$disk->exists($path)) {
+            return response()->json(['message' => 'File backup không tồn tại.'], 404);
+        }
+
+        // Tăng thời gian thực thi
+        set_time_limit(300);
+
+        $tempDir = storage_path('app/restore-temp');
+        // Tạo thư mục tạm nếu chưa có
+        if (!File::exists($tempDir)) {
+            File::makeDirectory($tempDir, 0755, true);
+        } else {
+            // Dọn dẹp nếu còn rác cũ
+            File::cleanDirectory($tempDir);
+        }
+
+        try {
+            // 1. Giải nén file Backup
+            $zip = new ZipArchive;
+            $fullPath = $disk->path($path);
+            
+            if ($zip->open($fullPath) === TRUE) {
+                $zip->extractTo($tempDir);
+                $zip->close();
+            } else {
+                throw new \Exception("Không thể giải nén file backup.");
+            }
+
+            // 2. Tìm file SQL dump
+            // Spatie backup thường lưu sql trong thư mục 'db-dumps'
+            $sqlFiles = File::glob($tempDir . '/db-dumps/*.sql');
+            
+            if (empty($sqlFiles)) {
+                throw new \Exception("Không tìm thấy file SQL database trong bản backup này. Có thể đây là bản backup chỉ chứa files.");
+            }
+
+            $sqlFile = $sqlFiles[0]; // Lấy file đầu tiên tìm thấy
+
+            // 3. Tiến hành Restore Database
+            DB::disableQueryLog();
+            
+            // Tắt kiểm tra khóa ngoại để tránh lỗi khi drop bảng
+            DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+            
+            // Đọc nội dung file SQL
+            $sql = file_get_contents($sqlFile);
+            
+            if (!$sql) {
+                throw new \Exception("File SQL rỗng hoặc không đọc được.");
+            }
+
+            // Thực thi SQL (Hàm này chạy nhiều câu lệnh cùng lúc)
+            DB::unprepared($sql);
+
+            // Bật lại kiểm tra khóa ngoại
+            DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+
+            // 4. Dọn dẹp thư mục tạm
+            File::deleteDirectory($tempDir);
+
+            // Ghi log
+            Log::info("Database restored from: " . $path);
+
+            return response()->json(['message' => 'Phục hồi cơ sở dữ liệu thành công! Hệ thống sẽ tải lại.']);
+
+        } catch (\Exception $e) {
+            // Dọn dẹp nếu lỗi
+            if (File::exists($tempDir)) {
+                File::deleteDirectory($tempDir);
+            }
+            
+            Log::error("Restore Failed: " . $e->getMessage());
+            return response()->json(['message' => 'Lỗi phục hồi: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

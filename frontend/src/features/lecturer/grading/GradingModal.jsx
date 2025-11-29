@@ -11,8 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch"; // Component Switch
-import { Loader2, Save, PenSquare, User, Calculator } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, PenSquare, User, Calculator, FileText, Users, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import {
     submitHuongDan,
@@ -28,6 +28,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 export const GradingModal = ({
@@ -37,58 +38,65 @@ export const GradingModal = ({
     group,
     role,
 }) => {
-    // Helper xác định key dữ liệu từ API
+    // --- HELPER: Xác định key dữ liệu ---
     const getInitialData = () => {
         if (!group) return { score: "", details: null, comment: "" };
         
-        // Mapping key theo role (backend trả về)
         const scoreKey = `diem_${role}_hientai`;
-        const detailKey = `diem_${role}_chitiet`; // Backend cần trả về key này (JSON)
-        // const commentKey = `nhanxet_${role}`; // Nếu backend có trả về
-
+        // Lưu ý: Backend cần trả về key 'diem_X_chitiet' (đã update ở Controller)
+        const detailKey = `diem_${role}_chitiet`; 
+        
+        // Giả sử backend trả về comment trong object diemTongKet hoặc relation riêng
+        // Tạm thời để trống nếu chưa có data comment từ list
         return {
             score: group[scoreKey] ?? "",
             details: group[detailKey] ?? null,
-            comment: "" // Hiện tại API chưa trả về comment trong list, để trống
+            comment: "" 
         };
     };
 
     const [diemChung, setDiemChung] = useState("");
-    const [diemRieng, setDiemRieng] = useState({}); // Object: { [studentId]: score }
+    const [diemRieng, setDiemRieng] = useState({}); 
     const [nhanxet, setNhanxet] = useState("");
-    const [isIndividual, setIsIndividual] = useState(false); // Chế độ chấm riêng
+    const [isIndividual, setIsIndividual] = useState(false); 
     const [isSaving, setIsSaving] = useState(false);
 
-    // Reset form khi mở modal
+    // --- RESET FORM ---
     useEffect(() => {
         if (isOpen && group) {
             const { score, details, comment } = getInitialData();
             
-            setNhanxet(comment);
+            // Xử lý parse JSON nếu cần (đề phòng backend trả string)
+            let parsedDetails = details;
+            if (typeof details === 'string') {
+                try { parsedDetails = JSON.parse(details); } catch (e) {}
+            }
 
-            // Kiểm tra xem trước đó đã chấm riêng hay chưa
-            if (details && Array.isArray(details) && details.length > 0) {
+            setNhanxet(comment || "");
+
+            if (parsedDetails && Array.isArray(parsedDetails) && parsedDetails.length > 0) {
                 setIsIndividual(true);
                 const scoresMap = {};
-                details.forEach(item => {
+                parsedDetails.forEach(item => {
                     scoresMap[item.student_id] = item.score;
                 });
                 setDiemRieng(scoresMap);
-                setDiemChung(score); // Vẫn giữ điểm TB để tham khảo
+                // setDiemChung(score); // Không cần set điểm chung khi đang ở chế độ riêng
             } else {
                 setIsIndividual(false);
-                setDiemChung(score);
-                // Khởi tạo điểm riêng bằng điểm chung (để tiện nếu user bật switch)
+                setDiemChung(score !== null && score !== undefined ? score : "");
+                
+                // Init điểm riêng để sẵn sàng switch
                 const initScores = {};
                 group.thanhviens?.forEach(tv => {
-                    initScores[tv.ID_NGUOIDUNG] = score;
+                    initScores[tv.ID_NGUOIDUNG] = score !== null && score !== undefined ? score : "";
                 });
                 setDiemRieng(initScores);
             }
         }
     }, [isOpen, group, role]);
 
-    // Tự động tính điểm trung bình khi nhập điểm riêng
+    // --- COMPUTED: Trung bình cộng ---
     const calculatedAverage = useMemo(() => {
         if (!group?.thanhviens?.length) return 0;
         const scores = Object.values(diemRieng).map(s => parseFloat(s)).filter(s => !isNaN(s));
@@ -97,9 +105,10 @@ export const GradingModal = ({
         return (sum / scores.length).toFixed(2);
     }, [diemRieng, group]);
 
-    // Xử lý thay đổi điểm chung (đồng bộ xuống điểm riêng)
+    // --- HANDLERS ---
     const handleDiemChungChange = (val) => {
         setDiemChung(val);
+        // Đồng bộ xuống điểm riêng để khi switch qua không bị trống
         const newScores = {};
         group.thanhviens?.forEach(tv => {
             newScores[tv.ID_NGUOIDUNG] = val;
@@ -107,18 +116,14 @@ export const GradingModal = ({
         setDiemRieng(newScores);
     };
 
-    // Xử lý thay đổi điểm riêng
     const handleDiemRiengChange = (studentId, val) => {
-        setDiemRieng(prev => ({
-            ...prev,
-            [studentId]: val
-        }));
+        if (parseFloat(val) > 10) return; 
+        setDiemRieng(prev => ({ ...prev, [studentId]: val }));
     };
 
     const handleSave = async () => {
         setIsSaving(true);
-
-        // Mapping API function
+        
         const submitFunction = {
             "huongdan": submitHuongDan,
             "phanbien": submitPhanBien,
@@ -138,7 +143,6 @@ export const GradingModal = ({
             };
 
             if (!isIndividual) {
-                // --- CHẾ ĐỘ CHẤM CHUNG ---
                 const val = parseFloat(diemChung);
                 if (isNaN(val) || val < 0 || val > 10) {
                     toast.error("Điểm chung không hợp lệ (0-10).");
@@ -147,28 +151,27 @@ export const GradingModal = ({
                 payload.DIEM = val;
                 payload.DIEM_CHI_TIET = null;
             } else {
-                // --- CHẾ ĐỘ CHẤM RIÊNG ---
                 const details = [];
                 let total = 0;
-                
-                // Duyệt qua tất cả thành viên để đảm bảo ai cũng có điểm
                 for (const tv of group.thanhviens) {
                     const sVal = parseFloat(diemRieng[tv.ID_NGUOIDUNG]);
                     if (isNaN(sVal) || sVal < 0 || sVal > 10) {
-                        toast.error(`Điểm của sinh viên ${tv.nguoidung?.HODEM_VA_TEN} không hợp lệ.`);
+                        toast.error(`Điểm của sinh viên ${tv.nguoidung?.HODEM_VA_TEN} chưa hợp lệ.`);
                         setIsSaving(false); return;
                     }
                     details.push({ student_id: tv.ID_NGUOIDUNG, score: sVal });
                     total += sVal;
                 }
-                
                 payload.DIEM_CHI_TIET = details;
-                payload.DIEM = (total / details.length).toFixed(2); // Gửi điểm TB lên để lưu vào cột chính
+                payload.DIEM = (total / details.length).toFixed(2);
             }
 
             await submitFunction(group.ID_NHOM, payload);
             toast.success("Đã lưu kết quả chấm điểm!");
-            onSaveSuccess();
+            
+            // [QUAN TRỌNG]: Gọi callback để refresh dữ liệu cha nhưng KHÔNG đóng modal
+            if (onSaveSuccess) onSaveSuccess();
+
         } catch (error) {
             console.error("Lỗi lưu điểm:", error);
             toast.error(error.response?.data?.error || "Có lỗi xảy ra khi lưu điểm.");
@@ -178,125 +181,166 @@ export const GradingModal = ({
     };
 
     const getRoleLabel = () => {
-        if (role === "huongdan") return "Giảng viên Hướng Dẫn";
-        if (role === "phanbien") return "Giảng viên Phản Biện";
-        return "Thành viên Hội Đồng";
+        if (role === "huongdan") return "Hướng Dẫn";
+        if (role === "phanbien") return "Phản Biện";
+        return "Hội Đồng";
     };
 
     if (!group) return null;
 
     return (
         <Dialog open={isOpen} onOpenChange={(val) => !isSaving && onClose()}>
-            <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-primary">
-                        <PenSquare className="w-5 h-5" /> Chấm điểm - {getRoleLabel()}
-                    </DialogTitle>
-                    <DialogDescription className="pt-2">
-                        <div className="bg-muted/40 p-3 rounded-lg border text-sm grid grid-cols-1 gap-1">
-                            <p><span className="font-semibold text-foreground">Nhóm:</span> {group.TEN_NHOM}</p>
-                            <p className="truncate"><span className="font-semibold text-foreground">Đề tài:</span> {group.detai?.TEN_DETAI || group.phancong_detai_nhom?.detai?.TEN_DETAI || "---"}</p>
+            <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden bg-background flex flex-col h-[600px]">
+                
+                {/* HEADER */}
+                <DialogHeader className="px-6 py-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between space-y-0">
+                    <div>
+                        <DialogTitle className="flex items-center gap-2 text-primary text-xl">
+                            <PenSquare className="w-5 h-5" /> Chấm điểm {getRoleLabel()}
+                        </DialogTitle>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm text-muted-foreground">Nhóm:</span>
+                            <Badge variant="secondary" className="font-bold text-sm px-2">{group.TEN_NHOM}</Badge>
                         </div>
-                    </DialogDescription>
-                </DialogHeader>
-
-                <div className="py-2 space-y-6">
-                    {/* 1. SWITCH CHUYỂN CHẾ ĐỘ */}
-                    <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-100 dark:border-blue-800">
-                        <div className="space-y-0.5">
-                            <Label className="text-base font-semibold text-blue-900 dark:text-blue-100">Chấm điểm chi tiết từng sinh viên?</Label>
-                            <p className="text-xs text-muted-foreground">Bật nếu các thành viên trong nhóm có mức độ đóng góp khác nhau.</p>
-                        </div>
-                        <Switch 
-                            checked={isIndividual} 
-                            onCheckedChange={setIsIndividual} 
-                            className="data-[state=checked]:bg-blue-600"
+                    </div>
+                    
+                    {/* Switch Chế độ */}
+                    <div className="flex items-center gap-3 bg-background border px-3 py-1.5 rounded-full shadow-sm">
+                        <Label htmlFor="mode-switch" className="text-xs font-semibold text-muted-foreground cursor-pointer select-none">
+                            {isIndividual ? "Chấm chi tiết" : "Chấm chung"}
+                        </Label>
+                        <Switch
+                            id="mode-switch"
+                            checked={isIndividual}
+                            onCheckedChange={setIsIndividual}
+                            className="data-[state=checked]:bg-blue-600 scale-90"
                         />
                     </div>
+                </DialogHeader>
 
-                    {/* 2. KHU VỰC NHẬP ĐIỂM */}
-                    <div className="space-y-4">
+                {/* BODY: Chia 2 cột */}
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
+                    
+                    {/* CỘT TRÁI (7/12): Danh sách sinh viên / Nhập điểm */}
+                    <div className="md:col-span-7 p-6 border-r flex flex-col h-full overflow-hidden bg-gray-50/50 dark:bg-gray-900/20">
+                        
                         {!isIndividual ? (
-                            // --- FORM CHẤM CHUNG ---
-                            <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <Label className="font-semibold">Điểm chung cho cả nhóm <span className="text-red-500">*</span></Label>
-                                <div className="flex items-center gap-3">
-                                    <Input 
-                                        type="number" 
-                                        step="0.1" 
+                            // --- GIAO DIỆN CHẤM CHUNG ---
+                            <div className="flex flex-col items-center justify-center h-full space-y-6 animate-in fade-in zoom-in-95 duration-300">
+                                <div className="text-center space-y-2">
+                                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Điểm tổng kết nhóm</h3>
+                                    <p className="text-sm text-muted-foreground px-8">
+                                        Điểm số này sẽ được áp dụng cho tất cả thành viên trong nhóm.
+                                    </p>
+                                </div>
+                                
+                                <div className="relative w-48 group">
+                                    <Input
+                                        type="number"
+                                        step="0.1"
                                         min="0" max="10"
                                         value={diemChung}
                                         onChange={(e) => handleDiemChungChange(e.target.value)}
-                                        className="h-12 text-xl font-bold w-32 text-center border-primary/50 focus-visible:ring-primary"
-                                        placeholder="0-10"
+                                        className="h-24 text-5xl font-bold text-center border-2 border-blue-200 focus-visible:ring-blue-500 rounded-2xl shadow-sm bg-white dark:bg-card transition-all group-hover:border-blue-400"
+                                        placeholder="0.0"
                                         autoFocus
                                     />
-                                    <span className="text-sm text-muted-foreground">/ 10 điểm</span>
+                                    <span className="absolute top-3 right-4 text-gray-400 text-sm font-medium">/10</span>
+                                </div>
+
+                                <div className="flex flex-wrap justify-center gap-2 w-full px-4">
+                                    {group.thanhviens?.map((tv) => (
+                                        <Badge key={tv.ID_NGUOIDUNG} variant="outline" className="bg-background py-1 px-2">
+                                            <User className="w-3 h-3 mr-1.5 opacity-70" />
+                                            {tv.nguoidung?.HODEM_VA_TEN}
+                                        </Badge>
+                                    ))}
                                 </div>
                             </div>
                         ) : (
-                            // --- FORM CHẤM RIÊNG (TABLE) ---
-                            <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
-                                <div className="flex items-center justify-between">
-                                    <Label className="font-semibold">Danh sách sinh viên</Label>
-                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                        <Calculator className="w-3 h-3 mr-1"/> TB: {calculatedAverage}
+                            // --- GIAO DIỆN CHẤM CHI TIẾT ---
+                            <div className="flex flex-col h-full animate-in fade-in slide-in-from-left-4 duration-300">
+                                <div className="flex items-center justify-between mb-4 shrink-0">
+                                    <Label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                                        Danh sách sinh viên ({group.thanhviens?.length})
+                                    </Label>
+                                    <Badge variant="secondary" className="h-6 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100 border-green-200">
+                                        <Calculator className="w-3 h-3 mr-1.5"/> 
+                                        TB: <span className="font-bold ml-1">{calculatedAverage}</span>
                                     </Badge>
                                 </div>
-                                <div className="border rounded-md overflow-hidden">
-                                    <Table>
-                                        <TableHeader className="bg-muted/50">
-                                            <TableRow>
-                                                <TableHead>Sinh viên</TableHead>
-                                                <TableHead className="w-[120px] text-right">Điểm số</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
+                                
+                                <div className="border rounded-lg bg-background shadow-sm flex-1 overflow-hidden flex flex-col">
+                                    <div className="grid grid-cols-12 bg-muted/50 py-2 px-4 text-xs font-bold text-muted-foreground border-b shrink-0">
+                                        <div className="col-span-8">HỌ TÊN & MSSV</div>
+                                        <div className="col-span-4 text-center">ĐIỂM SỐ</div>
+                                    </div>
+                                    <ScrollArea className="flex-1">
+                                        <div className="divide-y">
                                             {group.thanhviens?.map((tv) => (
-                                                <TableRow key={tv.ID_NGUOIDUNG}>
-                                                    <TableCell>
-                                                        <div className="font-medium">{tv.nguoidung?.HODEM_VA_TEN}</div>
-                                                        <div className="text-xs text-muted-foreground">{tv.nguoidung?.MA_DINHDANH}</div>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
+                                                <div key={tv.ID_NGUOIDUNG} className="grid grid-cols-12 items-center py-3 px-4 hover:bg-muted/30 transition-colors group">
+                                                    <div className="col-span-8 pr-2">
+                                                        <div className="font-medium text-sm truncate text-foreground group-hover:text-primary transition-colors" title={tv.nguoidung?.HODEM_VA_TEN}>
+                                                            {tv.nguoidung?.HODEM_VA_TEN}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground font-mono mt-0.5">
+                                                            {tv.nguoidung?.MA_DINHDANH}
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-span-4 flex justify-center">
                                                         <Input 
                                                             type="number" 
                                                             step="0.1" 
                                                             min="0" max="10"
                                                             value={diemRieng[tv.ID_NGUOIDUNG] ?? ""}
                                                             onChange={(e) => handleDiemRiengChange(tv.ID_NGUOIDUNG, e.target.value)}
-                                                            className="h-9 w-20 text-center font-bold ml-auto"
+                                                            className="h-9 w-20 text-center font-bold text-base border-blue-100 focus-visible:ring-blue-500"
+                                                            placeholder="0.0"
                                                         />
-                                                    </TableCell>
-                                                </TableRow>
+                                                    </div>
+                                                </div>
                                             ))}
-                                        </TableBody>
-                                    </Table>
+                                        </div>
+                                    </ScrollArea>
                                 </div>
                             </div>
                         )}
+                    </div>
 
-                        {/* 3. NHẬN XÉT */}
-                        <div className="space-y-2">
-                            <Label htmlFor="nhanxet" className="font-semibold">Nhận xét / Đánh giá</Label>
+                    {/* CỘT PHẢI (5/12): Nhận xét */}
+                    <div className="md:col-span-5 p-6 flex flex-col h-full bg-white dark:bg-background">
+                        <Label htmlFor="nhanxet" className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <FileText className="w-4 h-4" /> Nhận xét & Đánh giá
+                        </Label>
+                        
+                        <div className="flex-1 relative">
                             <Textarea
                                 id="nhanxet"
                                 value={nhanxet}
                                 onChange={(e) => setNhanxet(e.target.value)}
-                                placeholder="Nhập nhận xét về chất lượng đồ án, thái độ làm việc..."
-                                className="min-h-[100px] resize-none"
+                                className="w-full h-full resize-none text-sm leading-relaxed p-4 border-gray-200 focus-visible:ring-blue-500 bg-gray-50/50 focus:bg-background transition-colors rounded-xl"
+                                placeholder="Nhập nhận xét chi tiết về phần trình bày, ưu điểm, nhược điểm của nhóm..."
                             />
+                             <div className="absolute bottom-3 right-3 text-xs text-muted-foreground bg-background/80 px-2 py-1 rounded pointer-events-none border">
+                                {nhanxet.length} ký tự
+                            </div>
                         </div>
                     </div>
+
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isSaving}>Hủy bỏ</Button>
-                    <Button onClick={handleSave} disabled={isSaving} className="min-w-[120px] bg-blue-600 hover:bg-blue-700">
+                {/* FOOTER */}
+                <DialogFooter className="p-4 border-t bg-background shrink-0 flex justify-between items-center">
+                    <Button variant="outline" onClick={onClose} disabled={isSaving} className="text-muted-foreground hover:text-foreground border-gray-300">
+                        Đóng
+                    </Button>
+                    
+                    <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[140px] shadow-md transition-all hover:shadow-lg hover:-translate-y-0.5">
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Lưu kết quả
                     </Button>
                 </DialogFooter>
+
             </DialogContent>
         </Dialog>
     );

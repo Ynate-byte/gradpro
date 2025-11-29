@@ -9,36 +9,61 @@ use App\Models\Nhom;
 
 class AppServiceProvider extends ServiceProvider
 {
-    public function register(): void { }
+    /**
+     * Register any application services.
+     */
+    public function register(): void
+    {
+        //
+    }
 
+    /**
+     * Bootstrap any application services.
+     */
     public function boot(): void
     {
+        // Chỉ định nghĩa Gate nếu không chạy trong Console (để tránh lỗi migration khi chưa có bảng)
         if (!$this->app->runningInConsole()) {
             Gate::define('access-grading-admin', function (?Nguoidung $user) {
                 if (!$user) return false;
+                
                 $role = $user->vaitro?->TEN_VAITRO;
-                $position = $user->giangvien?->CHUCVU;
-                return $role === 'Admin' || $role === 'Trưởng khoa' || $role === 'Giáo vụ' 
-                    || $position === 'Trưởng khoa' || $position === 'Giáo vụ';
+                if ($role === 'Admin') return true;
+
+                if ($user->giangvien) {
+                    $positionCodes = $user->giangvien->chucvus->pluck('MA_CHUCVU')->toArray();
+
+                    return in_array('TRUONG_KHOA', $positionCodes) 
+                        || in_array('GIAO_VU', $positionCodes)
+                        || in_array('PHO_KHOA', $positionCodes);
+                }
+
+                return false;
             });
 
             Gate::define('grade-huongdan', function (?Nguoidung $user, Nhom $nhom) {
                 if (!$user || !$user->giangvien) return false;
+                
                 $gvhdId = $nhom->phancongDetaiNhom?->ID_GVHD;
                 return $user->giangvien->ID_GIANGVIEN === $gvhdId;
             });
 
             Gate::define('grade-phanbien', function (?Nguoidung $user, Nhom $nhom) {
                 if (!$user || !$user->giangvien) return false;
-                $hoidongPhanBien = $nhom->hoidongs()->where('LOAI', 'phanbien')->first();
+                
+                $hoidongPhanBien = $nhom->hoidongs->where('LOAI', 'phanbien')->first();
+                
                 if (!$hoidongPhanBien) return false;
                 return $hoidongPhanBien->hasGiangvien($user->giangvien->ID_GIANGVIEN);
             });
 
             Gate::define('grade-hoidong', function (?Nguoidung $user, Nhom $nhom) {
                 if (!$user || !$user->giangvien) return false;
-                $hoidongBaoVe = $nhom->hoidongs()->where('LOAI', 'hoidong')->first();
+                
+                $hoidongBaoVe = $nhom->hoidongs->whereIn('LOAI', ['hoidong', 'hoidong5'])->first();
+                
                 if (!$hoidongBaoVe) return false;
+                
                 return $hoidongBaoVe->hasGiangvien($user->giangvien->ID_GIANGVIEN);
             });
         }

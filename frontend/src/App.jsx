@@ -56,7 +56,6 @@ const GeneralSettingsPage = lazy(() => import('./features/admin/settings/General
 const AdminActivityLog = lazy(() => import('./features/admin/activity-log/index.jsx'));
 const NotificationPage = lazy(() => import('./features/notifications/index.jsx'));
 const FileManagerPage = lazy(() => import('./features/admin/file-manager/FileManager.jsx'));
-// [MỚI] Import trang Backup
 const BackupManagementPage = lazy(() => import('./features/admin/backup-management/index.jsx'));
 
 // Component placeholder cho các trang chưa có nội dung
@@ -98,13 +97,18 @@ function App() {
   
   // Phân quyền chi tiết
   const isTruongKhoa = isAdmin || role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
-  const isGiaoVu = isAdmin || role === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
+
+  // [CẬP NHẬT QUAN TRỌNG]: Thêm PHO_KHOA vào điều kiện isGiaoVu
+  const isGiaoVu = isAdmin || role === 'Giáo vụ' || positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
+  
   const isTruongBoMon = isAdmin || positionCodes.includes('TRUONG_BOMON');
   
   const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
   const isSinhVien = role === 'Sinh viên';
 
+  // Admin, Trưởng khoa, Giáo vụ (và Phó khoa nhờ dòng isGiaoVu ở trên)
   const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu;
+  
   const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
   const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
@@ -116,7 +120,7 @@ function App() {
     if (isAdmin) {
       return <Navigate to="/admin/dashboard" replace />;
     }
-    // Nếu là Giảng viên / Giáo vụ / Trưởng khoa (không phải Admin thuần) -> Vào Dashboard GV
+    // Nếu là Giảng viên / Giáo vụ / Trưởng khoa / Phó khoa (không phải Admin thuần) -> Vào Dashboard GV
     if (canViewGiangVienRoutes) {
       return <LecturerDashboard />;
     }
@@ -185,7 +189,7 @@ function App() {
             </>
           )}
 
-          {/* Routes dành cho Giảng viên (Bao gồm GV, TK, GVụ, Admin) */}
+          {/* Routes dành cho Giảng viên (Bao gồm GV, TK, GVụ, PHO_KHOA, Admin) */}
           {canViewGiangVienRoutes && (
             <>
               {!isSinhVien && <Route path="lecturer/thesis-topics" element={<LecturerThesisTopicsPage />} />}
@@ -208,19 +212,17 @@ function App() {
             </>
           )}
 
-          {/* Routes dành cho Admin/Giáo vụ/Trưởng khoa */}
+          {/* Routes dành cho Admin/Giáo vụ/Trưởng khoa/Phó khoa (Nhập điểm hộ) */}
           {canChamDiem && (
             <>
-              {/* Route cho Admin nhập điểm hộ */}
               <Route path="admin/cham-diem" element={<ListNhomChamDiem />} />
               <Route path="admin/cham-diem/:idNhom" element={<ChamDiemChiTiet />} />
             </>
           )}
 
-          {/* Routes dành cho Admin, Trưởng Khoa, Giáo Vụ */}
+          {/* Routes dành cho Admin, Trưởng Khoa, Giáo Vụ, Phó Khoa */}
           {canViewAdminRoutes && (
             <>
-              {/* [MỚI] Route Dashboard Admin */}
               <Route path="admin/dashboard" element={<AdminDashboard />} />
 
               <Route path="admin/users" element={<UserManagementPage />} />
@@ -252,11 +254,11 @@ function App() {
               <Route path="admin/settings/general" element={<GeneralSettingsPage />} />
               <Route path="admin/quota-management" element={<AdminQuotaManager />} />
               
-              {/*Route Nhật ký hệ thống */}
+              {/* Route Nhật ký hệ thống */}
               <Route path="admin/system-logs" element={<AdminActivityLog />} />
               <Route path="admin/files" element={<FileManagerPage />} />
               
-              {/* [MỚI] Route Sao lưu dữ liệu */}
+              {/* Route Sao lưu dữ liệu */}
               <Route path="admin/backups" element={<BackupManagementPage />} />
             </>
           )}

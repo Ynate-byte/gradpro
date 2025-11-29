@@ -20,8 +20,10 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Download, Trash2, Database, HardDrive, Loader2, ShieldCheck, AlertTriangle, ChevronDown, FileArchive } from 'lucide-react';
-import { getBackups, createBackup, deleteBackup, downloadBackupLink } from '@/api/adminBackupService';
+// [MỚI] Thêm icon RotateCcw
+import { Download, Trash2, Database, HardDrive, Loader2, ShieldCheck, AlertTriangle, ChevronDown, FileArchive, RotateCcw } from 'lucide-react';
+// [MỚI] Import restoreBackup
+import { getBackups, createBackup, deleteBackup, downloadBackupLink, restoreBackup } from '@/api/adminBackupService';
 import { toast } from 'sonner';
 
 export default function BackupPage() {
@@ -30,6 +32,10 @@ export default function BackupPage() {
     // State cho Dialog xóa
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [backupToDelete, setBackupToDelete] = useState(null);
+
+    // [MỚI] State cho Dialog Restore
+    const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+    const [backupToRestore, setBackupToRestore] = useState(null);
 
     // 1. Lấy danh sách backup
     const { data: backups, isLoading } = useQuery({
@@ -58,12 +64,36 @@ export default function BackupPage() {
         onSuccess: () => {
             toast.success("Đã xóa file backup.");
             queryClient.invalidateQueries(['backups']);
-            setDeleteDialogOpen(false); // Đóng dialog sau khi xóa thành công
+            setDeleteDialogOpen(false);
             setBackupToDelete(null);
         },
         onError: (err) => {
             toast.error("Lỗi xóa: " + (err.response?.data?.message || err.message));
-            setDeleteDialogOpen(false); // Đóng dialog nếu lỗi
+            setDeleteDialogOpen(false);
+        }
+    });
+
+    // [MỚI] 4. Phục hồi Backup
+    const restoreMutation = useMutation({
+        mutationFn: restoreBackup,
+        onMutate: () => {
+            toast.loading("Đang tiến hành phục hồi hệ thống. Vui lòng không tắt trình duyệt...", { id: 'restore-process' });
+        },
+        onSuccess: (data) => {
+            toast.dismiss('restore-process');
+            toast.success(data.message || "Phục hồi dữ liệu thành công!");
+            setRestoreDialogOpen(false);
+            setBackupToRestore(null);
+            
+            // Reload trang sau 2s để đảm bảo dữ liệu mới được hiển thị (đặc biệt nếu restore DB liên quan đến user/session)
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        },
+        onError: (err) => {
+            toast.dismiss('restore-process');
+            toast.error("Lỗi phục hồi: " + (err.response?.data?.message || err.message));
+            setRestoreDialogOpen(false);
         }
     });
 
@@ -89,6 +119,12 @@ export default function BackupPage() {
         setDeleteDialogOpen(true);
     };
 
+    // [MỚI] Hàm mở dialog confirm restore
+    const confirmRestore = (backup) => {
+        setBackupToRestore(backup);
+        setRestoreDialogOpen(true);
+    };
+
     return (
         <div className="p-6 space-y-6 max-w-6xl mx-auto animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -107,7 +143,7 @@ export default function BackupPage() {
                         <Button 
                             size="lg"
                             className="bg-blue-600 hover:bg-blue-700 shadow-lg min-w-[200px]"
-                            disabled={createBackupMutation.isPending}
+                            disabled={createBackupMutation.isPending || restoreMutation.isPending}
                         >
                             {createBackupMutation.isPending ? (
                                 <><Loader2 className="animate-spin mr-2 h-4 w-4" /> Đang xử lý...</>
@@ -144,7 +180,7 @@ export default function BackupPage() {
                             <Table>
                                 <TableHeader className="bg-muted/50">
                                     <TableRow>
-                                        <TableHead className="w-[40%]">Tên Tập Tin</TableHead>
+                                        <TableHead className="w-[35%]">Tên Tập Tin</TableHead>
                                         <TableHead>Kích thước</TableHead>
                                         <TableHead>Thời gian tạo</TableHead>
                                         <TableHead>Tuổi thọ</TableHead>
@@ -186,6 +222,18 @@ export default function BackupPage() {
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex justify-end gap-2">
+                                                        {/* [MỚI] Nút Restore */}
+                                                        <Button 
+                                                            variant="outline" 
+                                                            size="sm" 
+                                                            className="h-8 px-2 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                                                            onClick={() => confirmRestore(backup)}
+                                                            disabled={restoreMutation.isPending}
+                                                            title="Phục hồi dữ liệu từ bản này"
+                                                        >
+                                                            <RotateCcw className="h-4 w-4 mr-1" /> Restore
+                                                        </Button>
+
                                                         <Button 
                                                             variant="outline" 
                                                             size="sm" 
@@ -195,6 +243,7 @@ export default function BackupPage() {
                                                         >
                                                             <Download className="h-4 w-4 mr-1" /> Tải về
                                                         </Button>
+                                                        
                                                         <Button 
                                                             variant="ghost" 
                                                             size="sm" 
@@ -221,8 +270,9 @@ export default function BackupPage() {
                     <div>
                         <strong className="block mb-1 text-amber-700">Lưu ý về Phục hồi (Restore):</strong>
                         <ul className="list-disc pl-4 space-y-1 opacity-90">
-                            <li><strong>Chỉ Database:</strong> File nén chỉ chứa file SQL. Giải nén và import vào CSDL.</li>
-                            <li><strong>Toàn bộ:</strong> File nén chứa file SQL và thư mục <code>public/storage</code>.</li>
+                            <li>Hành động <strong>Restore</strong> sẽ ghi đè toàn bộ dữ liệu hiện tại bằng dữ liệu trong bản sao lưu.</li>
+                            <li>Quá trình này có thể mất vài phút. <strong>Tuyệt đối không tắt trình duyệt</strong> khi đang xử lý.</li>
+                            <li>Sau khi phục hồi thành công, hệ thống sẽ tự động tải lại trang.</li>
                         </ul>
                     </div>
                 </div>
@@ -246,6 +296,36 @@ export default function BackupPage() {
                         >
                             {deleteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                             Xóa vĩnh viễn
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* [MỚI] Dialog Xác nhận Restore */}
+            <AlertDialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-amber-600 flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5" /> Cảnh báo Phục hồi Dữ liệu
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Bạn đang chuẩn bị phục hồi hệ thống về trạng thái của bản sao lưu:
+                            <br/><span className="font-bold text-foreground mt-2 block">{backupToRestore?.name}</span>
+                            <br/>
+                            <span className="block mt-2 text-red-500 font-medium">
+                                CẢNH BÁO: Toàn bộ dữ liệu hiện tại sẽ bị thay thế bởi dữ liệu trong bản sao lưu này. Những thay đổi mới nhất (sau thời điểm sao lưu) sẽ bị mất.
+                            </span>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={restoreMutation.isPending}>Hủy bỏ</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={() => restoreMutation.mutate(backupToRestore?.path)}
+                            disabled={restoreMutation.isPending}
+                            className="bg-amber-600 hover:bg-amber-700 text-white"
+                        >
+                            {restoreMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RotateCcw className="h-4 w-4 mr-2" />}
+                            Xác nhận Phục hồi
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

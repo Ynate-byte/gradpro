@@ -1,6 +1,7 @@
 <?php
 
 namespace App\Http\Controllers;
+
 use Illuminate\Support\Facades\Auth;
 
 abstract class Controller
@@ -34,7 +35,11 @@ abstract class Controller
 
     protected function isGiaoVu()
     {
-        return $this->isAdmin() || in_array('GIAO_VU', $this->getUserPositionCodes());
+        $positions = $this->getUserPositionCodes();
+        
+        return $this->isAdmin() || 
+               in_array('GIAO_VU', $positions) || 
+               in_array('PHO_KHOA', $positions);
     }
     
     protected function isTruongBoMon()

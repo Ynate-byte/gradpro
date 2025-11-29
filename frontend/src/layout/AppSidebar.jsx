@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Bell, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight,
     LogOut, CircleUserRound, Newspaper, Shield, CheckCircle, GraduationCap, PenSquare,
-    Layers, History, FileText, Activity, Star, PieChart, Folder
+    Layers, History, FileText, Activity, Star, PieChart, Folder, ShieldCheck
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,6 @@ import {
     SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
-import { ShieldCheck } from 'lucide-react';
 
 // --- Helper: Kiểm tra URL active ---
 const checkActive = (href, currentUrl) => {
@@ -124,7 +123,10 @@ export function AppSidebar() {
 
     // Check Chức vụ quản lý
     const isTruongKhoa = positionCodes.includes('TRUONG_KHOA');
-    const isGiaoVu = positionCodes.includes('GIAO_VU');
+    
+    // [CẬP NHẬT QUAN TRỌNG]: Thêm PHO_KHOA vào danh sách có quyền như Giáo vụ
+    const isGiaoVu = positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
+    
     const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
 
     // Quyền truy cập khu vực Admin/Quản lý

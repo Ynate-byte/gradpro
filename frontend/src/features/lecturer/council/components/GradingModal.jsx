@@ -12,8 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch"; 
-import { Loader2, Save, PenSquare, Calculator } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Save, PenSquare, Calculator, User, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { submitHoiDong } from "@/api/chamDiemService";
 import {
@@ -25,34 +25,30 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
-    const { user } = useAuth(); // Lấy user để biết Giảng viên nào đang chấm
-    
+    const { user } = useAuth();
+
     // State
     const [diemChung, setDiemChung] = useState("");
-    const [diemRieng, setDiemRieng] = useState({}); // { [studentId]: score }
+    const [diemRieng, setDiemRieng] = useState({});
     const [nhanxet, setNhanxet] = useState("");
     const [isIndividual, setIsIndividual] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // Reset và load dữ liệu cũ khi mở modal
+    // Load data
     useEffect(() => {
         if (isOpen && group && user?.giangvien) {
             const myId = user.giangvien.ID_GIANGVIEN;
-            
-            // Tìm điểm của chính giảng viên này trong mảng diem_hoi_dong của nhóm
-            // Lưu ý: Backend phải trả về relationship 'diemHoiDong' (đã sửa ở controller trên)
             const myScoreRecord = group.diem_hoi_dong?.find(d => d.ID_GIANGVIEN === myId);
 
             const score = myScoreRecord ? myScoreRecord.DIEM : "";
             const comment = myScoreRecord ? myScoreRecord.NHANXET : "";
-            // Parse chi tiết nếu có (Backend trả về mảng hoặc JSON string)
+
             let details = myScoreRecord ? myScoreRecord.DIEM_CHI_TIET : null;
-            
-            // Handle trường hợp backend trả về string JSON
             if (typeof details === 'string') {
-                try { details = JSON.parse(details); } catch (e) {}
+                try { details = JSON.parse(details); } catch (e) { }
             }
 
             setNhanxet(comment || "");
@@ -64,11 +60,9 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
                     scoresMap[item.student_id] = item.score;
                 });
                 setDiemRieng(scoresMap);
-                setDiemChung(score);
             } else {
                 setIsIndividual(false);
                 setDiemChung(score);
-                // Khởi tạo điểm riêng bằng điểm chung để tiện thao tác
                 const initScores = {};
                 group.thanhviens?.forEach(tv => {
                     initScores[tv.ID_NGUOIDUNG] = score;
@@ -78,10 +72,12 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
         }
     }, [isOpen, group, user]);
 
-    // Tự động tính trung bình khi chấm riêng
     const calculatedAverage = useMemo(() => {
         if (!group?.thanhviens?.length) return 0;
-        const scores = Object.values(diemRieng).map(s => parseFloat(s)).filter(s => !isNaN(s));
+        const scores = group.thanhviens.map(tv => {
+            const s = parseFloat(diemRieng[tv.ID_NGUOIDUNG]);
+            return isNaN(s) ? 0 : s;
+        });
         if (scores.length === 0) return 0;
         const sum = scores.reduce((a, b) => a + b, 0);
         return (sum / scores.length).toFixed(2);
@@ -97,10 +93,8 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
     };
 
     const handleDiemRiengChange = (studentId, val) => {
-        setDiemRieng(prev => ({
-            ...prev,
-            [studentId]: val
-        }));
+        if (parseFloat(val) > 10) return;
+        setDiemRieng(prev => ({ ...prev, [studentId]: val }));
     };
 
     const handleSave = async () => {
@@ -112,7 +106,6 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
             };
 
             if (!isIndividual) {
-                // CHẤM CHUNG
                 const val = parseFloat(diemChung);
                 if (isNaN(val) || val < 0 || val > 10) {
                     toast.error("Điểm chung không hợp lệ (0-10).");
@@ -121,13 +114,12 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
                 payload.DIEM = val;
                 payload.DIEM_CHI_TIET = null;
             } else {
-                // CHẤM RIÊNG
                 const details = [];
                 let total = 0;
                 for (const tv of group.thanhviens) {
                     const sVal = parseFloat(diemRieng[tv.ID_NGUOIDUNG]);
                     if (isNaN(sVal) || sVal < 0 || sVal > 10) {
-                        toast.error(`Điểm của sinh viên ${tv.nguoidung?.HODEM_VA_TEN} không hợp lệ.`);
+                        toast.error(`Điểm của sinh viên ${tv.nguoidung?.HODEM_VA_TEN} chưa hợp lệ.`);
                         setIsSaving(false); return;
                     }
                     details.push({ student_id: tv.ID_NGUOIDUNG, score: sVal });
@@ -138,9 +130,15 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
             }
 
             await submitHoiDong(group.ID_NHOM, payload);
+            toast.success("Đã lưu điểm thành công!");
             
-            toast.success("Lưu điểm hội đồng thành công!");
-            onSaveSuccess();
+            // [UPDATE] Gọi callback để refresh dữ liệu cha, NHƯNG KHÔNG ĐÓNG MODAL
+            if (onSaveSuccess) {
+                onSaveSuccess(); 
+            }
+            
+            // Không gọi onClose() ở đây nữa
+
         } catch (error) {
             console.error("Lỗi chấm điểm:", error);
             toast.error(error.response?.data?.error || "Lỗi khi lưu điểm.");
@@ -153,120 +151,154 @@ const GradingModal = ({ isOpen, onClose, onSaveSuccess, group }) => {
 
     return (
         <Dialog open={isOpen} onOpenChange={(val) => !isSaving && onClose()}>
-            <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2 text-primary">
-                        <PenSquare className="w-5 h-5" /> Chấm điểm Hội Đồng
-                    </DialogTitle>
-                    <DialogDescription className="pt-1">
-                        Nhóm: <span className="font-bold text-foreground">{group.TEN_NHOM}</span>
-                    </DialogDescription>
-                </DialogHeader>
+            <DialogContent className="sm:max-w-4xl p-0 gap-0 overflow-hidden bg-background flex flex-col h-[600px]">
                 
-                <div className="grid gap-5 py-2">
-                    {/* Switch Chế độ */}
-                    <div className="flex items-center justify-between bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-100 dark:border-blue-800">
-                        <div className="space-y-0.5">
-                            <Label className="text-sm font-semibold text-blue-900 dark:text-blue-100">
-                                Chấm điểm chi tiết từng sinh viên?
-                            </Label>
-                            <p className="text-xs text-muted-foreground">
-                                Bật nếu các thành viên trong nhóm có mức độ đóng góp khác nhau.
-                            </p>
+                {/* HEADER */}
+                <DialogHeader className="px-6 py-4 border-b bg-muted/10 shrink-0 flex flex-row items-center justify-between space-y-0">
+                    <div>
+                        <DialogTitle className="flex items-center gap-2 text-primary text-xl">
+                            <PenSquare className="w-5 h-5" /> Chấm điểm Hội Đồng
+                        </DialogTitle>
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className="text-sm text-muted-foreground">Nhóm:</span>
+                            <Badge variant="secondary" className="font-bold text-sm px-2">{group.TEN_NHOM}</Badge>
                         </div>
-                        <Switch 
-                            checked={isIndividual} 
-                            onCheckedChange={setIsIndividual} 
-                            className="data-[state=checked]:bg-blue-600"
+                    </div>
+                    
+                    <div className="flex items-center gap-3 bg-background border px-3 py-1.5 rounded-full shadow-sm">
+                        <Label htmlFor="mode-switch" className="text-xs font-semibold text-muted-foreground cursor-pointer">
+                            {isIndividual ? "Chấm chi tiết" : "Chấm chung"}
+                        </Label>
+                        <Switch
+                            id="mode-switch"
+                            checked={isIndividual}
+                            onCheckedChange={setIsIndividual}
+                            className="data-[state=checked]:bg-blue-600 scale-90"
                         />
                     </div>
+                </DialogHeader>
 
-                    {/* Khu vực nhập điểm */}
-                    <div className="space-y-4">
+                {/* BODY */}
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-hidden">
+                    
+                    {/* CỘT TRÁI (7/12) */}
+                    <div className="md:col-span-7 p-6 border-r flex flex-col h-full overflow-hidden bg-gray-50/50 dark:bg-gray-900/20">
+                        
                         {!isIndividual ? (
-                            <div className="flex flex-col gap-2 animate-in fade-in slide-in-from-top-1">
-                                <Label className="font-semibold">Điểm số <span className="text-red-500">*</span></Label>
-                                <div className="flex items-center gap-3">
+                            <div className="flex flex-col items-center justify-center h-full space-y-6">
+                                <div className="text-center space-y-2">
+                                    <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300">Điểm tổng kết nhóm</h3>
+                                    <p className="text-sm text-muted-foreground px-8">
+                                        Điểm số này sẽ được áp dụng cho tất cả thành viên trong nhóm.
+                                    </p>
+                                </div>
+                                
+                                <div className="relative w-48">
                                     <Input
                                         type="number"
                                         step="0.1"
                                         min="0" max="10"
                                         value={diemChung}
                                         onChange={(e) => handleDiemChungChange(e.target.value)}
-                                        className="h-11 text-lg font-bold w-full pl-4"
-                                        placeholder="0 - 10"
+                                        className="h-24 text-5xl font-bold text-center border-2 border-blue-200 focus-visible:ring-blue-500 rounded-xl shadow-sm bg-white dark:bg-card"
+                                        placeholder="0.0"
+                                        autoFocus
                                     />
+                                    <span className="absolute top-2 right-4 text-gray-400 text-sm font-medium">/10</span>
+                                </div>
+
+                                <div className="flex flex-wrap justify-center gap-2 w-full px-4">
+                                    {group.thanhviens?.map((tv) => (
+                                        <Badge key={tv.ID_NGUOIDUNG} variant="outline" className="bg-background">
+                                            <User className="w-3 h-3 mr-1 opacity-70" />
+                                            {tv.nguoidung?.HODEM_VA_TEN}
+                                        </Badge>
+                                    ))}
                                 </div>
                             </div>
                         ) : (
-                            <div className="space-y-3 animate-in fade-in slide-in-from-top-1">
-                                <div className="flex items-center justify-between">
-                                    <Label className="font-semibold">Danh sách sinh viên</Label>
-                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                                        <Calculator className="w-3 h-3 mr-1"/> TB: {calculatedAverage}
+                            <div className="flex flex-col h-full">
+                                <div className="flex items-center justify-between mb-4 shrink-0">
+                                    <Label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+                                        Danh sách sinh viên ({group.thanhviens?.length})
+                                    </Label>
+                                    <Badge variant="secondary" className="h-6">
+                                        <Calculator className="w-3 h-3 mr-1.5"/> 
+                                        TB: <span className="font-bold ml-1 text-primary">{calculatedAverage}</span>
                                     </Badge>
                                 </div>
-                                <div className="border rounded-md overflow-hidden">
-                                    <Table>
-                                        <TableHeader className="bg-muted/50">
-                                            <TableRow>
-                                                <TableHead>Sinh viên</TableHead>
-                                                <TableHead className="w-[100px] text-right">Điểm</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {group.thanhviens && group.thanhviens.length > 0 ? (
-                                                group.thanhviens.map((tv) => (
-                                                    <TableRow key={tv.ID_NGUOIDUNG}>
-                                                        <TableCell className="py-2">
-                                                            <div className="font-medium text-sm">{tv.nguoidung?.HODEM_VA_TEN}</div>
-                                                            <div className="text-[10px] text-muted-foreground">{tv.nguoidung?.MA_DINHDANH}</div>
-                                                        </TableCell>
-                                                        <TableCell className="text-right py-2">
-                                                            <Input 
-                                                                type="number" 
-                                                                step="0.1" 
-                                                                min="0" max="10"
-                                                                value={diemRieng[tv.ID_NGUOIDUNG] ?? ""}
-                                                                onChange={(e) => handleDiemRiengChange(tv.ID_NGUOIDUNG, e.target.value)}
-                                                                className="h-8 w-20 text-center font-bold ml-auto text-sm"
-                                                            />
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ))
-                                            ) : (
-                                                <TableRow>
-                                                    <TableCell colSpan={2} className="text-center text-muted-foreground text-sm py-4">
-                                                        Không tìm thấy danh sách thành viên.
-                                                    </TableCell>
-                                                </TableRow>
-                                            )}
-                                        </TableBody>
-                                    </Table>
+                                
+                                <div className="border rounded-lg bg-background shadow-sm flex-1 overflow-hidden flex flex-col">
+                                    <div className="grid grid-cols-12 bg-muted/50 py-2 px-4 text-xs font-bold text-muted-foreground border-b shrink-0">
+                                        <div className="col-span-8">HỌ TÊN & MSSV</div>
+                                        <div className="col-span-4 text-center">ĐIỂM SỐ</div>
+                                    </div>
+                                    <ScrollArea className="flex-1">
+                                        <div className="divide-y">
+                                            {group.thanhviens?.map((tv) => (
+                                                <div key={tv.ID_NGUOIDUNG} className="grid grid-cols-12 items-center py-3 px-4 hover:bg-muted/30 transition-colors">
+                                                    <div className="col-span-8 pr-2">
+                                                        <div className="font-medium text-sm truncate" title={tv.nguoidung?.HODEM_VA_TEN}>
+                                                            {tv.nguoidung?.HODEM_VA_TEN}
+                                                        </div>
+                                                        <div className="text-xs text-muted-foreground font-mono">
+                                                            {tv.nguoidung?.MA_DINHDANH}
+                                                        </div>
+                                                    </div>
+                                                    <div className="col-span-4 flex justify-center">
+                                                        <Input 
+                                                            type="number" 
+                                                            step="0.1" 
+                                                            min="0" max="10"
+                                                            value={diemRieng[tv.ID_NGUOIDUNG] ?? ""}
+                                                            onChange={(e) => handleDiemRiengChange(tv.ID_NGUOIDUNG, e.target.value)}
+                                                            className="h-9 w-20 text-center font-bold text-base border-blue-100 focus-visible:ring-blue-500"
+                                                            placeholder="0.0"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </ScrollArea>
                                 </div>
                             </div>
                         )}
+                    </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="nhanxet" className="font-semibold">Nhận xét</Label>
-                            <Textarea
-                                id="nhanxet"
-                                value={nhanxet}
-                                onChange={(e) => setNhanxet(e.target.value)}
-                                className="min-h-[100px] resize-none"
-                                placeholder="Nhập nhận xét (tùy chọn)..."
-                            />
+                    {/* CỘT PHẢI (5/12) */}
+                    <div className="md:col-span-5 p-6 flex flex-col h-full bg-white dark:bg-background">
+                        <Label htmlFor="nhanxet" className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-4 flex items-center gap-2">
+                            <FileText className="w-4 h-4" /> Nhận xét & Đánh giá
+                        </Label>
+                        
+                        <Textarea
+                            id="nhanxet"
+                            value={nhanxet}
+                            onChange={(e) => setNhanxet(e.target.value)}
+                            className="flex-1 resize-none text-sm leading-relaxed p-4 border-gray-200 focus-visible:ring-blue-500 bg-gray-50/50"
+                            placeholder="Nhập nhận xét chi tiết về phần trình bày, ưu điểm, nhược điểm của nhóm..."
+                        />
+                        
+                        <div className="mt-2 text-xs text-muted-foreground text-right">
+                            {nhanxet.length} ký tự
                         </div>
                     </div>
+
                 </div>
-                
-                <DialogFooter>
-                    <Button variant="outline" onClick={onClose} disabled={isSaving}>Hủy bỏ</Button>
-                    <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white">
+
+                {/* FOOTER */}
+                <DialogFooter className="p-4 border-t bg-background shrink-0 flex justify-between items-center">
+                    {/* Nút Đóng luôn hiển thị để user có thể thoát sau khi lưu */}
+                    <Button variant="outline" onClick={onClose} disabled={isSaving} className="text-muted-foreground hover:text-foreground border-gray-300">
+                        Đóng
+                    </Button>
+                    
+                    <Button onClick={handleSave} disabled={isSaving} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[140px] shadow-md">
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Lưu điểm
+                        Lưu kết quả
                     </Button>
                 </DialogFooter>
+
             </DialogContent>
         </Dialog>
     );
