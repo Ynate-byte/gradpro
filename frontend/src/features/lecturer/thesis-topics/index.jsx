@@ -168,7 +168,8 @@ const ThesisTopicsPage = () => {
     // State departmentOptions
     const [departmentOptions, setDepartmentOptions] = useState([]);
 
-    const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
+    // --- [QUAN TRỌNG] Xóa state currentTopicIndex cũ để dùng useMemo ---
+    // const [currentTopicIndex, setCurrentTopicIndex] = useState(0); 
 
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
@@ -181,7 +182,7 @@ const ThesisTopicsPage = () => {
     const positions = user?.giangvien?.chucvus || [];
     const canImport = role === 'Admin' || positions.length > 0; 
 
-    // 1. Load dữ liệu ban đầu
+    // --- Logic khởi tạo dữ liệu ---
     useEffect(() => {
         loadInitialData();
     }, []);
@@ -220,7 +221,7 @@ const ThesisTopicsPage = () => {
         }
     };
 
-    // 2. Fetch Dữ liệu chính
+    // --- Logic Fetch Topics ---
     const fetchTopicsData = useCallback(async () => {
         if (!selectedPlan) return;
 
@@ -245,7 +246,6 @@ const ThesisTopicsPage = () => {
             const deptFilter = columnFilters.find(f => f.id === 'department_id');
             if (deptFilter) params.department_id = deptFilter.value;
 
-            // [SỬA QUAN TRỌNG]: Đổi từ getAdminTopics sang getTopics để dùng đúng controller của User/Lecturer
             const response = await thesisTopicService.getTopics(params);
             const { data, last_page } = response.data;
 
@@ -269,7 +269,7 @@ const ThesisTopicsPage = () => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [selectedPlan, activeTab, debouncedSearchTerm, columnFilters]);
 
-    // 3. Fetch Dữ liệu thống kê
+    // --- Logic Fetch Stats ---
     useEffect(() => {
         if (selectedPlan) {
             loadPlanStatsAndInfo(selectedPlan);
@@ -294,7 +294,7 @@ const ThesisTopicsPage = () => {
         }
     };
 
-    // ... (Các handlers CRUD giữ nguyên)
+    // --- CRUD Handlers ---
     const handleCreateTopic = async (topicData) => {
         try {
             await thesisTopicService.createTopic(topicData);
@@ -345,32 +345,41 @@ const ThesisTopicsPage = () => {
         }
     };
 
+    // --- [SỬA] LOGIC ĐIỀU HƯỚNG MỚI (Dynamic Calculation) ---
+    // Tính toán index dựa trên ID đang chọn và danh sách topics hiện có
+    // Sử dụng String() để đảm bảo an toàn khi so sánh
+    const currentTopicIndex = useMemo(() => {
+        if (!selectedTopicId || topics.length === 0) return -1;
+        return topics.findIndex(t => String(t.ID_DETAI) === String(selectedTopicId));
+    }, [topics, selectedTopicId]);
+
+    const hasNext = currentTopicIndex !== -1 && currentTopicIndex < topics.length - 1;
+    const hasPrevious = currentTopicIndex > 0;
+
+    const handleNextTopic = useCallback(() => { 
+        if (hasNext) {
+            const nextTopic = topics[currentTopicIndex + 1];
+            if (nextTopic) {
+                setSelectedTopicId(nextTopic.ID_DETAI);
+            }
+        }
+    }, [hasNext, currentTopicIndex, topics]);
+
+    const handlePreviousTopic = useCallback(() => { 
+        if (hasPrevious) {
+            const prevTopic = topics[currentTopicIndex - 1];
+            if (prevTopic) {
+                setSelectedTopicId(prevTopic.ID_DETAI);
+            }
+        }
+    }, [hasPrevious, currentTopicIndex, topics]);
+
     const handleViewTopicDetails = (topicId) => {
         setSelectedTopicId(topicId);
         setShowTopicDetailDialog(true);
-        const idx = topics.findIndex(t => t.ID_DETAI === topicId);
-        setCurrentTopicIndex(idx >= 0 ? idx : 0);
     };
 
-    const hasNext = currentTopicIndex < topics.length - 1;
-    const hasPrevious = currentTopicIndex > 0;
-
-    const handleNextTopic = () => { 
-        if (hasNext) {
-            const nextIdx = currentTopicIndex + 1;
-            setCurrentTopicIndex(nextIdx);
-            setSelectedTopicId(topics[nextIdx].ID_DETAI);
-        }
-    };
-
-    const handlePreviousTopic = () => { 
-        if (hasPrevious) {
-            const prevIdx = currentTopicIndex - 1;
-            setCurrentTopicIndex(prevIdx);
-            setSelectedTopicId(topics[prevIdx].ID_DETAI);
-        }
-    };
-
+    // --- Other Dialog Handlers ---
     const handleAddSuggestion = (topicId) => {
         setSelectedTopicId(topicId);
         setShowSuggestionDialog(true);
@@ -554,7 +563,7 @@ const ThesisTopicsPage = () => {
                                         searchTerm={searchTerm}
                                         onSearchChange={setSearchTerm}
 
-                                        // [SỬA] Filter Bộ môn
+                                        // Filter Bộ môn
                                         khoaBomonFilterColumnId="department_id"
                                         khoaBomonFilterOptions={departmentOptions}
                                         khoaBomonFilterTitle="Bộ môn"
@@ -612,13 +621,16 @@ const ThesisTopicsPage = () => {
                 onOpenChange={setShowTopicDetailDialog} 
                 topicId={selectedTopicId} 
                 showAdminActions={false} 
-                onApprove={null}
-                onReject={null}
-                onRequestEdit={null}
+                onApprove={null} 
+                onReject={null} 
+                onRequestEdit={null} 
+                
+                // --- TRUYỀN PROPS ĐIỀU HƯỚNG MỚI ---
                 onNext={handleNextTopic}
                 onPrevious={handlePreviousTopic}
                 hasNext={hasNext}
                 hasPrevious={hasPrevious}
+                
                 onDataChange={() => {
                     fetchTopicsData();
                     loadPlanStatsAndInfo(selectedPlan);

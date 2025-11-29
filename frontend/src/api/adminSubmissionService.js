@@ -21,8 +21,11 @@ export const confirmSubmission = (submissionId) => {
     return axiosClient.post(`${getBaseUrl()}/${submissionId}/confirm`).then(res => res.data);
 };
 
-export const rejectSubmission = (submissionId, ly_do) => {
-    return axiosClient.post(`${getBaseUrl()}/${submissionId}/reject`, { ly_do }).then(res => res.data);
+export const rejectSubmission = (submissionId, ly_do, rejectedFileIds = []) => {
+    return axiosClient.post(`${getBaseUrl()}/${submissionId}/reject`, { 
+        ly_do, 
+        rejected_file_ids: rejectedFileIds 
+    }).then(res => res.data);
 };
 
 export const getSubmissionsForPhancong = (phancongId) => {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, BarChart3 } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
@@ -10,16 +10,14 @@ import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
 import { getAllPlans } from "@/api/thesisPlanService";
-import { getKhoaBomons } from "@/api/userService"; // [SỬA] Import getKhoaBomons
+import { getKhoaBomons } from "@/api/userService"; 
 import TopicDetailDialog from "../../../lecturer/thesis-topics/components/TopicDetailDialog";
 import RejectDialog from "./RejectDialog";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
-import TopicsChart from "../../dashboard/components/TopicsChart";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// StatCard Component (Giữ nguyên)
+// --- StatCard Component ---
 const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasStatusDot }) => {
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
@@ -34,14 +32,8 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
             <motion.div 
                 className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
                 initial={false}
-                animate={isReduced ? {} : {
-                    scale: value === 'loading' ? [1, 1.1, 1] : 1,
-                }}
-                transition={{ 
-                    duration: 1.5, 
-                    repeat: value === 'loading' ? Infinity : 0, 
-                    ease: "easeInOut"
-                }}
+                animate={isReduced ? {} : { scale: value === 'loading' ? [1, 1.1, 1] : 1 }}
+                transition={{ duration: 1.5, repeat: value === 'loading' ? Infinity : 0, ease: "easeInOut" }}
             >
                 <Icon className={cn("h-6 w-6", iconColorClass)} />
             </motion.div>
@@ -72,33 +64,16 @@ const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasSt
 
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
-        return {
-            container: { visible: { opacity: 1 } },
-            item: { visible: { opacity: 1, y: 0 } },
-            table: { visible: { opacity: 1, y: 0 } }
-        };
+        return { container: { visible: { opacity: 1 } }, item: { visible: { opacity: 1, y: 0 } }, table: { visible: { opacity: 1, y: 0 } } };
     }
     return {
-        container: {
-            hidden: { opacity: 0 },
-            visible: { opacity: 1, transition: { staggerChildren: 0.08 } }
-        },
-        item: {
-            hidden: { y: 20, opacity: 0 },
-            visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100, damping: 12 } }
-        },
-        table: {
-            hidden: { opacity: 0, y: 20 },
-            visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } },
-            exit: { opacity: 0, y: -20, transition: { duration: 0.2 } }
-        }
+        container: { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.08 } } },
+        item: { hidden: { y: 20, opacity: 0 }, visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100, damping: 12 } } },
+        table: { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: "easeOut" } }, exit: { opacity: 0, y: -20, transition: { duration: 0.2 } } }
     };
 };
 
-// [SỬA] Cập nhật columnVisibility để ẩn ID bộ môn
-const columnVisibility = {
-    "department_id": false,
-};
+const columnVisibility = { "department_id": false };
 
 const TopicManagementTabs = () => {
     const [allTopics, setAllTopics] = useState([]);
@@ -113,7 +88,6 @@ const TopicManagementTabs = () => {
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
     const [columnFilters, setColumnFilters] = useState([]);
     
-    // [SỬA] Đổi tên state thành departmentOptions
     const [departmentOptions, setDepartmentOptions] = useState([]);
     
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
@@ -126,21 +100,18 @@ const TopicManagementTabs = () => {
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [actionType, setActionType] = useState("");
 
-    const [navigationList, setNavigationList] = useState([]);
-    const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
-
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // 1. Load Plans & Departments
+    // 1. Init Data
     useEffect(() => {
         const init = async () => {
             try {
                 const [plansRes, deptRes] = await Promise.all([
                     getAllPlans(),
-                    getKhoaBomons().catch(() => []) // [SỬA] Gọi API lấy Bộ môn
+                    getKhoaBomons().catch(() => []) 
                 ]);
                 
                 const plansList = plansRes || [];
@@ -151,7 +122,6 @@ const TopicManagementTabs = () => {
                     setSelectedPlanId(String(activePlan.ID_KEHOACH));
                 }
 
-                // [SỬA] Map data Bộ môn
                 setDepartmentOptions(
                     (deptRes || []).map(dept => ({
                         label: dept.TEN_KHOA_BOMON,
@@ -197,6 +167,7 @@ const TopicManagementTabs = () => {
         }
     };
 
+    // 3. Process Data (Filter & Sort)
     const processedData = useMemo(() => {
         let filtered = allTopics.filter(t => {
             const matchesSearch =
@@ -207,7 +178,6 @@ const TopicManagementTabs = () => {
             const matchesTab = activeTab === "Tất cả" || t.TRANGTHAI === activeTab;
 
             const matchesFilters = columnFilters.every(filter => {
-                // [SỬA] Lọc theo department_id
                 if (filter.id === 'department_id') {
                     const filterValues = new Set(filter.value);
                     return filterValues.has(String(t.ID_KHOA_BOMON));
@@ -253,43 +223,67 @@ const TopicManagementTabs = () => {
         return { pagedData, pageCount, stats, allFiltered: filtered };
     }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
 
+    // --- LOGIC ĐIỀU HƯỚNG MỚI (FIXED) ---
+
+    // 1. Lấy danh sách hiện tại (động)
+    const currentList = useMemo(() => {
+        return processedData.allFiltered || [];
+    }, [processedData.allFiltered]);
+
+    // 2. Tính toán Index dựa trên Selected ID (Luôn đúng kể cả khi data thay đổi)
+    const currentTopicIndex = useMemo(() => {
+        if (!selectedTopicId || currentList.length === 0) return -1;
+        return currentList.findIndex(t => String(t.ID_DETAI) === String(selectedTopicId));
+    }, [currentList, selectedTopicId]);
+
+    // 3. Tính toán trạng thái nút
+    const hasNext = currentTopicIndex !== -1 && currentTopicIndex < currentList.length - 1;
+    const hasPrevious = currentTopicIndex !== -1 && currentTopicIndex > 0;
+
     const handleViewTopicDetails = (topicId) => {
         setSelectedTopicId(topicId);
         setShowTopicDetailDialog(true);
-        const currentList = processedData.allFiltered;
-        setNavigationList(currentList);
-        const currentIndex = currentList.findIndex(t => t.ID_DETAI === topicId);
-        setCurrentTopicIndex(currentIndex >= 0 ? currentIndex : 0);
     };
 
     const handleNext = () => {
-        if (navigationList.length > 0 && currentTopicIndex < navigationList.length - 1) {
-            const nextIndex = currentTopicIndex + 1;
-            setCurrentTopicIndex(nextIndex);
-            setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
+        if (hasNext) {
+            const nextTopic = currentList[currentTopicIndex + 1];
+            if (nextTopic) setSelectedTopicId(nextTopic.ID_DETAI);
         }
     };
 
     const handlePrevious = () => {
-        if (navigationList.length > 0 && currentTopicIndex > 0) {
-            const prevIndex = currentTopicIndex - 1;
-            setCurrentTopicIndex(prevIndex);
-            setSelectedTopicId(navigationList[prevIndex].ID_DETAI);
+        if (hasPrevious) {
+            const prevTopic = currentList[currentTopicIndex - 1];
+            if (prevTopic) setSelectedTopicId(prevTopic.ID_DETAI);
         }
     };
 
+    // --- ACTIONS HANDLERS ---
+
     const handleApprove = async (topicId) => {
         try {
+            // Logic Auto-Next thông minh: 
+            // Lưu lại ID của topic tiếp theo TRƯỚC khi reload data (vì sau khi approve, topic hiện tại có thể biến mất khỏi list 'Chờ duyệt')
+            let nextTopicId = null;
+            if (hasNext) {
+                nextTopicId = currentList[currentTopicIndex + 1].ID_DETAI;
+            }
+
+            // Gọi API
             await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
             toast.success("Đề tài đã được duyệt thành công!");
-            loadTopics(selectedPlanId); 
             
-            if (showTopicDetailDialog && navigationList.length > 0) {
-                if (currentTopicIndex < navigationList.length - 1) {
-                    const nextIndex = currentTopicIndex + 1;
-                    setCurrentTopicIndex(nextIndex);
-                    setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
+            // Reload
+            await loadTopics(selectedPlanId); 
+            
+            // Điều hướng
+            if (showTopicDetailDialog) {
+                if (nextTopicId) {
+                    // Nếu còn topic tiếp theo trong danh sách cũ, chuyển tới đó
+                    setSelectedTopicId(nextTopicId);
                 } else {
+                    // Nếu hết danh sách, đóng dialog
                     setShowTopicDetailDialog(false);
                 }
             }
@@ -301,6 +295,12 @@ const TopicManagementTabs = () => {
 
     const handleRejectSubmit = async (reason) => {
         try {
+            // Logic Auto-Next tương tự approve
+            let nextTopicId = null;
+            if (hasNext) {
+                nextTopicId = currentList[currentTopicIndex + 1].ID_DETAI;
+            }
+
             const action = actionType === "reject" ? "reject" : "request_edit";
             await thesisTopicService.adminApproveOrReject(selectedTopic.ID_DETAI, {
                 action,
@@ -311,13 +311,13 @@ const TopicManagementTabs = () => {
                 : "Đã yêu cầu chỉnh sửa đề tài.";
             toast.success(message);
             setShowRejectDialog(false);
-            loadTopics(selectedPlanId);
+            
+            await loadTopics(selectedPlanId);
 
-            if (showTopicDetailDialog && navigationList.length > 0) {
-                if (currentTopicIndex < navigationList.length - 1) {
-                    const nextIndex = currentTopicIndex + 1;
-                    setCurrentTopicIndex(nextIndex);
-                    setSelectedTopicId(navigationList[nextIndex].ID_DETAI);
+             // Điều hướng
+             if (showTopicDetailDialog) {
+                if (nextTopicId) {
+                    setSelectedTopicId(nextTopicId);
                 } else {
                     setShowTopicDetailDialog(false);
                 }
@@ -349,10 +349,7 @@ const TopicManagementTabs = () => {
         onApprove: handleApprove,
         onReject: handleReject,
         onRequestEdit: handleRequestEdit
-    }), [handleApprove, handleReject, handleRequestEdit, handleViewTopicDetails]);
-
-    const hasNext = currentTopicIndex < navigationList.length - 1;
-    const hasPrevious = currentTopicIndex > 0;
+    }), [handleApprove, handleReject, handleRequestEdit]); // bỏ handleViewTopicDetails khỏi deps để tránh rerender ko cần thiết nếu logic đơn giản
 
     const renderDataTable = () => {
         return (
@@ -380,7 +377,7 @@ const TopicManagementTabs = () => {
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
 
-                    // [SỬA] Truyền props lọc Bộ môn
+                    // Filter Bộ môn
                     khoaBomonFilterColumnId="department_id"
                     khoaBomonFilterOptions={departmentOptions}
                     khoaBomonFilterTitle="Bộ môn"
@@ -488,12 +485,12 @@ const TopicManagementTabs = () => {
 
                     <div className="flex-1 min-h-0 overflow-hidden">
                         <AnimatePresence mode="wait">
-                            <motion.div
+                            <motion.div 
                                 key={activeTab + selectedPlanId} 
-                                variants={variants.table}
-                                initial="hidden"
-                                animate="visible"
-                                exit="exit"
+                                variants={variants.table} 
+                                initial="hidden" 
+                                animate="visible" 
+                                exit="exit" 
                                 className="h-full flex flex-col"
                             >
                                 <TabsContent value={activeTab} className="mt-0 h-full outline-none ring-0 flex flex-col">
@@ -513,6 +510,7 @@ const TopicManagementTabs = () => {
                 onApprove={handleApprove}
                 onReject={handleReject}
                 onRequestEdit={handleRequestEdit}
+                // Truyền props điều hướng (đã fix)
                 onNext={handleNext}
                 onPrevious={handlePrevious}
                 hasNext={hasNext}

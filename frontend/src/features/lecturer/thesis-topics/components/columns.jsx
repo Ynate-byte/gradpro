@@ -1,7 +1,7 @@
 import React from 'react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ArrowUp, ArrowDown, Send } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, Send, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTableRowActions } from "./row-actions";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -96,11 +96,29 @@ export const getColumns = ({
     {
         accessorKey: "TRANGTHAI",
         header: "Trạng thái",
-        cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
+        cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+                {getStatusBadge(row.original.TRANGTHAI)}
+                {/* [MỚI] Icon Tái sử dụng hiển thị cạnh trạng thái */}
+                {row.original.LA_TAISUDUNG == 1 && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="shrink-0 cursor-help">
+                                    <RotateCcw className="w-3.5 h-3.5 text-indigo-500" />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                <p>Đề tài tái sử dụng</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+            </div>
+        ),
         filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
     
-    // [SỬA] Cột Bộ môn (Thay thế Chuyên ngành)
     {
         accessorKey: "ten_bo_mon",
         header: "Bộ môn",
@@ -110,7 +128,6 @@ export const getColumns = ({
             </div>
         ),
     },
-    // [SỬA] Cột ẩn để lọc theo ID Bộ môn
     {
         id: "department_id",
         accessorFn: (row) => String(row.original?.ID_KHOA_BOMON || ""),

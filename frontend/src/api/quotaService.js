@@ -35,6 +35,10 @@ const quotaService = {
     removeAssignment: (assignmentId) => {
         return axios.delete(`/admin/quotas/${assignmentId}`);
     },
+
+    updateReusePercentage: (data) => {
+        return axios.post('/admin/quotas/update-reuse-percentage', data);
+    },
 };
 
 export default quotaService;

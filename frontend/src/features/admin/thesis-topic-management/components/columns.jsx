@@ -1,8 +1,10 @@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { DataTableRowActions } from "./row-actions"; 
+import { DataTableRowActions } from "./row-actions";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from "lucide-react"; // Đảm bảo đã import RotateCcw
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 const getStatusBadge = (status) => {
     const statusConfig = {
@@ -64,6 +66,7 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
             <button
                 onClick={() => onViewDetails(row.original.ID_DETAI)}
                 className="max-w-[300px] xl:max-w-sm truncate font-medium text-left hover:underline text-primary dark:text-blue-400"
+                title={row.original.TEN_DETAI}
             >
                 {row.original.TEN_DETAI}
             </button>
@@ -78,17 +81,38 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
             </div>
         )
     },
+    // 👇 CẬP NHẬT CỘT TRẠNG THÁI TẠI ĐÂY
     {
         accessorKey: "TRANGTHAI",
         header: "Trạng thái",
-        cell: ({ row }) => getStatusBadge(row.original.TRANGTHAI),
+        cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+                {/* Badge trạng thái */}
+                {getStatusBadge(row.original.TRANGTHAI)}
+
+                {/* Icon Tái sử dụng (Chỉ hiện nếu LA_TAISUDUNG == 1) */}
+                {row.original.LA_TAISUDUNG == 1 && (
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div className="shrink-0 cursor-help">
+                                    <RotateCcw className="w-3.5 h-3.5 text-indigo-500" />
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                <p>Đề tài tái sử dụng</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                )}
+            </div>
+        ),
         filterFn: (row, id, value) => {
             return value.includes(row.getValue(id))
         },
     },
-    // [SỬA] Hiển thị cột Bộ môn
     {
-        accessorKey: "ten_bo_mon", // Backend trả về 'ten_bo_mon'
+        accessorKey: "ten_bo_mon", 
         header: "Bộ môn",
         cell: ({ row }) => (
             <div className="text-xs text-muted-foreground max-w-[120px] truncate" title={row.original.ten_bo_mon}>
@@ -96,7 +120,6 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
             </div>
         )
     },
-    // [SỬA] Cột ẩn để lọc theo ID Bộ môn
     { 
         id: "department_id",
         accessorFn: row => String(row.original?.ID_KHOA_BOMON || ''), 

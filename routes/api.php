@@ -291,6 +291,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/auto-assign-quotas', [QuotaController::class, 'autoAssignQuotas']);
             Route::put('/{assignment}/status', [QuotaController::class, 'updateAssignmentStatus']);
             Route::delete('/{assignment}', [QuotaController::class, 'removeAssignment']);
+            Route::post('/update-reuse-percentage', [QuotaController::class, 'updateReusePercentage']);
         });
         
         // Quản lý Nộp bài

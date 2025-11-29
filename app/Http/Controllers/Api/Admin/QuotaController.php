@@ -211,6 +211,28 @@ class QuotaController extends Controller
         }
     }
 
+    //Cập nhật tỷ lệ tái sử dụng tối đa cho kế hoạch
+    public function updateReusePercentage(Request $request)
+    {
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'ID_KEHOACH' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
+            'TYLE_TAISUDUNG_TOIDA' => 'required|integer|min:0|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $plan = KehoachKhoaluan::findOrFail($request->ID_KEHOACH);
+        $plan->update(['TYLE_TAISUDUNG_TOIDA' => $request->TYLE_TAISUDUNG_TOIDA]);
+
+        return response()->json(['message' => 'Đã cập nhật tỷ lệ tái sử dụng thành công.']);
+    }
+
     public function autoAssignQuotas(Request $request)
     {
         $validator = Validator::make($request->all(), [

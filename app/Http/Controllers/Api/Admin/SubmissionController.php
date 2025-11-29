@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 use App\Services\ActivityLogger;
 use App\Services\NotificationService;
+use App\Models\FileNopSanpham;
 
 class SubmissionController extends Controller
 {
@@ -295,6 +296,8 @@ class SubmissionController extends Controller
 
         $validated = $request->validate([
             'ly_do' => 'required|string|min:10|max:1000',
+            'rejected_file_ids' => 'nullable|array', // Thêm validate mảng file IDs
+            'rejected_file_ids.*' => 'integer|exists:FILE_NOP_SANPHAM,ID_FILE',
         ], [
             'ly_do.required' => 'Vui lòng nhập lý do yêu cầu nộp lại.',
             'ly_do.min' => 'Lý do phải có ít nhất 10 ký tự.',
@@ -304,12 +307,26 @@ class SubmissionController extends Controller
             return response()->json(['message' => 'Lần nộp này đã được xử lý trước đó.'], 400);
         }
 
-        $submission->update([
-            'TRANGTHAI' => 'Yêu cầu nộp lại',
-            'ID_NGUOI_XACNHAN' => Auth::id(),
-            'NGAY_XACNHAN' => now(),
-            'PHANHOI_ADMIN' => $validated['ly_do'],
-        ]);
+        DB::transaction(function () use ($submission, $validated, $request) {
+            // 1. Cập nhật trạng thái phiếu nộp
+            $submission->update([
+                'TRANGTHAI' => 'Yêu cầu nộp lại',
+                'ID_NGUOI_XACNHAN' => Auth::id(),
+                'NGAY_XACNHAN' => now(),
+                'PHANHOI_ADMIN' => $validated['ly_do'],
+            ]);
+
+            // 2. Cập nhật trạng thái các file
+            // Reset tất cả về false trước (để tránh lỗi nếu update lại)
+            FileNopSanpham::where('ID_NOP_SANPHAM', $submission->ID_NOP_SANPHAM)
+                ->update(['IS_REJECTED' => false]);
+
+            // Đánh dấu các file bị chọn là true
+            if (!empty($request->rejected_file_ids)) {
+                FileNopSanpham::whereIn('ID_FILE', $request->rejected_file_ids)
+                    ->update(['IS_REJECTED' => true]);
+            }
+        });
 
         NotificationService::send(
             $submission->ID_NGUOI_NOP,

@@ -37,6 +37,7 @@ class KehoachKhoaluan extends Model
         'TYTRONG_DIEM_PHANBIEN',
         'ID_NGUOIPHEDUYET',
         'SETTINGS',
+        'TYLE_TAISUDUNG_TOIDA',
     ];
 
     protected $casts = [

@@ -12,6 +12,7 @@ use App\Models\ThanhvienNhom;
 use App\Models\PhancongNguoiGopY;
 use App\Models\Nguoidung;
 use App\Models\QuotaGiangvien;
+use App\Models\KehoachKhoaluan;
 use App\Imports\TopicsImport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -181,51 +182,64 @@ class DetaiController extends Controller
             'existing_topic_id' => 'required|integer|exists:DETAI,ID_DETAI',
             'new_plan_id' => 'required|integer|exists:KEHOACH_KHOALUAN,ID_KEHOACH',
         ]);
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
-        }
+        if ($validator->fails()) return response()->json(['errors' => $validator->errors()], 422);
 
         $currentUser = Auth::user();
         $lecturer = $currentUser->giangvien;
-
-        if (!$lecturer) {
-            return response()->json(['message' => 'Không được phép'], 403);
-        }
+        if (!$lecturer) return response()->json(['message' => 'Không được phép'], 403);
 
         $existingTopic = Detai::findOrFail($request->existing_topic_id);
-
-        // Chỉ được reuse nếu trạng thái đề tài là Đã duyệt và thuộc giảng viên hiện tại
+        
+        // Check quyền sở hữu
         if ($existingTopic->TRANGTHAI !== 'Đã duyệt' || $existingTopic->ID_NGUOI_DEXUAT != $lecturer->ID_GIANGVIEN) {
             return response()->json(['message' => 'Chỉ có thể tái sử dụng đề tài đã duyệt của chính bạn'], 403);
         }
 
-        // Tạo đề tài mới copy dữ liệu từ đề tài cũ
+        // 1. Lấy thông tin Kế hoạch & Quota của Giảng viên
+        $plan = KehoachKhoaluan::findOrFail($request->new_plan_id);
+        $quota = QuotaGiangvien::where('ID_KEHOACH', $plan->ID_KEHOACH)
+            ->where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
+            ->first();
+
+        if (!$quota || $quota->SO_DETAI_QUOTA <= 0) {
+            return response()->json(['message' => 'Bạn chưa được phân công chỉ tiêu (Quota) cho kế hoạch này.'], 400);
+        }
+
+        // 2. Tính toán giới hạn tái sử dụng
+        $reusePercentage = $plan->TYLE_TAISUDUNG_TOIDA ?? 0;
+        $maxReuseAllowed = floor(($quota->SO_DETAI_QUOTA * $reusePercentage) / 100);
+
+        // 3. Đếm số đề tài ĐÃ tái sử dụng trong kế hoạch này
+        $currentReusedCount = Detai::where('ID_KEHOACH', $plan->ID_KEHOACH)
+            ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
+            ->where('LA_TAISUDUNG', true)
+            ->count();
+
+        if ($currentReusedCount >= $maxReuseAllowed) {
+            return response()->json([
+                'message' => "Bạn đã đạt giới hạn tái sử dụng ({$currentReusedCount}/{$maxReuseAllowed} đề tài). Vui lòng tạo đề tài mới."
+            ], 400);
+        }
+
+        // 4. Tạo đề tài mới (Duyệt ngay lập tức)
         $newTopic = Detai::create([
             'ID_KEHOACH' => $request->new_plan_id,
             'MA_DETAI' => 'DT' . date('Y') . strtoupper(substr(md5(uniqid()), 0, 6)),
             'TEN_DETAI' => $existingTopic->TEN_DETAI,
             'MOTA' => $existingTopic->MOTA,
-            
-            // [SỬA] Copy Bộ môn
             'ID_KHOA_BOMON' => $existingTopic->ID_KHOA_BOMON,
-            
             'YEUCAU' => $existingTopic->YEUCAU,
             'MUCTIEU' => $existingTopic->MUCTIEU,
             'KETQUA_MONGDOI' => $existingTopic->KETQUA_MONGDOI,
             'ID_NGUOI_DEXUAT' => $lecturer->ID_GIANGVIEN,
             'SO_NHOM_TOIDA' => $existingTopic->SO_NHOM_TOIDA,
             'TRANGTHAI' => 'Đã duyệt',
+            'LA_TAISUDUNG' => true, 
             'NGAY_DUYET' => now(),
             'ID_NGUOI_DUYET' => $currentUser->ID_NGUOIDUNG,
         ]);
 
-        ActivityLogger::log(
-            'REUSE_TOPIC',
-            "Tái sử dụng đề tài: {$existingTopic->TEN_DETAI} sang kế hoạch ID: {$request->new_plan_id}",
-            ['original_topic_id' => $existingTopic->ID_DETAI, 'new_topic_id' => $newTopic->ID_DETAI],
-            null,
-            'FileText'
-        );
+        ActivityLogger::log('REUSE_TOPIC', "Tái sử dụng đề tài: {$existingTopic->TEN_DETAI}", ['new_id' => $newTopic->ID_DETAI], null, 'Copy');
 
         return response()->json($newTopic, 201);
     }
@@ -366,20 +380,17 @@ class DetaiController extends Controller
         $currentUser = Auth::user();
         $lecturer = $currentUser->giangvien;
 
-        // 1. Kiểm tra quyền (Giữ nguyên)
+        // Người đề xuất được sửa, Admin/Trưởng khoa được sửa
         $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
-        $isAdmin = $this->isAdmin();
+        $isAdmin = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
 
         if (!$isProposer && !$isAdmin) {
             return response()->json(['message' => 'Không được phép'], 403);
         }
 
-        if ($topic->TRANGTHAI === 'Đã duyệt' && !$isAdmin) {
+        // Nếu đã duyệt, chỉ Admin mới được sửa trực tiếp mà không đổi trạng thái (trừ trường hợp Tái sử dụng bên dưới)
+        if ($topic->TRANGTHAI === 'Đã duyệt' && !$isAdmin && !$topic->LA_TAISUDUNG) {
             return response()->json(['message' => 'Không thể cập nhật đề tài đã duyệt'], 403);
-        }
-
-        if ($topic->TRANGTHAI === 'Đang chỉnh sửa' && !$isAdmin && !$isProposer) {
-            return response()->json(['message' => 'Không thể cập nhật đề tài đang được chỉnh sửa bởi người dùng khác'], 403);
         }
 
         // 2. Validate dữ liệu
@@ -397,50 +408,53 @@ class DetaiController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
-        // 3. Lấy dữ liệu gốc
+        // 3. Lấy dữ liệu gốc để log
         $originalData = $topic->getOriginal();
 
-        // 4. Đổ dữ liệu mới vào model (nhưng chưa lưu)
+        // 4. Fill dữ liệu mới
         $topic->fill($request->only([
             'TEN_DETAI', 'MOTA', 'ID_KHOA_BOMON', 'YEUCAU', 'MUCTIEU', 'KETQUA_MONGDOI', 'SO_NHOM_TOIDA'
         ]));
 
-        // 5. [FIX LỖI QUAN TRỌNG] Sử dụng getDirty() thay vì getChanges()
+        // 5. Xử lý Logic Thay đổi
         if ($topic->isDirty()) {
-            // getDirty() trả về mảng các trường bị thay đổi [key => newValue]
-            $dirtyFields = $topic->getDirty(); 
+            $dirtyFields = $topic->getDirty();
             $details = [];
 
             foreach ($dirtyFields as $key => $newValue) {
-                // Bỏ qua các trường timestamp tự động
                 if (in_array($key, ['updated_at', 'NGAYCAPNHAT'])) continue;
-
                 $details[] = [
                     'field' => $key,
-                    'old' => $originalData[$key] ?? '', // Giá trị cũ
-                    'new' => $newValue                  // Giá trị mới
+                    'old' => $originalData[$key] ?? '',
+                    'new' => $newValue
                 ];
             }
 
-            // Bây giờ mới Lưu
+            // Nếu đề tài là Tái sử dụng VÀ Đang ở trạng thái 'Đã duyệt' VÀ Người sửa KHÔNG PHẢI Admin
+            // => Bắt buộc chuyển về 'Chờ duyệt' để duyệt lại
+            if ($topic->LA_TAISUDUNG && $topic->TRANGTHAI === 'Đã duyệt' && !$isAdmin) {
+                $topic->TRANGTHAI = 'Chờ duyệt';
+            }
+
             $topic->save();
 
-            // Ghi log nếu có thay đổi thực sự
+            // Ghi log
             if (!empty($details)) {
                 ActivityLogger::log(
                     'UPDATE_TOPIC',
                     "Cập nhật đề tài: {$topic->TEN_DETAI}",
                     [
-                        'changes' => $details, 
-                        'topic_id' => (int)$topic->ID_DETAI // Cast int cho chắc chắn
+                        'changes' => $details,
+                        'topic_id' => (int)$topic->ID_DETAI,
+                        'status_changed_to' => $topic->TRANGTHAI
                     ],
-                    null, // Không cần ID nhóm
+                    null,
                     'Edit'
                 );
             }
         }
 
-        // 6. Xử lý chuyển trạng thái (Giữ nguyên)
+        // 6. Xử lý chuyển trạng thái thông thường (cho đề tài không phải tái sử dụng hoặc đang nháp)
         if ($isProposer && in_array($topic->TRANGTHAI, ['Yêu cầu chỉnh sửa', 'Chờ duyệt', 'Đang chỉnh sửa'])) {
             $newState = ($topic->TRANGTHAI === 'Yêu cầu chỉnh sửa') ? 'Nháp' : 
                        (($topic->TRANGTHAI === 'Chờ duyệt') ? 'Đang chỉnh sửa' : 'Chờ duyệt');

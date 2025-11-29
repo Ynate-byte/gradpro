@@ -112,6 +112,7 @@ class DetaiAdminController extends Controller
                 'ID_NGUOI_DUYET' => $currentUser->ID_NGUOIDUNG,
                 'NGAY_DUYET' => now(),
                 'LYDO_TUCHOI' => null,
+                'LA_TAISUDUNG' => false,
             ]);
             $message = 'Đề tài đã được duyệt thành công';
         } elseif ($request->action === 'reject') {

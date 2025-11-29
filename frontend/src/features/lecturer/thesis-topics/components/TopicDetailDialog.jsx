@@ -14,11 +14,11 @@ import {
     Send, BookOpen, User, Layers, Users,
     Target, Check, MessageSquare, Loader2,
     CheckCircle, Edit, XCircle, ChevronLeft, ChevronRight,
-    Clock, Info, AlertCircle, Save, X, Edit3, ArrowRight
+    Clock, Info, AlertCircle, Save, X, Edit3, ArrowRight,
+    RotateCcw, AlertTriangle
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Skeleton } from '@/components/ui/skeleton';
 import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -40,8 +40,6 @@ import HistoryTimeline from '@/components/shared/HistoryTimeline';
 // ==========================================
 
 const MetadataCard = ({ icon: Icon, label, value, oldValue }) => {
-    // [FIX LOGIC SO SÁNH]: Kiểm tra kỹ oldValue có tồn tại trong API trả về không (undefined nghĩa là không có log thay đổi)
-    // Nếu oldValue khác undefined và khác value hiện tại -> Có thay đổi
     const hasDiff = (oldValue !== undefined) && (String(oldValue || '') !== String(value || ''));
 
     return (
@@ -127,10 +125,16 @@ const getStatusBadge = (status) => {
 };
 
 const getInitials = (name) => {
-    if (!name) return 'U';
-    const parts = name.split(' ').filter(Boolean);
-    if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-    return name.substring(0, 2).toUpperCase();
+    if (!name || typeof name !== 'string') return '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) {
+        return parts[0].slice(0, 2).toUpperCase();
+    }
+    // Lấy chữ cái đầu của tên và họ (hoặc 2 chữ cái đầu nếu ngắn)
+    const first = parts[0][0] || '';
+    const last = parts[parts.length - 1][0] || '';
+    return (first + last).toUpperCase();
 };
 
 // ==========================================
@@ -182,8 +186,12 @@ const TopicDetailDialog = ({
     const isOwner = topic && String(topic.ID_NGUOI_DEXUAT) === String(user?.giangvien?.ID_GIANGVIEN);
     const isAdmin = ['Admin', 'Giáo vụ', 'Trưởng khoa'].includes(user?.vaitro?.TEN_VAITRO);
     
-    const canEdit = topic && ((isOwner && ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'].includes(topic.TRANGTHAI)) || isAdmin);
+    const canEdit = topic && ((isOwner && ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa', 'Đã duyệt'].includes(topic.TRANGTHAI)) || isAdmin);
     const canComment = topic && !['Đã duyệt', 'Từ chối', 'Đã khóa', 'Đã đầy'].includes(topic.TRANGTHAI);
+
+    // --- [MỚI] Check Reuse ---
+    const isReused = topic?.LA_TAISUDUNG;
+    const isApproved = topic?.TRANGTHAI === 'Đã duyệt';
 
     // --- EFFECTS ---
 
@@ -191,10 +199,7 @@ const TopicDetailDialog = ({
         if (open && topicId) {
             loadTopicDetails(true);
             loadDepartments();
-            
-            // [FIX]: Luôn load so sánh để hiển thị diff cho cả Admin và GV
             loadComparison(); 
-            
             if (activeTab === 'history') loadHistory();
         } else if (!open) {
             setTopic(null);
@@ -205,6 +210,25 @@ const TopicDetailDialog = ({
             setActiveTab('info');
         }
     }, [open, topicId]);
+
+    // --- [ADD] KEYBOARD NAVIGATION ---
+    useEffect(() => {
+        const handleKeyDown = (e) => {
+            if (!open) return;
+            // Nếu đang chỉnh sửa, không điều hướng bằng phím để tránh xung đột khi gõ text
+            if (isEditing) return;
+
+            if (e.key === 'ArrowLeft' && hasPrevious) {
+                onPrevious();
+            } else if (e.key === 'ArrowRight' && hasNext) {
+                onNext();
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open, isEditing, hasNext, hasPrevious, onNext, onPrevious]); // <-- Quan trọng: Thêm onNext, onPrevious
+    // ---------------------------------
 
     useEffect(() => {
         if (open && topicId && activeTab === 'history') {
@@ -288,7 +312,15 @@ const TopicDetailDialog = ({
         try {
             const res = await thesisTopicService.updateTopic(topicId, editFormData);
             setTopic(res.data);
-            toast.success("Cập nhật thành công.");
+            
+            // Nếu là đề tài tái sử dụng đã duyệt, backend sẽ tự đổi status về 'Chờ duyệt'
+            // Cần thông báo cho user biết
+            if (isReused && isApproved && !isAdmin && res.data.TRANGTHAI === 'Chờ duyệt') {
+                 toast.warning("Đề tài đã chuyển sang trạng thái 'Chờ duyệt' do có sự thay đổi.");
+            } else {
+                 toast.success("Cập nhật thành công.");
+            }
+
             setIsEditing(false);
             if (onDataChange) onDataChange();
             
@@ -299,6 +331,16 @@ const TopicDetailDialog = ({
         } finally {
             setIsSaving(false);
         }
+    };
+
+    // [MỚI] Xử lý khi bấm nút Chỉnh sửa
+    const handleEditClick = () => {
+        if (isReused && isApproved && !isAdmin) {
+            if (!window.confirm("CẢNH BÁO QUAN TRỌNG:\n\nĐây là đề tài Tái sử dụng đã được duyệt tự động.\nNếu bạn chỉnh sửa nội dung, trạng thái sẽ chuyển về 'Chờ duyệt' và cần cấp trên phê duyệt lại.\n\nBạn có chắc chắn muốn tiếp tục?")) {
+                return;
+            }
+        }
+        setIsEditing(true);
     };
 
     const handleCancelEdit = () => {
@@ -359,13 +401,11 @@ const TopicDetailDialog = ({
 
     // --- RENDER HELPER: FIELD WITH DIFF ---
     const renderField = (key, label, icon, isArea = false) => {
-        const currentValue = topic[key] || "";
+        const currentValue = topic?.[key] || "";
 
-        // [FIX LOGIC]: Kiểm tra chính xác sự tồn tại của key trong comparisonData
         const hasHistoryData = comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, key);
         const rawOldValue = hasHistoryData ? comparisonData[key] : undefined;
         
-        // Chỉ hiện diff nếu có history data và giá trị khác nhau
         const hasDiff = hasHistoryData && 
                         (String(rawOldValue || '') !== String(currentValue || '')) && 
                         !isEditing;
@@ -424,17 +464,6 @@ const TopicDetailDialog = ({
         );
     };
 
-    // --- RENDER MAIN ---
-    if (loading || !topic) {
-        return (
-            <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-5xl h-[80vh] flex items-center justify-center">
-                    <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                </DialogContent>
-            </Dialog>
-        );
-    }
-
     return (
         <Dialog open={open} onOpenChange={(v) => {
             if (!v && isEditing) { setIsEditing(false); }
@@ -449,7 +478,10 @@ const TopicDetailDialog = ({
                             <BookOpen className="h-6 w-6" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            {isEditing ? (
+                            {/* Check nếu loading và chưa có topic thì hiện skeleton hoặc chờ */}
+                            {loading && !topic ? (
+                                <div className="h-6 w-48 bg-muted animate-pulse rounded" />
+                            ) : isEditing ? (
                                 <Input 
                                     value={editFormData.TEN_DETAI}
                                     onChange={e => setEditFormData({...editFormData, TEN_DETAI: e.target.value})}
@@ -458,21 +490,35 @@ const TopicDetailDialog = ({
                                 />
                             ) : (
                                 <DialogTitle className="text-xl font-bold text-foreground leading-tight mb-1.5 line-clamp-1">
-                                    {topic.TEN_DETAI}
+                                    {topic?.TEN_DETAI || "Đang tải..."}
                                 </DialogTitle>
                             )}
                             
-                            <div className="flex items-center gap-3 mt-1.5">
-                                <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-5 border-border/50">{topic.MA_DETAI}</Badge>
-                                {getStatusBadge(topic.TRANGTHAI)}
-                            </div>
+                            {/* Chỉ hiển thị badge khi không loading hoặc đã có data topic */}
+                            {(!loading || topic) && topic && (
+                                <div className="flex items-center gap-3 mt-1.5">
+                                    <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-5 border-border/50">{topic.MA_DETAI}</Badge>
+                                    {getStatusBadge(topic.TRANGTHAI)}
+
+                                    {isReused && (
+                                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 gap-1 pl-1 pr-2">
+                                            <RotateCcw className="w-3 h-3" /> Tái sử dụng
+                                        </Badge>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
                     {/* Actions Top Right */}
                     <div className="flex items-center gap-2 ml-4">
-                        {!isEditing && canEdit && (
-                            <Button variant="outline" size="sm" onClick={() => setIsEditing(true)} className="h-9 border-dashed border-primary/50 text-primary hover:bg-primary/5">
+                        {!isEditing && canEdit && topic && (
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={handleEditClick} 
+                                className="h-9 border-dashed border-primary/50 text-primary hover:bg-primary/5"
+                            >
                                 <Edit className="w-4 h-4 mr-2" /> Chỉnh sửa
                             </Button>
                         )}
@@ -518,17 +564,36 @@ const TopicDetailDialog = ({
                     </div>
                 </div>
 
-                {/* 3. BODY CONTENT */}
+                {/* 3. BODY CONTENT - Dùng relative để chứa Loading Overlay */}
                 <div className="flex-1 overflow-hidden bg-secondary/10 relative">
                     
-                    {/* === TAB 1: THÔNG TIN & THẢO LUẬN === */}
-                    {activeTab === 'info' && (
+                    {/* LOADING OVERLAY - Hiển thị đè lên nội dung thay vì thay thế toàn bộ DialogContent */}
+                    {loading && (
+                        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
+                            <Loader2 className="w-10 h-10 animate-spin text-primary mb-2" />
+                            <p className="text-sm text-muted-foreground animate-pulse">Đang tải dữ liệu...</p>
+                        </div>
+                    )}
+
+                    {/* Chỉ render nội dung khi có data 'topic' (hoặc giữ lại UI cũ nếu đang loading đè lên) */}
+                    {topic && activeTab === 'info' && (
                         <div className="flex h-full animate-in fade-in duration-300">
                             
                             {/* CỘT TRÁI: NỘI DUNG CHÍNH */}
                             <ScrollArea className="flex-1 h-full">
                                 <div className="p-6 max-w-5xl mx-auto space-y-8">
                                     
+                                    {/* [MỚI] Alert: Cảnh báo khi sửa đề tài tái sử dụng */}
+                                    {isEditing && isReused && isApproved && !isAdmin && (
+                                        <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            <AlertTitle className="font-bold">Lưu ý khi chỉnh sửa</AlertTitle>
+                                            <AlertDescription>
+                                                Bạn đang sửa một đề tài tái sử dụng đã được duyệt. Sau khi lưu, trạng thái sẽ chuyển thành <strong>Chờ duyệt</strong> để cấp trên xem xét lại.
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
                                     {/* Alert: Lý do từ chối / yêu cầu sửa */}
                                     {!isEditing && (topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && (
                                         <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 shadow-sm">
@@ -709,7 +774,7 @@ const TopicDetailDialog = ({
                     )}
 
                     {/* === TAB 2: LỊCH SỬ THAY ĐỔI === */}
-                    {activeTab === 'history' && (
+                    {topic && activeTab === 'history' && (
                         <div className="h-full p-6 overflow-y-auto custom-scrollbar bg-background animate-in fade-in duration-300">
                             <div className="max-w-3xl mx-auto">
                                 <div className="mb-6 flex items-center gap-2 text-muted-foreground">
@@ -726,17 +791,31 @@ const TopicDetailDialog = ({
                 <div className="px-6 py-4 border-t bg-background shrink-0 flex items-center justify-between z-10">
                     {/* Navigation */}
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" size="sm" onClick={onPrevious} disabled={!onPrevious || !hasPrevious} className="w-9 p-0 rounded-full border-dashed">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={onPrevious} 
+                            disabled={!hasPrevious} 
+                            className="w-9 p-0 rounded-full border-dashed"
+                        >
                             <ChevronLeft className="w-4 h-4" />
                         </Button>
                         <span className="text-xs font-mono text-muted-foreground px-2">Điều hướng</span>
-                        <Button variant="outline" size="sm" onClick={onNext} disabled={!onNext || !hasNext} className="w-9 p-0 rounded-full border-dashed">
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={onNext} 
+                            disabled={!hasNext} 
+                            className="w-9 p-0 rounded-full border-dashed"
+                        >
                             <ChevronRight className="w-4 h-4" />
                         </Button>
                     </div>
 
                     {/* Main Actions */}
-                    {!isEditing && showAdminActions && (
+                    {!isEditing && showAdminActions && topic && (
                         <div className="flex gap-3">
                              <Button variant="ghost" onClick={() => onReject(topic)} className="text-destructive hover:bg-destructive/10 hover:text-destructive h-9">
                                 <XCircle className="w-4 h-4 mr-2" /> Từ chối

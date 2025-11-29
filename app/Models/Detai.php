@@ -33,6 +33,7 @@ class Detai extends Model
         'LYDO_TUCHOI',
         'NGAYTAO',
         'NGAYCAPNHAT',
+        'LA_TAISUDUNG',
     ];
 
     protected $casts = [
@@ -41,6 +42,7 @@ class Detai extends Model
         'NGAYCAPNHAT' => 'datetime',
         'SO_NHOM_TOIDA' => 'integer',
         'SO_NHOM_HIENTAI' => 'integer',
+        'LA_TAISUDUNG' => 'boolean',
     ];
 
     // Relationships
