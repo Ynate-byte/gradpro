@@ -101,7 +101,7 @@ const ListHoiDong = () => {
 
   return (
     <motion.div 
-        className="p-4 md:p-8 space-y-6 max-w-[1600px] mx-auto"
+        className="h-full overflow-y-auto p-4 md:p-8 bg-muted/10"
         variants={containerVariants}
         initial="hidden"
         animate="visible"

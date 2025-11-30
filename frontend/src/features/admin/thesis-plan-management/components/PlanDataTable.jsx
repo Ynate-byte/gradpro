@@ -24,8 +24,9 @@ export function PlanDataTable({
     setSorting,
     searchTerm,
     onSearchChange,
+    flexLayout,
+    className
 }) {
-    // Ghi nhớ cấu hình cột để tránh render lại không cần thiết
     const columns = useMemo(() => getColumns(columnsConfig), [columnsConfig]);
 
     return (
@@ -54,6 +55,10 @@ export function PlanDataTable({
             searchPlaceholder="Tìm theo tên kế hoạch..."
             searchTerm={searchTerm}
             onSearchChange={onSearchChange}
+            
+            flexLayout={flexLayout}
+            className={className}
+            containerClassName="h-full border-none shadow-none"
         />
     );
 }

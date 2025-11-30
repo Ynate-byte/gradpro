@@ -22,7 +22,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { 
     History, Search, Activity, Calendar, PlusCircle, Edit3, LogIn, 
     RefreshCw, FileText, User, Shield, Monitor, Check, X, Filter, 
-    ArrowLeft, ArrowRight, Mail, UserCheck, UserPlus
+    ArrowLeft, ArrowRight, Mail, UserCheck
 } from 'lucide-react';
 
 // Map tên trường Database sang Tiếng Việt
@@ -121,11 +121,11 @@ const SimpleFacetedFilter = ({ title, options, value, onChange }) => {
 
 const StatCard = ({ title, value, subtitle, icon: Icon, colorClass }) => (
     <Card className="flex-1 min-w-[200px] border shadow-sm hover:shadow-md transition-all">
-        <CardContent className="p-6">
+        <CardContent className="p-4 md:p-6">
             <div className="flex justify-between items-start">
                 <div>
                     <p className="text-sm font-medium text-muted-foreground mb-2">{title}</p>
-                    <h3 className="text-3xl font-bold tracking-tight">{value}</h3>
+                    <h3 className="text-2xl md:text-3xl font-bold tracking-tight">{value}</h3>
                     <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
                 </div>
                 <div className={cn("p-2.5 rounded-xl bg-opacity-10", colorClass)}>
@@ -208,11 +208,9 @@ function getResourceIcon(type) {
     return Monitor;
 }
 
-// Helper: Render chi tiết thông minh (Full view)
 const DetailRenderer = ({ type, details }) => {
     if (!details || Object.keys(details).length === 0) return <span className="text-muted-foreground text-xs italic">Không có chi tiết</span>;
 
-    // 1. Hiển thị Diff (Sự thay đổi Old -> New)
     if (details.changes && Array.isArray(details.changes)) {
         return (
             <div className="mt-2 flex flex-col gap-1.5 bg-muted/40 p-2.5 rounded-md border text-xs">
@@ -237,7 +235,6 @@ const DetailRenderer = ({ type, details }) => {
         );
     }
 
-    // 2. Các loại log cụ thể khác
     if (type === 'LOGIN') {
         return <p className="text-xs text-muted-foreground">IP: {details.ip} • {details.user_agent?.split(')')[0]})</p>;
     }
@@ -280,7 +277,6 @@ const DetailRenderer = ({ type, details }) => {
          );
     }
     
-    // Grading Logs
     if (type && type.includes('GRADE')) {
          return (
              <div className="flex flex-col gap-1 mt-1">
@@ -303,11 +299,9 @@ const DetailRenderer = ({ type, details }) => {
          );
     }
 
-    // Fallback: Hiển thị các thông tin text đơn giản
     if (details.topic_name) return <p className="text-xs text-muted-foreground mt-1">Đề tài: {details.topic_name}</p>;
     if (details.message) return <p className="text-xs text-muted-foreground italic mt-1">"{details.message}"</p>;
     
-    // Fallback cuối cùng: In các cặp key-value còn lại
     return (
         <div className="text-xs text-muted-foreground mt-1">
             {Object.entries(details).map(([key, value]) => {
@@ -339,7 +333,7 @@ export default function PersonalHistoryPage() {
             { value: 'UPDATE_PROFILE', label: 'Cập nhật hồ sơ' },
             { value: 'TASK_CREATE', label: 'Tạo công việc (Kanban)' },
             { value: 'TASK_MOVE', label: 'Cập nhật công việc' },
-            { value: 'TASK_UPDATE', label: 'Chỉnh sửa công việc' }, // Thêm cái này
+            { value: 'TASK_UPDATE', label: 'Chỉnh sửa công việc' }, 
             { value: 'CREATE_MEETING', label: 'Tạo lịch họp' },
         ];
 
@@ -373,14 +367,12 @@ export default function PersonalHistoryPage() {
         return commonOptions;
     }, [user]);
 
-    // Fetch Stats
     const { data: stats } = useQuery({
         queryKey: ['personal-history-stats'],
         queryFn: getPersonalHistoryStats,
         refetchInterval: isAutoRefresh ? 10000 : false,
     });
 
-    // Fetch List
     const { data, isLoading, refetch, isRefetching } = useQuery({
         queryKey: ['personal-history', page, filterType, debouncedSearch],
         queryFn: () => getPersonalHistory({ 
@@ -411,10 +403,12 @@ export default function PersonalHistoryPage() {
     };
 
     return (
-        <div className="p-6 space-y-8 bg-background min-h-screen">
+        // [FIX] Layout: h-full, flex-col, overflow-hidden
+        <div className="h-full flex flex-col p-4 md:p-6 gap-6 bg-background overflow-hidden animate-in fade-in duration-500">
             
-            {/* --- 1. HEADER & ACTIONS --- */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"> 
+            {/* 1. HEADER & ACTIONS - Shrink 0 */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0"> 
+                <h1 className="text-2xl font-bold tracking-tight">Lịch sử hoạt động</h1>
                 <div className="flex gap-2">
                     <Button 
                         variant={isAutoRefresh ? "secondary" : "outline"} 
@@ -422,7 +416,7 @@ export default function PersonalHistoryPage() {
                         onClick={toggleAutoRefresh}
                     >
                         <RefreshCw className={cn("h-4 w-4", isAutoRefresh && "animate-spin")} />
-                        {isAutoRefresh ? "Auto Refresh: ON" : "Auto Refresh: OFF"}
+                        {isAutoRefresh ? "Auto: ON" : "Auto: OFF"}
                     </Button>
                     <Button variant="outline" className="gap-2" onClick={() => refetch()} disabled={isLoading || isRefetching}>
                         <RefreshCw className={cn("h-4 w-4", (isLoading || isRefetching) && "animate-spin")} /> 
@@ -431,8 +425,8 @@ export default function PersonalHistoryPage() {
                 </div>
             </div>
 
-            {/* --- 2. STATS CARDS --- */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            {/* 2. STATS CARDS - Shrink 0 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 shrink-0">
                 <StatCard title="Tổng hoạt động" value={stats?.total || 0} subtitle="Tất cả thời gian" icon={Activity} colorClass="bg-gray-100 text-gray-600" />
                 <StatCard title="Hôm nay" value={stats?.today || 0} subtitle="Hoạt động trong ngày" icon={Calendar} colorClass="bg-blue-100 text-blue-600" />
                 <StatCard title="Tạo mới" value={stats?.created || 0} subtitle="Các tạo mới" icon={PlusCircle} colorClass="bg-emerald-100 text-emerald-600" />
@@ -440,18 +434,16 @@ export default function PersonalHistoryPage() {
                 <StatCard title="Xác thực" value={stats?.auth || 0} subtitle="Đăng nhập/xuất" icon={Shield} colorClass="bg-purple-100 text-purple-600" />
             </div>
 
-            {/* --- 3. MAIN CONTENT (FILTER & TABLE) --- */}
-            <Card className="border shadow-sm">
-                <CardHeader className="pb-4 border-b bg-muted/10">
+            {/* 3. MAIN CONTENT (FILTER & TABLE) - Flex 1 & Overflow Hidden */}
+            <Card className="flex-1 flex flex-col border shadow-sm min-h-0 overflow-hidden">
+                <CardHeader className="pb-4 border-b bg-muted/10 shrink-0">
                     <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
                         <div>
                             <CardTitle>Danh sách chi tiết</CardTitle>
                             <CardDescription>Hiển thị {data?.from || 0} - {data?.to || 0} trong tổng số {data?.total || 0} dòng</CardDescription>
                         </div>
                         
-                        {/* TOOLBAR FILTER */}
                         <div className="flex flex-col sm:flex-row gap-2 w-full lg:w-auto items-center">
-                            
                             <div className="relative w-full sm:w-[250px]">
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                 <Input 
@@ -483,112 +475,108 @@ export default function PersonalHistoryPage() {
                     </div>
                 </CardHeader>
                 
-                <CardContent className="p-0">
-                    <div className="relative w-full overflow-auto">
-                        <Table>
-                            <TableHeader className="bg-muted/30">
-                                <TableRow>
-                                    <TableHead className="w-[180px] font-semibold">Thời gian</TableHead>
-                                    <TableHead className="w-[180px] font-semibold">Hành động</TableHead>
-                                    <TableHead className="w-[150px] font-semibold">Tài nguyên</TableHead>
-                                    <TableHead className="font-semibold">Mô tả chi tiết</TableHead>
-                                    <TableHead className="w-[150px] text-right font-semibold">IP Address</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    Array.from({ length: 5 }).map((_, i) => (
-                                        <TableRow key={i}>
-                                            <TableCell colSpan={5}>
-                                                <div className="h-8 bg-muted rounded w-full animate-pulse"></div>
-                                            </TableCell>
-                                        </TableRow>
-                                    ))
-                                ) : historyItems.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={5} className="h-40 text-center text-muted-foreground">
-                                            <div className="flex flex-col items-center justify-center gap-2">
-                                                <History className="h-8 w-8 opacity-20" />
-                                                <p>Không tìm thấy hoạt động nào phù hợp.</p>
-                                            </div>
+                {/* [FIX] Container cuộn nằm ở đây */}
+                <CardContent className="p-0 flex-1 overflow-auto relative">
+                    <Table>
+                        <TableHeader className="bg-muted/30 sticky top-0 z-10 shadow-sm">
+                            <TableRow>
+                                <TableHead className="w-[180px] font-semibold">Thời gian</TableHead>
+                                <TableHead className="w-[180px] font-semibold">Hành động</TableHead>
+                                <TableHead className="w-[150px] font-semibold">Tài nguyên</TableHead>
+                                <TableHead className="font-semibold">Mô tả chi tiết</TableHead>
+                                <TableHead className="w-[150px] text-right font-semibold">IP Address</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        <TableCell colSpan={5}>
+                                            <div className="h-8 bg-muted rounded w-full animate-pulse"></div>
                                         </TableCell>
                                     </TableRow>
-                                ) : (
-                                    historyItems.map((item) => {
-                                        // Parse JSON detail
-                                        const details = typeof item.CHI_TIET === 'string' ? JSON.parse(item.CHI_TIET) : (item.CHI_TIET || {});
-                                        const resourceName = getResourceName(item.LOAI_HANH_DONG);
-                                        const ResourceIcon = getResourceIcon(item.LOAI_HANH_DONG);
+                                ))
+                            ) : historyItems.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={5} className="h-40 text-center text-muted-foreground">
+                                        <div className="flex flex-col items-center justify-center gap-2">
+                                            <History className="h-8 w-8 opacity-20" />
+                                            <p>Không tìm thấy hoạt động nào phù hợp.</p>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                historyItems.map((item) => {
+                                    const details = typeof item.CHI_TIET === 'string' ? JSON.parse(item.CHI_TIET) : (item.CHI_TIET || {});
+                                    const resourceName = getResourceName(item.LOAI_HANH_DONG);
+                                    const ResourceIcon = getResourceIcon(item.LOAI_HANH_DONG);
 
-                                        return (
-                                            <TableRow key={item.ID_LICHSU} className="hover:bg-muted/30 transition-colors">
-                                                <TableCell>
-                                                    <div className="flex flex-col">
-                                                        <span className="font-medium text-foreground">
-                                                            {format(new Date(item.NGAY_TAO), "dd/MM/yyyy", { locale: vi })}
-                                                        </span>
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {format(new Date(item.NGAY_TAO), "HH:mm:ss")}
-                                                        </span>
-                                                    </div>
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <ActionBadge type={item.LOAI_HANH_DONG} />
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
-                                                        <ResourceIcon className="h-4 w-4" />
-                                                        {resourceName}
-                                                    </div>
-                                                </TableCell>
-
-                                                <TableCell>
-                                                    <span className="text-sm text-foreground block mb-1 font-medium">
-                                                        {item.TIEU_DE}
+                                    return (
+                                        <TableRow key={item.ID_LICHSU} className="hover:bg-muted/30 transition-colors">
+                                            <TableCell>
+                                                <div className="flex flex-col">
+                                                    <span className="font-medium text-foreground">
+                                                        {format(new Date(item.NGAY_TAO), "dd/MM/yyyy", { locale: vi })}
                                                     </span>
-                                                    
-                                                    {/* Render chi tiết dựa trên loại hành động */}
-                                                    <DetailRenderer type={item.LOAI_HANH_DONG} details={details} />
-                                                </TableCell>
+                                                    <span className="text-xs text-muted-foreground">
+                                                        {format(new Date(item.NGAY_TAO), "HH:mm:ss")}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
 
-                                                <TableCell className="text-right text-xs text-muted-foreground font-mono">
-                                                    {details.ip || '-'}
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                    
-                    {/* --- PAGINATION FOOTER --- */}
-                    {totalPages > 1 && (
-                        <div className="p-4 border-t flex items-center justify-between bg-muted/10">
-                            <div className="text-xs text-muted-foreground">
-                                Trang {page} / {totalPages}
-                            </div>
-                            <div className="flex gap-2">
-                                <Button 
-                                    variant="outline" size="sm" 
-                                    onClick={() => setPage(p => Math.max(1, p - 1))} 
-                                    disabled={page === 1 || isLoading}
-                                >
-                                    <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Trước
-                                </Button>
-                                <Button 
-                                    variant="outline" size="sm" 
-                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-                                    disabled={page === totalPages || isLoading}
-                                >
-                                    Sau <ArrowRight className="h-3.5 w-3.5 ml-1" />
-                                </Button>
-                            </div>
-                        </div>
-                    )}
+                                            <TableCell>
+                                                <ActionBadge type={item.LOAI_HANH_DONG} />
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <div className="flex items-center gap-2 text-sm text-muted-foreground font-medium">
+                                                    <ResourceIcon className="h-4 w-4" />
+                                                    {resourceName}
+                                                </div>
+                                            </TableCell>
+
+                                            <TableCell>
+                                                <span className="text-sm text-foreground block mb-1 font-medium">
+                                                    {item.TIEU_DE}
+                                                </span>
+                                                <DetailRenderer type={item.LOAI_HANH_DONG} details={details} />
+                                            </TableCell>
+
+                                            <TableCell className="text-right text-xs text-muted-foreground font-mono">
+                                                {details.ip || '-'}
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
                 </CardContent>
+                
+                {/* --- PAGINATION FOOTER - Sticky Bottom --- */}
+                {totalPages > 1 && (
+                    <div className="p-4 border-t flex items-center justify-between bg-muted/10 shrink-0">
+                        <div className="text-xs text-muted-foreground">
+                            Trang {page} / {totalPages}
+                        </div>
+                        <div className="flex gap-2">
+                            <Button 
+                                variant="outline" size="sm" 
+                                onClick={() => setPage(p => Math.max(1, p - 1))} 
+                                disabled={page === 1 || isLoading}
+                            >
+                                <ArrowLeft className="h-3.5 w-3.5 mr-1" /> Trước
+                            </Button>
+                            <Button 
+                                variant="outline" size="sm" 
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                                disabled={page === totalPages || isLoading}
+                            >
+                                Sau <ArrowRight className="h-3.5 w-3.5 ml-1" />
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </Card>
         </div>
     );

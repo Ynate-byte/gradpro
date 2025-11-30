@@ -454,7 +454,7 @@ const StudentThesisTopicsPage = () => {
     };
 
     return (
-        <div className="p-4 md:p-8 space-y-6 container mx-auto max-w-7xl animate-in fade-in duration-500">
+        <div className="h-full overflow-auto p-4 md:p-8 space-y-6 container mx-auto max-w-7xl animate-in fade-in duration-500">
             
             {/* Page Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b">

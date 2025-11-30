@@ -2,18 +2,18 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getThesisPlans, getPlanFilterOptions } from '@/api/thesisPlanService'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { PlusCircle, Layers, Clock, Archive, FileEdit, LayoutGrid } from 'lucide-react'
 import { PlanDataTable } from './components/PlanDataTable'
 import { PlanDetailDialog } from './components/PlanDetailDialog'
 import { TemplateSelectionDialog } from './components/TemplateSelectionDialog'
-import { useAuth } from '@/contexts/AuthContext' 
+import { useAuth } from '@/contexts/AuthContext'
 import { useDebounce } from '@/hooks/useDebounce';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { useTheme } from "@/components/theme-provider";
+import { cn } from "@/lib/utils";
 
-// Cấu hình các Tab và trạng thái tương ứng
 const TABS = {
     ACTIVE: {
         id: 'active',
@@ -43,7 +43,7 @@ const TABS = {
         id: 'all',
         label: 'Tất cả',
         icon: LayoutGrid,
-        statuses: [] // Mảng rỗng = không lọc
+        statuses: []
     }
 };
 
@@ -62,14 +62,32 @@ const columnVisibility = {
     HOCKY: false, 
 };
 
+const getVariants = (shouldReduce) => {
+    if (shouldReduce) {
+        return {
+            container: { visible: { opacity: 1 } },
+            item: { visible: { opacity: 1, y: 0 } },
+        };
+    }
+    return {
+        container: {
+            hidden: { opacity: 0 },
+            visible: { opacity: 1, transition: { staggerChildren: 0.1 } }
+        },
+        item: {
+            hidden: { y: 20, opacity: 0 },
+            visible: { y: 0, opacity: 1, transition: { type: "spring", stiffness: 100 } }
+        }
+    };
+};
+
 export default function ThesisPlanManagementPage() {
     const [plans, setPlans] = useState([])
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 })
     const [pageCount, setPageCount] = useState(0)
     const [loading, setLoading] = useState(true)
     
-    // State cho Tabs
-    const [activeTab, setActiveTab] = useState('active') // Mặc định là tab 'active'
+    const [activeTab, setActiveTab] = useState('active')
 
     const [isDetailOpen, setIsDetailOpen] = useState(false)
     const [selectedPlanId, setSelectedPlanId] = useState(null)
@@ -93,6 +111,11 @@ export default function ThesisPlanManagementPage() {
 
     const canCreate = isGiaoVu || isTruongKhoa || isAdmin;
 
+    const shouldReduceMotion = useReducedMotion();
+    const { reduceMotion } = useTheme();
+    const isReduced = reduceMotion || shouldReduceMotion;
+    const variants = useMemo(() => getVariants(isReduced), [isReduced]);
+
     useEffect(() => {
         getPlanFilterOptions()
             .then(data => {
@@ -103,13 +126,10 @@ export default function ThesisPlanManagementPage() {
             });
     }, []); 
 
-    // Tải danh sách kế hoạch
     const fetchData = useCallback(() => {
         setLoading(true)
         
-        // Xác định danh sách trạng thái dựa trên Tab hiện tại
         let statusFilter = TABS[Object.keys(TABS).find(key => TABS[key].id === activeTab)]?.statuses;
-
         const manualStatusFilter = columnFilters.find(f => f.id === 'TRANGTHAI')?.value;
 
         if (activeTab === 'all') {
@@ -120,7 +140,7 @@ export default function ThesisPlanManagementPage() {
             page: pagination.pageIndex + 1,
             per_page: pagination.pageSize,
             search: debouncedSearchTerm, 
-            statuses: statusFilter, // Gửi mảng trạng thái lên API
+            statuses: statusFilter,
             khoahoc: columnFilters.find(f => f.id === 'KHOAHOC')?.value,
             namhoc: columnFilters.find(f => f.id === 'NAMHOC')?.value,
             hocky: columnFilters.find(f => f.id === 'HOCKY')?.value,
@@ -136,9 +156,7 @@ export default function ThesisPlanManagementPage() {
             .catch(() => toast.error("Lỗi khi tải danh sách kế hoạch."))
             .finally(() => setLoading(false))
     }, [pagination, columnFilters, sorting, debouncedSearchTerm, activeTab])
-
     
-    // Tải dữ liệu khi thay đổi bộ lọc, phân trang, sắp xếp hoặc Tab
     useEffect(() => {
         fetchData()
     }, [fetchData]) 
@@ -148,10 +166,9 @@ export default function ThesisPlanManagementPage() {
     const handleOpenEdit = (plan) => { navigate(`/admin/thesis-plans/${plan.ID_KEHOACH}/edit`) }
     const handleViewDetails = (planId) => { setSelectedPlanId(planId); setIsDetailOpen(true); }
 
-    // Reset trang về 0 khi đổi Tab hoặc Search
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
-    }, [debouncedSearchTerm, activeTab]); // Bỏ columnFilters khỏi đây để tránh loop nếu không cần thiết, hoặc giữ nếu muốn reset khi filter
+    }, [debouncedSearchTerm, activeTab]);
 
     const hockyLabelMap = { '1': 'Học kỳ 1', '2': 'Học kỳ 2', '3': 'Học kỳ Hè' };
     const khoahocOptions = useMemo(() => (filterOptionsData.khoahoc || []).map(val => ({ label: val, value: val })), [filterOptionsData.khoahoc]);
@@ -160,80 +177,105 @@ export default function ThesisPlanManagementPage() {
     const hedaotaoOptions = useMemo(() => (filterOptionsData.hedaotao || []).map(val => ({ label: val, value: val })), [filterOptionsData.hedaotao]);
 
     return (
-        <div className="space-y-4 p-4 md:p-8">
-            {/* Header & Create Button */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <motion.div 
+            // [FIX LAYOUT]: Đặt chiều cao full, không cuộn body, flex column
+            className="flex flex-col h-full space-y-4 p-4 md:p-6 overflow-hidden"
+            initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.5 }}
+        >
+            {/* Header: Không co giãn (shrink-0) */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
                 {canCreate && (
-                    <Button onClick={handleOpenCreate} className="shrink-0">
+                    <Button onClick={handleOpenCreate} className="shrink-0 shadow-sm">
                         <PlusCircle className="mr-2 h-4 w-4" /> Tạo Kế hoạch mới
                     </Button>
                 )}
             </div>
 
-            {/* Tabs */}
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-4">
-                    {Object.values(TABS).map((tab) => (
-                        <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2">
-                            <tab.icon className="h-4 w-4" />
-                            <span className="hidden sm:inline">{tab.label}</span>
-                            <span className="sm:hidden">{tab.label.split(' ')[0]}</span> {/* Tên ngắn gọn trên mobile */}
-                        </TabsTrigger>
-                    ))}
-                </TabsList>
+            {/* Tabs & Table Container: Chiếm toàn bộ không gian còn lại */}
+            <div className="flex-1 min-h-0 flex flex-col">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col space-y-4">
+                    <div className="shrink-0">
+                        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 bg-muted/50">
+                            {Object.values(TABS).map((tab) => (
+                                <TabsTrigger key={tab.id} value={tab.id} className="flex items-center gap-2">
+                                    <tab.icon className="h-4 w-4" />
+                                    <span className="hidden sm:inline">{tab.label}</span>
+                                    <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                    </div>
 
-                <AnimatePresence mode="wait">
-                    <motion.div
-                        key={activeTab}
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        transition={{ duration: 0.2 }}
-                    >
-                        <TabsContent value={activeTab} className="mt-0">
-                            <Card>
-                                <CardHeader className="pb-3">
-                                    <CardTitle>{Object.values(TABS).find(t => t.id === activeTab)?.label}</CardTitle>
-                                    <CardDescription>
-                                        Danh sách các kế hoạch {Object.values(TABS).find(t => t.id === activeTab)?.label.toLowerCase()}.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <PlanDataTable
-                                        data={plans}
-                                        columnsConfig={{
-                                            onEdit: handleOpenEdit,
-                                            onSuccess: handleSuccess,
-                                            onViewDetails: handleViewDetails
-                                        }}
-                                        pageCount={pageCount}
-                                        loading={loading}
-                                        pagination={pagination}
-                                        setPagination={setPagination}
-                                        columnFilters={columnFilters}
-                                        setColumnFilters={setColumnFilters}
-                                        
-                                        // Ẩn bộ lọc trạng thái nếu không phải tab "Tất cả" để tránh xung đột logic
-                                        statusOptions={activeTab === 'all' ? statusOptions : undefined}
-                                        statusColumnId={activeTab === 'all' ? 'TRANGTHAI' : undefined}
+                    <AnimatePresence mode="wait">
+                         <motion.div
+                            key={activeTab}
+                            className="flex-1 min-h-0 flex flex-col"
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.2 }}
+                        >
+                            <TabsContent value={activeTab} className="flex-1 mt-0 outline-none ring-0 h-full flex flex-col">
+                                {/* Container chính cho bảng: flex-col để chia header và body */}
+                                <div className="flex flex-col h-full border rounded-lg bg-card shadow-sm overflow-hidden">
+                                     <div className="p-4 border-b bg-muted/10 shrink-0">
+                                        <h3 className="font-semibold text-lg tracking-tight">
+                                            {Object.values(TABS).find(t => t.id === activeTab)?.label}
+                                        </h3>
+                                        <p className="text-sm text-muted-foreground">
+                                            Danh sách các kế hoạch {Object.values(TABS).find(t => t.id === activeTab)?.label.toLowerCase()}.
+                                        </p>
+                                     </div>
+                                     
+                                     {/* Table Container: flex-1 để chiếm hết chiều cao còn lại */}
+                                     <div className="flex-1 min-h-0 flex flex-col">
+                                        <PlanDataTable
+                                            data={plans}
+                                            columnsConfig={{
+                                                onEdit: handleOpenEdit,
+                                                onSuccess: handleSuccess,
+                                                onViewDetails: handleViewDetails
+                                            }}
+                                            pageCount={pageCount}
+                                            loading={loading}
+                                            pagination={pagination}
+                                            setPagination={setPagination}
+                                            columnFilters={columnFilters}
+                                            setColumnFilters={setColumnFilters}
+                                            
+                                            // Props cho filter
+                                            statusOptions={activeTab === 'all' ? statusOptions : undefined}
+                                            khoahocFilterOptions={khoahocOptions}
+                                            namhocFilterOptions={namhocOptions}
+                                            hockyFilterOptions={hockyOptions}
+                                            hedaotaoFilterOptions={hedaotaoOptions}
+                                            
+                                            columnVisibility={columnVisibility}
+                                            sorting={sorting}
+                                            setSorting={setSorting}
+                                            onAddUser={null}
+                                            onImportUser={null}
+                                            addBtnText="" 
+                                            searchColumnId="TEN_DOT"
+                                            searchPlaceholder="Tìm theo tên kế hoạch..."
+                                            searchTerm={searchTerm}
+                                            onSearchChange={setSearchTerm}
+                                            
+                                            // [QUAN TRỌNG] Bật chế độ Flex Layout cho bảng
+                                            flexLayout={true}
+                                            className="h-full border-0 rounded-none" 
+                                        />
+                                     </div>
+                                </div>
+                            </TabsContent>
+                        </motion.div>
+                    </AnimatePresence>
+                </Tabs>
+            </div>
 
-                                        khoahocFilterOptions={khoahocOptions}
-                                        namhocFilterOptions={namhocOptions}
-                                        hockyFilterOptions={hockyOptions}
-                                        hedaotaoFilterOptions={hedaotaoOptions}
-                                        columnVisibility={columnVisibility}
-                                        sorting={sorting}
-                                        setSorting={setSorting}
-                                        searchTerm={searchTerm}
-                                        onSearchChange={setSearchTerm}
-                                    />
-                                </CardContent>
-                            </Card>
-                        </TabsContent>
-                    </motion.div>
-                </AnimatePresence>
-            </Tabs>
-
+            {/* Dialogs */}
             <PlanDetailDialog
                 planId={selectedPlanId}
                 isOpen={isDetailOpen}
@@ -243,6 +285,6 @@ export default function ThesisPlanManagementPage() {
                 isOpen={isTemplateDialogOpen}
                 setIsOpen={setIsTemplateDialogOpen}
             />
-        </div>
+        </motion.div>
     )
 }

@@ -94,7 +94,6 @@ const DebouncedInput = React.memo(({ value, onChange, onBlur, ...props }) => {
   }, [localValue, onChange, value]);
 
   const handleBlur = (e) => {
-    // Khi blur, cập nhật ngay lập tức để đảm bảo logic onBlur của form chạy đúng
     if (localValue !== value) {
       onChange(localValue);
     }
@@ -130,7 +129,7 @@ const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
       if (localValue !== value) {
         onChange(localValue);
       }
-    }, 800); // Delay 800ms cho editor nặng
+    }, 800); // Delay 800ms
 
     return () => clearTimeout(timer);
   }, [localValue, onChange, value]);
@@ -144,10 +143,6 @@ const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
   );
 });
 
-
-// ──────────────────────────────────────────────────────────────
-// Hệ thống chức năng
-// ──────────────────────────────────────────────────────────────
 const SYSTEM_FEATURES = [
   { value: 'none', label: '--- Không liên kết ---' },
   { value: 'GV_RA_DE', label: 'Giảng viên gửi duyệt đề tài' },
@@ -157,9 +152,6 @@ const SYSTEM_FEATURES = [
   { value: 'CHAM_DIEM', label: 'Giảng viên chấm điểm (HD/PB)' },
 ]
 
-// ──────────────────────────────────────────────────────────────
-// Helper
-// ──────────────────────────────────────────────────────────────
 function adjustDateForWeekend(date) {
   if (!isValid(date)) return date
   const day = getDay(date)
@@ -277,7 +269,6 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Nội dung (Mục {index + 1})*</FormLabel>
               <FormControl>
-                {/* Dùng DebouncedInput */}
                 <DebouncedInput {...f} />
               </FormControl>
               <FormMessage className="text-xs" />
@@ -295,7 +286,6 @@ const MilestoneItem = React.forwardRef(({
               <FormLabel className="text-sm">Mô tả</FormLabel>
               <FormControl>
                 <div className="rich-text-wrapper">
-                    {/* Dùng DebouncedRichTextEditor */}
                     <DebouncedRichTextEditor
                         value={f.value}
                         onChange={f.onChange}
@@ -382,7 +372,6 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Bắt đầu*</FormLabel>
               <FormControl>
-                {/* Dùng DebouncedInput */}
                 <DebouncedInput
                   type="datetime-local"
                   {...f}
@@ -406,7 +395,6 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Thời lượng* (ngày)</FormLabel>
               <FormControl>
-                {/* Dùng DebouncedInput */}
                 <DebouncedInput
                   type="number"
                   min="1"
@@ -431,7 +419,6 @@ const MilestoneItem = React.forwardRef(({
             <FormItem>
               <FormLabel className="text-sm">Kết thúc*</FormLabel>
               <FormControl>
-                {/* Dùng DebouncedInput */}
                 <DebouncedInput
                   type="datetime-local"
                   {...f}
@@ -492,15 +479,15 @@ const SortableItemWrapper = ({ id, children }) => {
 // Skeleton
 // ──────────────────────────────────────────────────────────────
 const PlanFormSkeleton = () => (
-  <div className="space-y-6 p-4 md:p-8">
-    <div className="flex justify-between items-center mb-8">
+  <div className="space-y-6 p-4 md:p-8 h-full overflow-hidden flex flex-col">
+    <div className="flex justify-between items-center mb-8 shrink-0">
         <Skeleton className="h-8 w-24" />
         <div className="flex gap-2">
             <Skeleton className="h-10 w-24" />
             <Skeleton className="h-10 w-32" />
         </div>
     </div>
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-1">
       <div className="lg:col-span-1 space-y-5">
         <Card className="shadow-sm">
           <CardHeader><Skeleton className="h-6 w-3/4" /></CardHeader>
@@ -559,6 +546,7 @@ export default function PlanFormPage() {
   const isFromTemplate = !isEditMode && !!templateId
 
   const isProgrammaticUpdate = useRef(false)
+  const scrollContainerRef = useRef(null) // [NEW] Ref cho vùng cuộn
 
   const [planStatus, setPlanStatus] = useState(null)
   const [isLoading, setIsLoading] = useState(isEditMode || !!templateId)
@@ -570,9 +558,7 @@ export default function PlanFormPage() {
 
   const [isManuallyEditingPlanEndDate, setIsManuallyEditingPlanEndDate] = useState(false)
   
-  // ──────────────────────────────────────
-  // Thêm logic state Scroll từ code cũ
-  // ──────────────────────────────────────
+  // State Scroll
   const [isScrolled, setIsScrolled] = useState(false)
   const [approximateDaysText, setApproximateDaysText] = useState('')
 
@@ -614,30 +600,26 @@ export default function PlanFormPage() {
   )
 
   // ──────────────────────────────────────
-  // Thêm useEffect lắng nghe scroll
+  // [UPDATED] UseEffect lắng nghe scroll trên vùng cuộn mới
   // ──────────────────────────────────────
   useEffect(() => {
-    const scrollSelector = "main.overflow-y-auto";
-    let scrollContainerElement = null;
     const handleScroll = () => {
-      if (!scrollContainerElement) return;
-      setIsScrolled(scrollContainerElement.scrollTop > 0);
-    };
-    const setupScrollListener = () => {
-      scrollContainerElement = document.querySelector(scrollSelector);
-      if (scrollContainerElement) {
-        scrollContainerElement.addEventListener('scroll', handleScroll);
-        handleScroll();
+      if (scrollContainerRef.current) {
+        setIsScrolled(scrollContainerRef.current.scrollTop > 10);
       }
     };
-    const timerId = setTimeout(setupScrollListener, 0);
+    
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+    }
+
     return () => {
-      clearTimeout(timerId);
-      if (scrollContainerElement) {
-        scrollContainerElement.removeEventListener('scroll', handleScroll);
+      if (container) {
+        container.removeEventListener('scroll', handleScroll);
       }
     };
-  }, []);
+  }, [isLoading]); // Chạy lại khi loading xong và ref đã được gắn
 
   // ──────────────────────────────────────
   // Đồng bộ NGAY_KETHUC kế hoạch
@@ -670,9 +652,7 @@ export default function PlanFormPage() {
     }
   }, [form])
 
-  // ──────────────────────────────────────
   // Scale (chỉ khi tạo từ template)
-  // ──────────────────────────────────────
   const scaleAllMilestones = useCallback((planStartStr, totalWeeks) => {
     if (!isFromTemplate || originalTemplateMetadata.length === 0) return
     if (!planStartStr || !isValid(parseISO(planStartStr))) return
@@ -705,9 +685,6 @@ export default function PlanFormPage() {
     syncPlanEndDate()
   }, [form, isFromTemplate, originalTemplateMetadata, templateBaseWeeks, syncPlanEndDate])
 
-  // ──────────────────────────────────────
-  // Cascade (luôn chạy – cả tạo mới và edit)
-  // ──────────────────────────────────────
   const cascadeMilestoneChanges = useCallback((startIdx) => {
     const planStartStr = form.getValues('NGAY_BATDAU')
     if (!planStartStr || !isValid(parseISO(planStartStr))) return
@@ -1125,200 +1102,204 @@ export default function PlanFormPage() {
     }
   }
 
-  // ──────────────────────────────────────
   // Render
-  // ──────────────────────────────────────
   if (isLoading) return <PlanFormSkeleton />
 
   const isPlanStartDateLocked = isEditMode && !['Bản nháp', 'Chờ phê duyệt', 'Yêu cầu chỉnh sửa', 'Đã phê duyệt'].includes(planStatus)
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4 md:p-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div>
-            <Button type="button" variant="outline" size="sm" onClick={() => navigate('/admin/thesis-plans')}>
-              <ChevronLeft className="mr-2 h-4 w-4" /> Quay lại
-            </Button>
-          </div>
-          <div className="flex gap-2 w-full sm:w-auto">
-            <Button type="button" variant="secondary" onClick={handlePreview} disabled={isSubmitting} className="flex-1 sm:flex-none">
-              {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
-              Xem trước
-            </Button>
-            <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isEditMode ? 'Lưu thay đổi' : 'Tạo kế hoạch'}
-            </Button>
-          </div>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col overflow-hidden">
+        
+        {/* Header Area */}
+        <div className="flex-none p-4 md:px-8 pb-4 border-b bg-background z-10 shrink-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <Button type="button" variant="outline" size="sm" onClick={() => navigate('/admin/thesis-plans')}>
+                  <ChevronLeft className="mr-2 h-4 w-4" /> Quay lại
+                </Button>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Button type="button" variant="secondary" onClick={handlePreview} disabled={isSubmitting} className="flex-1 sm:flex-none">
+                  {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
+                  Xem trước
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="flex-1 sm:flex-none">
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isEditMode ? 'Lưu thay đổi' : 'Tạo kế hoạch'}
+                </Button>
+              </div>
+            </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-          {/* Thông tin chung */}
-          <motion.div
-             className={cn(
-               "lg:col-span-1 lg:sticky",
-               "lg:top-[calc(var(--header-height,_60px)_+_2rem)]",
-               "lg:flex lg:flex-col lg:justify-center", // Căn giữa theo chiều dọc khi cuộn
-               "transition-all duration-300 ease-out",
-               isScrolled
-                 ? "lg:h-[calc(79vh_-_var(--header-height,_60px)_-_2rem)]" // Thu nhỏ
-                 : "lg:h-[calc(93vh_-_var(--header-height,_60px)_-_2rem)]" // Đầy đủ
-             )}
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, ease: "easeOut" }}
-          >
-            <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
-              <CardHeader className="pb-4 pt-4 pb-1 ">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Info className="h-5 w-5 text-primary" /> Thông tin chung
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-5 pt-2">
-                
-                {/* Dòng 1: Tên đợt */}
-                <FormField name="TEN_DOT" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên đợt*</FormLabel><FormControl><DebouncedInput placeholder="VD: KLTN HK1, 2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )} />
-                
-                {/* Dòng 2: Năm học - Học kỳ - Khóa (3 cột) */}
-                <div className="grid grid-cols-3 gap-4">
-                  <FormField name="NAMHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Năm học*</FormLabel><FormControl><DebouncedInput placeholder="2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                  <FormField name="HOCKY" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Học kỳ*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger></FormControl><SelectContent><SelectItem key="1" value="1">1</SelectItem><SelectItem key="2" value="2">2</SelectItem><SelectItem key="3" value="3">Hè</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
-                  <FormField name="KHOAHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Khóa*</FormLabel><FormControl><DebouncedInput placeholder="K13" {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                </div>
+        {/* Scrollable Content Area */}
+        <div 
+            ref={scrollContainerRef} 
+            className="flex-1 overflow-y-auto p-4 md:p-8"
+        >
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+              {/* Thông tin chung */}
+              <motion.div
+                 className={cn(
+                   "lg:col-span-1 lg:sticky",
+                   // [FIX] Điều chỉnh top cho sticky khi nằm trong scroll container
+                   "lg:top-0", 
+                   "lg:flex lg:flex-col lg:justify-center",
+                   "transition-all duration-300 ease-out",
+                   // Logic isScrolled sẽ làm giảm chiều cao khi cuộn
+                   isScrolled
+                     ? "lg:scale-95 lg:origin-top" // Ví dụ: Thu nhỏ nhẹ
+                     : "" 
+                 )}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut" }}
+              >
+                <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
+                  <CardHeader className="pb-4 pt-4 pb-1 ">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Info className="h-5 w-5 text-primary" /> Thông tin chung
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5 pt-2">
+                    
+                    <FormField name="TEN_DOT" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên đợt*</FormLabel><FormControl><DebouncedInput placeholder="VD: KLTN HK1, 2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )} />
+                    <div className="grid grid-cols-3 gap-4">
+                      <FormField name="NAMHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Năm học*</FormLabel><FormControl><DebouncedInput placeholder="2025-2026" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                      <FormField name="HOCKY" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Học kỳ*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Chọn" /></SelectTrigger></FormControl><SelectContent><SelectItem key="1" value="1">1</SelectItem><SelectItem key="2" value="2">2</SelectItem><SelectItem key="3" value="3">Hè</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
+                      <FormField name="KHOAHOC" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Khóa*</FormLabel><FormControl><DebouncedInput placeholder="K13" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField name="HEDAOTAO" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Hệ ĐT*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem key="CN" value="Cử nhân">Cử nhân</SelectItem><SelectItem key="KS" value="Kỹ sư">Kỹ sư</SelectItem><SelectItem key="TS" value="Thạc sỹ">Thạc sỹ</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
+                      <FormField name="SO_TUAN_THUCHIEN" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Số tuần TH*</FormLabel>
+                          <FormControl>
+                            <DebouncedInput
+                              type="number" min="1" placeholder="12"
+                              {...field}
+                              onBlur={field.onBlur}
+                              onChange={(val) => {
+                                field.onChange(val); 
+                                setIsManuallyEditingPlanEndDate(false); 
+                              }}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                             <span className="text-sky-600 font-medium">{approximateDaysText}</span>
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}/>
+                    </div>
 
-                {/* Dòng 3: Hệ đào tạo - Số tuần (2 cột) */}
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField name="HEDAOTAO" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Hệ ĐT*</FormLabel><Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem key="CN" value="Cử nhân">Cử nhân</SelectItem><SelectItem key="KS" value="Kỹ sư">Kỹ sư</SelectItem><SelectItem key="TS" value="Thạc sỹ">Thạc sỹ</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
-                  <FormField name="SO_TUAN_THUCHIEN" control={form.control} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Số tuần TH*</FormLabel>
-                      <FormControl>
-                        <DebouncedInput
-                          type="number" min="1" placeholder="12"
-                          {...field}
-                          onBlur={field.onBlur}
-                          onChange={(val) => {
-                            field.onChange(val); 
-                            setIsManuallyEditingPlanEndDate(false); 
-                          }}
-                        />
-                      </FormControl>
-                      <FormDescription>
-                         <span className="text-sky-600 font-medium">{approximateDaysText}</span>
-                      </FormDescription>
-                      <FormMessage />
-                    </FormItem>
-                  )}/>
-                </div>
+                    {/* Dòng 4: Ngày bắt đầu - Kết thúc */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField name="NGAY_BATDAU" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ngày bắt đầu*</FormLabel>
+                          <FormControl>
+                            <DebouncedInput
+                              type="date"
+                              {...field}
+                              disabled={isPlanStartDateLocked}
+                              onBlur={(e) => {
+                                field.onBlur(e);
+                                const adjustedDate = adjustDateForWeekend(parseISO(e.target.value));
+                                const adjustedDateStr = format(adjustedDate, DATE_ONLY_FORMAT);
+                                
+                                if (e.target.value !== adjustedDateStr) {
+                                  toast.info("Ngày bắt đầu đã được dời sang Thứ Hai.", { duration: 2000 });
+                                  field.onChange(adjustedDateStr); 
+                                }
+                                setIsManuallyEditingPlanEndDate(false);
+                              }}
+                            />
+                          </FormControl>
+                          {isPlanStartDateLocked && <FormDescription className="text-destructive text-[10px]">Đang chạy.</FormDescription>}
+                          <FormMessage />
+                        </FormItem>
+                      )}/>
+                      <FormField name="NGAY_KETHUC" control={form.control} render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Ngày kết thúc*</FormLabel>
+                          <FormControl>
+                            <DebouncedInput
+                              type="date"
+                              {...field}
+                              onFocus={() => setIsManuallyEditingPlanEndDate(true)}
+                              onBlur={(e) => {
+                                field.onBlur(e);
+                                const newEndDateStr = e.target.value;
+                                const adjustedEndDate = adjustDateForWeekend(parseISO(newEndDateStr));
+                                const adjustedEndDateStr = format(adjustedEndDate, DATE_ONLY_FORMAT);
+                                
+                                if (newEndDateStr !== adjustedEndDateStr) {
+                                  toast.info("Ngày kết thúc đã được dời sang Thứ Hai.", { duration: 2000 });
+                                  field.onChange(adjustedEndDateStr); 
+                                }
+                              }}
+                            />
+                            </FormControl>
+                            <FormMessage />
+                        </FormItem>
+                      )}/>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
 
-                {/* Dòng 4: Ngày bắt đầu - Kết thúc */}
-                <div className="grid grid-cols-2 gap-4">
-                  <FormField name="NGAY_BATDAU" control={form.control} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ngày bắt đầu*</FormLabel>
-                      <FormControl>
-                        <DebouncedInput
-                          type="date"
-                          {...field}
-                          disabled={isPlanStartDateLocked}
-                          onBlur={(e) => {
-                            field.onBlur(e);
-                            const adjustedDate = adjustDateForWeekend(parseISO(e.target.value));
-                            const adjustedDateStr = format(adjustedDate, DATE_ONLY_FORMAT);
-                            
-                            if (e.target.value !== adjustedDateStr) {
-                              toast.info("Ngày bắt đầu đã được dời sang Thứ Hai.", { duration: 2000 });
-                              field.onChange(adjustedDateStr); 
-                            }
-                            setIsManuallyEditingPlanEndDate(false);
-                          }}
-                        />
-                      </FormControl>
-                      {isPlanStartDateLocked && <FormDescription className="text-destructive text-[10px]">Đang chạy.</FormDescription>}
-                      <FormMessage />
-                    </FormItem>
-                  )}/>
-                  <FormField name="NGAY_KETHUC" control={form.control} render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Ngày kết thúc*</FormLabel>
-                      <FormControl>
-                        <DebouncedInput
-                          type="date"
-                          {...field}
-                          onFocus={() => setIsManuallyEditingPlanEndDate(true)}
-                          onBlur={(e) => {
-                            field.onBlur(e);
-                            const newEndDateStr = e.target.value;
-                            const adjustedEndDate = adjustDateForWeekend(parseISO(newEndDateStr));
-                            const adjustedEndDateStr = format(adjustedEndDate, DATE_ONLY_FORMAT);
-                            
-                            if (newEndDateStr !== adjustedEndDateStr) {
-                              toast.info("Ngày kết thúc đã được dời sang Thứ Hai.", { duration: 2000 });
-                              field.onChange(adjustedEndDateStr); 
-                            }
-                          }}
-                        />
-                        </FormControl>
-                        <FormMessage />
-                    </FormItem>
-                  )}/>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Cột phải: Mốc thời gian */}
-          <motion.div
-            className="lg:col-span-2 space-y-4"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-          >
-            <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
-              <CardHeader className="flex flex-row items-center justify-between pb-4">
-                <CardTitle className="text-lg">Mốc thời gian ({fields.length})</CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={() => addMilestone(-1)}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Thêm mục
-                </Button>
-              </CardHeader>
-               <CardContent className="pt-2">
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                    <SortableContext items={fields.map(f => f.arrayId)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-4">
-                        {fields.map((field, idx) => (
-                          <div key={field.arrayId} className="group relative pl-7">
-                            <SortableItemWrapper id={field.arrayId}>
-                              <MilestoneItem
-                                index={idx}
-                                field={field}
-                                remove={() => removeMilestone(idx)}
-                                form={form}
-                                onMilestoneChange={handleMilestoneChange}
-                                usedFeatureKeys={usedFeatureKeys}
-                              />
-                            </SortableItemWrapper>
-                            <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 w-6 p-0 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                onClick={() => addMilestone(idx + 1)}
-                                title="Chèn mục mới bên dưới"
-                              >
-                                <PlusCircle className="h-4 w-4" />
-                              </Button>
-                            </div>
+              {/* Cột phải: Mốc thời gian */}
+              <motion.div
+                className="lg:col-span-2 space-y-4"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
+              >
+                <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
+                  <CardHeader className="flex flex-row items-center justify-between pb-4">
+                    <CardTitle className="text-lg">Mốc thời gian ({fields.length})</CardTitle>
+                    <Button type="button" variant="outline" size="sm" onClick={() => addMilestone(-1)}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Thêm mục
+                    </Button>
+                  </CardHeader>
+                   <CardContent className="pt-2">
+                      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                        <SortableContext items={fields.map(f => f.arrayId)} strategy={verticalListSortingStrategy}>
+                          <div className="space-y-4">
+                            {fields.map((field, idx) => (
+                              <div key={field.arrayId} className="group relative pl-7">
+                                <SortableItemWrapper id={field.arrayId}>
+                                  <MilestoneItem
+                                    index={idx}
+                                    field={field}
+                                    remove={() => removeMilestone(idx)}
+                                    form={form}
+                                    onMilestoneChange={handleMilestoneChange}
+                                    usedFeatureKeys={usedFeatureKeys}
+                                  />
+                                </SortableItemWrapper>
+                                <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 w-6 p-0 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                    onClick={() => addMilestone(idx + 1)}
+                                    title="Chèn mục mới bên dưới"
+                                  >
+                                    <PlusCircle className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </SortableContext>
-                  </DndContext>
-                </CardContent>
-            </Card>
-          </motion.div>
+                        </SortableContext>
+                      </DndContext>
+                    </CardContent>
+                </Card>
+              </motion.div>
+            </div>
         </div>
       </form>
     </Form>

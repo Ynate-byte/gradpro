@@ -62,7 +62,6 @@ const DraggableGroupCard = ({ group, count }) => {
         data: { type: 'GROUP', group }
     });
 
-    // Đóng Popover nếu bắt đầu kéo
     useEffect(() => {
         if (isDragging) {
             setIsPopoverOpen(false);
@@ -94,7 +93,6 @@ const DraggableGroupCard = ({ group, count }) => {
                 <div className="space-y-1 text-sm text-muted-foreground">
                     <p className="flex items-center gap-2">
                         <Users className="h-4 w-4 text-primary" />
-                        {/* Giả sử có trường SO_LUONG_SV hoặc lấy từ length của mảng thành viên */}
                         <span>Sĩ số: <strong className="text-foreground">{group.SO_THANHVIEN_HIENTAI || 0}</strong> sinh viên</span>
                     </p>
                     <p className="flex items-center gap-2">
@@ -162,7 +160,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
 
             const newStartDate = new Date(y, mon - 1, d, h, m, 0);
             const newEndDate = new Date(newStartDate);
-            newEndDate.setMinutes(newEndDate.getMinutes() + 45); // Mặc định +45p khi sửa nhanh
+            newEndDate.setMinutes(newEndDate.getMinutes() + 45);
 
             const payload = {
                 THOIGIAN_BATDAU: newStartDate.toISOString(),
@@ -182,7 +180,7 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
         }
     };
 
-    let colorClass = "event-default"; // CSS class defined in Calendar.css
+    let colorClass = "event-default";
     if (meeting.DANHGIA === 'Tot') colorClass = "event-good";
     if (meeting.DANHGIA === 'BinhThuong') colorClass = "event-normal";
     if (meeting.DANHGIA === 'KhongTot') colorClass = "event-bad";
@@ -474,9 +472,11 @@ export default function LecturerCalendarPage() {
 
     return (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <div className="flex h-[calc(100vh-4rem)] flex-col md:flex-row overflow-hidden bg-background text-foreground">
+            {/* [FIX SCROLL] Sử dụng h-full để container chiếm hết chiều cao */}
+            <div className="flex h-full flex-col md:flex-row overflow-hidden bg-background text-foreground">
 
-                <div className="w-full md:w-72 bg-card border-r p-4 flex flex-col gap-4 shadow-sm z-20 shrink-0 h-1/4 md:h-full overflow-hidden">
+                {/* [FIX SCROLL] Sidebar Group: Đặt h-full và overflow-y-auto để cuộn độc lập */}
+                <div className="w-full md:w-72 bg-card border-r p-4 flex flex-col gap-4 shadow-sm z-20 shrink-0 h-1/4 md:h-full">
                     <div className="flex-shrink-0">
                         <h2 className="font-bold text-lg flex items-center gap-2 text-foreground">
                             <Users className="h-5 w-5 text-primary" /> Nhóm hướng dẫn
@@ -484,7 +484,6 @@ export default function LecturerCalendarPage() {
                     </div>
                     <div className="flex-1 overflow-y-auto pr-2 space-y-2 custom-scrollbar">
                         
-                        {/* [FIX LỖI]: Kiểm tra Array.isArray trước khi map */}
                         {(!Array.isArray(groups) || groups.length === 0) ? (
                             <div className="text-sm text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
                                 Không có nhóm nào trong kế hoạch đang thực hiện.
@@ -511,7 +510,8 @@ export default function LecturerCalendarPage() {
                     </div>
                 </div>
 
-                <div className="flex-1 flex flex-col min-w-0 bg-muted/10 h-3/4 md:h-full">
+                {/* [FIX SCROLL] Calendar Area: Đặt h-full và flex-1 để chiếm phần còn lại */}
+                <div className="flex-1 flex flex-col min-w-0 bg-muted/10 h-3/4 md:h-full overflow-hidden">
                     <div className="flex items-center justify-between p-4 border-b bg-card shrink-0">
                         <div className="flex items-center gap-2">
                             <Button variant="outline" size="icon" onClick={() => setCurrentDate(addWeeks(currentDate, -1))}>
@@ -534,13 +534,14 @@ export default function LecturerCalendarPage() {
                             </div>
                         )}
 
-                        <div className="calendar-container shadow-sm border h-full w-full overflow-auto custom-scrollbar">
+                        {/* [FIX SCROLL] Calendar Grid Container: overflow-auto để cuộn lịch */}
+                        <div className="calendar-container shadow-sm border h-full w-full overflow-auto custom-scrollbar bg-background">
                             <div className="calendar-grid">
-                                <div className="calendar-header bg-muted/50 text-muted-foreground sticky top-0 z-20">Buổi</div>
+                                <div className="calendar-header bg-muted/50 text-muted-foreground sticky top-0 left-0 z-30 border-b border-r">Buổi</div>
                                 {daysOfWeek.map(day => {
                                     const isToday = isSameWeek(day, new Date(), options) && format(day, 'yyyyMMdd') === format(new Date(), 'yyyyMMdd');
                                     return (
-                                        <div key={day.toISOString()} className={cn("calendar-header sticky top-0 z-20", isToday && "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400")}>
+                                        <div key={day.toISOString()} className={cn("calendar-header sticky top-0 z-20 border-b", isToday && "bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400")}>
                                             <div className="uppercase text-[10px] font-bold opacity-70">{format(day, 'EEEE', { locale: vi })}</div>
                                             <div className="text-lg font-bold leading-none mt-0.5">{format(day, 'dd/MM')}</div>
                                         </div>
@@ -549,7 +550,7 @@ export default function LecturerCalendarPage() {
 
                                 {sessions.map(session => (
                                     <React.Fragment key={session.id}>
-                                        <div className="calendar-session-cell justify-center items-center text-sm font-bold text-muted-foreground bg-muted/20 sticky left-0 z-10 border-r">
+                                        <div className="calendar-session-cell justify-center items-center text-sm font-bold text-muted-foreground bg-muted/20 sticky left-0 z-10 border-r border-b">
                                             {session.name}
                                         </div>
                                         {daysOfWeek.map(day => (

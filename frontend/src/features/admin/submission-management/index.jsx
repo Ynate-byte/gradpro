@@ -6,25 +6,26 @@ import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getColumns } from './components/columns';
 import { SubmissionDetailDialog } from './components/SubmissionDetailDialog'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookCopy, CheckCircle, Clock, AlertCircle, FileCheck, FileWarning, Filter } from 'lucide-react';
+import { BookCopy, CheckCircle, Clock, AlertCircle, FileCheck, FileWarning, Search, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"; // [FIX] Import TabsContent nếu cần dùng, nhưng ở đây ta dùng Tabs làm controller cho DataTable
 import StatCard from '@/components/shared/StatCard';
 import { useDebounce } from '@/hooks/useDebounce';
-import { Separator } from "@/components/ui/separator";
-import { useAuth } from '@/contexts/AuthContext'; // [QUAN TRỌNG]
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { useAuth } from '@/contexts/AuthContext';
 
 const planStatusColors = {
-    'Bản nháp': 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
-    'Chờ phê duyệt': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    'Chờ duyệt chỉnh sửa': 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
-    'Yêu cầu chỉnh sửa': 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400',
-    'Đã phê duyệt': 'bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400',
-    'Đang thực hiện': 'bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-400',
-    'Đang chấm điểm': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-    'Đã hoàn thành': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-    'Đã hủy': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    'Bản nháp': 'bg-gray-100 text-gray-600',
+    'Chờ phê duyệt': 'bg-yellow-100 text-yellow-700',
+    'Chờ duyệt chỉnh sửa': 'bg-yellow-100 text-yellow-700',
+    'Yêu cầu chỉnh sửa': 'bg-orange-100 text-orange-700',
+    'Đã phê duyệt': 'bg-sky-100 text-sky-700',
+    'Đang thực hiện': 'bg-blue-100 text-blue-700',
+    'Đang chấm điểm': 'bg-purple-100 text-purple-700',
+    'Đã hoàn thành': 'bg-green-100 text-green-700',
+    'Đã hủy': 'bg-red-100 text-red-700',
 };
 
 export default function SubmissionManagementPage() {
@@ -36,11 +37,11 @@ export default function SubmissionManagementPage() {
   const [loading, setLoading] = useState(true);
   
   // --- State Bộ lọc & Phân trang ---
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
   const [sorting, setSorting] = useState([]);
   const [allPlans, setAllPlans] = useState([]);
   const [selectedPlanId, setSelectedPlanId] = useState('all');
-  const [activeTab, setActiveTab] = useState('Chờ xác nhận');
+  const [activeTab, setActiveTab] = useState('Chờ xác nhận'); // Mặc định tab này
   const [columnFilters, setColumnFilters] = useState([]);
   
   // --- State Tìm kiếm ---
@@ -90,7 +91,6 @@ export default function SubmissionManagementPage() {
   const fetchData = useCallback(() => {
     setLoading(true);
     
-    // [FIX] Kiểm tra xem có phải đang ở trang lecturer không
     const isLecturerRoute = window.location.pathname.includes('/lecturer');
 
     const params = {
@@ -98,9 +98,8 @@ export default function SubmissionManagementPage() {
       per_page: pagination.pageSize,
       sort: sorting[0] ? `${sorting[0].id},${sorting[0].desc ? 'desc' : 'asc'}` : 'NGAY_NOP,asc',
       plan_id: selectedPlanId === 'all' ? undefined : selectedPlanId,
-      trangthai: activeTab === 'Tất cả' ? undefined : activeTab,
+      trangthai: activeTab === 'Tất cả' ? undefined : activeTab, // Filter theo Tab hiện tại
       search: debouncedSearch,
-      // [FIX] Nếu là trang GV, gửi kèm ID GVHD
       lecturer_id: (isLecturerRoute && user?.giangvien) ? user.giangvien.ID_GIANGVIEN : undefined
     };
 
@@ -117,6 +116,7 @@ export default function SubmissionManagementPage() {
     fetchData();
   }, [fetchData]);
 
+  // Reset trang về 1 khi thay đổi filter
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }));
   }, [selectedPlanId, activeTab, debouncedSearch]);
@@ -153,20 +153,25 @@ export default function SubmissionManagementPage() {
     onSuccess: handleSuccess,
   }), [handleSuccess]);
 
-  const compactStatCardClass = "p-3 shadow-sm border"; 
+  // [STYLE] Class nhỏ gọn cho StatCard
+  const compactStatCardClass = "p-2 shadow-sm border bg-card hover:bg-accent/5 transition-colors cursor-pointer"; 
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-8 pb-0 gap-0 bg-muted/10"> 
-      <div className="grid gap-2 grid-cols-2 lg:grid-cols-4 shrink-0">
+    // [LAYOUT] Container chính
+    <div className="h-full flex flex-col p-4 md:p-6 gap-4 bg-muted/10 overflow-hidden animate-in fade-in duration-500">
+      
+      {/* 1. Stats Area (Click vào thẻ để chuyển Tab) */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 shrink-0">
             <StatCard
                 title="Chờ xác nhận"
                 value={stats.pending}
                 icon={Clock}
-                description="Cần xử lý"
+                description="Cần xử lý ngay"
                 iconBgClass="bg-yellow-100 dark:bg-yellow-900/20"
                 iconColorClass="text-yellow-600 dark:text-yellow-400"
                 isLoading={loadingStats}
                 onClick={() => setActiveTab('Chờ xác nhận')}
+                isActive={activeTab === 'Chờ xác nhận'}
                 className={compactStatCardClass} 
             />
              <StatCard
@@ -178,114 +183,119 @@ export default function SubmissionManagementPage() {
                 iconColorClass="text-green-600 dark:text-green-400"
                 isLoading={loadingStats}
                 onClick={() => setActiveTab('Đã xác nhận')}
+                isActive={activeTab === 'Đã xác nhận'}
                 className={compactStatCardClass}
             />
              <StatCard
                 title="Yêu cầu nộp lại"
                 value={stats.rejected}
                 icon={AlertCircle}
-                description="Chưa đạt"
+                description="Chưa đạt yêu cầu"
                 iconBgClass="bg-red-100 dark:bg-red-900/20"
                 iconColorClass="text-red-600 dark:text-red-400"
                 isLoading={loadingStats}
                 onClick={() => setActiveTab('Yêu cầu nộp lại')}
+                isActive={activeTab === 'Yêu cầu nộp lại'}
                 className={compactStatCardClass}
             />
             <StatCard
                 title="Chưa nộp"
                 value={stats.not_submitted}
                 icon={FileWarning}
-                description="Đang chờ"
+                description="Đang chờ nộp"
                 iconBgClass="bg-gray-100 dark:bg-gray-800"
                 iconColorClass="text-gray-600 dark:text-gray-400"
                 isLoading={loadingStats}
+                // onClick={() => setActiveTab('Tất cả')} // Có thể map sang filter khác nếu muốn
                 className={compactStatCardClass}
             />
       </div>
 
-      <div className="flex-1 min-h-0 bg-background rounded-lg border shadow-sm flex flex-col overflow-hidden">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-            <div className="px-4 py-2 border-b bg-muted/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
-                <TabsList className="h-9 p-0 bg-transparent gap-1 justify-start w-full sm:w-auto overflow-x-auto no-scrollbar shrink-0">
+      {/* 2. Main Content Area */}
+      <div className="flex-1 flex flex-col bg-background rounded-xl border shadow-sm overflow-hidden">
+        
+        {/* Tabs & Toolbar */}
+        <div className="border-b bg-background p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-4 shrink-0">
+            {/* Tabs Control */}
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full lg:w-auto">
+                <TabsList className="grid w-full lg:w-auto grid-cols-4 h-9">
                     {['Chờ xác nhận', 'Đã xác nhận', 'Yêu cầu nộp lại', 'Tất cả'].map((tab) => (
                         <TabsTrigger 
                             key={tab} 
                             value={tab}
-                            className="data-[state=active]:bg-background data-[state=active]:shadow-sm border border-transparent data-[state=active]:border-border text-xs h-8 px-3 rounded-md"
+                            className="text-xs px-2 lg:px-4 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow-sm"
                         >
                             {tab}
                         </TabsTrigger>
                     ))}
                 </TabsList>
+            </Tabs>
 
-                <div className="flex items-center w-full sm:w-auto gap-2">
-                      <Select onValueChange={setSelectedPlanId} value={selectedPlanId || 'all'}>
-                        <SelectTrigger className="w-full sm:w-[350px] h-8 text-sm bg-background shadow-sm border-muted-foreground/20">
-                            <div className='flex items-center gap-2 truncate'>
-                                <BookCopy className='h-3.5 w-3.5 text-muted-foreground shrink-0' />
-                                <SelectValue placeholder="Tất cả kế hoạch" />
-                            </div>
-                        </SelectTrigger>
-                        <SelectContent align="end">
-                            <SelectItem value="all">
-                                <span className="font-medium">Tất cả kế hoạch</span>
-                            </SelectItem>
-                            {allPlans.map(plan => (
-                                <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                    <div className="flex items-center justify-between w-full gap-2">
-                                        <span className="font-medium truncate flex-1">{plan.TEN_DOT}</span>
-                                        {plan.TRANGTHAI && (
-                                            <Badge 
-                                                variant="outline" 
-                                                className={cn(
-                                                    "text-[10px] px-1.5 py-0 h-5 border-0 font-normal whitespace-nowrap shrink-0", 
-                                                    planStatusColors[plan.TRANGTHAI] || "bg-gray-100 text-gray-600"
-                                                )}
-                                            >
-                                                {plan.TRANGTHAI}
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
-            </div>
-
-            {/* Table Content */}
-            <div className="flex-1 min-h-0 overflow-hidden">
-                <TabsContent value={activeTab} className="h-full mt-0 p-0 data-[state=active]:flex flex-col">
-                    <DataTable
-                        columns={columns}
-                        data={submissions}
-                        pageCount={pageCount}
-                        loading={loading}
-                        pagination={pagination}
-                        setPagination={setPagination}
-                        sorting={sorting}
-                        setSorting={setSorting}
-                        
-                        searchColumnId="search_generic" 
-                        searchPlaceholder="Tìm theo đề tài, nhóm, sinh viên..." 
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                        
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        
-                        onAddUser={null}
-                        onImportUser={null}
-                        addBtnText=""
-                        bulkActions={null}
-                        
-                        containerClassName="flex-1 overflow-y-auto min-h-0 border-0 rounded-none relative"
-                        className="h-full flex flex-col p-4" 
-                        flexLayout={true} 
+            {/* Filter Tools (Search & Select Plan) */}
+            <div className="flex flex-col sm:flex-row items-center gap-2 w-full lg:w-auto">
+                <div className="relative w-full sm:w-60">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input 
+                        placeholder="Tìm theo đề tài, nhóm..." 
+                        className="pl-8 h-9 text-sm"
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
                     />
-                </TabsContent>
+                </div>
+
+                <Select onValueChange={setSelectedPlanId} value={selectedPlanId || 'all'}>
+                    <SelectTrigger className="w-full sm:w-[250px] h-9 text-sm">
+                        <div className='flex items-center gap-2 truncate'>
+                            <BookCopy className='h-3.5 w-3.5 text-muted-foreground shrink-0' />
+                            <SelectValue placeholder="Tất cả kế hoạch" />
+                        </div>
+                    </SelectTrigger>
+                    <SelectContent align="end" className="max-w-[300px]">
+                        <SelectItem value="all">
+                            <span className="font-medium">Tất cả kế hoạch</span>
+                        </SelectItem>
+                        {allPlans.map(plan => (
+                            <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                <div className="flex flex-col gap-0.5 text-left">
+                                    <span className="font-medium truncate w-full">{plan.TEN_DOT}</span>
+                                    <span className={cn("text-[10px] uppercase font-bold", 
+                                        planStatusColors[plan.TRANGTHAI]?.split(' ')[1] 
+                                    )}>
+                                        {plan.TRANGTHAI}
+                                    </span>
+                                </div>
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+
+                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" onClick={() => fetchData()}>
+                    <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                </Button>
             </div>
-        </Tabs>
+        </div>
+
+        {/* 3. Table Container */}
+        {/* Quan trọng: flex-1 overflow-y-auto để cuộn riêng phần bảng */}
+        <div className="flex-1 overflow-y-auto min-h-0 relative">
+            <DataTable
+                columns={columns}
+                data={submissions}
+                pageCount={pageCount}
+                loading={loading}
+                pagination={pagination}
+                setPagination={setPagination}
+                sorting={sorting}
+                setSorting={setSorting}
+                columnFilters={columnFilters}
+                setColumnFilters={setColumnFilters}
+                
+                // Tắt border của container con vì đã có border ở container cha
+                containerClassName="border-0 rounded-none h-full"
+                className="h-full"
+                flexLayout={true} // Chế độ flex cho bảng
+            />
+        </div>
       </div>
 
       {viewingSubmission && (

@@ -19,17 +19,24 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails, onA
     {
         accessorKey: "TEN_NHOM",
         header: ({ column }) => (
-            <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            <Button 
+                variant="ghost" 
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="-ml-3" // Căn lề trái cho header
+            >
                 Tên Nhóm <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
         ),
         cell: ({ row }) => (
-            <button
-                className="font-medium text-left hover:underline pl-2 group-data-[state=full]:text-muted-foreground text-blue-600 dark:text-blue-400"
-                onClick={() => onViewDetails(row.original)}
-            >
-                {row.original.TEN_NHOM}
-            </button>
+            // [UPDATE] flex items-center h-full để căn giữa dọc
+            <div className="flex items-center h-full">
+                <button
+                    className="font-medium text-left hover:underline group-data-[state=full]:text-muted-foreground text-blue-600 dark:text-blue-400"
+                    onClick={() => onViewDetails(row.original)}
+                >
+                    {row.original.TEN_NHOM}
+                </button>
+            </div>
         )
     },
 
@@ -37,9 +44,11 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails, onA
         accessorKey: "nhomtruong.HODEM_VA_TEN",
         header: "Nhóm trưởng",
         cell: ({ row }) => (
-            <span className="group-data-[state=full]:text-muted-foreground">
-                {row.original.nhomtruong?.HODEM_VA_TEN ?? 'N/A'}
-            </span>
+            <div className="flex items-center h-full">
+                <span className="group-data-[state=full]:text-muted-foreground">
+                    {row.original.nhomtruong?.HODEM_VA_TEN ?? 'N/A'}
+                </span>
+            </div>
         ),
     },
 
@@ -47,15 +56,13 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails, onA
         accessorKey: "SO_THANHVIEN_HIENTAI",
         header: () => <div className="text-center">Thành viên</div>,
         cell: ({ row }) => {
-            // [LOGIC MỚI] Lấy số lượng hiện tại và tối đa từ Kế hoạch
             const current = row.original.SO_THANHVIEN_HIENTAI;
-            // Lấy từ quan hệ kehoach (cần đảm bảo Backend đã eager load 'kehoach')
             const max = row.original.kehoach?.SO_THANHVIEN_TOIDA || 4;
-            
             const isFull = current >= max;
 
+            // [UPDATE] flex items-center h-full justify-center
             return (
-                <div className="flex items-center justify-center gap-2 group-data-[state=full]:text-muted-foreground">
+                <div className="flex items-center justify-center h-full gap-2 group-data-[state=full]:text-muted-foreground">
                     <Users className={cn("h-4 w-4", isFull ? "text-red-500" : "text-muted-foreground")} />
                     <span className={cn(isFull && "text-red-600 font-medium")}>
                         {current} / {max}
@@ -80,7 +87,7 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails, onA
             const statusStyle = statusConfig[displayStatus] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200 border-gray-200 dark:border-gray-700';
 
             return (
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center h-full gap-2 flex-wrap">
                     {(group.LA_NHOM_DACBIET === true || group.LA_NHOM_DACBIET === 1) && (
                         <Badge variant="destructive"
                             className="gap-1.5 pl-1.5 pr-2 py-0.5 text-xs">
@@ -103,21 +110,27 @@ export const getColumns = ({ onEdit, onAddStudent, onSuccess, onViewDetails, onA
         accessorKey: "NGAYTAO",
         header: "Ngày tạo",
         cell: ({ row }) => (
-            <span className="text-xs group-data-[state=full]:text-muted-foreground">
-                {format(new Date(row.original.NGAYTAO), 'dd/MM/yyyy', { locale: vi })}
-            </span>
+            <div className="flex items-center h-full">
+                <span className="text-xs group-data-[state=full]:text-muted-foreground">
+                    {format(new Date(row.original.NGAYTAO), 'dd/MM/yyyy', { locale: vi })}
+                </span>
+            </div>
         )
     },
 
     {
         id: "actions",
-        cell: ({ row }) => <GroupRowActions 
-            row={row} 
-            onEdit={onEdit} 
-            onAddStudent={onAddStudent} 
-            onSuccess={onSuccess} 
-            onAssignTopic={onAssignTopic}
-        />,
+        cell: ({ row }) => (
+            <div className="flex items-center justify-center h-full">
+                <GroupRowActions 
+                    row={row} 
+                    onEdit={onEdit} 
+                    onAddStudent={onAddStudent} 
+                    onSuccess={onSuccess} 
+                    onAssignTopic={onAssignTopic}
+                />
+            </div>
+        ),
     },
 
     {

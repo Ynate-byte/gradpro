@@ -18,9 +18,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
 } from "@/components/ui/popover";
 
 // Icons
@@ -44,7 +44,7 @@ const getPlanGridClass = (count) => {
     }
 };
 
-// --- COMPONENT: QUOTA PROGRESS CARD (Thẻ tiến độ chỉ tiêu) ---
+// --- COMPONENT: QUOTA PROGRESS CARD ---
 const QuotaProgressCard = ({ assigned, created, onClick }) => {
     const percent = assigned > 0 ? Math.min(100, Math.round((created / assigned) * 100)) : 0;
     const missing = Math.max(0, assigned - created);
@@ -100,7 +100,7 @@ const QuotaProgressCard = ({ assigned, created, onClick }) => {
     );
 };
 
-// --- COMPONENT: REMINDER ITEM (Mục nhắc nhở) ---
+// --- COMPONENT: REMINDER ITEM ---
 const ReminderItem = ({ icon: Icon, title, description, actionText, onAction, variant = "default" }) => {
     const variants = {
         urgent: "bg-red-50 border-red-200 text-red-900 dark:bg-red-900/20 dark:border-red-900 dark:text-red-200",
@@ -139,7 +139,7 @@ const ReminderItem = ({ icon: Icon, title, description, actionText, onAction, va
     );
 };
 
-// --- COMPONENT: PLAN TIMELINE (Tiến độ kế hoạch) ---
+// --- COMPONENT: PLAN TIMELINE ---
 const PlanTimelineItem = ({ plan }) => {
     const currentPhase = plan.current_phase;
     const nextPhase = plan.next_phase;
@@ -223,12 +223,11 @@ const PlanTimelineItem = ({ plan }) => {
     );
 };
 
-// --- COMPONENT: COUNCIL CARD (Chi tiết hội đồng) ---
+// --- COMPONENT: COUNCIL CARD ---
 const CouncilCard = () => {
     const navigate = useNavigate();
     const { user } = useAuth();
     
-    // Fetch danh sách hội đồng của giảng viên
     const { data: councils, isLoading } = useQuery({
         queryKey: ['lecturerCouncils'],
         queryFn: getHoiDongByGiangVien,
@@ -238,12 +237,10 @@ const CouncilCard = () => {
 
     const totalCount = councils?.length || 0;
     
-    // Tìm hội đồng sắp diễn ra gần nhất (tính từ hôm nay)
     const upcomingCouncil = councils
         ?.filter(c => c.NGAY_BAOCAO && new Date(c.NGAY_BAOCAO) >= new Date().setHours(0,0,0,0))
         ?.sort((a, b) => new Date(a.NGAY_BAOCAO) - new Date(b.NGAY_BAOCAO))[0];
 
-    // Helper: Map vai trò sang tiếng Việt
     const getRoleName = (role) => {
         switch(role) {
             case 'chutich': return 'Chủ tịch';
@@ -253,11 +250,8 @@ const CouncilCard = () => {
         }
     };
 
-    // Helper: Lấy vai trò của user hiện tại trong hội đồng đó
     const getMyRole = (council) => {
-        // Tìm giảng viên hiện tại trong danh sách giangviens của hội đồng
         if (!council.giangviens || !user?.giangvien?.ID_GIANGVIEN) return 'Thành viên';
-        
         const me = council.giangviens.find(gv => gv.ID_GIANGVIEN === user.giangvien.ID_GIANGVIEN);
         return getRoleName(me?.VAITRO);
     };
@@ -267,11 +261,9 @@ const CouncilCard = () => {
             className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 p-5 text-white shadow-lg transition-all hover:scale-[1.01] cursor-pointer"
             onClick={() => navigate('/lecturer/council')}
         >
-            {/* Background Decoration */}
             <GraduationCap className="absolute -bottom-6 -right-6 h-32 w-32 text-white/10 transition-transform duration-500 group-hover:rotate-12 group-hover:scale-110" />
             
             <div className="relative z-10 flex h-full flex-col justify-between">
-                {/* Header */}
                 <div className="flex items-start justify-between">
                     <div>
                         <p className="text-xs font-bold uppercase tracking-wider text-indigo-200">Hội đồng tham gia</p>
@@ -285,7 +277,6 @@ const CouncilCard = () => {
                     </div>
                 </div>
 
-                {/* Detail Content: Upcoming Council */}
                 <div className="mt-6 space-y-3">
                     {upcomingCouncil ? (
                         <div className="rounded-lg bg-white/10 p-3 backdrop-blur-md border border-white/10">
@@ -318,7 +309,6 @@ const CouncilCard = () => {
                     )}
                 </div>
 
-                {/* Footer Action */}
                 <div className="mt-4 flex items-center gap-1 text-xs font-medium text-indigo-200 transition-colors group-hover:text-white">
                     Xem danh sách đầy đủ <ArrowRight className="h-3 w-3 transition-transform group-hover:translate-x-1" />
                 </div>
@@ -336,7 +326,7 @@ export default function LecturerDashboard() {
     const { data: stats, isLoading: loadStats } = useQuery({
         queryKey: ['lecturerDashboardStats'],
         queryFn: getLecturerDashboardStats,
-        refetchInterval: 60000, // Tự động refresh mỗi 1 phút
+        refetchInterval: 60000,
     });
 
     // 2. Lấy danh sách nhóm đang hướng dẫn
@@ -359,7 +349,6 @@ export default function LecturerDashboard() {
         queryKey: ['lecturerMyQuotaDetail'],
         queryFn: async () => {
             const plans = await getAllPlans();
-            // Ưu tiên lấy kế hoạch đang chạy, nếu không thì lấy cái mới nhất
             const activePlan = plans.find(p => p.TRANGTHAI === 'Đang thực hiện' || p.TRANGTHAI === 'Chờ duyệt chỉnh sửa') || plans[0];
             
             if (activePlan) {
@@ -385,7 +374,6 @@ export default function LecturerDashboard() {
         );
     }
 
-    // Extract Data từ API stats
     const { 
         pendingSubmissionsCount = 0, 
         missingQuotaCount = 0, 
@@ -395,14 +383,13 @@ export default function LecturerDashboard() {
     
     const hasReminders = pendingSubmissionsCount > 0 || missingQuotaCount > 0 || pendingReviewsCount > 0;
 
-    // Extract Data từ API Quota
     const quotaAssigned = myQuotaData?.quota_assigned || 0;
     const topicsCreated = myQuotaData?.topics_created || 0;
 
     return (
-        <div className="min-h-screen bg-gray-50/50 dark:bg-background p-4 md:p-8 space-y-6">
-            {/* Grid Layout Chính: 2/3 Trái, 1/3 Phải */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+        // [FIX SCROLL] Thêm h-full và overflow-y-auto
+        <div className="h-full overflow-y-auto bg-gray-50/50 dark:bg-background p-4 md:p-8">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 pb-10">
                 
                 {/* --- CỘT TRÁI (2/3): KẾ HOẠCH & NHẮC NHỞ & DANH SÁCH NHÓM --- */}
                 <div className="xl:col-span-2 space-y-8">
@@ -506,7 +493,6 @@ export default function LecturerDashboard() {
                                         const groupCode = assignment.nhom?.ID_NHOM || 'N/A';
                                         const status = assignment.TRANGTHAI || 'Đang thực hiện';
 
-                                        // Badge Color Logic
                                         let statusBadgeClass = "bg-gray-100 text-gray-700 border-gray-200";
                                         if (status === 'Đang thực hiện') statusBadgeClass = "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300";
                                         if (status === 'Đã hoàn thành') statusBadgeClass = "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300";
@@ -555,8 +541,8 @@ export default function LecturerDashboard() {
 
                 {/* --- CỘT PHẢI (1/3): LỊCH & TIỆN ÍCH --- */}
                 <div className="space-y-6">
-                     {/* Lịch họp hôm nay */}
-                     <Card className="shadow-sm border-t-4 border-t-blue-500 overflow-hidden">
+                      {/* Lịch họp hôm nay */}
+                      <Card className="shadow-sm border-t-4 border-t-blue-500 overflow-hidden">
                         <CardHeader className="pb-2 px-5 pt-5">
                             <div className="flex justify-between items-center">
                                 <CardTitle className="text-base font-bold flex items-center gap-2">
@@ -597,11 +583,11 @@ export default function LecturerDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Thẻ Hội đồng (MỚI) */}
+                    {/* Thẻ Hội đồng */}
                     <CouncilCard />
 
-                     {/* Thẻ Quota (Mini) */}
-                     <div className="border rounded-xl p-4 bg-card shadow-sm">
+                      {/* Thẻ Quota (Mini) */}
+                      <div className="border rounded-xl p-4 bg-card shadow-sm">
                         <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-1">
                              <Target className="w-3 h-3" /> Tiến độ ra đề
                         </h4>
@@ -610,7 +596,7 @@ export default function LecturerDashboard() {
                             created={topicsCreated}
                             onClick={() => navigate('/lecturer/quota-management')}
                         />
-                     </div>
+                      </div>
                 </div>
             </div>
         </div>

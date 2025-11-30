@@ -7,9 +7,6 @@ import { format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils'; 
 
-/**
- * Cấu hình màu sắc cho các trạng thái của kế hoạch.
- */
 const statusConfig = {
     'Bản nháp': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
     'Chờ phê duyệt': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
@@ -22,55 +19,55 @@ const statusConfig = {
     'Đã hủy': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
 };
 
-
-/**
- * Hàm trả về cấu hình các cột cho bảng dữ liệu kế hoạch.
- */
 export const getColumns = ({ onViewDetails, onSuccess }) => [
     {
         accessorKey: "TEN_DOT",
         header: ({ column }) => (
-            <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+            <Button 
+                variant="ghost" 
+                onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="-ml-3"
+            >
                 Tên Kế hoạch <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
         ),
         cell: ({ row }) => (
-            <button
-                className="font-medium text-left hover:underline pl-2"
-                onClick={() => onViewDetails(row.original.ID_KEHOACH)}
-            >
-                {row.original.TEN_DOT}
-            </button>
+            <div className="flex items-center h-full">
+                <button
+                    className="font-medium text-left hover:underline text-blue-600 dark:text-blue-400 truncate max-w-[300px]"
+                    onClick={() => onViewDetails(row.original.ID_KEHOACH)}
+                    title={row.original.TEN_DOT}
+                >
+                    {row.original.TEN_DOT}
+                </button>
+            </div>
         )
     },
     {
         accessorKey: "KHOAHOC",
         header: "Khóa học",
-        filterFn: (row, id, value) => { 
-            return value.includes(row.getValue(id))
-        },
+        cell: ({ row }) => <div className="flex items-center h-full">{row.original.KHOAHOC}</div>,
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
     {
         accessorKey: "NAMHOC",
         header: "Năm học",
-        cell: ({ row }) => `${row.original.NAMHOC}`,
-        filterFn: (row, id, value) => { 
-            return value.includes(row.getValue(id))
-        },
+        cell: ({ row }) => <div className="flex items-center h-full">{row.original.NAMHOC}</div>,
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
-        {
+    {
         accessorKey: "HEDAOTAO",
         header: "Hệ đào tạo",
-        filterFn: (row, id, value) => { // Thêm filterFn
-            return value.includes(row.getValue(id))
-        },
+        cell: ({ row }) => <div className="flex items-center h-full">{row.original.HEDAOTAO}</div>,
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
     {
         accessorKey: "NGAY_BATDAU",
         header: "Thời gian",
         cell: ({ row }) => (
-            <div className="text-xs">
-                {format(new Date(row.original.NGAY_BATDAU), 'dd/MM/yyyy', { locale: vi })} - {format(new Date(row.original.NGAY_KETHUC), 'dd/MM/yyyy', { locale: vi })}
+            <div className="flex flex-col justify-center h-full text-xs text-muted-foreground">
+                <span>{format(new Date(row.original.NGAY_BATDAU), 'dd/MM/yyyy', { locale: vi })}</span>
+                <span>- {format(new Date(row.original.NGAY_KETHUC), 'dd/MM/yyyy', { locale: vi })}</span>
             </div>
         )
     },
@@ -81,26 +78,27 @@ export const getColumns = ({ onViewDetails, onSuccess }) => [
             const status = row.original.TRANGTHAI;
             const config = statusConfig[status] || 'bg-gray-100 text-gray-800';
             return (
-                <Badge variant="outline" className={cn('border-0 text-xs', config)}>
-                    {status}
-                </Badge>
+                <div className="flex items-center h-full">
+                    <Badge variant="outline" className={cn('border-0 text-[10px] px-1.5 py-0.5', config)}>
+                        {status}
+                    </Badge>
+                </div>
             );
         },
-        filterFn: (row, id, value) => {
-            return value.includes(row.getValue(id))
-        },
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
     {
         id: "actions",
-        cell: ({ row }) => <PlanRowActions row={row} onSuccess={onSuccess} />,
+        cell: ({ row }) => (
+            <div className="flex items-center justify-center h-full">
+                <PlanRowActions row={row} onSuccess={onSuccess} />
+            </div>
+        ),
     },
 
-    // Cột ẩn để lọc
     {
         accessorKey: "HOCKY",
         enableHiding: false, 
-        filterFn: (row, id, value) => { 
-            return value.includes(row.getValue(id))
-        },
+        filterFn: (row, id, value) => value.includes(row.getValue(id)),
     },
 ];

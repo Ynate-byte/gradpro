@@ -8,81 +8,12 @@ import { UserImportDialog } from './components/UserImportDialog';
 import { UserDetailSheet } from './components/UserDetailSheet';
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, GraduationCap, Briefcase, ShieldCheck, Circle, Loader2 } from 'lucide-react';
+import { Users, GraduationCap, Briefcase, ShieldCheck } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import { cn } from '@/lib/utils';
 import { useTheme } from "@/components/theme-provider";
-
-// Component StatCard (Đã tối ưu cho Reduce Motion)
-const StatCard = ({ icon: Icon, title, value, description, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot }) => {
-    const shouldReduceMotion = useReducedMotion();
-
-    return (
-        <motion.div 
-            className="bg-card text-card-foreground p-2 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1"
-            whileHover={shouldReduceMotion ? {} : { y: -4 }}
-            transition={{ type: "spring", stiffness: 300, damping: 20 }}
-        >
-            <motion.div 
-                className={cn("p-3 rounded-lg", iconBgClass)}
-                initial={false}
-                animate={shouldReduceMotion ? {} : { 
-                    scale: value === 'loading' ? [1, 1.08, 1] : 1,
-                    rotate: value === 'loading' ? [0, 5, -5, 0] : 0
-                }}
-                transition={{ 
-                    duration: 2, 
-                    repeat: value === 'loading' ? Infinity : 0,
-                    ease: "easeInOut"
-                }}
-            >
-                <Icon className={cn("h-6 w-6", iconColorClass)} />
-            </motion.div>
-            <div className="flex-1">
-                <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-                <div className="flex items-center gap-2 h-8 overflow-hidden">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={value}
-                            initial={shouldReduceMotion ? { opacity: 1 } : { opacity: 0, y: 20, scale: 0.8 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -20, scale: 0.8 }}
-                            transition={{ duration: shouldReduceMotion ? 0 : 0.4, ease: "easeOut" }}
-                            className="flex items-center gap-2"
-                        >
-                            {value === 'loading' ? (
-                                <Loader2 className={cn("h-6 w-6 text-muted-foreground", shouldReduceMotion ? "" : "animate-spin")}/>
-                            ) : (
-                                <>
-                                    <p className="text-2xl font-bold">{value}</p>
-                                    {hasStatusDot && (
-                                        <motion.div
-                                            initial={{ scale: 0 }}
-                                            animate={{ scale: 1 }}
-                                            transition={{ delay: 0.2, type: "spring" }}
-                                        >
-                                            <Circle className={cn("h-2.5 w-2.5 fill-green-500 text-green-500", !shouldReduceMotion && "animate-pulse")} />
-                                        </motion.div>
-                                    )}
-                                </>
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-                {description && (
-                    <motion.p 
-                        className="text-xs text-muted-foreground mt-0.5"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: shouldReduceMotion ? 0 : 0.1 }}
-                    >
-                        {description}
-                    </motion.p>
-                )}
-            </div>
-        </motion.div>
-    );
-};
+// [QUAN TRỌNG] Import StatCard xịn từ Shared component
+import StatCard from '@/components/shared/StatCard'; 
 
 // Animation variants
 const getVariants = (shouldReduce) => {
@@ -90,7 +21,6 @@ const getVariants = (shouldReduce) => {
         return {
             container: { visible: { opacity: 1 } },
             item: { visible: { opacity: 1, y: 0, scale: 1 } },
-            table: { visible: { opacity: 1, y: 0, scale: 1 } }
         };
     }
     return {
@@ -102,30 +32,21 @@ const getVariants = (shouldReduce) => {
             }
         },
         item: {
-            hidden: { y: 30, opacity: 0, scale: 0.95 },
+            hidden: { y: 20, opacity: 0, scale: 0.95 },
             visible: { 
                 y: 0, opacity: 1, scale: 1,
                 transition: { type: "spring", stiffness: 100, damping: 15 }
             }
-        },
-        table: {
-            hidden: { opacity: 0, y: 30, scale: 0.98 },
-            visible: { 
-                opacity: 1, y: 0, scale: 1,
-                transition: { type: "spring", stiffness: 80, damping: 18, duration: 0.5 }
-            },
-            exit: { opacity: 0, y: -30, scale: 0.98, transition: { duration: 0.3 } }
         }
     };
 };
 
-// Cấu hình ẩn cột mặc định (Ẩn các cột ID)
 const userColumnVisibility = {
     chuyen_nganh: false,
     khoa_bomon: false,
     chuyen_nganh_id: false,
     khoa_bomon_id: false,
-    chuc_vu_id: false, // Ẩn cột mảng ID chức vụ
+    chuc_vu_id: false,
 };
 
 export default function UserManagementPage() {
@@ -140,7 +61,7 @@ export default function UserManagementPage() {
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [viewingUserId, setViewingUserId] = useState(null);
     const [activeTab, setActiveTab] = useState("Tất cả");
-    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+    const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
     const [columnFilters, setColumnFilters] = useState([]);
     const [sorting, setSorting] = useState([]);
     const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
@@ -153,10 +74,9 @@ export default function UserManagementPage() {
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme(); 
     const isReduced = reduceMotion || shouldReduceMotion;
-
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // 1. Fetch các Options cho bộ lọc (Chuyên ngành, Khoa/BM, Chức vụ)
+    // 1. Fetch Options
     useEffect(() => {
         Promise.all([
             getChuyenNganhs().catch(() => []),
@@ -165,15 +85,12 @@ export default function UserManagementPage() {
         ]).then(([chuyenNganhs, khoaBomons, positions]) => {
             setChuyenNganhOptions(chuyenNganhs);
             setKhoaBomonOptions(khoaBomons);
-            // Map chức vụ sang dạng { label, value } để dùng cho filter
             setPositionOptions(positions.map(p => ({ label: p.TEN_CHUCVU, value: String(p.ID_CHUCVU) })));
         })
-        .catch(() => {
-            toast.error("Lỗi khi tải các tùy chọn lọc.");
-        });
+        .catch(() => toast.error("Lỗi khi tải các tùy chọn lọc."));
     }, []);
 
-    // 2. Hàm Fetch dữ liệu chính (Người dùng)
+    // 2. Fetch Data
     const fetchData = useCallback((isInitialLoad = false) => {
         if (isInitialLoad || activeTab || columnFilters.length > 0 || debouncedSearchTerm) {
             setLoadingStats(true);
@@ -182,36 +99,20 @@ export default function UserManagementPage() {
 
         let roleFilter = undefined;
         let positionFilterIds = undefined;
-
-        // Lấy filter chức vụ thủ công từ dropdown (nếu người dùng chọn)
         const manualPositionFilter = columnFilters.find(f => f.id === 'chuc_vu_id')?.value;
 
-        // Logic map Tab sang API Params
-        if (activeTab === "Sinh viên") {
-            roleFilter = "Sinh viên";
-        } else if (activeTab === "Giảng viên") {
-            roleFilter = "Giảng viên";
-        } else if (activeTab === "Giáo vụ") {
-            // Tìm ID của chức vụ "Giáo vụ"
+        if (activeTab === "Sinh viên") roleFilter = "Sinh viên";
+        else if (activeTab === "Giảng viên") roleFilter = "Giảng viên";
+        else if (activeTab === "Giáo vụ") {
             const gvOption = positionOptions.find(p => p.label.toLowerCase().includes('giáo vụ'));
-            if (gvOption) {
-                positionFilterIds = [gvOption.value]; 
-            }
+            if (gvOption) positionFilterIds = [gvOption.value]; 
         } else if (activeTab === "Trưởng khoa") {
-            // Tìm ID của chức vụ "Trưởng khoa"
             const tkOption = positionOptions.find(p => p.label.toLowerCase().includes('trưởng khoa'));
-            if (tkOption) {
-                positionFilterIds = [tkOption.value];
-            }
+            if (tkOption) positionFilterIds = [tkOption.value];
         }
 
-        // Nếu người dùng chọn thêm filter chức vụ từ dropdown
         if (manualPositionFilter && manualPositionFilter.length > 0) {
-            // Nếu đang ở Tab "Tất cả" hoặc "Giảng viên", ưu tiên bộ lọc thủ công (hoặc gộp vào nếu logic backend hỗ trợ)
-            // Ở đây ta ưu tiên bộ lọc thủ công nếu chưa có filter từ Tab
-            if (!positionFilterIds) {
-                positionFilterIds = manualPositionFilter;
-            }
+            if (!positionFilterIds) positionFilterIds = manualPositionFilter;
         }
         
         const params = {
@@ -222,7 +123,7 @@ export default function UserManagementPage() {
             statuses: columnFilters.find(f => f.id === 'trang_thai')?.value,
             chuyen_nganh_ids: columnFilters.find(f => f.id === 'chuyen_nganh_id')?.value,
             khoa_bomon_ids: columnFilters.find(f => f.id === 'khoa_bomon_id')?.value,
-            position_ids: positionFilterIds, // Gửi mảng ID chức vụ
+            position_ids: positionFilterIds,
             sort: sorting[0] ? `${sorting[0].id},${sorting[0].desc ? 'desc' : 'asc'}` : undefined,
         };
         
@@ -232,16 +133,15 @@ export default function UserManagementPage() {
                 setPageCount(response.last_page);
                 setTotal(response.total);
             })
-            .catch(error => toast.error("Lỗi khi tải dữ liệu người dùng."))
+            .catch(error => toast.error("Lỗi khi tải dữ liệu."))
             .finally(() => {
                 setLoading(false);
                 setLoadingStats(false);
             });
     }, [pagination, columnFilters, sorting, activeTab, debouncedSearchTerm, positionOptions]);
 
-    // Gọi fetchData khi dependencies thay đổi (đặc biệt là khi positionOptions đã load xong)
     useEffect(() => {
-        if (positionOptions.length > 0 || activeTab === 'Tất cả' || activeTab === 'Sinh viên' || activeTab === 'Giảng viên') {
+        if (positionOptions.length > 0 || ['Tất cả','Sinh viên','Giảng viên'].includes(activeTab)) {
              fetchData(true);
         }
     }, [fetchData, positionOptions.length]);
@@ -249,10 +149,7 @@ export default function UserManagementPage() {
     const handleFormSuccess = () => fetchData(true);
     const handleOpenCreateDialog = () => { setEditingUser(null); setIsDialogOpen(true); };
     const handleOpenEditDialog = (user) => { setEditingUser(user); setIsDialogOpen(true); };
-    const handleOpenViewSheet = (user) => {
-        setViewingUserId(user.ID_NGUOIDUNG);
-        setIsSheetOpen(true);
-    };
+    const handleOpenViewSheet = (user) => { setViewingUserId(user.ID_NGUOIDUNG); setIsSheetOpen(true); };
 
     const columns = useMemo(() => getColumns({
         onEdit: handleOpenEditDialog,
@@ -260,222 +157,144 @@ export default function UserManagementPage() {
         onViewDetails: handleOpenViewSheet
     }), [handleFormSuccess]);
 
-    // Reset trang về 1 khi thay đổi bộ lọc/tab/search
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters, debouncedSearchTerm]);
 
-    // --- KHÔI PHỤC BIẾN THỐNG KÊ ---
-    // Tính toán số liệu hiển thị trên Card (Dựa trên dữ liệu trang hiện tại hoặc tổng số nếu có API stats riêng)
-    // Lưu ý: data.filter chỉ đếm trên trang hiện tại. Để chính xác cần API stats.
-    // Ở đây ta dùng tạm logic cũ đếm trên trang để không bị lỗi crash.
-    
-    const totalStudents = useMemo(() => 
-        loadingStats ? 'loading' : (activeTab === 'Sinh viên' ? total.toLocaleString('vi-VN') : '...'), 
-    [activeTab, total, loadingStats]);
-    
-    const totalLecturers = useMemo(() => 
-        loadingStats ? 'loading' : data.filter(u => ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(u.vaitro?.TEN_VAITRO)).length, 
-    [data, loadingStats]);
+    // Stats Logic
+    const totalStudents = useMemo(() => loadingStats ? 'loading' : (activeTab === 'Sinh viên' ? total.toLocaleString('vi-VN') : '...'), [activeTab, total, loadingStats]);
+    const totalLecturers = useMemo(() => loadingStats ? 'loading' : data.filter(u => ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(u.vaitro?.TEN_VAITRO)).length, [data, loadingStats]);
+    const activeUsers = useMemo(() => loadingStats ? 'loading' : data.filter(u => u.TRANGTHAI_KICHHOAT).length, [data, loadingStats]);
 
-    const activeUsers = useMemo(() => 
-        loadingStats ? 'loading' : data.filter(u => u.TRANGTHAI_KICHHOAT).length, 
-    [data, loadingStats]);
-
-    // Chuẩn bị Options cho các bộ lọc faceted
+    // Filter Options Logic
     const chuyenNganhFilterOptions = useMemo(() => (chuyenNganhOptions || []).map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) })), [chuyenNganhOptions]);
     const khoaBomonFilterOptions = useMemo(() => (khoaBomonOptions || []).map(kb => ({ label: kb.TEN_KHOA_BOMON, value: String(kb.ID_KHOA_BOMON) })), [khoaBomonOptions]);
-    // positionOptions đã được map ở useEffect đầu tiên
 
+    // Render Table
     const renderDataTable = (tabName) => {
-        const [tableHeight, setTableHeight] = useState('auto');
-        const tableRef = React.useRef(null);
-
-        React.useLayoutEffect(() => {
-            if (tableRef.current) {
-                const height = tableRef.current.getBoundingClientRect().height;
-                setTableHeight(height);
-            }
-        }, [data, loading, tabName]);
-
         return (
-            <motion.div
-                initial={false}
-                animate={{ height: tableHeight }}
-                transition={{
-                    duration: isReduced ? 0 : 0.5,
-                    ease: [0.4, 0, 0.2, 1]
-                }}
-                style={{ overflow: 'hidden' }}
-            >
-                <div ref={tableRef}>
-                    <DataTable
-                        key={tabName}
-                        columns={columns}
-                        data={data}
-                        pageCount={pageCount}
-                        loading={loading}
-                        pagination={pagination}
-                        setPagination={setPagination}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        sorting={sorting}
-                        setSorting={setSorting}
-                        
-                        // Toolbar Actions
-                        onAddUser={handleOpenCreateDialog}
-                        onImportUser={() => setIsImportOpen(true)}
-                        addBtnText="Thêm người dùng"
-                        
-                        // Search
-                        searchColumnId="HODEM_VA_TEN"
-                        searchPlaceholder="Tìm theo tên, email, mã..."
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-
-                        // Filters
-                        statusColumnId="trang_thai"
-                        statusOptions={[{ value: "1", label: "Hoạt động" }, { value: "0", label: "Vô hiệu" }]}
-                        
-                        chuyenNganhFilterColumnId="chuyen_nganh_id"
-                        chuyenNganhFilterOptions={(tabName === 'Tất cả' || tabName === 'Sinh viên') ? chuyenNganhFilterOptions : undefined}
-                        
-                        khoaBomonFilterColumnId="khoa_bomon_id"
-                        khoaBomonFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? khoaBomonFilterOptions : undefined}
-                        
-                        chucVuFilterColumnId="chuc_vu_id" 
-                        chucVuFilterOptions={(tabName === 'Tất cả' || tabName === 'Giảng viên') ? positionOptions : undefined}
-
-                        // Other configs
-                        columnVisibility={userColumnVisibility}
-                        state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility: userColumnVisibility }}
-                        onRowSelectionChange={setRowSelection}
-                        onSuccess={handleFormSuccess}
-                    />
-                </div>
-            </motion.div>
+            <div className="flex-1 min-h-0 h-full"> 
+                <DataTable
+                    key={tabName}
+                    columns={columns}
+                    data={data}
+                    pageCount={pageCount}
+                    loading={loading}
+                    pagination={pagination}
+                    setPagination={setPagination}
+                    columnFilters={columnFilters}
+                    setColumnFilters={setColumnFilters}
+                    sorting={sorting}
+                    setSorting={setSorting}
+                    flexLayout={true} 
+                    containerClassName="h-full border-none shadow-none"
+                    
+                    // Toolbar props
+                    onAddUser={handleOpenCreateDialog}
+                    onImportUser={() => setIsImportOpen(true)}
+                    addBtnText="Thêm mới"
+                    searchColumnId="HODEM_VA_TEN"
+                    searchPlaceholder="Tìm kiếm..."
+                    searchTerm={searchTerm}
+                    onSearchChange={setSearchTerm}
+                    
+                    // Filters
+                    statusColumnId="trang_thai"
+                    statusOptions={[{ value: "1", label: "Hoạt động" }, { value: "0", label: "Vô hiệu" }]}
+                    chuyenNganhFilterColumnId="chuyen_nganh_id"
+                    chuyenNganhFilterOptions={(tabName === 'Tất cả' || tabName === 'Sinh viên') ? chuyenNganhFilterOptions : undefined}
+                    khoaBomonFilterColumnId="khoa_bomon_id"
+                    khoaBomonFilterOptions={(tabName === 'Tất cả' || ['Giảng viên', 'Giáo vụ', 'Trưởng khoa'].includes(tabName)) ? khoaBomonFilterOptions : undefined}
+                    chucVuFilterColumnId="chuc_vu_id" 
+                    chucVuFilterOptions={(tabName === 'Tất cả' || tabName === 'Giảng viên') ? positionOptions : undefined}
+                    
+                    columnVisibility={userColumnVisibility}
+                    state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility: userColumnVisibility }}
+                    onRowSelectionChange={setRowSelection}
+                    onSuccess={handleFormSuccess}
+                />
+            </div>
         );
     };
 
     return (
-        <>
+        <div className="h-full flex flex-col p-4 gap-4">
+            {/* [FIX] Stats Cards: Sử dụng StatCard xịn import từ shared để có hiệu ứng */}
             <motion.div 
-                className="flex-1 space-y-6 p-4 md:p-8"
-                initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: isReduced ? 0 : 0.3 }}
+                className="flex-none grid gap-4 grid-cols-2 lg:grid-cols-4"
+                variants={variants.container}
+                initial="hidden"
+                animate="visible"
             >
-                {/* Stats Cards */}
-                <motion.div
-                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                    variants={variants.container}
-                    initial="hidden"
-                    animate="visible"
-                >
-                    <motion.div variants={variants.item}>
-                        <StatCard 
-                            icon={Users} 
-                            title="Tổng số" 
-                            value={loadingStats ? 'loading' : total.toLocaleString('vi-VN')} 
-                            description="tài khoản hiển thị" 
-                            iconBgClass="bg-blue-100 dark:bg-blue-900/30" 
-                            iconColorClass="text-blue-600 dark:text-blue-400" 
-                        />
-                    </motion.div>
-                    <motion.div variants={variants.item}>
-                        <StatCard 
-                            icon={GraduationCap} 
-                            title="Sinh viên" 
-                            value={totalStudents} 
-                            description="trên trang này" 
-                            iconBgClass="bg-sky-100 dark:bg-sky-900/30" 
-                            iconColorClass="text-sky-600 dark:text-sky-400" 
-                        />
-                    </motion.div>
-                    <motion.div variants={variants.item}>
-                        <StatCard 
-                            icon={Briefcase} 
-                            title="Giảng viên & CV" 
-                            value={totalLecturers} 
-                            description="trên trang này" 
-                            iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" 
-                            iconColorClass="text-indigo-600 dark:text-indigo-400" 
-                        />
-                    </motion.div>
-                    <motion.div variants={variants.item}>
-                        <StatCard 
-                            icon={ShieldCheck} 
-                            title="Đang hoạt động" 
-                            value={activeUsers} 
-                            description="trên trang này" 
-                            iconBgClass="bg-green-100 dark:bg-green-900/30" 
-                            iconColorClass="text-green-600 dark:text-green-400" 
-                            hasStatusDot={true}
-                        />
-                    </motion.div>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard 
+                        icon={Users} title="Tổng số" 
+                        value={loadingStats ? 'loading' : total.toLocaleString('vi-VN')} 
+                        description="tài khoản" 
+                        iconBgClass="bg-blue-100 dark:bg-blue-900/30" iconColorClass="text-blue-600 dark:text-blue-400" 
+                        isLoading={loadingStats} // Truyền prop isLoading
+                    />
                 </motion.div>
-
-                {/* Tabs và DataTable */}
-                <motion.div
-                    initial={isReduced ? { y: 0, opacity: 1 } : { y: 30, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ 
-                        duration: 0.5, 
-                        delay: isReduced ? 0 : 0.3,
-                        type: "spring",
-                        stiffness: 100
-                    }}
-                >
-                    <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-                        <motion.div
-                            initial={isReduced ? { x: 0, opacity: 1 } : { x: -20, opacity: 0 }}
-                            animate={{ x: 0, opacity: 1 }}
-                            transition={{ delay: isReduced ? 0 : 0.4 }}
-                        >
-                            <TabsList className={cn("transition-all duration-300", isReduced && "transition-none")}>
-                                <TabsTrigger value="Tất cả" className={cn("transition-all duration-200", isReduced && "transition-none")}>Tất cả</TabsTrigger>
-                                <TabsTrigger value="Sinh viên" className={cn("transition-all duration-200", isReduced && "transition-none")}>Sinh viên</TabsTrigger>
-                                <TabsTrigger value="Giảng viên" className={cn("transition-all duration-200", isReduced && "transition-none")}>Giảng viên</TabsTrigger>
-                                <TabsTrigger value="Giáo vụ" className={cn("transition-all duration-200", isReduced && "transition-none")}>Giáo vụ</TabsTrigger>
-                                <TabsTrigger value="Trưởng khoa" className={cn("transition-all duration-200", isReduced && "transition-none")}>Trưởng khoa</TabsTrigger>
-                            </TabsList>
-                        </motion.div>
-                        <TabsContent value={activeTab} className="mt-0 outline-none ring-0">
-                            {renderDataTable(activeTab)}
-                        </TabsContent>
-                    </Tabs>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard 
+                        icon={GraduationCap} title="Sinh viên" 
+                        value={totalStudents} description="trang hiện tại" 
+                        iconBgClass="bg-sky-100 dark:bg-sky-900/30" iconColorClass="text-sky-600 dark:text-sky-400" 
+                        isLoading={loadingStats}
+                    />
+                </motion.div>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard 
+                        icon={Briefcase} title="Cán bộ" 
+                        value={totalLecturers} description="Giảng viên & CV" 
+                        iconBgClass="bg-indigo-100 dark:bg-indigo-900/30" iconColorClass="text-indigo-600 dark:text-indigo-400" 
+                        isLoading={loadingStats}
+                    />
+                </motion.div>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard 
+                        icon={ShieldCheck} title="Hoạt động" 
+                        value={activeUsers} description="trang hiện tại" 
+                        iconBgClass="bg-green-100 dark:bg-green-900/30" iconColorClass="text-green-600 dark:text-green-400" 
+                        hasStatusDot={true}
+                        isLoading={loadingStats}
+                    />
                 </motion.div>
             </motion.div>
 
-            {/* Dialogs và Sheet */}
+            {/* Tabs & Table */}
+            <div className="flex-1 min-h-0 flex flex-col bg-card rounded-lg border shadow-sm">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+                    <div className="px-4 pt-4 pb-2 border-b">
+                        <TabsList className="bg-muted/50">
+                            <TabsTrigger value="Tất cả">Tất cả</TabsTrigger>
+                            <TabsTrigger value="Sinh viên">Sinh viên</TabsTrigger>
+                            <TabsTrigger value="Giảng viên">Giảng viên</TabsTrigger>
+                            <TabsTrigger value="Giáo vụ">Giáo vụ</TabsTrigger>
+                            <TabsTrigger value="Trưởng khoa">Trưởng khoa</TabsTrigger>
+                        </TabsList>
+                    </div>
+                    
+                    <div className="flex-1 min-h-0 p-4 pt-2">
+                        {['Tất cả', 'Sinh viên', 'Giảng viên', 'Giáo vụ', 'Trưởng khoa'].map(tab => (
+                            <TabsContent key={tab} value={tab} className="h-full mt-0 border-0 p-0 data-[state=active]:flex flex-col">
+                                {activeTab === tab && renderDataTable(tab)}
+                            </TabsContent>
+                        ))}
+                    </div>
+                </Tabs>
+            </div>
+
+            {/* Dialogs */}
             <AnimatePresence>
-                {isDialogOpen && (
-                    <UserFormDialog
-                        isOpen={isDialogOpen}
-                        setIsOpen={setIsDialogOpen}
-                        editingUser={editingUser}
-                        onSuccess={handleFormSuccess}
-                    />
-                )}
+                {isDialogOpen && <UserFormDialog isOpen={isDialogOpen} setIsOpen={setIsDialogOpen} editingUser={editingUser} onSuccess={handleFormSuccess} />}
             </AnimatePresence>
             <AnimatePresence>
-                {isImportOpen && (
-                    <UserImportDialog
-                        isOpen={isImportOpen}
-                        setIsOpen={setIsImportOpen}
-                        onSuccess={handleFormSuccess}
-                    />
-                )}
+                {isImportOpen && <UserImportDialog isOpen={isImportOpen} setIsOpen={setIsImportOpen} onSuccess={handleFormSuccess} />}
             </AnimatePresence>
             <AnimatePresence>
-                {isSheetOpen && (
-                    <UserDetailSheet
-                        userId={viewingUserId}
-                        isOpen={isSheetOpen}
-                        setIsOpen={setIsSheetOpen}
-                    />
-                )}
+                {isSheetOpen && <UserDetailSheet userId={viewingUserId} isOpen={isSheetOpen} setIsOpen={setIsSheetOpen} />}
             </AnimatePresence>
-        </>
+        </div>
     );
 }

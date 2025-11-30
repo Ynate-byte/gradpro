@@ -6,30 +6,42 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Users, BookOpen, UserCheck, AlertTriangle, Edit, Eye } from 'lucide-react';
+import { 
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Loader2, Users, BookOpen, UserCheck, AlertTriangle, Edit, Eye, Bot, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 import axios from '@/api/axiosConfig';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 
-const StatCard = ({ icon, title, value, description, iconBgClass, iconColorClass }) => {
+// --- Component StatCard (Compact Version) ---
+const StatCard = ({ icon: Icon, title, value, description, iconBgClass, iconColorClass }) => {
     return (
-        <div className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:-translate-y-1">
-            <div className={cn("p-3 rounded-lg", iconBgClass)}>
-                {icon && React.createElement(icon, { className: cn("h-6 w-6", iconColorClass) })}
+        <div className="bg-card text-card-foreground p-3 rounded-lg shadow-sm border flex items-center gap-3 transition-all duration-300 hover:shadow-md">
+            <div className={cn("p-2 rounded-lg", iconBgClass)}>
+                {Icon && <Icon className={cn("h-5 w-5", iconColorClass)} />}
             </div>
             <div className="flex-1">
-                <h3 className="text-sm font-medium text-muted-foreground">{title}</h3>
-                <div className="flex items-center gap-2 h-8 overflow-hidden">
+                <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{title}</h3>
+                <div className="flex items-center gap-2 h-7 overflow-hidden mt-0.5">
                     <div className="flex items-center gap-2">
                         {value === 'loading' ? (
-                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                         ) : (
-                            <p className="text-2xl font-bold">{value}</p>
+                            <p className="text-xl font-bold">{value}</p>
                         )}
                     </div>
                 </div>
                 {description && (
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
                         {description}
                     </p>
                 )}
@@ -55,6 +67,9 @@ const TopicReviewerAssignmentPage = () => {
     const [lecturerDetails, setLecturerDetails] = useState([]);
     const [selectedLecturer, setSelectedLecturer] = useState(null);
 
+    // [MỚI] Alert Dialog state cho Auto Assign
+    const [showAutoAssignAlert, setShowAutoAssignAlert] = useState(false);
+
     useEffect(() => {
         loadPlans();
     }, []);
@@ -75,7 +90,6 @@ const TopicReviewerAssignmentPage = () => {
             const plansData = response.data || [];
             setPlans(plansData);
             if (plansData.length > 0 && !selectedPlan) {
-                // Ưu tiên chọn kế hoạch đang hoạt động nếu có
                 const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
                 setSelectedPlan(String(activePlan.ID_KEHOACH));
             }
@@ -91,19 +105,16 @@ const TopicReviewerAssignmentPage = () => {
         if (!selectedPlan) return;
         setIsLoading(true);
         try {
-            // [FIX] Thêm params plan_id vào cả 2 request để backend tính toán đúng quota/số liệu
             const [topicsRes, lecturersRes] = await Promise.all([
                 axios.get(`/department-head/topic-assignments/available-topics-for-reviewers`, {
                     params: { plan_id: selectedPlan }
                 }),
                 axios.get('/department-head/topic-assignments/lecturers', {
-                    params: { plan_id: selectedPlan } // [QUAN TRỌNG] Đã thêm tham số này
+                    params: { plan_id: selectedPlan }
                 })
             ]);
 
             setTopics(topicsRes.data || []);
-            // API trả về { lecturers: [...] } hoặc mảng tùy cấu trúc, cần check kỹ response
-            // Dựa theo code backend cũ: return response()->json(['lecturers' => $result]);
             setLecturers(lecturersRes.data?.lecturers || []); 
         } catch (error) {
             console.error('Error loading data:', error);
@@ -117,7 +128,6 @@ const TopicReviewerAssignmentPage = () => {
 
     const handleAssignReviewers = (topic) => {
         setSelectedTopic(topic);
-        // Load current reviewers for this topic
         const currentReviewers = topic.phancong_nguoi_gop_y?.map(pc => pc.ID_GIANGVIEN) || [];
         setSelectedReviewers(currentReviewers);
         setShowAssignDialog(true);
@@ -136,7 +146,7 @@ const TopicReviewerAssignmentPage = () => {
                     topic_id: selectedTopic.ID_DETAI,
                     reviewer_id: reviewerId
                 })),
-                note: 'Phân công thủ công' // Thêm note nếu cần
+                note: 'Phân công thủ công'
             });
 
             toast.success('Phân công người góp ý thành công');
@@ -152,17 +162,17 @@ const TopicReviewerAssignmentPage = () => {
         }
     };
 
-    const handleAutoAssign = async () => {
+    // [SỬA ĐỔI] Thay window.confirm bằng việc mở Dialog
+    const handleAutoAssignClick = () => {
         if (!selectedPlan) {
             toast.error('Vui lòng chọn kế hoạch');
             return;
         }
-        
-        // Thêm confirm đơn giản
-        if(!window.confirm("Hệ thống sẽ tự động phân công ngẫu nhiên cho các đề tài CHƯA có người góp ý. Bạn có chắc chắn muốn tiếp tục?")) {
-            return;
-        }
+        setShowAutoAssignAlert(true);
+    };
 
+    const executeAutoAssign = async () => {
+        setShowAutoAssignAlert(false); // Đóng dialog trước khi chạy
         setIsSubmitting(true);
         try {
             await axios.post('/department-head/topic-assignments/auto-assign-reviewers', {
@@ -185,10 +195,7 @@ const TopicReviewerAssignmentPage = () => {
             return;
         }
 
-        // Calculate lecturer details from existing data
         const lecturerMap = new Map();
-
-        // Initialize all lecturers with 0 assignments
         lecturers.forEach(lecturer => {
             lecturerMap.set(lecturer.ID_GIANGVIEN, {
                 ID_GIANGVIEN: lecturer.ID_GIANGVIEN,
@@ -199,7 +206,6 @@ const TopicReviewerAssignmentPage = () => {
             });
         });
 
-        // Count assignments from topics data
         topics.forEach(topic => {
             if (topic.phancong_nguoi_gop_y) {
                 topic.phancong_nguoi_gop_y.forEach(assignment => {
@@ -213,11 +219,10 @@ const TopicReviewerAssignmentPage = () => {
             }
         });
 
-        // Convert map to array and format topic names
         const details = Array.from(lecturerMap.values()).map(lecturer => ({
             ...lecturer,
             topic_names: lecturer.topic_names.length > 0 ? lecturer.topic_names.join(', ') : 'Chưa có đề tài',
-            topics_list: lecturer.topic_names // Keep original array for detailed view
+            topics_list: lecturer.topic_names
         }));
 
         setLecturerDetails(details);
@@ -241,7 +246,7 @@ const TopicReviewerAssignmentPage = () => {
     }, [topics]);
 
     const renderContent = () => {
-        if (isLoading) {
+        if (isLoading && !isSubmitting) {
             return (
                 <div className="flex flex-col items-center justify-center h-64 text-blue-500">
                     <Loader2 className="h-8 w-8 animate-spin mb-4" />
@@ -261,7 +266,11 @@ const TopicReviewerAssignmentPage = () => {
         }
 
         return (
-            <div className="space-y-6" key={selectedPlan}>
+            <motion.div 
+                className="space-y-6 pb-20" 
+                key={selectedPlan}
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5 }}
+            >
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <StatCard
@@ -294,22 +303,26 @@ const TopicReviewerAssignmentPage = () => {
                     {/* Card Tự động phân công */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Tự động Phân công Người Góp ý</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <Bot className="w-5 h-5 text-purple-600" />
+                                Tự động Phân công
+                            </CardTitle>
                             <CardDescription>
-                                Phân công ngẫu nhiên người góp ý cho tất cả đề tài trạng thái Chờ duyệt chưa có người góp ý.
+                                Hệ thống sẽ tự động phân công ngẫu nhiên người góp ý cho tất cả đề tài chưa có người phụ trách.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex justify-between items-center">
                             <p className="text-sm text-muted-foreground">
-                                Sẽ phân công 1 người góp ý cho mỗi đề tài, đảm bảo không trùng với người đề xuất đề tài.
+                                Đảm bảo mỗi đề tài có ít nhất 1 người góp ý, tránh trùng với GVHD.
                             </p>
                             <Button
-                                onClick={handleAutoAssign}
+                                onClick={handleAutoAssignClick}
                                 disabled={isSubmitting || processedData.stats.unassignedTopics === 0}
                                 variant="default"
+                                className="bg-purple-600 hover:bg-purple-700"
                             >
                                 {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                Tự động phân công
+                                Chạy tự động
                             </Button>
                         </CardContent>
                     </Card>
@@ -317,21 +330,23 @@ const TopicReviewerAssignmentPage = () => {
                     {/* Card Chi tiết phân công */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>Chi tiết Phân công</CardTitle>
+                            <CardTitle className="flex items-center gap-2">
+                                <Eye className="w-5 h-5 text-blue-600" />
+                                Chi tiết Phân công
+                            </CardTitle>
                             <CardDescription>
                                 Xem danh sách giảng viên và số lượng đề tài được giao góp ý.
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="flex justify-between items-center">
                             <p className="text-sm text-muted-foreground">
-                                Hiển thị chi tiết phân công cho từng giảng viên trong bộ môn.
+                                Kiểm tra tải công việc của từng giảng viên.
                             </p>
                             <Button
                                 onClick={handleViewDetails}
                                 disabled={isLoading}
                                 variant="outline"
                             >
-                                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
                                 Xem chi tiết
                             </Button>
                         </CardContent>
@@ -339,62 +354,71 @@ const TopicReviewerAssignmentPage = () => {
                 </div>
 
                 {/* Danh sách đề tài Table */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Danh sách Đề tài Phân công Người Góp ý</CardTitle>
+                <Card className="overflow-hidden">
+                    <CardHeader className="bg-muted/5 pb-4">
+                        <CardTitle className="flex items-center gap-2">
+                            <Layers className="w-5 h-5 text-gray-600" />
+                            Danh sách Đề tài
+                        </CardTitle>
                         <CardDescription>
-                            Danh sách các đề tài trạng thái Chờ duyệt hoặc Đang chỉnh sửa trong bộ môn.
+                            Danh sách các đề tài trong bộ môn cần phân công người góp ý.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent>
+                    <CardContent className="p-0">
                         {topics.length === 0 ? (
-                            <div className="py-4 text-center text-muted-foreground">
+                            <div className="py-8 text-center text-muted-foreground">
                                 Không có đề tài nào cần phân công người góp ý.
                             </div>
                         ) : (
-                            <div className="rounded-md border">
+                            <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="bg-muted/20">
                                         <TableRow>
-                                            <TableHead className="w-[30%]">Tên đề tài</TableHead>
+                                            <TableHead className="w-[35%] pl-6">Tên đề tài</TableHead>
                                             <TableHead>GV Đề xuất</TableHead>
                                             <TableHead>Người góp ý hiện tại</TableHead>
-                                            <TableHead className="text-center">Số lượng</TableHead>
-                                            <TableHead className="text-center">Hành động</TableHead>
+                                            <TableHead className="text-center">SL</TableHead>
+                                            <TableHead className="text-center pr-6">Hành động</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {topics.map(topic => (
-                                            <TableRow key={topic.ID_DETAI} className="hover:bg-muted/50">
-                                                <TableCell className="font-semibold max-w-xs truncate" title={topic.TEN_DETAI}>
+                                            <TableRow key={topic.ID_DETAI} className="hover:bg-muted/30 transition-colors">
+                                                <TableCell className="font-semibold max-w-xs truncate pl-6" title={topic.TEN_DETAI}>
                                                     {topic.TEN_DETAI}
                                                 </TableCell>
-                                                <TableCell className="text-sm">
+                                                <TableCell className="text-sm text-muted-foreground">
                                                     {topic.nguoiDexuat?.nguoidung?.HODEM_VA_TEN || 'N/A'}
                                                 </TableCell>
                                                 <TableCell className="text-sm max-w-xs truncate" title={topic.reviewer_names || 'Chưa phân công'}>
-                                                    {topic.reviewer_names || 'Chưa phân công'}
+                                                    {topic.reviewer_names ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <UserCheck className="w-3 h-3 text-green-600" />
+                                                            {topic.reviewer_names}
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-muted-foreground italic text-xs">Chưa phân công</span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-center">
                                                     <Badge variant={topic.reviewer_count > 0 ? 'default' : 'secondary'}>
                                                         {topic.reviewer_count}
                                                     </Badge>
                                                 </TableCell>
-                                                <TableCell className="text-center">
+                                                <TableCell className="text-center pr-6">
                                                     <Button
                                                         size="sm"
                                                         onClick={() => handleAssignReviewers(topic)}
                                                         variant="outline"
+                                                        className="h-8"
                                                     >
                                                         {topic.reviewer_count > 0 ? (
                                                             <>
-                                                                <Edit className="w-4 h-4 mr-1" />
-                                                                Chỉnh sửa
+                                                                <Edit className="w-3.5 h-3.5 mr-1" /> Chỉnh sửa
                                                             </>
                                                         ) : (
                                                             <>
-                                                                <Users className="w-4 h-4 mr-1" />
-                                                                Phân công
+                                                                <Users className="w-3.5 h-3.5 mr-1" /> Phân công
                                                             </>
                                                         )}
                                                     </Button>
@@ -407,222 +431,236 @@ const TopicReviewerAssignmentPage = () => {
                         )}
                     </CardContent>
                 </Card>
-            </div>
+            </motion.div>
         );
     };
 
     return (
-        <div className="flex-1 space-y-6 p-4 md:p-8">
-            <Card>
-                <CardHeader className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-                    <div>
-                        <CardTitle className="flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-100">
-                            <Users className="h-5 w-5 text-blue-500" />
-                            Phân công Người Góp ý
-                        </CardTitle>
-                        <CardDescription className="mt-1">
-                            Phân công giảng viên góp ý cho các đề tài trong bộ môn.
-                        </CardDescription>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                        <label className="text-sm font-medium whitespace-nowrap text-muted-foreground">Chọn Kế hoạch:</label>
-                        <Select
-                            value={selectedPlan ? String(selectedPlan) : ""}
-                            onValueChange={setSelectedPlan}
-                            disabled={isLoading}
-                        >
-                            <SelectTrigger className="w-full md:w-[300px] bg-background">
-                                <SelectValue placeholder="Chọn kế hoạch" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {isLoading ? (
-                                    <div className="flex items-center justify-center p-2">
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    </div>
-                                ) : plans.length === 0 ? (
-                                    <div className="p-2 text-center text-sm text-muted-foreground">Không có kế hoạch</div>
-                                ) : (
-                                    plans.map(plan => (
-                                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                            {plan.TEN_DOT} - {plan.NAMHOC}
-                                        </SelectItem>
-                                    ))
-                                )}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </CardHeader>
-            </Card>
-
-            {renderContent()}
-
-            {/* Assign Reviewers Dialog */}
-            <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
-                <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                        <DialogTitle>Phân công Người Góp ý</DialogTitle>
-                        <DialogDescription>
-                            Chọn giảng viên để góp ý cho đề tài: <strong>{selectedTopic?.TEN_DETAI}</strong>
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                        <div className="text-sm text-muted-foreground">
-                            <p>• Không thể chọn người đề xuất đề tài ({selectedTopic?.nguoiDexuat?.nguoidung?.HODEM_VA_TEN})</p>
-                            <p>• Khuyến nghị chọn 1-2 người góp ý</p>
+        // [FIX SCROLL] Thêm h-full và overflow-y-auto
+        <div className="h-full overflow-y-auto p-4 md:p-8 bg-muted/10">
+            <div className="max-w-[1600px] mx-auto space-y-6">
+                <Card>
+                    <CardHeader className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+                        <div>
+                            <CardTitle className="flex items-center gap-2 text-xl font-bold text-gray-800 dark:text-gray-100">
+                                <Users className="h-6 w-6 text-blue-600" />
+                                Phân công Người Góp ý
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                                Quản lý và phân công giảng viên góp ý (phản biện sơ bộ) cho các đề tài.
+                            </CardDescription>
                         </div>
-
-                        <div className="max-h-60 overflow-y-auto border rounded-lg p-4">
-                            {lecturers.map(lecturer => {
-                                const isProposer = lecturer.ID_GIANGVIEN === selectedTopic?.ID_NGUOI_DEXUAT;
-                                const isSelected = selectedReviewers.includes(lecturer.ID_GIANGVIEN);
-
-                                return (
-                                    <div key={lecturer.ID_GIANGVIEN} className="flex items-center space-x-2 py-2">
-                                        <Checkbox
-                                            id={`lecturer-${lecturer.ID_GIANGVIEN}`}
-                                            checked={isSelected}
-                                            disabled={isProposer}
-                                            onCheckedChange={(checked) => {
-                                                if (checked) {
-                                                    setSelectedReviewers(prev => [...prev, lecturer.ID_GIANGVIEN]);
-                                                } else {
-                                                    setSelectedReviewers(prev => prev.filter(id => id !== lecturer.ID_GIANGVIEN));
-                                                }
-                                            }}
-                                        />
-                                        <label
-                                            htmlFor={`lecturer-${lecturer.ID_GIANGVIEN}`}
-                                            className={cn(
-                                                "text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
-                                                isProposer && "text-muted-foreground line-through"
-                                            )}
-                                        >
-                                            {lecturer.TEN_GIANGVIEN} ({lecturer.HOCVI})
-                                            {isProposer && " - Người đề xuất"}
-                                        </label>
-                                    </div>
-                                );
-                            })}
+                        <div className="flex items-center space-x-4">
+                            <label className="text-sm font-medium whitespace-nowrap text-muted-foreground">Chọn Kế hoạch:</label>
+                            <Select
+                                value={selectedPlan ? String(selectedPlan) : ""}
+                                onValueChange={setSelectedPlan}
+                                disabled={isLoading}
+                            >
+                                <SelectTrigger className="w-full md:w-[300px] bg-background">
+                                    <SelectValue placeholder="Chọn kế hoạch" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {isLoading ? (
+                                        <div className="flex items-center justify-center p-2">
+                                            <Loader2 className="h-4 w-4 animate-spin" />
+                                        </div>
+                                    ) : plans.length === 0 ? (
+                                        <div className="p-2 text-center text-sm text-muted-foreground">Không có kế hoạch</div>
+                                    ) : (
+                                        plans.map(plan => (
+                                            <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                                {plan.TEN_DOT} - {plan.NAMHOC}
+                                            </SelectItem>
+                                        ))
+                                    )}
+                                </SelectContent>
+                            </Select>
                         </div>
-                    </div>
+                    </CardHeader>
+                </Card>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowAssignDialog(false)}>
-                            Hủy
-                        </Button>
-                        <Button
-                            onClick={handleSubmitAssignment}
-                            disabled={isSubmitting || selectedReviewers.length === 0}
-                        >
-                            {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Xác nhận phân công
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                {renderContent()}
 
-            {/* Lecturer Details Dialog */}
-            <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
-                <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
-                    <DialogHeader>
-                        <DialogTitle>Chi tiết Phân công Người Góp ý</DialogTitle>
-                        <DialogDescription>
-                            Danh sách giảng viên trong bộ môn và số lượng đề tài được giao góp ý.
-                        </DialogDescription>
-                    </DialogHeader>
+                {/* --- DIALOGS --- */}
 
-                    <div className="flex-1 overflow-y-auto">
-                        {lecturerDetails.length === 0 ? (
-                            <div className="py-4 text-center text-muted-foreground">
-                                Không có dữ liệu chi tiết.
+                {/* Assign Reviewers Dialog */}
+                <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+                    <DialogContent className="sm:max-w-[600px]">
+                        <DialogHeader>
+                            <DialogTitle>Phân công Người Góp ý</DialogTitle>
+                            <DialogDescription>
+                                Chọn giảng viên để góp ý cho đề tài: <strong>{selectedTopic?.TEN_DETAI}</strong>
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-4">
+                            <div className="text-sm text-muted-foreground bg-blue-50 p-3 rounded-md border border-blue-100">
+                                <p className="flex items-center gap-2"><AlertTriangle className="w-3 h-3 text-orange-500" /> Không thể chọn người đề xuất ({selectedTopic?.nguoiDexuat?.nguoidung?.HODEM_VA_TEN})</p>
+                                <p className="flex items-center gap-2 mt-1"><Checkbox checked disabled className="w-3 h-3" /> Khuyến nghị chọn 1-2 người góp ý</p>
                             </div>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Tên giảng viên</TableHead>
-                                        <TableHead>Học vị</TableHead>
-                                        <TableHead className="text-center">Số đề tài góp ý</TableHead>
-                                        <TableHead className="text-center">Danh sách đề tài</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {lecturerDetails.map(lecturer => (
-                                        <TableRow key={lecturer.ID_GIANGVIEN} className="hover:bg-muted/50">
-                                            <TableCell className="font-semibold">
-                                                {lecturer.TEN_GIANGVIEN}
-                                            </TableCell>
-                                            <TableCell className="text-sm">
-                                                {lecturer.HOCVI}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <Badge variant={lecturer.topic_count > 0 ? 'default' : 'secondary'}>
-                                                    {lecturer.topic_count}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                {lecturer.topic_count > 0 ? (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() => handleViewLecturerTopics(lecturer)}
-                                                    >
-                                                        <Eye className="w-4 h-4 mr-1" />
-                                                        Xem chi tiết
-                                                    </Button>
-                                                ) : (
-                                                    <span className="text-sm text-muted-foreground">Chưa có đề tài</span>
+
+                            <div className="max-h-60 overflow-y-auto border rounded-lg p-2">
+                                {lecturers.map(lecturer => {
+                                    const isProposer = lecturer.ID_GIANGVIEN === selectedTopic?.ID_NGUOI_DEXUAT;
+                                    const isSelected = selectedReviewers.includes(lecturer.ID_GIANGVIEN);
+
+                                    return (
+                                        <div key={lecturer.ID_GIANGVIEN} className={cn("flex items-center space-x-3 p-2 rounded-md hover:bg-muted/50 transition-colors", isProposer && "opacity-50 bg-muted/30")}>
+                                            <Checkbox
+                                                id={`lecturer-${lecturer.ID_GIANGVIEN}`}
+                                                checked={isSelected}
+                                                disabled={isProposer}
+                                                onCheckedChange={(checked) => {
+                                                    if (checked) {
+                                                        setSelectedReviewers(prev => [...prev, lecturer.ID_GIANGVIEN]);
+                                                    } else {
+                                                        setSelectedReviewers(prev => prev.filter(id => id !== lecturer.ID_GIANGVIEN));
+                                                    }
+                                                }}
+                                            />
+                                            <label
+                                                htmlFor={`lecturer-${lecturer.ID_GIANGVIEN}`}
+                                                className={cn(
+                                                    "flex-1 text-sm font-medium leading-none cursor-pointer",
+                                                    isProposer && "cursor-not-allowed line-through text-muted-foreground"
                                                 )}
-                                            </TableCell>
+                                            >
+                                                {lecturer.TEN_GIANGVIEN} <span className="text-muted-foreground text-xs ml-1">({lecturer.HOCVI})</span>
+                                                {isProposer && <span className="ml-2 text-xs text-red-500 italic">- Người đề xuất</span>}
+                                            </label>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowAssignDialog(false)}>Hủy</Button>
+                            <Button onClick={handleSubmitAssignment} disabled={isSubmitting || selectedReviewers.length === 0}>
+                                {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Xác nhận phân công
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* [MỚI] Auto Assign Alert Dialog */}
+                <AlertDialog open={showAutoAssignAlert} onOpenChange={setShowAutoAssignAlert}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2 text-purple-600">
+                                <Bot className="w-5 h-5" /> Xác nhận Tự động Phân công
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Hệ thống sẽ tự động phân công ngẫu nhiên giảng viên góp ý cho các đề tài <strong>chưa có người phụ trách</strong>.
+                                <br/><br/>
+                                <span className="block p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-xs">
+                                    Lưu ý: Các phân công thủ công trước đó sẽ không bị ảnh hưởng.
+                                </span>
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Hủy bỏ</AlertDialogCancel>
+                            <AlertDialogAction onClick={executeAutoAssign} className="bg-purple-600 hover:bg-purple-700">
+                                Đồng ý chạy
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Lecturer Details Dialog */}
+                <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+                    <DialogContent className="sm:max-w-[800px] max-h-[80vh] overflow-hidden flex flex-col">
+                        <DialogHeader>
+                            <DialogTitle>Chi tiết Phân công Người Góp ý</DialogTitle>
+                            <DialogDescription>
+                                Danh sách giảng viên trong bộ môn và số lượng đề tài được giao góp ý.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="flex-1 overflow-y-auto p-1">
+                            {lecturerDetails.length === 0 ? (
+                                <div className="py-4 text-center text-muted-foreground">
+                                    Không có dữ liệu chi tiết.
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader className="bg-muted/20 sticky top-0 z-10">
+                                        <TableRow>
+                                            <TableHead className="pl-4">Tên giảng viên</TableHead>
+                                            <TableHead>Học vị</TableHead>
+                                            <TableHead className="text-center">Số đề tài góp ý</TableHead>
+                                            <TableHead className="text-center pr-4">Danh sách đề tài</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        )}
-                    </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {lecturerDetails.map(lecturer => (
+                                            <TableRow key={lecturer.ID_GIANGVIEN} className="hover:bg-muted/50">
+                                                <TableCell className="font-semibold pl-4">{lecturer.TEN_GIANGVIEN}</TableCell>
+                                                <TableCell className="text-sm">{lecturer.HOCVI}</TableCell>
+                                                <TableCell className="text-center">
+                                                    <Badge variant={lecturer.topic_count > 0 ? 'default' : 'secondary'}>
+                                                        {lecturer.topic_count}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-center pr-4">
+                                                    {lecturer.topic_count > 0 ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleViewLecturerTopics(lecturer)}
+                                                            className="h-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                                        >
+                                                            <Eye className="w-3.5 h-3.5 mr-1" /> Xem chi tiết
+                                                        </Button>
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground italic">Chưa có</span>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </div>
+                        <DialogFooter className="border-t pt-4">
+                            <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>Đóng</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowDetailsDialog(false)}>
-                            Đóng
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                {/* Lecturer Topics Dialog */}
+                <Dialog open={showLecturerTopicsDialog} onOpenChange={setShowLecturerTopicsDialog}>
+                    <DialogContent className="sm:max-w-[600px]">
+                        <DialogHeader>
+                            <DialogTitle>Danh sách đề tài góp ý</DialogTitle>
+                            <DialogDescription>
+                                Các đề tài được giao cho giảng viên <strong>{selectedLecturer?.TEN_GIANGVIEN}</strong> góp ý.
+                            </DialogDescription>
+                        </DialogHeader>
 
-            {/* Lecturer Topics Dialog */}
-            <Dialog open={showLecturerTopicsDialog} onOpenChange={setShowLecturerTopicsDialog}>
-                <DialogContent className="sm:max-w-[600px]">
-                    <DialogHeader>
-                        <DialogTitle>Danh sách đề tài góp ý</DialogTitle>
-                        <DialogDescription>
-                            Các đề tài được giao cho giảng viên <strong>{selectedLecturer?.TEN_GIANGVIEN}</strong> góp ý.
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4 max-h-[50vh] overflow-y-auto">
-                        {selectedLecturer?.topics_list && selectedLecturer.topics_list.length > 0 ? (
-                            <div className="space-y-2">
-                                {selectedLecturer.topics_list.map((topicName, index) => (
-                                    <div key={index} className="p-3 bg-muted/50 rounded-lg border">
-                                        <div className="font-medium text-sm">{topicName}</div>
+                        <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2">
+                            {selectedLecturer?.topics_list && selectedLecturer.topics_list.length > 0 ? (
+                                selectedLecturer.topics_list.map((topicName, index) => (
+                                    <div key={index} className="p-3 bg-muted/30 rounded-lg border flex items-start gap-2">
+                                        <div className="mt-1 w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                        <span className="text-sm font-medium leading-tight">{topicName}</span>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="py-4 text-center text-muted-foreground">
-                                Không có đề tài nào được giao.
-                            </div>
-                        )}
-                    </div>
+                                ))
+                            ) : (
+                                <div className="py-4 text-center text-muted-foreground">
+                                    Không có đề tài nào được giao.
+                                </div>
+                            )}
+                        </div>
 
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowLecturerTopicsDialog(false)}>
-                            Đóng
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setShowLecturerTopicsDialog(false)}>Đóng</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div>
         </div>
     );
 };

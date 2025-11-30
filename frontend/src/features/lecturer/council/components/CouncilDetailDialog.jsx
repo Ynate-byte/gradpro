@@ -267,17 +267,17 @@ const CouncilDetailDialog = ({ councilId, open, onOpenChange }) => {
                                                                 </div>
                                                             ) : myScore !== null ? (
                                                                 <div className="flex items-center gap-2">
-                                                                    <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs h-8 px-2.5 font-medium flex items-center gap-1">
-                                                                        <span className="h-2 w-2 rounded-full bg-green-500"></span>
-                                                                        {myScore}đ
-                                                                    </Badge>
-                                                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleOpenGrading(nhom)} title="Sửa điểm">
-                                                                        <Pencil className="h-3.5 w-3.5" />
-                                                                    </Button>
+                                                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs h-8 px-2.5 font-medium flex items-center gap-1">
+                                                                            <span className="h-2 w-2 rounded-full bg-green-500"></span>
+                                                                            {myScore}đ
+                                                                        </Badge>
+                                                                        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => handleOpenGrading(nhom)} title="Sửa điểm">
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Button>
                                                                 </div>
                                                             ) : (
                                                                 <Button size="sm" className="h-8 text-xs px-3 bg-primary text-white hover:bg-primary/90" onClick={() => handleOpenGrading(nhom)}>
-                                                                    <PenSquare className="h-3.5 w-3.5 mr-1.5" /> Chấm điểm
+                                                                        <PenSquare className="h-3.5 w-3.5 mr-1.5" /> Chấm điểm
                                                                 </Button>
                                                             )}
                                                         </>
@@ -333,6 +333,7 @@ const CouncilDetailDialog = ({ councilId, open, onOpenChange }) => {
         group={gradingGroup}
         currentScore={gradingScore}
         currentComment={gradingComment}
+        role="hoidong" // [QUAN TRỌNG] Truyền vai trò hoidong để GradingModal biết cần gọi API nào
       />
     </>
   );

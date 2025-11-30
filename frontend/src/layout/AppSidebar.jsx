@@ -158,7 +158,7 @@ export function AppSidebar() {
                     { href: "/projects/topics", title: "Danh sách Đề tài", hidden: !isSinhVien },
                     { href: "/projects/my-plans", title: "Kế hoạch tham gia", hidden: !isSinhVien },
                     { href: "/projects/my-group", title: "Nhóm của tôi", hidden: !isSinhVien },
-                    { href: "/projects/find-group", title: "Tìm nhóm", hidden: !isSinhVien },
+                    { href: "/projects/find-group", title: "Tìm kiếm nhóm", hidden: !isSinhVien },
                     // Giảng viên
                     { href: "/lecturer/thesis-topics", title: "Đề tài của tôi", hidden: !hasLecturerProfile },
                     { href: "/lecturer/groups-management", title: "Nhóm hướng dẫn", hidden: !hasLecturerProfile },
@@ -232,7 +232,15 @@ export function AppSidebar() {
             </SidebarHeader>
 
             {/* === CONTENT === */}
-            <SidebarContent className="py-2">
+            {/* [CẬP NHẬT] Sửa class ở đây để tùy chỉnh thanh cuộn */}
+            <SidebarContent 
+                className="py-2 
+                [&::-webkit-scrollbar]:w-1.5 
+                [&::-webkit-scrollbar-track]:bg-transparent 
+                [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 
+                hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 
+                [&::-webkit-scrollbar-thumb]:rounded-full"
+            >
                 {/* 1. Nhóm Menu Platform */}
                 <SidebarGroup>
                     <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">

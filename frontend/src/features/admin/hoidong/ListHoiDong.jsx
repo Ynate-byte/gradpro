@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -25,8 +25,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // [MỚI] Import RadioGroup
-import { Label } from "@/components/ui/label"; // [MỚI] Import Label
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import {
   Loader2,
   PlusCircle,
@@ -206,7 +206,6 @@ const ListHoiDong = () => {
   const [upgradeTarget, setUpgradeTarget] = useState(null);
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
   
-  // [MỚI] State để chọn loại hội đồng khi nâng cấp
   const [upgradeType, setUpgradeType] = useState("hoidong"); 
 
   const currentLoaiFilter = columnFilters.find(f => f.id === "LOAI")?.value?.[0];
@@ -269,7 +268,6 @@ const ListHoiDong = () => {
         sort: sorting.length > 0 ? `${sorting[0].id},${sorting[0].desc ? "desc" : "asc"}` : undefined,
         search: debouncedSearch,
         kehoach: selectedPlanId,
-        // [SỬA] Sử dụng đúng key 'khoaBomon' để lấy giá trị filter
         khoa_bomon_id: columnFilters.find((f) => f.id === "khoaBomon")?.value,
         loai: columnFilters.find((f) => f.id === "LOAI")?.value,
         trang_thai_cham_diem: columnFilters.find((f) => f.id === "trang_thai_cham_diem")?.value,
@@ -294,7 +292,6 @@ const ListHoiDong = () => {
     },
   });
 
-  // [UPDATED] Upgrade Mutation có truyền type
   const upgradeMutation = useMutation({
     mutationFn: (ids) => hoiDongService.bulkUpgradeHoiDong(ids, upgradeType),
     onSuccess: (data) => {
@@ -311,7 +308,6 @@ const ListHoiDong = () => {
     },
   });
 
-  // [UPDATED] Single Upgrade Mutation có truyền type
   const singleUpgradeMutation = useMutation({
     mutationFn: (id) => hoiDongService.upgradePhanBienToHoiDong(id, upgradeType),
     onSuccess: (data) => {
@@ -378,7 +374,6 @@ const ListHoiDong = () => {
         size: 120,
       },
       {
-        // [SỬA] AccessorKey này sẽ tạo ra column ID là 'khoaBomon'
         accessorKey: "khoaBomon", 
         header: "Bộ môn",
         accessorFn: (row) => row.khoaBomon?.TEN_KHOA_BOMON,
@@ -456,7 +451,7 @@ const ListHoiDong = () => {
                   size="icon"
                   onClick={() => {
                     setUpgradeTarget(hoidong);
-                    setUpgradeType("hoidong"); // Reset default
+                    setUpgradeType("hoidong"); 
                     setIsSingleUpgradeAlertOpen(true);
                   }}
                   title="Nâng cấp lên Hội đồng Bảo vệ"
@@ -553,21 +548,15 @@ const ListHoiDong = () => {
     </div>
   );
 
-  const [tableHeight, setTableHeight] = useState('auto');
-  const tableRef = useRef(null);
-
-  useLayoutEffect(() => {
-    if (tableRef.current) {
-      const height = tableRef.current.getBoundingClientRect().height;
-      setTableHeight(height);
-    }
-  }, [data, isLoadingData, pagination]);
-
   return (
     <>
-      <div className="p-4 md:p-8 space-y-6 h-full flex flex-col">
+      {/* [QUAN TRỌNG] Layout cha: 
+        - h-full: Để chiếm toàn bộ chiều cao của component cha (AuthenticatedLayout)
+        - overflow-hidden: Để ngăn scroll của body, buộc scroll xảy ra bên trong.
+      */}
+      <div className="p-4 md:p-8 space-y-6 h-full flex flex-col overflow-hidden">
         
-        {/* 1. STAT CARDS SECTION */}
+        {/* 1. STAT CARDS SECTION (Flex shrink 0 để không bị co lại) */}
         <motion.div 
           className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0"
           variants={variants.container}
@@ -627,7 +616,7 @@ const ListHoiDong = () => {
           </motion.div>
         </motion.div>
 
-        {/* 2. ACTION BAR */}
+        {/* 2. ACTION BAR (Flex shrink 0) */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="w-full md:w-[300px]">
@@ -675,19 +664,16 @@ const ListHoiDong = () => {
           </div>
         </div>
 
-        {/* 3. DATA TABLE */}
-        <motion.div 
-          initial={false}
-          animate={{ height: tableHeight }}
-          transition={{ 
-              duration: isReduced ? 0 : 0.5,
-              ease: [0.4, 0, 0.2, 1] 
-          }}
-          style={{ overflow: 'hidden' }}
-          className="flex-grow flex flex-col"
-        >
-          <div ref={tableRef} className="h-full flex flex-col">
+        {/* 3. DATA TABLE CONTAINER 
+          - flex-1: Chiếm toàn bộ không gian còn lại
+          - min-h-0: QUAN TRỌNG - Cho phép flex item co lại nhỏ hơn nội dung của nó (để scrollbar xuất hiện)
+          - overflow-hidden: Để nội dung bên trong (Table) tự xử lý scroll
+        */}
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
             <DataTable
+              // [QUAN TRỌNG] Bật chế độ Flex Layout cho DataTable
+              flexLayout={true}
+              
               columns={columns}
               data={data?.data ?? []}
               pageCount={pageCount}
@@ -705,7 +691,6 @@ const ListHoiDong = () => {
               searchTerm={searchTerm}
               onSearchChange={setSearchTerm}
               
-              // [SỬA] Truyền đúng ID column 'khoaBomon'
               khoaBomonFilterColumnId="khoaBomon"
               khoaBomonFilterOptions={filterOptions?.khoabomon}
               khoaBomonFilterTitle="Bộ môn"
@@ -721,8 +706,7 @@ const ListHoiDong = () => {
               onAddUser={() => setIsCreateOpen(true)}
               addBtnText="Thêm hội đồng"
             />
-          </div>
-        </motion.div>
+        </div>
         
         {/* Dialogs */}
         <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
@@ -785,7 +769,7 @@ const ListHoiDong = () => {
                 <AlertDialogHeader>
                   <AlertDialogTitle>Nâng cấp lên Hội đồng Bảo vệ</AlertDialogTitle>
                   <AlertDialogDescription asChild>
-                     <div className="space-y-3">
+                      <div className="space-y-3">
                         <p>Hội đồng <b>{upgradeTarget?.TEN_HOIDONG}</b> sẽ được chuyển từ loại <b>Phản biện</b> sang <b>Hội đồng bảo vệ</b>.</p>
                         
                         <div className="bg-muted/50 p-3 rounded-md border">
@@ -805,7 +789,7 @@ const ListHoiDong = () => {
                         <p className="text-sm text-muted-foreground italic">
                           Giảng viên phản biện hiện tại sẽ được giữ lại với vai trò "Thành viên". Bạn cần bổ sung thêm các thành viên còn lại sau khi nâng cấp.
                         </p>
-                     </div>
+                      </div>
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>

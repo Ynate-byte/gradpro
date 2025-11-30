@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
-import { UserSquare, Lock, AlertCircle, Eye, EyeOff, ShieldCheck } from 'lucide-react';
+import { UserSquare, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
     const [identifier, setIdentifier] = useState('');
@@ -43,7 +43,8 @@ export default function Login() {
 
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4 md:p-8">
-            <style jsx>{`
+            {/* --- ĐOẠN ĐÃ SỬA --- */}
+            <style>{`
                 input:-webkit-autofill,
                 input:-webkit-autofill:hover, 
                 input:-webkit-autofill:focus, 
@@ -52,14 +53,17 @@ export default function Login() {
                     -webkit-text-fill-color: #0f172a !important;
                     transition: background-color 5000s ease-in-out 0s;
                 }
-                :global(.dark) input:-webkit-autofill,
-                :global(.dark) input:-webkit-autofill:hover, 
-                :global(.dark) input:-webkit-autofill:focus, 
-                :global(.dark) input:-webkit-autofill:active {
+                /* Sửa :global(.dark) thành .dark */
+                .dark input:-webkit-autofill,
+                .dark input:-webkit-autofill:hover, 
+                .dark input:-webkit-autofill:focus, 
+                .dark input:-webkit-autofill:active {
                     -webkit-box-shadow: 0 0 0 30px rgba(15, 23, 42, 0.6) inset !important;
                     -webkit-text-fill-color: #ffffff !important;
                 }
             `}</style>
+            {/* ------------------- */}
+
             <div 
                 className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 dark:opacity-0"
                 style={{

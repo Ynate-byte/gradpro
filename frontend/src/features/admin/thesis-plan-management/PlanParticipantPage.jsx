@@ -7,21 +7,11 @@ import { UserDetailSheet } from '@/features/admin/user-management/components/Use
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { getParticipantColumns } from './components/participants/participantColumns';
 import { AddParticipantDialog } from './components/participants/AddParticipantDialog';
-// ----- [THÊM MỚI] -----
 import { ImportWizardDialog } from './components/participants/ImportWizardDialog'; 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card'; 
 import { Button } from '@/components/ui/button';
-import { ChevronLeft, UserPlus, Loader2, Trash2, Upload } from 'lucide-react'; // <-- Thêm Upload
-// ----- [KẾT THÚC THÊM MỚI] -----
+import { ChevronLeft, UserPlus, Loader2, Trash2, Upload, Users } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator
-} from "@/components/ui/breadcrumb";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -32,23 +22,56 @@ import {
     AlertDialogHeader,
     AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+// [THÊM MỚI] Import cho Animation
+import { motion, useReducedMotion } from 'framer-motion';
+import { useTheme } from "@/components/theme-provider";
 
 const columnVisibility = {
     chuyen_nganh_id: false,
 };
 
+// [THÊM MỚI] Cấu hình Animation variants
+const getVariants = (shouldReduce) => {
+    // Nếu bật chế độ giảm chuyển động, chỉ hiện ngay lập tức (opacity 1)
+    if (shouldReduce) {
+        return {
+            container: { visible: { opacity: 1 } },
+            item: { visible: { opacity: 1, y: 0 } },
+        };
+    }
+    // Ngược lại, chạy hiệu ứng Stagger (xuất hiện lần lượt) và Slide Up
+    return {
+        container: {
+            hidden: { opacity: 0 },
+            visible: { 
+                opacity: 1, 
+                transition: { staggerChildren: 0.1, delayChildren: 0.1 } 
+            }
+        },
+        item: {
+            hidden: { y: 20, opacity: 0 },
+            visible: { 
+                y: 0, 
+                opacity: 1, 
+                transition: { type: "spring", stiffness: 100, damping: 15 } 
+            }
+        }
+    };
+};
 
-// Hiển thị skeleton khi đang tải
 const LoadingSkeleton = () => (
-    <div className="space-y-6">
-        <Skeleton className="h-10 w-32" />
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-6 w-48" />
-        <Skeleton className="h-96 w-full" />
+    <div className="space-y-6 p-6">
+        <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-10 rounded-full" />
+            <div className="space-y-2">
+                <Skeleton className="h-6 w-64" />
+                <Skeleton className="h-4 w-48" />
+            </div>
+        </div>
+        <Skeleton className="h-[500px] w-full rounded-xl" />
     </div>
 );
 
-// Trang quản lý sinh viên tham gia kế hoạch
 export default function PlanParticipantPage() {
     const { planId } = useParams();
     const navigate = useNavigate();
@@ -60,7 +83,7 @@ export default function PlanParticipantPage() {
     const [sorting, setSorting] = useState([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-    const [isImportWizardOpen, setIsImportWizardOpen] = useState(false); // <-- [THÊM MỚI]
+    const [isImportWizardOpen, setIsImportWizardOpen] = useState(false);
     const [columnFilters, setColumnFilters] = useState([]);
     const [rowSelection, setRowSelection] = useState({}); 
     const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState(false); 
@@ -72,19 +95,20 @@ export default function PlanParticipantPage() {
     const [viewingUserId, setViewingUserId] = useState(null);
     const [chuyenNganhOptions, setChuyenNganhOptions] = useState([]);
 
+    // [THÊM MỚI] Logic xử lý Reduce Motion
+    const shouldReduceMotion = useReducedMotion();
+    const { reduceMotion } = useTheme();
+    const isReduced = reduceMotion || shouldReduceMotion;
+    const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // Tải thông tin kế hoạch VÀ các tùy chọn lọc
     const fetchPlanDetailsAndOptions = useCallback(async () => {
         try {
-            // Tải song song
             const [planData, cnData] = await Promise.all([
                 getThesisPlanById(planId),
                 getChuyenNganhs()
             ]);
-            
             setPlan(planData);
             setChuyenNganhOptions(cnData || []);
-
         } catch (err) {
             if (err.config?.url?.includes('thesis-plans')) {
                 toast.error("Không thể tải thông tin kế hoạch.");
@@ -95,7 +119,6 @@ export default function PlanParticipantPage() {
         }
     }, [planId, navigate]);
 
-    // Tải danh sách sinh viên tham gia
     const fetchData = useCallback(() => {
         if (!planId) return;
         setLoading(true);
@@ -118,24 +141,20 @@ export default function PlanParticipantPage() {
             .finally(() => setLoading(false));
     }, [planId, pagination, searchTerm, sorting, columnFilters]);
 
-    // Tải dữ liệu ban đầu (plan + filter options)
     useEffect(() => {
         fetchPlanDetailsAndOptions();
     }, [fetchPlanDetailsAndOptions]);
 
-    // Tải lại danh sách SV khi thay đổi bộ lọc, phân trang, sắp xếp
     useEffect(() => {
-        if (plan) { // Chỉ fetch khi đã có thông tin plan
+        if (plan) {
             fetchData();
         }
     }, [fetchData, plan]);
 
-    // Reset trang về 0 khi tìm kiếm hoặc lọc
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [searchTerm, columnFilters]);
 
-    // Hàm xử lý xóa hàng loạt
     const handleBulkDelete = async () => {
         const selectedIds = Object.keys(rowSelection)
             .filter(key => rowSelection[key])
@@ -162,7 +181,6 @@ export default function PlanParticipantPage() {
         }
     };
 
-    // Hàm mở Sheet chi tiết
     const handleViewDetails = (sinhvienThamgia) => {
         const userId = sinhvienThamgia?.sinhvien?.ID_NGUOIDUNG;
         if (userId) {
@@ -173,45 +191,57 @@ export default function PlanParticipantPage() {
         }
     };
 
-    // Cấu hình cột cho bảng
     const columns = useMemo(() => getParticipantColumns({
         onSuccess: fetchData,
         onViewDetails: handleViewDetails 
     }), [fetchData]); 
 
-    // Chuyển đổi options cho bộ lọc
     const chuyenNganhFilterOptions = useMemo(() => 
         chuyenNganhOptions.map(cn => ({ label: cn.TEN_CHUYENNGANH, value: String(cn.ID_CHUYENNGANH) })),
         [chuyenNganhOptions]
     );
 
-
-    // Hiển thị loading nếu chưa có thông tin plan
     if (!plan) {
-        return <div className="p-8"><LoadingSkeleton /></div>;
+        return <LoadingSkeleton />;
     }
 
     const selectedRowCount = Object.values(rowSelection).filter(Boolean).length;
 
-
     return (
-        <div className="space-y-6 p-4 md:p-8">
-            <div className="flex items-center justify-between gap-4">
-                <div>
+        // [UPDATE] Chuyển div thành motion.div và thêm variants container
+        <motion.div 
+            className="h-full flex flex-col space-y-4 p-4 md:p-6 overflow-hidden bg-background"
+            initial="hidden"
+            animate="visible"
+            variants={variants.container}
+        >
+            {/* Header Area - Bọc trong motion.div variants.item */}
+            <motion.div 
+                className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0 pb-2"
+                variants={variants.item}
+            >
+                <div className="flex items-center gap-3">
                     <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
+                        variant="ghost"
+                        size="icon"
+                        className="h-10 w-10 rounded-full border bg-background hover:bg-accent hover:text-accent-foreground"
                         onClick={() => navigate('/admin/thesis-plans')}
                     >
-                        <ChevronLeft className="mr-2 h-4 w-4" /> DS Kế hoạch
+                        <ChevronLeft className="h-5 w-5" />
                     </Button>
+                    <div>
+                        <h1 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+                           {plan.TEN_DOT}
+                        </h1>
+                    </div>
                 </div>
-                <div className="flex items-center gap-2">
+
+                <div className="flex items-center gap-2 self-end sm:self-auto">
                     {selectedRowCount > 0 && (
                         <Button
                             variant="destructive"
                             size="sm"
+                            className="shadow-sm"
                             onClick={() => setIsBulkDeleteAlertOpen(true)}
                             disabled={isBulkDeleting}
                         >
@@ -219,54 +249,62 @@ export default function PlanParticipantPage() {
                             Xóa ({selectedRowCount})
                         </Button>
                     )}
-                    {/* ----- [THÊM MỚI] Nút Import ----- */}
-                    <Button variant="outline" size="sm" onClick={() => setIsImportWizardOpen(true)}>
-                        <Upload className="mr-2 h-4 w-4" /> Import Sinh viên
+                    <Button variant="outline" size="sm" className="shadow-sm border-dashed" onClick={() => setIsImportWizardOpen(true)}>
+                        <Upload className="mr-2 h-4 w-4" /> Import Excel
                     </Button>
-                    {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
-                    <Button onClick={() => setIsAddDialogOpen(true)}>
+                    <Button onClick={() => setIsAddDialogOpen(true)} size="sm" className="shadow-sm">
                         <UserPlus className="mr-2 h-4 w-4" /> Thêm Sinh viên
                     </Button>
                 </div>
-            </div>
+            </motion.div>
 
-            <Card>
-                <CardHeader>
-                    {/* ... (Phần CardHeader giữ nguyên) ... */}
-                </CardHeader>
-                <CardContent>
-                    <DataTable
-                        columns={columns}
-                        data={participants}
-                        pageCount={pageCount}
-                        loading={loading}
-                        pagination={pagination}
-                        setPagination={setPagination}
-                        columnFilters={columnFilters}
-                        setColumnFilters={setColumnFilters}
-                        sorting={sorting}
-                        setSorting={setSorting}
-                        searchTerm={searchTerm}
-                        onSearchChange={setSearchTerm}
-                        searchColumnId="search"
-                        searchPlaceholder="Tìm theo tên, MSSV, email..."
-                        statusColumnId="DU_DIEUKIEN"
-                        statusOptions={[
-                            { value: "true", label: "Đủ điều kiện" }, 
-                            { value: "false", label: "Không đủ" }
-                        ]}
-                        chuyenNganhFilterColumnId="chuyen_nganh_id" 
-                        chuyenNganhFilterOptions={chuyenNganhFilterOptions} 
-                        columnVisibility={columnVisibility} 
-                        state={{ rowSelection }} 
-                        onRowSelectionChange={setRowSelection} 
-                        onAddUser={null} 
-                        onImportUser={null}
-                        addBtnText="" 
-                    />
-                </CardContent>
-            </Card>
+            {/* Table Container - Bọc trong motion.div variants.item */}
+            <motion.div 
+                className="flex-1 flex flex-col min-h-0"
+                variants={variants.item}
+            >
+                <Card className="flex-1 flex flex-col min-h-0 border-border/60 shadow-sm bg-card">
+                    <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+                        <div className="flex-1 min-h-0">
+                            <DataTable
+                                columns={columns}
+                                data={participants}
+                                pageCount={pageCount}
+                                loading={loading}
+                                pagination={pagination}
+                                setPagination={setPagination}
+                                columnFilters={columnFilters}
+                                setColumnFilters={setColumnFilters}
+                                sorting={sorting}
+                                setSorting={setSorting}
+                                searchTerm={searchTerm}
+                                onSearchChange={setSearchTerm}
+                                searchColumnId="search"
+                                searchPlaceholder="Tìm theo tên, MSSV, email..."
+                                statusColumnId="DU_DIEUKIEN"
+                                statusOptions={[
+                                    { value: "true", label: "Đủ điều kiện" }, 
+                                    { value: "false", label: "Không đủ" }
+                                ]}
+                                chuyenNganhFilterColumnId="chuyen_nganh_id" 
+                                chuyenNganhFilterOptions={chuyenNganhFilterOptions} 
+                                columnVisibility={columnVisibility} 
+                                state={{ rowSelection }} 
+                                onRowSelectionChange={setRowSelection} 
+                                onAddUser={null} 
+                                onImportUser={null}
+                                addBtnText="" 
+                                
+                                flexLayout={true}
+                                containerClassName="h-full border-none shadow-none"
+                                className="h-full"
+                            />
+                        </div>
+                    </CardContent>
+                </Card>
+            </motion.div>
 
+            {/* Dialogs - Giữ nguyên logic */}
             <AddParticipantDialog
                 isOpen={isAddDialogOpen}
                 setIsOpen={setIsAddDialogOpen}
@@ -274,14 +312,12 @@ export default function PlanParticipantPage() {
                 plan={plan}
             />
             
-            {/* ----- [THÊM MỚI] Render Dialog Wizard ----- */}
             <ImportWizardDialog
                 isOpen={isImportWizardOpen}
                 setIsOpen={setIsImportWizardOpen}
                 onSuccess={fetchData}
                 plan={plan}
             />
-            {/* ----- [KẾT THÚC THÊM MỚI] ----- */}
 
             <UserDetailSheet
                 userId={viewingUserId}
@@ -310,6 +346,6 @@ export default function PlanParticipantPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+        </motion.div>
     );
 }

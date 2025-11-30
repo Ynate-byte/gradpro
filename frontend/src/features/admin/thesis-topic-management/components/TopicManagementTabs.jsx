@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, FileDown } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
 import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
@@ -16,51 +17,7 @@ import RejectDialog from "./RejectDialog";
 import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
-
-// --- StatCard Component ---
-const StatCard = ({ icon: Icon, title, value, iconBgClass, iconColorClass, hasStatusDot }) => {
-    const shouldReduceMotion = useReducedMotion();
-    const { reduceMotion } = useTheme();
-    const isReduced = reduceMotion || shouldReduceMotion;
-
-    return (
-        <motion.div 
-            className="bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300 hover:shadow-md h-full"
-            whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}
-            transition={{ type: "spring", stiffness: 300, damping: 15 }}
-        >
-            <motion.div 
-                className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
-                initial={false}
-                animate={isReduced ? {} : { scale: value === 'loading' ? [1, 1.1, 1] : 1 }}
-                transition={{ duration: 1.5, repeat: value === 'loading' ? Infinity : 0, ease: "easeInOut" }}
-            >
-                <Icon className={cn("h-6 w-6", iconColorClass)} />
-            </motion.div>
-            <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-muted-foreground truncate">{title}</h3>
-                <div className="flex items-baseline gap-2 h-8 overflow-hidden">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={value}
-                            initial={isReduced ? { opacity: 1 } : { opacity: 0, y: 15 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={isReduced ? { opacity: 0 } : { opacity: 0, y: -15 }}
-                            transition={{ duration: 0.3, ease: "easeOut" }}
-                            className="flex items-baseline gap-2"
-                        >
-                            {value === 'loading' ? (
-                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                            ) : (
-                                <p className="text-2xl font-bold">{value}</p>
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-            </div>
-        </motion.div>
-    );
-};
+import StatCard from '@/components/shared/StatCard';
 
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
@@ -175,6 +132,7 @@ const TopicManagementTabs = () => {
                 t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
                 t.MA_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
 
+            // Logic lọc theo Tab
             const matchesTab = activeTab === "Tất cả" || t.TRANGTHAI === activeTab;
 
             const matchesFilters = columnFilters.every(filter => {
@@ -223,20 +181,16 @@ const TopicManagementTabs = () => {
         return { pagedData, pageCount, stats, allFiltered: filtered };
     }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
 
-    // --- LOGIC ĐIỀU HƯỚNG MỚI (FIXED) ---
-
-    // 1. Lấy danh sách hiện tại (động)
+    // 4. Navigation Logic
     const currentList = useMemo(() => {
         return processedData.allFiltered || [];
     }, [processedData.allFiltered]);
 
-    // 2. Tính toán Index dựa trên Selected ID (Luôn đúng kể cả khi data thay đổi)
     const currentTopicIndex = useMemo(() => {
         if (!selectedTopicId || currentList.length === 0) return -1;
         return currentList.findIndex(t => String(t.ID_DETAI) === String(selectedTopicId));
     }, [currentList, selectedTopicId]);
 
-    // 3. Tính toán trạng thái nút
     const hasNext = currentTopicIndex !== -1 && currentTopicIndex < currentList.length - 1;
     const hasPrevious = currentTopicIndex !== -1 && currentTopicIndex > 0;
 
@@ -259,31 +213,23 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // --- ACTIONS HANDLERS ---
-
+    // 5. Actions
     const handleApprove = async (topicId) => {
         try {
-            // Logic Auto-Next thông minh: 
-            // Lưu lại ID của topic tiếp theo TRƯỚC khi reload data (vì sau khi approve, topic hiện tại có thể biến mất khỏi list 'Chờ duyệt')
             let nextTopicId = null;
             if (hasNext) {
                 nextTopicId = currentList[currentTopicIndex + 1].ID_DETAI;
             }
 
-            // Gọi API
             await thesisTopicService.adminApproveOrReject(topicId, { action: "approve" });
             toast.success("Đề tài đã được duyệt thành công!");
             
-            // Reload
             await loadTopics(selectedPlanId); 
             
-            // Điều hướng
             if (showTopicDetailDialog) {
                 if (nextTopicId) {
-                    // Nếu còn topic tiếp theo trong danh sách cũ, chuyển tới đó
                     setSelectedTopicId(nextTopicId);
                 } else {
-                    // Nếu hết danh sách, đóng dialog
                     setShowTopicDetailDialog(false);
                 }
             }
@@ -295,7 +241,6 @@ const TopicManagementTabs = () => {
 
     const handleRejectSubmit = async (reason) => {
         try {
-            // Logic Auto-Next tương tự approve
             let nextTopicId = null;
             if (hasNext) {
                 nextTopicId = currentList[currentTopicIndex + 1].ID_DETAI;
@@ -314,7 +259,6 @@ const TopicManagementTabs = () => {
             
             await loadTopics(selectedPlanId);
 
-             // Điều hướng
              if (showTopicDetailDialog) {
                 if (nextTopicId) {
                     setSelectedTopicId(nextTopicId);
@@ -340,6 +284,10 @@ const TopicManagementTabs = () => {
         setShowRejectDialog(true);
     };
 
+    const handleExport = () => {
+        toast.info("Tính năng xuất danh sách đang phát triển.");
+    };
+
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters, debouncedSearchTerm, selectedPlanId]);
@@ -349,7 +297,7 @@ const TopicManagementTabs = () => {
         onApprove: handleApprove,
         onReject: handleReject,
         onRequestEdit: handleRequestEdit
-    }), [handleApprove, handleReject, handleRequestEdit]); // bỏ handleViewTopicDetails khỏi deps để tránh rerender ko cần thiết nếu logic đơn giản
+    }), [handleApprove, handleReject, handleRequestEdit]);
 
     const renderDataTable = () => {
         return (
@@ -385,106 +333,144 @@ const TopicManagementTabs = () => {
                     columnVisibility={columnVisibility}
                     state={{ rowSelection, sorting, columnFilters, pagination, columnVisibility }}
                     onRowSelectionChange={setRowSelection}
+                    onAddUser={null}
+                    onImportUser={null}
+                    addBtnText=""
+                    
+                    // [QUAN TRỌNG] Flex Layout Props
                     flexLayout={true}
+                    containerClassName="h-full border-none shadow-none"
                     className="h-full"
                 />
             </motion.div>
         );
     };
 
+    // Danh sách các tab trạng thái
+    const TABS = [
+        "Chờ duyệt", 
+        "Đã duyệt", 
+        "Yêu cầu chỉnh sửa", 
+        "Đang chỉnh sửa", 
+        "Đã đầy",
+        "Tất cả" 
+    ];
+
     return (
         <motion.div
             initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            className="flex flex-col h-[calc(100vh-8.7rem)] space-y-4 p-4 md:p-0 overflow-hidden"
+            // [UPDATE] Cấu hình layout full height, không cuộn trang
+            className="flex flex-col h-full space-y-4 p-4 md:p-6 overflow-hidden"
         >
-            {/* Stat Cards */}
-            <div className="shrink-0">
-                <motion.div
-                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                    variants={variants.container}
-                    initial="hidden"
-                    animate="visible"
-                >
-                    <motion.div variants={variants.item}>
-                        <StatCard
-                            icon={BookOpen}
-                            title="Tổng số Đề tài"
-                            value={loadingStats ? 'loading' : processedData.stats.total}
-                            iconBgClass="bg-blue-100 dark:bg-blue-900/30"
-                            iconColorClass="text-blue-600 dark:text-blue-400"
-                        />
-                    </motion.div>
-                    <motion.div variants={variants.item}>
-                        <StatCard
-                            icon={Clock}
-                            title="Chờ duyệt"
-                            value={loadingStats ? 'loading' : processedData.stats.pending}
-                            iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
-                            iconColorClass="text-yellow-600 dark:text-yellow-400"
-                            hasStatusDot={processedData.stats.pending > 0}
-                        />
-                    </motion.div>
-                    <motion.div variants={variants.item}>
-                        <StatCard
-                            icon={CheckCircle}
-                            title="Đã duyệt"
-                            value={loadingStats ? 'loading' : processedData.stats.approved}
-                            iconBgClass="bg-green-100 dark:bg-green-900/30"
-                            iconColorClass="text-green-600 dark:text-green-400"
-                        />
-                    </motion.div>
-                    <motion.div variants={variants.item}>
-                        <StatCard
-                            icon={AlertTriangle}
-                            title="Cần xử lý"
-                            value={loadingStats ? 'loading' : processedData.stats.editRequest}
-                            iconBgClass="bg-orange-100 dark:bg-orange-900/30"
-                            iconColorClass="text-orange-600 dark:text-orange-400"
-                        />
-                    </motion.div>
-                </motion.div>
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
+                 <div className="flex items-center gap-2 w-full md:w-auto">
+                     <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
+                     <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                         <SelectTrigger className="w-full md:w-[400px] shadow-sm">
+                             <SelectValue placeholder="Chọn một kế hoạch..." />
+                         </SelectTrigger>
+                         <SelectContent>
+                             {plans.length > 0 ? (
+                                 plans.map(plan => (
+                                     <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                         <div className="flex items-center justify-between w-full gap-2">
+                                             <span className="truncate">{plan.TEN_DOT}</span>
+                                             <span className="text-xs text-muted-foreground">({plan.NAMHOC})</span>
+                                         </div>
+                                     </SelectItem>
+                                 ))
+                             ) : (
+                                 <div className="p-4 text-center text-sm text-muted-foreground">Không tìm thấy kế hoạch nào.</div>
+                             )}
+                         </SelectContent>
+                     </Select>
+                 </div>
+                 <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId} className="shadow-sm">
+                         <FileDown className="mr-2 h-4 w-4" /> Xuất danh sách
+                     </Button>
+                 </div>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full space-y-4">
-                    <div className="shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                        <TabsList className={cn("transition-all duration-300 w-full md:w-auto justify-start bg-transparent p-0 h-auto gap-2 flex-wrap", isReduced && "transition-none")}>
-                            {["Tất cả", "Chờ duyệt", "Đang chỉnh sửa", "Đã duyệt", "Yêu cầu chỉnh sửa", "Từ chối", "Nháp"].map(tab => (
-                                <TabsTrigger
-                                    key={tab}
-                                    value={tab}
-                                    className={cn(
-                                        "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow rounded-md px-4 py-2 transition-all duration-200 border border-transparent data-[state=inactive]:border-border/50 data-[state=inactive]:bg-background",
-                                        isReduced && "transition-none"
-                                    )}
-                                >
-                                    {tab}
-                                </TabsTrigger>
-                            ))}
-                        </TabsList>
+            {/* Stats Cards - Fixed Height */}
+            <motion.div
+                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 shrink-0"
+                variants={variants.container}
+                initial="hidden"
+                animate="visible"
+            >
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard
+                        icon={BookOpen}
+                        title="Tổng số Đề tài"
+                        value={loadingStats ? 'loading' : processedData.stats.total}
+                        // [FIX] Dùng onClick thay vì onAction
+                        onClick={() => setActiveTab("Tất cả")}
+                        iconBgClass="bg-blue-100 dark:bg-blue-900/30"
+                        iconColorClass="text-blue-600 dark:text-blue-400"
+                        isActive={activeTab === "Tất cả"}
+                        isLoading={loadingStats}
+                    />
+                </motion.div>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard
+                        icon={Clock}
+                        title="Chờ duyệt"
+                        value={loadingStats ? 'loading' : processedData.stats.pending}
+                        onClick={() => setActiveTab("Chờ duyệt")}
+                        iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
+                        iconColorClass="text-yellow-600 dark:text-yellow-400"
+                        hasStatusDot={processedData.stats.pending > 0}
+                        isActive={activeTab === "Chờ duyệt"}
+                        isLoading={loadingStats}
+                    />
+                </motion.div>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard
+                        icon={CheckCircle}
+                        title="Đã duyệt"
+                        value={loadingStats ? 'loading' : processedData.stats.approved}
+                        onClick={() => setActiveTab("Đã duyệt")}
+                        iconBgClass="bg-green-100 dark:bg-green-900/30"
+                        iconColorClass="text-green-600 dark:text-green-400"
+                        isActive={activeTab === "Đã duyệt"}
+                        isLoading={loadingStats}
+                    />
+                </motion.div>
+                <motion.div variants={variants.item} className="h-full">
+                    <StatCard
+                        icon={AlertTriangle}
+                        title="Cần xử lý"
+                        value={loadingStats ? 'loading' : processedData.stats.editRequest}
+                        onClick={() => setActiveTab("Yêu cầu chỉnh sửa")}
+                        iconBgClass="bg-orange-100 dark:bg-orange-900/30"
+                        iconColorClass="text-orange-600 dark:text-orange-400"
+                        isActive={activeTab === "Yêu cầu chỉnh sửa"}
+                        isLoading={loadingStats}
+                    />
+                </motion.div>
+            </motion.div>
 
-                        <div className="flex items-center gap-2 w-full md:w-auto">
-                            <Filter className="h-4 w-4 text-muted-foreground hidden sm:block" />
-                            <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-                                <SelectTrigger className="w-full md:w-[250px] h-9 bg-background shadow-sm focus:ring-1">
-                                    <SelectValue placeholder="Chọn kế hoạch..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {plans.map((plan) => (
-                                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                            <span className="font-medium">{plan.TEN_DOT}</span> 
-                                            <span className="text-xs text-muted-foreground ml-2">({plan.NAMHOC})</span>
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+            {/* Tabs & Table - Expand to Fill Space */}
+            <div className="flex-1 min-h-0 flex flex-col bg-card rounded-lg border shadow-sm">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+                    <div className="px-4 pt-4 pb-2 border-b shrink-0">
+                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                             <TabsList className="bg-muted/50">
+                                {TABS.map((tab) => (
+                                    <TabsTrigger key={tab} value={tab} className="px-3 data-[state=active]:bg-background data-[state=active]:shadow-sm">
+                                        {tab}
+                                    </TabsTrigger>
+                                ))}
+                            </TabsList>
                         </div>
                     </div>
 
-                    <div className="flex-1 min-h-0 overflow-hidden">
-                        <AnimatePresence mode="wait">
+                    <div className="flex-1 min-h-0 p-0 overflow-hidden">
+                         <AnimatePresence mode="wait">
                             <motion.div 
                                 key={activeTab + selectedPlanId} 
                                 variants={variants.table} 
@@ -493,7 +479,7 @@ const TopicManagementTabs = () => {
                                 exit="exit" 
                                 className="h-full flex flex-col"
                             >
-                                <TabsContent value={activeTab} className="mt-0 h-full outline-none ring-0 flex flex-col">
+                                <TabsContent value={activeTab} className="flex-1 mt-0 h-full outline-none ring-0 flex flex-col p-4 pt-2">
                                     {renderDataTable()}
                                 </TabsContent>
                             </motion.div>
@@ -502,6 +488,7 @@ const TopicManagementTabs = () => {
                 </Tabs>
             </div>
 
+            {/* Dialogs */}
             <TopicDetailDialog
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}
@@ -510,7 +497,6 @@ const TopicManagementTabs = () => {
                 onApprove={handleApprove}
                 onReject={handleReject}
                 onRequestEdit={handleRequestEdit}
-                // Truyền props điều hướng (đã fix)
                 onNext={handleNext}
                 onPrevious={handlePrevious}
                 hasNext={hasNext}

@@ -298,7 +298,7 @@ export default function MyGroupPage() {
     }
 
     return (
-        <div className="p-4 md:p-8 space-y-6">
+        <div className="p-4 md:p-8 space-y-6 h-full overflow-auto">
             
             {/* HEADER */}
             {hasGroup ? (

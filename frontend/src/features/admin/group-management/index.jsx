@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, UserX, SlidersHorizontal, FileDown, BookCopy, Loader2, PlusCircle, Circle, ArrowRight } from 'lucide-react';
+import { Users, UserX, SlidersHorizontal, FileDown, BookCopy, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { getGroupStatistics, exportGroups } from '@/api/adminGroupService';
 import { getAllPlans } from '@/api/thesisPlanService';
@@ -16,6 +16,8 @@ import { CreateGroupDialog } from './components/CreateGroupDialog';
 import { GroupDetailSheet } from './components/GroupDetailSheet';
 import { UngroupedStudentsDialog } from './components/UngroupedStudentsDialog';
 import { useTheme } from "@/components/theme-provider";
+// Sử dụng StatCard dùng chung để đồng bộ giao diện và hiệu ứng
+import StatCard from '@/components/shared/StatCard';
 
 const statusConfig = {
     'Bản nháp': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
@@ -29,72 +31,6 @@ const statusConfig = {
     'Đã hủy': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300'
 };
 const groupColumnVisibility = { TRANGTHAI: false, LA_NHOM_DACBIET: false };
-
-const StatCard = ({ icon: Icon, title, value, onAction, iconBgClass = "bg-primary/10", iconColorClass = "text-primary", hasStatusDot }) => {
-    const shouldReduceMotion = useReducedMotion();
-    const { reduceMotion } = useTheme();
-    const isReduced = reduceMotion || shouldReduceMotion;
-
-    return (
-        <motion.div
-            className={cn(
-                "relative bg-card text-card-foreground p-4 rounded-lg shadow-sm border flex items-center gap-4 transition-all duration-300",
-                onAction && "cursor-pointer hover:shadow-md hover:border-primary/50"
-            )}
-            whileHover={isReduced ? {} : { y: -4, scale: 1.01 }}
-            transition={{ type: "spring", stiffness: 300, damping: 15 }}
-            onClick={onAction}
-        >
-            <motion.div
-                className={cn("p-3 rounded-lg flex-shrink-0", iconBgClass)}
-                initial={false}
-                animate={isReduced ? {} : {
-                    scale: value === 'loading' ? [1, 1.1, 1] : 1,
-                }}
-                transition={{
-                    duration: 1.5,
-                    repeat: value === 'loading' ? Infinity : 0,
-                    ease: "easeInOut"
-                }}
-            >
-                <Icon className={cn("h-6 w-6", iconColorClass)} />
-            </motion.div>
-            <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-medium text-muted-foreground truncate">{title}</h3>
-                <div className="flex items-baseline gap-2 h-8 overflow-hidden">
-                    <AnimatePresence mode="wait">
-                        <motion.div
-                            key={value}
-                            initial={isReduced ? { opacity: 1 } : { opacity: 0, y: 15 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={isReduced ? { opacity: 0 } : { opacity: 0, y: -15 }}
-                            transition={{ duration: 0.3, ease: "easeOut" }}
-                            className="flex items-baseline gap-2"
-                        >
-                            {value === 'loading' ? (
-                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground"/>
-                            ) : (
-                                <>
-                                    <p className="text-2xl font-bold">{value?.toLocaleString('vi-VN') ?? '0'}</p>
-                                    {hasStatusDot && (
-                                        <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.1, type: "spring" }}>
-                                            <Circle className="h-2.5 w-2.5 fill-green-500 text-green-500" />
-                                        </motion.div>
-                                    )}
-                                </>
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
-                </div>
-            </div>
-            {onAction && (
-                <div className="absolute top-4 right-4 text-muted-foreground/50 group-hover:text-primary">
-                    <ArrowRight className="h-5 w-5" />
-                </div>
-            )}
-        </motion.div>
-    );
-};
 
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
@@ -211,20 +147,21 @@ export default function GroupAdminPage() {
 
     return (
         <motion.div
-            className="flex flex-col h-[calc(100vh-var(--header-height,56px))] p-4 md:p-8"
+            className="flex flex-col h-full space-y-4 p-4 md:p-6 overflow-hidden"
             initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
         >
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6 flex-shrink-0">
+            {/* Header & Controls */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
                  <div className="flex flex-wrap items-center gap-2">
-                     <Button onClick={() => setIsCreateGroupOpen(true)} disabled={!selectedPlanId}>
+                     <Button onClick={() => setIsCreateGroupOpen(true)} disabled={!selectedPlanId} className="shadow-sm">
                          <PlusCircle className="mr-2 h-4 w-4" /> Tạo nhóm mới
                      </Button>
-                     <Button variant="outline" onClick={() => setIsAutoGroupOpen(true)} disabled={!selectedPlanId}>
+                     <Button variant="outline" onClick={() => setIsAutoGroupOpen(true)} disabled={!selectedPlanId} className="shadow-sm">
                          <SlidersHorizontal className="mr-2 h-4 w-4" /> Ghép nhóm tự động
                      </Button>
-                     <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId}>
+                     <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId} className="shadow-sm">
                          <FileDown className="mr-2 h-4 w-4" /> Xuất danh sách
                      </Button>
                  </div>
@@ -232,7 +169,7 @@ export default function GroupAdminPage() {
                  <div className="flex items-center gap-2 w-full md:w-auto">
                      <BookCopy className="h-5 w-5 text-muted-foreground shrink-0" />
                      <Select onValueChange={setSelectedPlanId} value={selectedPlanId}>
-                         <SelectTrigger className="w-full md:w-[400px]">
+                         <SelectTrigger className="w-full md:w-[400px] shadow-sm">
                              <SelectValue placeholder="Chọn một kế hoạch..." />
                          </SelectTrigger>
                          <SelectContent>
@@ -258,62 +195,71 @@ export default function GroupAdminPage() {
                  </div>
             </div>
 
+            {/* Stats Cards */}
             <motion.div
-                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0 mb-6"
+                className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 shrink-0"
                 variants={variants.container}
                 initial="hidden"
                 animate="visible"
             >
-                <motion.div variants={variants.item}>
+                <motion.div variants={variants.item} className="h-full">
                     <StatCard
                         icon={Users}
                         title="SV chưa có nhóm"
-                        value={isLoadingStats ? 'loading' : stats?.studentsWithoutGroup}
-                        onAction={() => setIsUngroupedStudentOpen(true)}
+                        value={stats?.studentsWithoutGroup}
+                        // [FIX] Sửa prop onAction thành onClick để khớp với StatCard dùng chung
+                        onClick={() => setIsUngroupedStudentOpen(true)}
                         iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
                         iconColorClass="text-yellow-600 dark:text-yellow-400"
+                        isLoading={isLoadingStats}
                     />
                 </motion.div>
-                <motion.div variants={variants.item}>
+                <motion.div variants={variants.item} className="h-full">
                     <StatCard
                         icon={UserX}
                         title="SV chưa đăng nhập"
-                        value={isLoadingStats ? 'loading' : stats?.inactiveStudents}
-                        onAction={() => setIsInactiveStudentOpen(true)}
+                        value={stats?.inactiveStudents}
+                        // [FIX] Sửa prop onAction thành onClick để khớp với StatCard dùng chung
+                        onClick={() => setIsInactiveStudentOpen(true)}
                         iconBgClass="bg-orange-100 dark:bg-orange-900/30"
                         iconColorClass="text-orange-600 dark:text-orange-400"
+                        isLoading={isLoadingStats}
                     />
                 </motion.div>
-                <motion.div variants={variants.item}>
+                <motion.div variants={variants.item} className="h-full">
                      <StatCard
                          icon={Users}
                          title="Tổng số nhóm"
-                         value={isLoadingStats ? 'loading' : stats?.totalGroups}
+                         value={stats?.totalGroups}
                          iconBgClass="bg-blue-100 dark:bg-blue-900/30"
                          iconColorClass="text-blue-600 dark:text-blue-400"
+                         isLoading={isLoadingStats}
                      />
                  </motion.div>
-                <motion.div variants={variants.item}>
+                <motion.div variants={variants.item} className="h-full">
                      <StatCard
                          icon={Users}
                          title="Nhóm đã đủ TV"
-                         value={isLoadingStats ? 'loading' : stats?.fullGroups}
+                         value={stats?.fullGroups}
                          iconBgClass="bg-green-100 dark:bg-green-900/30"
                          iconColorClass="text-green-600 dark:text-green-400"
                          hasStatusDot={stats?.fullGroups > 0}
+                         isLoading={isLoadingStats}
                      />
                  </motion.div>
             </motion.div>
 
+            {/* Main Table Content */}
             <motion.div
-                className="flex-grow min-h-0"
+                className="flex-1 min-h-0 flex flex-col"
                 variants={variants.table}
                 initial="hidden"
                 animate="visible"
             >
                 {selectedPlanId ? (
                     <GroupDataTable
-                        className="h-full"
+                        flexLayout={true}
+                        className="h-full" 
                         key={`${selectedPlanId}-${refreshTrigger}`}
                         planId={selectedPlanId}
                         onSuccess={handleSuccess}
@@ -332,6 +278,7 @@ export default function GroupAdminPage() {
                 )}
             </motion.div>
 
+            {/* Dialogs */}
             <AnimatePresence>
                 {isInactiveStudentOpen && (
                     <InactiveStudentsDialog

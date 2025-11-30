@@ -79,11 +79,12 @@ export function DataTable({
 
   return (
     <div className={cn(
-      "space-y-4",
-      flexLayout && "h-full flex flex-col space-y-2", 
+      "flex flex-col gap-4 w-full", // Sử dụng flex column để layout chặt chẽ hơn
+      flexLayout && "h-full", 
       className
     )}>
 
+      {/* Toolbar nằm trên cùng, không co giãn */}
       <div className="shrink-0">
         <DataTableToolbar
           table={table}
@@ -114,83 +115,86 @@ export function DataTable({
         />
       </div>
       
+      {/* Container của bảng: Chiếm phần còn lại, xử lý cuộn tại đây */}
       <div
         className={cn(
-          // [SỬA LẠI]: Luôn giữ rounded-md và border để có viền sát bảng
-          "rounded-md border relative",
-          
+          "rounded-md border bg-card overflow-hidden flex flex-col", // bg-card để đồng bộ theme
           containerClassName,
           !containerClassName && (
             flexLayout
-              // flex-1 để giãn chiều cao, overflow để cuộn bên trong viền
-              ? "flex-1 min-h-0 w-full overflow-y-auto" 
-              : "max-h-[calc(100vh-25rem)] overflow-y-auto"
+              ? "flex-1 min-h-0" // Nếu flexLayout, chiếm hết chiều cao và cuộn bên trong
+              : "" // Nếu không, để tự nhiên (tránh set max-h cứng gây khoảng trắng)
           )
         )}
       >
-        <Table>
-          <TableHeader className="sticky top-0 bg-background z-10 shadow-sm">
-            {table.getHeaderGroups().map((headerGroup) => (
-              // [SỬA LẠI]: Bỏ border-t-0 để giữ style mặc định của shadcn
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id} colSpan={header.colSpan}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
+        {/* Wrapper cuộn cho bảng */}
+        <div className="flex-1 overflow-auto relative"> 
+           <Table>
+             {/* Header dính (Sticky) */}
+            <TableHeader className="sticky top-0 bg-card z-10 shadow-sm">
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                  {headerGroup.headers.map((header) => {
+                    return (
+                      <TableHead key={header.id} colSpan={header.colSpan} className="whitespace-nowrap">
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                      </TableHead>
+                    )
+                  })}
+                </TableRow>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                Array.from({ length: pageSize }).map((_, index) => (
+                  <TableRow key={`skeleton-${index}`}>
+                    {columns.map((column, colIndex) => (
+                      <TableCell key={`skeleton-${index}-${column.id || column.accessorKey || colIndex}`}>
+                        <Skeleton className="h-5 w-full" />
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                    {...getRowProps(row)}
+                    className="group" // Thêm group để style hover actions nếu cần
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
                         )}
-                    </TableHead>
-                  )
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: pageSize }).map((_, index) => (
-                <TableRow key={`skeleton-${index}`}>
-                  {columns.map((column) => (
-                    <TableCell key={`skeleton-${index}-${column.id || column.accessorKey}`}>
-                      <Skeleton className="h-5 w-full" />
-                    </TableCell>
-                  ))}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    Không tìm thấy kết quả phù hợp.
+                  </TableCell>
                 </TableRow>
-              ))
-            ) : table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                  {...getRowProps(row)}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  Không tìm thấy kết quả.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
       
-      <div className="shrink-0 py-1">
+      {/* Pagination nằm dưới cùng */}
+      <div className="shrink-0">
          <DataTablePagination table={table} />
       </div>
     </div>

@@ -57,7 +57,7 @@ export function TemplateRowActions({ row, onEdit, onSuccess }) {
         <DropdownMenuContent align="end" className="w-[160px]">
           <DropdownMenuLabel>Hành động</DropdownMenuLabel>
           <DropdownMenuItem onClick={() => onEdit(template)}>
-            <Pencil className="mr-2 h-4 w-4" /> Sửa
+            <Pencil className="mr-2 h-4 w-4" /> Sửa thông tin
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
@@ -69,6 +69,7 @@ export function TemplateRowActions({ row, onEdit, onSuccess }) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      
       <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
         <AlertDialogContent aria-labelledby={deleteTitleId} aria-describedby={deleteDescriptionId}>
           <AlertDialogHeader>

@@ -5,8 +5,8 @@ import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton'; // Thêm Skeleton
-import { Loader2, Calendar, Clock, BookCopy, Users, ChevronRight, ChevronDown, CheckCircle } from 'lucide-react'; // Bỏ Radio
+import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2, Calendar, Clock, BookCopy, Users, ChevronRight, ChevronDown, CheckCircle } from 'lucide-react';
 import { format, parseISO, isValid, isPast, isFuture } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -195,7 +195,6 @@ const EmptyState = () => (
   </Card>
 );
 
-
 // Component trang chính (Nâng cấp)
 export default function MyPlansPage() {
   const [plans, setPlans] = useState([]);
@@ -220,27 +219,22 @@ export default function MyPlansPage() {
   }, [fetchPlans]);
 
   return (
-    <div className="space-y-6 p-4 md:p-8 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3">
-        <BookCopy className="w-8 h-8 text-primary" />
-        <div>
-          <h1 className="text-3xl font-bold">Kế hoạch Khóa luận</h1>
-          <p className="text-muted-foreground">Danh sách các đợt khóa luận bạn đang tham gia.</p>
+    // [FIX SCROLL] Thêm h-full overflow-y-auto để fix lỗi cuộn
+    <div className="h-full overflow-y-auto p-4 md:p-8 bg-muted/10">
+        <div className="max-w-5xl mx-auto space-y-6 pb-20">
+            {/* Nâng cấp logic render */}
+            {isLoading ? (
+                <LoadingSkeleton />
+            ) : plans.length === 0 ? (
+                <EmptyState />
+            ) : (
+                <div className="space-y-4">
+                {plans.map(plan => (
+                    <PlanCard key={plan.ID_KEHOACH} plan={plan} />
+                ))}
+                </div>
+            )}
         </div>
-      </div>
-
-      {/* Nâng cấp logic render */}
-      {isLoading ? (
-        <LoadingSkeleton />
-      ) : plans.length === 0 ? (
-        <EmptyState />
-      ) : (
-        <div className="space-y-4">
-          {plans.map(plan => (
-            <PlanCard key={plan.ID_KEHOACH} plan={plan} />
-          ))}
-        </div>
-      )}
     </div>
   );
 }

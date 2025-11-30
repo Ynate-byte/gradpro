@@ -38,6 +38,7 @@ export const getParticipantColumns = ({ onSuccess, onViewDetails }) => [
         ),
         enableSorting: false,
         enableHiding: false,
+        size: 40,
     },
     {
         accessorKey: "sinhvien.nguoidung.HODEM_VA_TEN",
@@ -45,38 +46,53 @@ export const getParticipantColumns = ({ onSuccess, onViewDetails }) => [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="-ml-3" // Căn lề trái header
             >
                 Sinh viên <ArrowUpDown className="ml-2 h-4 w-4" />
             </Button>
         ),
         cell: ({ row }) => (
-            <button
-                className="flex items-center gap-3 pl-2 text-left"
-                onClick={() => onViewDetails(row.original)}
-            >
-                <Avatar className="h-9 w-9">
-                    <AvatarFallback>{getInitials(row.original.sinhvien.nguoidung.HODEM_VA_TEN)}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col">
-                    <span className="max-w-[200px] truncate font-medium hover:underline">
-                        {row.original.sinhvien.nguoidung.HODEM_VA_TEN}
-                    </span>
-                    <span className="text-sm text-muted-foreground max-w-[200px] truncate">
-                        {row.original.sinhvien.nguoidung.EMAIL}
-                    </span>
-                </div>
-            </button>
-        )
+            // [FIX] Căn giữa dọc
+            <div className="flex items-center h-full w-full">
+                <button
+                    className="flex items-center gap-3 text-left w-full"
+                    onClick={() => onViewDetails(row.original)}
+                >
+                    <Avatar className="h-9 w-9 border">
+                        <AvatarFallback>{getInitials(row.original.sinhvien.nguoidung.HODEM_VA_TEN)}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex flex-col min-w-0">
+                        <span className="truncate font-medium hover:underline text-blue-600 dark:text-blue-400">
+                            {row.original.sinhvien.nguoidung.HODEM_VA_TEN}
+                        </span>
+                        <span className="text-xs text-muted-foreground truncate">
+                            {row.original.sinhvien.nguoidung.EMAIL}
+                        </span>
+                    </div>
+                </button>
+            </div>
+        ),
+        minSize: 250,
     },
     {
         accessorKey: "sinhvien.nguoidung.MA_DINHDANH",
         header: "MSSV",
-        cell: ({ row }) => <div className="font-mono text-sm">{row.original.sinhvien.nguoidung.MA_DINHDANH}</div>
+        cell: ({ row }) => (
+            <div className="flex items-center h-full font-mono text-sm text-muted-foreground">
+                {row.original.sinhvien.nguoidung.MA_DINHDANH}
+            </div>
+        ),
+        size: 120,
     },
     {
         accessorKey: "sinhvien.chuyennganh.TEN_CHUYENNGANH",
         header: "Chuyên ngành",
-        cell: ({ row }) => row.original.sinhvien.chuyennganh?.TEN_CHUYENNGANH || 'N/A'
+        cell: ({ row }) => (
+            <div className="flex items-center h-full text-sm">
+                {row.original.sinhvien.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}
+            </div>
+        ),
+        minSize: 200,
     },
     {
         accessorKey: "DU_DIEUKIEN",
@@ -84,32 +100,47 @@ export const getParticipantColumns = ({ onSuccess, onViewDetails }) => [
         cell: ({ row }) => {
             const isEligible = row.getValue("DU_DIEUKIEN");
             return (
-                <Badge variant={isEligible ? "secondary" : "destructive"} className={isEligible ? "bg-green-100 text-green-800 border-0" : ""}>
-                    {isEligible ? <ShieldCheck className="mr-1 h-3.5 w-3.5" /> : <ShieldOff className="mr-1 h-3.5 w-3.5" />}
-                    {isEligible ? "Đủ" : "Không đủ"}
-                </Badge>
+                <div className="flex items-center h-full">
+                    <Badge 
+                        variant={isEligible ? "outline" : "destructive"} 
+                        className={isEligible 
+                            ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" 
+                            : "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800"
+                        }
+                    >
+                        {isEligible ? <ShieldCheck className="mr-1 h-3 w-3" /> : <ShieldOff className="mr-1 h-3 w-3" />}
+                        {isEligible ? "Đủ" : "Không đủ"}
+                    </Badge>
+                </div>
             );
         },
         filterFn: (row, id, value) => {
-            const rowValue = String(!!row.getValue(id)); // "true" hoặc "false"
+            const rowValue = String(!!row.getValue(id)); 
             return value.includes(rowValue);
         },
+        size: 140,
     },
     {
         accessorKey: "NGAY_DANGKY",
         header: "Ngày ĐK/Thêm",
         cell: ({ row }) => (
-            <span className="text-xs text-muted-foreground">
+            <div className="flex items-center h-full text-xs text-muted-foreground">
                 {row.original.NGAY_DANGKY ? format(new Date(row.original.NGAY_DANGKY), 'dd/MM/yyyy HH:mm', { locale: vi }) : 'N/A'}
-            </span>
-        )
+            </div>
+        ),
+        size: 150,
     },
     {
         id: "actions",
-        cell: ({ row }) => <ParticipantRowActions row={row} onSuccess={onSuccess} />,
+        cell: ({ row }) => (
+            <div className="flex items-center justify-center h-full">
+                <ParticipantRowActions row={row} onSuccess={onSuccess} />
+            </div>
+        ),
+        size: 60,
     },
     {
-        id: "chuyen_nganh_id", // ID này sẽ được `DataTableToolbar` tìm kiếm
+        id: "chuyen_nganh_id", 
         accessorKey: "sinhvien.ID_CHUYENNGANH",
         enableHiding: false,
         filterFn: (row, id, value) => {

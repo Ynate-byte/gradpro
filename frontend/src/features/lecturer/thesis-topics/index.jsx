@@ -403,7 +403,7 @@ const ThesisTopicsPage = () => {
 
     return (
         <motion.div 
-            className="flex-1 space-y-6 p-8 pb-0 flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden"
+            className="flex-1 space-y-6 p-8 flex flex-col h-[calc(100vh-5.5rem)] overflow-hidden"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}

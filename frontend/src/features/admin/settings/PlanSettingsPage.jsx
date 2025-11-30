@@ -185,157 +185,160 @@ const PlanSettingsPage = () => {
     );
 
     return (
-        <div className="space-y-6 p-6 max-w-5xl mx-auto">
-            <div>
-                <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-                    <Settings className="h-8 w-8" /> Thiết lập chung
-                </h2>
-                <p className="text-muted-foreground">
-                    Cấu hình các thông số và thời gian hiệu lực cho từng chức năng của kế hoạch.
-                </p>
-            </div>
+        // [FIX] Thêm h-full và overflow-y-auto
+        <div className="h-full overflow-y-auto">
+            <div className="space-y-6 p-6 max-w-5xl mx-auto">
+                <div>
+                    <h2 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+                        <Settings className="h-8 w-8" /> Thiết lập chung
+                    </h2>
+                    <p className="text-muted-foreground">
+                        Cấu hình các thông số và thời gian hiệu lực cho từng chức năng của kế hoạch.
+                    </p>
+                </div>
 
-            <Card className="border-blue-100 bg-blue-50/30">
-                <CardHeader className="pb-3">
-                    <CardTitle>Chọn Kế hoạch</CardTitle>
-                    <CardDescription>Vui lòng chọn kế hoạch bạn muốn cấu hình.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {isLoadingPlans ? (
-                        <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải...</div>
-                    ) : (
-                        <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-                            <SelectTrigger className="w-full md:w-[400px] bg-white">
-                                <SelectValue placeholder="-- Chọn kế hoạch --" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {plans.map((plan) => (
-                                    <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                        {plan.TEN_DOT} <span className="text-muted-foreground text-xs">({plan.TRANGTHAI})</span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-                </CardContent>
-            </Card>
+                <Card className="border-blue-100 bg-blue-50/30">
+                    <CardHeader className="pb-3">
+                        <CardTitle>Chọn Kế hoạch</CardTitle>
+                        <CardDescription>Vui lòng chọn kế hoạch bạn muốn cấu hình.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {isLoadingPlans ? (
+                            <div className="flex items-center gap-2 text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Đang tải...</div>
+                        ) : (
+                            <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                                <SelectTrigger className="w-full md:w-[400px] bg-white">
+                                    <SelectValue placeholder="-- Chọn kế hoạch --" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {plans.map((plan) => (
+                                        <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                            {plan.TEN_DOT} <span className="text-muted-foreground text-xs">({plan.TRANGTHAI})</span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    </CardContent>
+                </Card>
 
-            {selectedPlanId && (
-                <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                        
-                        {/* SECTION 1: CẤU HÌNH THỜI GIAN (FEATURE FLAGS) */}
-                        <Card className="border-l-4 border-l-primary shadow-md">
-                            <CardHeader>
-                                <div className="flex items-center gap-2">
-                                    <CalendarClock className="h-6 w-6 text-primary" />
-                                    <CardTitle className="text-lg">Thời gian & Hiệu lực Chức năng</CardTitle>
-                                </div>
-                                <CardDescription>
-                                    Hệ thống sẽ <strong>tự động BẬT</strong> chức năng khi nằm trong khoảng thời gian này. 
-                                    Để <strong>TẮT</strong> vĩnh viễn, hãy xóa trắng ngày.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <FeatureDateRow label="Giảng viên ra đề tài" startName="GV_RA_DE_START" endName="GV_RA_DE_END" />
-                                <FeatureDateRow label="Sinh viên tạo nhóm" startName="SV_TAO_NHOM_START" endName="SV_TAO_NHOM_END" />
-                                <FeatureDateRow label="Sinh viên đăng ký đề tài" startName="SV_DANGKY_DE_START" endName="SV_DANGKY_DE_END" />
-                                <FeatureDateRow label="Giảng viên chấm điểm" startName="CHAM_DIEM_START" endName="CHAM_DIEM_END" />
-                                <FeatureDateRow label="Tổ chức Hội đồng" startName="TAO_HOIDONG_START" endName="TAO_HOIDONG_END" />
-                            </CardContent>
-                        </Card>
-
-                        <div className="grid gap-6 md:grid-cols-2">
-                            {/* SECTION 2: CÀI ĐẶT NHÓM */}
-                            <Card>
+                {selectedPlanId && (
+                    <Form {...form}>
+                        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                            
+                            {/* SECTION 1: CẤU HÌNH THỜI GIAN (FEATURE FLAGS) */}
+                            <Card className="border-l-4 border-l-primary shadow-md">
                                 <CardHeader>
-                                    <CardTitle className="text-lg">Quy định Nhóm</CardTitle>
+                                    <div className="flex items-center gap-2">
+                                        <CalendarClock className="h-6 w-6 text-primary" />
+                                        <CardTitle className="text-lg">Thời gian & Hiệu lực Chức năng</CardTitle>
+                                    </div>
+                                    <CardDescription>
+                                        Hệ thống sẽ <strong>tự động BẬT</strong> chức năng khi nằm trong khoảng thời gian này. 
+                                        Để <strong>TẮT</strong> vĩnh viễn, hãy xóa trắng ngày.
+                                    </CardDescription>
                                 </CardHeader>
-                                <CardContent>
-                                    <FormField
-                                        control={form.control}
-                                        name="SO_THANHVIEN_TOIDA"
-                                        render={({ field }) => (
-                                            <FormItem>
-                                                <FormLabel>Số thành viên tối đa / nhóm</FormLabel>
-                                                <FormControl>
-                                                    <div className="flex items-center gap-2">
-                                                        <Input type="number" {...field} className="w-24" disabled={isLoadingSettings} />
-                                                        <span className="text-sm text-muted-foreground">sinh viên</span>
-                                                    </div>
-                                                </FormControl>
-                                                <FormMessage />
-                                            </FormItem>
-                                        )}
-                                    />
+                                <CardContent className="space-y-4">
+                                    <FeatureDateRow label="Giảng viên ra đề tài" startName="GV_RA_DE_START" endName="GV_RA_DE_END" />
+                                    <FeatureDateRow label="Sinh viên tạo nhóm" startName="SV_TAO_NHOM_START" endName="SV_TAO_NHOM_END" />
+                                    <FeatureDateRow label="Sinh viên đăng ký đề tài" startName="SV_DANGKY_DE_START" endName="SV_DANGKY_DE_END" />
+                                    <FeatureDateRow label="Giảng viên chấm điểm" startName="CHAM_DIEM_START" endName="CHAM_DIEM_END" />
+                                    <FeatureDateRow label="Tổ chức Hội đồng" startName="TAO_HOIDONG_START" endName="TAO_HOIDONG_END" />
                                 </CardContent>
                             </Card>
 
-                            {/* SECTION 3: CÀI ĐẶT ĐIỂM */}
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="text-lg">Tỷ trọng điểm Tổng kết</CardTitle>
-                                    <CardDescription>Tổng các thành phần phải bằng 100%.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="space-y-4">
-                                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-6 md:grid-cols-2">
+                                {/* SECTION 2: CÀI ĐẶT NHÓM */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">Quy định Nhóm</CardTitle>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <FormField
+                                            control={form.control}
+                                            name="SO_THANHVIEN_TOIDA"
+                                            render={({ field }) => (
+                                                <FormItem>
+                                                    <FormLabel>Số thành viên tối đa / nhóm</FormLabel>
+                                                    <FormControl>
+                                                        <div className="flex items-center gap-2">
+                                                            <Input type="number" {...field} className="w-24" disabled={isLoadingSettings} />
+                                                            <span className="text-sm text-muted-foreground">sinh viên</span>
+                                                        </div>
+                                                    </FormControl>
+                                                    <FormMessage />
+                                                </FormItem>
+                                            )}
+                                        />
+                                    </CardContent>
+                                </Card>
+
+                                {/* SECTION 3: CÀI ĐẶT ĐIỂM */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="text-lg">Tỷ trọng điểm Tổng kết</CardTitle>
+                                        <CardDescription>Tổng các thành phần phải bằng 100%.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div className="space-y-4">
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <FormField
+                                                    control={form.control}
+                                                    name="TYTRONG_GVHD"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="font-normal text-xs">GV Hướng dẫn (%)</FormLabel>
+                                                            <FormControl><Input type="number" {...field} className="text-right" disabled={isLoadingSettings} /></FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                                <FormField
+                                                    control={form.control}
+                                                    name="TYTRONG_GVPB"
+                                                    render={({ field }) => (
+                                                        <FormItem>
+                                                            <FormLabel className="font-normal text-xs">GV Phản biện (%)</FormLabel>
+                                                            <FormControl><Input type="number" {...field} className="text-right" disabled={isLoadingSettings} /></FormControl>
+                                                        </FormItem>
+                                                    )}
+                                                />
+                                            </div>
                                             <FormField
                                                 control={form.control}
-                                                name="TYTRONG_GVHD"
+                                                name="TYTRONG_HD"
                                                 render={({ field }) => (
                                                     <FormItem>
-                                                        <FormLabel className="font-normal text-xs">GV Hướng dẫn (%)</FormLabel>
-                                                        <FormControl><Input type="number" {...field} className="text-right" disabled={isLoadingSettings} /></FormControl>
-                                                    </FormItem>
-                                                )}
-                                            />
-                                            <FormField
-                                                control={form.control}
-                                                name="TYTRONG_GVPB"
-                                                render={({ field }) => (
-                                                    <FormItem>
-                                                        <FormLabel className="font-normal text-xs">GV Phản biện (%)</FormLabel>
+                                                        <FormLabel className="font-normal text-xs">Hội đồng bảo vệ (%)</FormLabel>
                                                         <FormControl><Input type="number" {...field} className="text-right" disabled={isLoadingSettings} /></FormControl>
                                                     </FormItem>
                                                 )}
                                             />
                                         </div>
-                                        <FormField
-                                            control={form.control}
-                                            name="TYTRONG_HD"
-                                            render={({ field }) => (
-                                                <FormItem>
-                                                    <FormLabel className="font-normal text-xs">Hội đồng bảo vệ (%)</FormLabel>
-                                                    <FormControl><Input type="number" {...field} className="text-right" disabled={isLoadingSettings} /></FormControl>
-                                                </FormItem>
-                                            )}
-                                        />
-                                    </div>
-                                    <Separator />
-                                    <div className={`flex items-center justify-between font-bold ${isTotalValid ? 'text-green-600' : 'text-destructive'}`}>
-                                        <span>Tổng cộng</span>
-                                        <span className="mr-2">{totalWeight}%</span>
-                                    </div>
-                                    {!isTotalValid && (
-                                        <Alert variant="destructive" className="py-2">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <AlertTitle className="ml-2 text-sm">Lỗi tỷ trọng</AlertTitle>
-                                        </Alert>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        </div>
+                                        <Separator />
+                                        <div className={`flex items-center justify-between font-bold ${isTotalValid ? 'text-green-600' : 'text-destructive'}`}>
+                                            <span>Tổng cộng</span>
+                                            <span className="mr-2">{totalWeight}%</span>
+                                        </div>
+                                        {!isTotalValid && (
+                                            <Alert variant="destructive" className="py-2">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertTitle className="ml-2 text-sm">Lỗi tỷ trọng</AlertTitle>
+                                            </Alert>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </div>
 
-                        <div className="flex justify-end sticky bottom-4 bg-background/80 backdrop-blur p-4 rounded-lg border shadow-sm">
-                            <Button type="submit" size="lg" disabled={isSaving || isLoadingSettings || !isTotalValid} className="w-full md:w-auto">
-                                {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                <Save className="mr-2 h-4 w-4" /> Lưu tất cả cài đặt
-                            </Button>
-                        </div>
-                    </form>
-                </Form>
-            )}
+                            <div className="flex justify-end sticky bottom-4 bg-background/80 backdrop-blur p-4 rounded-lg border shadow-sm">
+                                <Button type="submit" size="lg" disabled={isSaving || isLoadingSettings || !isTotalValid} className="w-full md:w-auto">
+                                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                    <Save className="mr-2 h-4 w-4" /> Lưu tất cả cài đặt
+                                </Button>
+                            </div>
+                        </form>
+                    </Form>
+                )}
+            </div>
         </div>
     );
 };

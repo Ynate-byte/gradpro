@@ -23,7 +23,7 @@ import { vi } from 'date-fns/locale';
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 
-// Helper lấy chữ cái đầu
+// --- HELPER: Lấy chữ cái đầu ---
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -31,7 +31,7 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 };
 
-// --- COMPONENT SIDEBAR ITEM (Giống các trang báo) ---
+// --- COMPONENT: ITEM SIDEBAR ---
 const SidebarNewsItem = ({ item, onClick }) => (
     <div 
         onClick={onClick}
@@ -73,6 +73,7 @@ const SidebarNewsItem = ({ item, onClick }) => (
     </div>
 );
 
+// --- MAIN COMPONENT: NEWS DETAIL ---
 const NewsDetail = () => {
     const { id } = useParams();
     const navigate = useNavigate();
@@ -101,16 +102,17 @@ const NewsDetail = () => {
     const [pdfLoading, setPdfLoading] = useState(false);
 
     useEffect(() => {
-        // Reset state khi đổi bài
+        // Reset state khi đổi bài (id thay đổi)
         setNews(null);
         setPdfObjectUrl(null);
         setShowPdf(false);
         setError(null);
         setLoading(true);
 
-        window.scrollTo(0, 0); // Scroll lên đầu trang
+        // Fetch dữ liệu mới
         fetchData();
 
+        // Cleanup URL blob khi unmount hoặc đổi bài
         return () => {
             if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl);
         };
@@ -124,6 +126,7 @@ const NewsDetail = () => {
             setNews(detailRes.data);
 
             // 2. Lấy danh sách tin cho Sidebar (Tin mới + Ghim)
+            // Lưu ý: Trong thực tế nên có API riêng lấy tin liên quan để tối ưu
             const listRes = await axios.get("/news");
             const allNews = Array.isArray(listRes.data.data) ? listRes.data.data : [];
 
@@ -185,13 +188,13 @@ const NewsDetail = () => {
     };
 
     if (loading) return (
-        <div className="flex justify-center items-center h-[60vh]">
+        <div className="flex justify-center items-center h-full min-h-[60vh]">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
         </div>
     );
 
     if (!news) return (
-        <div className="p-12 text-center">
+        <div className="p-12 text-center h-full flex flex-col justify-center items-center">
             <h2 className="text-xl font-bold text-gray-700">Bài viết không tồn tại hoặc đã bị xóa.</h2>
             <Button variant="link" onClick={() => navigate("/news")}>Quay lại trang tin tức</Button>
         </div>
@@ -201,8 +204,10 @@ const NewsDetail = () => {
     const createdDate = new Date(news.created_at);
 
     return (
-        <div className="min-h-screen bg-white dark:bg-gray-950 pb-20">
-            {/* --- THANH ĐIỀU HƯỚNG TOP --- */}
+        // [FIX SCROLL] Thêm h-full và overflow-y-auto để cho phép cuộn nội dung trong Layout cha
+        <div className="h-full overflow-y-auto bg-white dark:bg-gray-950">
+            
+            {/* --- THANH ĐIỀU HƯỚNG TOP (Sticky) --- */}
             <div className="border-b sticky top-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur z-40">
                 <div className="container max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
                     <Button variant="ghost" size="sm" onClick={() => navigate("/news")} className="-ml-2 text-muted-foreground hover:text-foreground">
@@ -224,6 +229,7 @@ const NewsDetail = () => {
                         {canManageNews && (
                             <>
                                 <Separator orientation="vertical" className="h-5 mx-1" />
+                                {/* Chuyền state editNewsId để NewsPage biết cần mở form edit */}
                                 <Button variant="ghost" size="sm" onClick={() => navigate("/news", { state: { editNewsId: news.id } })}>
                                     <Edit3 className="w-4 h-4 mr-2 text-blue-600" /> Sửa
                                 </Button>
@@ -237,7 +243,7 @@ const NewsDetail = () => {
             </div>
 
             {/* --- NỘI DUNG CHÍNH --- */}
-            <div className="container max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-12">
+            <div className="container max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-12 pb-20">
                 
                 {/* CỘT TRÁI: BÀI VIẾT (8 phần) */}
                 <motion.div 
@@ -297,7 +303,7 @@ const NewsDetail = () => {
                     </div>
 
                     {/* Thư viện ảnh phụ (nếu có) */}
-                    {news.images && news.images.filter(img => img !== news.cover_image_url).length > 0 && (
+                     {news.images && news.images.filter(img => img !== news.cover_image_url).length > 0 && (
                         <div className="mt-10">
                             <h3 className="text-xl font-bold mb-4 border-l-4 border-blue-600 pl-3">Hình ảnh khác</h3>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">

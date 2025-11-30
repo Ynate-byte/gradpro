@@ -8,13 +8,12 @@ import { vi } from 'date-fns/locale';
 
 // Import Shared Components
 import StatCard from '@/components/shared/StatCard'; 
-import { CleanupDialog } from './components/CleanupDialog'; // Đảm bảo file này đã được tạo ở bước trước
+import { CleanupDialog } from './components/CleanupDialog'; 
 
 // UI Components
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -31,15 +30,15 @@ import {
   Popover, PopoverContent, PopoverTrigger,
 } from "@/components/ui/popover";
 import { 
-    Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious 
+    Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious 
 } from "@/components/ui/pagination";
 
 // Icons
 import { 
-    Activity, Eye, Shield, User, LogIn, FileText, 
-    Trash2, Edit, PlusCircle, Database, UserPlus, UserMinus, 
-    Search, X, Lock, Filter, RefreshCw, Clock, AlertTriangle, 
-    CheckCircle, Info, AlertCircle, ArrowRight, Eraser
+    Activity, Eye, Shield, User, LogIn, 
+    Trash2, Edit, UserPlus, UserMinus, 
+    Search, X, Filter, RefreshCw, AlertTriangle, 
+    CheckCircle, Info, AlertCircle, Eraser, Archive
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -127,8 +126,8 @@ const UserFilter = ({ selectedUser, onSelect }) => {
                         <CommandInput placeholder="Tìm tên/MSSV..." value={search} onValueChange={setSearch} />
                         <CommandList>
                             {isLoading ? <div className="p-2 text-center text-xs text-muted-foreground">Đang tìm...</div> : 
-                             users.length === 0 ? <CommandEmpty>Không tìm thấy.</CommandEmpty> :
-                             <CommandGroup heading="Kết quả tìm kiếm">
+                            users.length === 0 ? <CommandEmpty>Không tìm thấy.</CommandEmpty> :
+                            <CommandGroup heading="Kết quả tìm kiếm">
                                 {users.map((user) => (
                                     <CommandItem key={user.ID_NGUOIDUNG} value={user.ID_NGUOIDUNG.toString()} onSelect={() => { onSelect(user); setOpen(false); }}>
                                         <div className="flex items-center gap-2">
@@ -164,65 +163,71 @@ const UserFilter = ({ selectedUser, onSelect }) => {
     );
 };
 
-// --- 3. COMPONENT: LOG ITEM (TIMELINE STYLE) ---
+// --- 3. [UPDATED] COMPONENT: LOG ITEM (FLEX LAYOUT) ---
+// Sửa lỗi hiển thị chồng chéo bằng cách dùng Flexbox thay vì absolute position
 const LogItem = ({ log, onClick, isLast }) => {
     const style = getLogStyle(log.LOAI_HANH_DONG);
     const Icon = style.icon;
 
     return (
-        <div className="relative pl-8 pb-8 last:pb-0">
-            {/* Đường nối timeline */}
-            {!isLast && (
-                <div className="absolute left-3.5 top-3.5 bottom-0 w-px bg-border" />
-            )}
-            
-            {/* Icon tròn */}
-            <div className={cn(
-                "absolute left-0 top-1 flex h-7 w-7 items-center justify-center rounded-full border shadow-sm bg-background z-10",
-                style.text
-            )}>
-                <Icon className="h-3.5 w-3.5" />
+        <div className="group relative flex gap-4 pb-0">
+            {/* Cột Timeline bên trái */}
+            <div className="flex flex-col items-center">
+                {/* Icon tròn */}
+                <div className={cn(
+                    "relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border shadow-sm bg-background transition-transform group-hover:scale-110",
+                    style.text
+                )}>
+                    <Icon className="h-4 w-4" />
+                </div>
+                {/* Đường nối dọc - Chỉ hiện nếu không phải item cuối */}
+                {!isLast && (
+                    <div className="w-px flex-1 bg-border/60 my-1" />
+                )}
             </div>
 
-            {/* Card nội dung */}
+            {/* Card nội dung bên phải */}
             <div 
                 onClick={() => onClick(log)}
                 className={cn(
-                    "group flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border bg-card hover:shadow-md transition-all cursor-pointer ml-2",
+                    "flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-lg border bg-card hover:shadow-md transition-all cursor-pointer min-w-0 mb-4", 
                     style.bg
                 )}
             >
-                <div className="space-y-1">
+                <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm text-foreground">{log.TIEU_DE}</span>
-                        <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 font-normal bg-background", style.text)}>
+                        <span className="font-semibold text-sm text-foreground truncate">{log.TIEU_DE}</span>
+                        <Badge variant="outline" className={cn("text-[10px] h-5 px-1.5 font-normal bg-background/50 whitespace-nowrap", style.text)}>
                             {log.LOAI_HANH_DONG}
                         </Badge>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                            <User className="h-3 w-3" />
+                        <span className="flex items-center gap-1 truncate">
+                            <User className="h-3 w-3 shrink-0" />
                             {log.nguoidung ? (
-                                <span className="font-medium text-foreground/80 hover:underline">{log.nguoidung.HODEM_VA_TEN}</span>
+                                <span className="font-medium text-foreground/80 hover:underline truncate max-w-[150px]">
+                                    {log.nguoidung.HODEM_VA_TEN}
+                                </span>
                             ) : (
                                 <span className="italic">Hệ thống</span>
                             )}
                         </span>
                         {log.nguoidung && (
                             <>
-                                <span>•</span>
-                                <span className="font-mono text-xs">{log.nguoidung.MA_DINHDANH}</span>
+                                <span className="hidden sm:inline">•</span>
+                                <span className="font-mono text-xs hidden sm:inline">{log.nguoidung.MA_DINHDANH}</span>
                             </>
                         )}
                     </div>
                 </div>
 
-                <div className="flex items-center justify-between sm:justify-end gap-4 pl-2 border-l sm:border-l-0 sm:pl-0">
-                    <div className="flex flex-col items-start sm:items-end text-xs text-muted-foreground min-w-[80px]">
+                {/* Thời gian */}
+                <div className="flex items-center justify-between sm:justify-end gap-4 pl-0 sm:pl-4 border-t sm:border-t-0 sm:border-l border-black/5 dark:border-white/5 pt-2 sm:pt-0 shrink-0">
+                    <div className="flex flex-row sm:flex-col items-center sm:items-end gap-2 sm:gap-0 text-xs text-muted-foreground w-full sm:w-auto justify-between sm:justify-end">
                         <span className="font-medium text-foreground/70">{format(new Date(log.NGAY_TAO), "HH:mm")}</span>
-                        <span>{formatDistanceToNow(new Date(log.NGAY_TAO), { addSuffix: true, locale: vi })}</span>
+                        <span className="whitespace-nowrap">{formatDistanceToNow(new Date(log.NGAY_TAO), { addSuffix: true, locale: vi })}</span>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex">
+                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity hidden sm:flex shrink-0">
                         <Eye className="h-4 w-4 text-muted-foreground" />
                     </Button>
                 </div>
@@ -329,9 +334,9 @@ export default function AdminActivityLog() {
 
     const { data, isLoading, refetch, isRefetching } = useQuery({
         queryKey: ['admin-logs', page, debouncedSearch, filterType, filterUser?.ID_NGUOIDUNG],
-        queryFn: () => getSystemHistory({
-            page,
-            per_page: 20,
+        queryFn: () => getSystemHistory({ 
+            page, 
+            per_page: 20, 
             search: debouncedSearch,
             type: filterType,
             user_id: filterUser?.ID_NGUOIDUNG
@@ -354,7 +359,7 @@ export default function AdminActivityLog() {
         return groups;
     }, [logs]);
 
-    // Mock Stats (Số liệu này nên lấy từ API nếu muốn chính xác tuyệt đối)
+    // Mock Stats
     const stats = useMemo(() => ({
         total: total,
         errors: logs.filter(l => l.LOAI_HANH_DONG.includes('DELETE') || l.LOAI_HANH_DONG.includes('REJECT')).length,
@@ -363,10 +368,10 @@ export default function AdminActivityLog() {
     }), [logs, total]);
 
     return (
-        <div className="p-6 space-y-8 bg-muted/10 min-h-screen animate-in fade-in duration-500">
+        <div className="p-6 h-full flex flex-col space-y-6 bg-muted/10 overflow-hidden animate-in fade-in duration-500">
             
             {/* 1. Header Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-shrink-0">
                 <StatCard title="Tổng số bản ghi" value={stats.total} description="Tổng hợp toàn hệ thống" icon={Activity} iconBgClass="bg-gray-100" iconColorClass="text-gray-600" />
                 <StatCard title="Cảnh báo / Xóa" value={stats.errors} description="Hành động rủi ro cao" icon={AlertCircle} iconBgClass="bg-red-100" iconColorClass="text-red-600" />
                 <StatCard title="Cập nhật / Sửa" value={stats.warnings} description="Thay đổi dữ liệu" icon={AlertTriangle} iconBgClass="bg-amber-100" iconColorClass="text-amber-600" />
@@ -374,7 +379,7 @@ export default function AdminActivityLog() {
             </div>
 
             {/* 2. Toolbar */}
-            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white dark:bg-card p-4 rounded-xl shadow-sm border sticky top-2 z-20">
+            <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white dark:bg-card p-4 rounded-xl shadow-sm border flex-shrink-0 z-20">
                 <div className="flex-1 w-full relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
@@ -427,74 +432,75 @@ export default function AdminActivityLog() {
             </div>
 
             {/* 3. List View (Grouped by Date) */}
-            <div className="space-y-6">
-                {isLoading ? (
-                    <div className="space-y-4">
-                        {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
-                    </div>
-                ) : logs.length > 0 ? (
-                    Object.keys(groupedLogs).map(dateKey => {
-                        const dateObj = new Date(dateKey);
-                        let dateLabel = format(dateObj, 'EEEE, dd/MM/yyyy', { locale: vi });
-                        if (isToday(dateObj)) dateLabel = "Hôm nay";
-                        if (isYesterday(dateObj)) dateLabel = "Hôm qua";
+            <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+                <div className="space-y-6 pb-6 pl-1">
+                    {isLoading ? (
+                        <div className="space-y-4">
+                            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+                        </div>
+                    ) : logs.length > 0 ? (
+                        Object.keys(groupedLogs).map(dateKey => {
+                            const dateObj = new Date(dateKey);
+                            let dateLabel = format(dateObj, 'EEEE, dd/MM/yyyy', { locale: vi });
+                            if (isToday(dateObj)) dateLabel = "Hôm nay";
+                            if (isYesterday(dateObj)) dateLabel = "Hôm qua";
 
-                        return (
-                            <div key={dateKey} className="relative">
-                                <div className="sticky top-0 z-10 py-2 bg-muted/10 backdrop-blur-sm mb-2">
-                                    <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-primary/50"></div>
-                                        {dateLabel}
-                                    </h3>
-                                </div>
-                                <div className="space-y-0 border-l-2 border-muted ml-3 pl-4"> 
-                                    {groupedLogs[dateKey].map((log, idx) => (
-                                        <div key={log.ID_LICHSU} className="relative -ml-6 pl-6 pb-4">
+                            return (
+                                <div key={dateKey} className="relative">
+                                    <div className="sticky top-0 z-10 py-2 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 mb-4 border-b">
+                                        <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                                            <div className="w-2 h-2 rounded-full bg-primary/50"></div>
+                                            {dateLabel}
+                                        </h3>
+                                    </div>
+                                    <div className="space-y-0 ml-1"> 
+                                        {groupedLogs[dateKey].map((log, idx) => (
                                             <LogItem 
+                                                key={log.ID_LICHSU} 
                                                 log={log} 
                                                 onClick={setSelectedLog} 
                                                 isLast={idx === groupedLogs[dateKey].length - 1}
                                             />
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })
-                ) : (
-                    <div className="text-center py-20 bg-white dark:bg-card rounded-xl border border-dashed">
-                        <Shield className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                        <h3 className="text-lg font-medium">Không tìm thấy nhật ký</h3>
-                        <p className="text-muted-foreground">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm.</p>
-                    </div>
-                )}
+                            );
+                        })
+                    ) : (
+                        <div className="text-center py-20 bg-white dark:bg-card rounded-xl border border-dashed">
+                            <Shield className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                            <h3 className="text-lg font-medium">Không tìm thấy nhật ký</h3>
+                            <p className="text-muted-foreground">Thử thay đổi bộ lọc hoặc từ khóa tìm kiếm.</p>
+                        </div>
+                    )}
 
-                {/* Pagination */}
-                {lastPage > 1 && (
-                    <div className="flex justify-center mt-8">
-                        <Pagination>
-                            <PaginationContent>
-                                <PaginationItem>
-                                    <PaginationPrevious 
-                                        onClick={() => setPage(p => Math.max(1, p - 1))} 
-                                        className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                    />
-                                </PaginationItem>
-                                <PaginationItem>
-                                    <span className="px-4 text-sm font-medium text-muted-foreground">
-                                        Trang {page} / {lastPage}
-                                    </span>
-                                </PaginationItem>
-                                <PaginationItem>
-                                    <PaginationNext 
-                                        onClick={() => setPage(p => Math.min(lastPage, p + 1))}
-                                        className={page === lastPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                                    />
-                                </PaginationItem>
-                            </PaginationContent>
-                        </Pagination>
-                    </div>
-                )}
+                    {/* Pagination */}
+                    {lastPage > 1 && (
+                        <div className="flex justify-center mt-8">
+                            <Pagination>
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious 
+                                            onClick={() => setPage(p => Math.max(1, p - 1))} 
+                                            className={page === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                        />
+                                    </PaginationItem>
+                                    <PaginationItem>
+                                        <span className="px-4 text-sm font-medium text-muted-foreground">
+                                            Trang {page} / {lastPage}
+                                        </span>
+                                    </PaginationItem>
+                                    <PaginationItem>
+                                        <PaginationNext 
+                                            onClick={() => setPage(p => Math.min(lastPage, p + 1))}
+                                            className={page === lastPage ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
+                        </div>
+                    )}
+                </div>
             </div>
 
             <LogDetailDialog log={selectedLog} isOpen={!!selectedLog} onOpenChange={(open) => !open && setSelectedLog(null)} />

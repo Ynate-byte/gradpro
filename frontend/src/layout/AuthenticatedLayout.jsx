@@ -5,8 +5,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import {
-  Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
-  BreadcrumbPage, BreadcrumbSeparator
+    Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList,
+    BreadcrumbPage, BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
 import { Button } from "@/components/ui/button";
 import { CalendarDays, Moon, Sun } from "lucide-react";
@@ -16,10 +16,8 @@ import { getUnreadCount, getNotifications } from '@/api/notificationService';
 import { NotificationDropdown } from '@/components/shared/notifications/NotificationDropdown';
 import { useTheme } from "@/components/theme-provider";
 
-// --- CẤU HÌNH TÊN HIỂN THỊ CHO BREADCRUMB ---
-// Lưu ý: Các route con (chi tiết) phải đặt khớp với pattern trong App.jsx
+// ... (Giữ nguyên phần routeNameMap như cũ)
 const routeNameMap = {
-    // 1. CHUNG
     '/': 'Trang chủ',
     '/news': 'Tin tức & Sự kiện',
     '/news/:id': 'Chi tiết tin tức',
@@ -30,12 +28,9 @@ const routeNameMap = {
     '/settings': 'Cài đặt',
     '/settings/account': 'Tài khoản',
     '/settings/appearance': 'Giao diện',
-
-    // 2. SINH VIÊN (Cập nhật đầy đủ để fix lỗi hiển thị ID)
     '/student': 'Sinh viên',
     '/student/dashboard': 'Tổng quan',
-    '/student/dashboard/:planId': 'Chi tiết Đồ án', // Fix lỗi hiển thị số "2"
-    
+    '/student/dashboard/:planId': 'Chi tiết Đồ án',
     '/projects': 'Đồ án',
     '/projects/my-plans': 'Kế hoạch tham gia',
     '/projects/my-group': 'Nhóm của tôi',
@@ -45,8 +40,6 @@ const routeNameMap = {
     '/projects/my-group/schedule/:id': 'Chi tiết Lịch họp',
     '/projects/find-group': 'Tìm kiếm nhóm',
     '/projects/topics': 'Đăng ký đề tài',
-
-    // 3. GIẢNG VIÊN
     '/lecturer': 'Giảng viên',
     '/lecturer/dashboard': 'Bảng điều khiển',
     '/lecturer/groups-management': 'Quản lý nhóm SV',
@@ -60,23 +53,17 @@ const routeNameMap = {
     '/lecturer/grading': 'Chấm điểm',
     '/lecturer/submissions': 'Duyệt bài nộp',
     '/lecturer/calendar': 'Lịch làm việc',
-
-    // 4. TRƯỞNG BỘ MÔN
     '/department-head/topic-reviewer-assignment': 'Phân công phản biện',
-
-    // 5. QUẢN TRỊ
     '/admin': 'Quản trị',
     '/admin/dashboard': 'Dashboard',
     '/admin/users': 'Người dùng',
     '/admin/groups': 'Nhóm sinh viên',
     '/admin/news': 'Tin tức',
     '/admin/backups': 'Sao lưu dữ liệu',
-    
     '/admin/thesis-plans': 'Kế hoạch khóa luận',
     '/admin/thesis-plans/create': 'Tạo mới',
     '/admin/thesis-plans/:id/edit': 'Chỉnh sửa',
     '/admin/thesis-plans/:id/participants': 'Danh sách sinh viên',
-    
     '/admin/templates': 'Mẫu kế hoạch',
     '/admin/thesis-topics': 'Quản lý đề tài',
     '/admin/quota-management': 'Phân bổ Quota',
@@ -89,7 +76,6 @@ const routeNameMap = {
     '/admin/settings/general': 'Cấu hình chung',
 };
 
-// Component Skeleton cho header
 const HeaderSkeleton = () => (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background px-4">
         <div className="flex items-center gap-3">
@@ -103,10 +89,9 @@ const HeaderSkeleton = () => (
     </header>
 );
 
-// Component Skeleton cho main content
 const MainSkeleton = () => (
-    <main className="flex-1 overflow-y-auto bg-muted/40 p-4 sm:p-6">
-        <div className="bg-card text-card-foreground rounded-lg border shadow-sm h-full overflow-y-auto p-4 md:p-6 space-y-4">
+    <main className="flex-1 overflow-hidden bg-muted/40 p-4 sm:p-6">
+        <div className="bg-card text-card-foreground rounded-lg border shadow-sm h-full overflow-hidden p-4 md:p-6 space-y-4">
             <Skeleton className="h-8 w-1/3" />
             <Skeleton className="h-4 w-2/3" />
             <Skeleton className="h-48 w-full" />
@@ -120,7 +105,6 @@ export default function AuthenticatedLayout() {
     const location = useLocation();
     const { theme, setTheme } = useTheme();
 
-    // --- LOGIC POLLING THÔNG BÁO ---
     const { data: countData } = useQuery({
         queryKey: ['unreadCount'],
         queryFn: getUnreadCount,
@@ -139,13 +123,11 @@ export default function AuthenticatedLayout() {
     const unreadCount = countData?.count || 0;
     const notifications = latestNotiData?.data || [];
 
-    // --- [UPDATED] LOGIC BREADCRUMB ---
     const breadcrumbItems = useMemo(() => {
         const pathnames = location.pathname.split('/').filter(x => x);
         let currentPath = '';
         const items = [];
 
-        // Luôn thêm Home
         items.push(
             <BreadcrumbItem key="root">
                 <BreadcrumbLink asChild>
@@ -160,12 +142,10 @@ export default function AuthenticatedLayout() {
             let routeName = null;
             let matchedRoute = null;
 
-            // 1. Kiểm tra khớp chính xác (Ưu tiên cao nhất)
             if (routeNameMap[currentPath]) {
                 routeName = routeNameMap[currentPath];
                 matchedRoute = currentPath;
             } else {
-                // 2. Kiểm tra khớp pattern (VD: /news/:id)
                 for (const pattern in routeNameMap) {
                     const match = matchPath(pattern, currentPath);
                     if (match) {
@@ -176,14 +156,7 @@ export default function AuthenticatedLayout() {
                 }
             }
 
-            // Nếu tìm thấy tên route, hiển thị nó. 
-            // Nếu không tìm thấy (VD: "student" đứng một mình mà không có map), 
-            // ta có thể chọn hiển thị raw value hoặc bỏ qua. 
-            // Ở đây ta hiển thị raw value nhưng viết hoa chữ đầu để đỡ trống trải.
             const displayName = routeName || (value.charAt(0).toUpperCase() + value.slice(1));
-
-            // [FIX]: Ẩn các segment không có ý nghĩa nếu muốn (VD: ẩn ID nếu không match được tên)
-            // Nhưng với logic trên, ID sẽ match được pattern /:id và hiển thị "Chi tiết..." nên ổn.
 
             items.push(<BreadcrumbSeparator key={`sep-${index}`} />);
             
@@ -196,7 +169,6 @@ export default function AuthenticatedLayout() {
             } else {
                 items.push(
                     <BreadcrumbItem key={currentPath}>
-                        {/* Nếu route có map thì link, không thì chỉ hiện text (tránh link chết 404) */}
                         {routeName ? (
                              <BreadcrumbLink asChild>
                                 <Link to={matchedRoute}>{displayName}</Link>
@@ -209,7 +181,6 @@ export default function AuthenticatedLayout() {
             }
         });
 
-        // Xử lý trường hợp trang chủ (tránh lặp breadcrumb)
         if (items.length <= 1 && location.pathname === '/') {
             items.push(<BreadcrumbSeparator key="sep-home" />);
             items.push(
@@ -222,10 +193,8 @@ export default function AuthenticatedLayout() {
         return items;
     }, [location.pathname]);
 
-    // --- CHECK QUYỀN HẠN ---
     const isLecturerOrHigher = ['Giảng viên', 'Trưởng khoa', 'Giáo vụ'].includes(user?.vaitro?.TEN_VAITRO);
 
-    // --- RENDER ---
     if (authLoading) {
         return (
             <SidebarProvider>
@@ -246,14 +215,14 @@ export default function AuthenticatedLayout() {
 
     return (
         <SidebarProvider>
-            <div className="flex h-screen w-full bg-background text-foreground">
+            <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
                 <AppSidebar />
-                <SidebarInset>
-                    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background px-4">
+                <SidebarInset className="flex flex-col h-full w-full overflow-hidden">
+                    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 z-10">
                         <div className="flex items-center gap-3 overflow-hidden">
                              <SidebarTrigger />
                              <Separator orientation="vertical" className="h-6" />
-                             <Breadcrumb>
+                             <Breadcrumb className="hidden md:flex">
                                 <BreadcrumbList>{breadcrumbItems}</BreadcrumbList>
                             </Breadcrumb>
                         </div>
@@ -290,8 +259,8 @@ export default function AuthenticatedLayout() {
                         </div>
                     </header>
                     
-                    <main className="flex-1 overflow-y-auto bg-muted/40 p-1">
-                         <div className="bg-card text-card-foreground rounded-2xl border-2 border-blue-200 dark:border-blue-900 shadow-lg p-1 min-h-full transition-colors">
+                    <main className="flex-1 overflow-hidden bg-muted/40">
+                         <div className="h-full w-full bg-card text-card-foreground rounded-2xl border-2 border-blue-200 dark:border-blue-900 shadow-lg overflow-hidden flex flex-col transition-colors">
                             <Outlet />
                         </div>
                     </main>

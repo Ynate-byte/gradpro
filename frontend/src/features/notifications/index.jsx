@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
@@ -23,8 +22,8 @@ import {
 // Icons
 import { 
     Bell, BellOff, Star, Calendar, Search, MoreVertical, 
-    CheckCircle, Trash2, MailOpen, Clock, AlertTriangle, AlertCircle, 
-    Megaphone, BookOpen, Info, Zap, Users
+    Trash2, MailOpen, Clock, AlertTriangle, AlertCircle, 
+    Megaphone, BookOpen, Info, Zap, Users, CheckCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -44,12 +43,11 @@ const getNotificationStyle = (type) => {
     }
 };
 
-// --- 2. ITEM COMPONENT (Đã cập nhật Priority) ---
+// --- 2. ITEM COMPONENT (COMPACT VERSION) ---
 const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
     const navigate = useNavigate();
     const { icon: Icon, color, bg } = getNotificationStyle(notification.LOAI_THONGBAO);
     
-    // Lấy mức độ ưu tiên và metadata
     const priority = notification.DO_UU_TIEN || 'NORMAL';
     const metaData = notification.DU_LIEU_GOC || {};
     const isUnread = !notification.DA_DOC;
@@ -59,9 +57,8 @@ const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
         if (notification.LIEN_KET) navigate(notification.LIEN_KET);
     };
 
-    // Style dựa trên độ ưu tiên
     const getPriorityClasses = () => {
-        if (!isUnread) return "bg-white dark:bg-card border-gray-200 dark:border-border opacity-80 hover:opacity-100"; // Đã đọc
+        if (!isUnread) return "bg-white dark:bg-card border-gray-200 dark:border-border opacity-70 hover:opacity-100"; 
 
         switch (priority) {
             case 'URGENT':
@@ -76,63 +73,62 @@ const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
     return (
         <div 
             className={cn(
-                "group relative flex items-start gap-4 p-4 rounded-xl border transition-all mb-3 hover:shadow-md cursor-pointer", 
+                "group relative flex items-start gap-3 p-3 rounded-lg border transition-all mb-2 hover:shadow-md cursor-pointer", 
                 getPriorityClasses()
             )} 
             onClick={handleClick}
         >
-            {/* Icon */}
-            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-full mt-1 shadow-sm", bg, color)}>
-                <Icon className="h-5 w-5" />
+            <div className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-full mt-0.5 shadow-sm", bg, color)}>
+                <Icon className="h-4 w-4" />
             </div>
 
             {/* Content */}
-            <div className="flex-1 min-w-0 space-y-1">
+            <div className="flex-1 min-w-0 space-y-0.5">
                 <div className="flex justify-between items-start gap-2">
-                    <div className="flex items-center gap-2 pr-6">
-                        {/* Icon cảnh báo cho mức độ khẩn cấp */}
-                        {priority === 'URGENT' && <AlertTriangle className="h-4 w-4 text-red-600 animate-pulse shrink-0" />}
-                        {priority === 'HIGH' && <AlertCircle className="h-4 w-4 text-orange-500 shrink-0" />}
+                    <div className="flex items-center gap-1.5 pr-6">
+                        {priority === 'URGENT' && <AlertTriangle className="h-3.5 w-3.5 text-red-600 animate-pulse shrink-0" />}
+                        {priority === 'HIGH' && <AlertCircle className="h-3.5 w-3.5 text-orange-500 shrink-0" />}
 
-                        <h4 className={cn("text-sm font-semibold leading-snug", isUnread ? "text-foreground" : "text-muted-foreground")}>
+                        {/* [COMPACT] Font size nhỏ gọn */}
+                        <h4 className={cn("text-sm font-semibold leading-tight", isUnread ? "text-foreground" : "text-muted-foreground")}>
                             {notification.TIEU_DE}
                         </h4>
                     </div>
                     
-                    {/* Badge Mới */}
                     {isUnread && priority === 'NORMAL' && (
-                        <Badge variant="secondary" className="shrink-0 text-[10px] h-5 px-1.5">Mới</Badge>
+                        <Badge variant="secondary" className="shrink-0 text-[9px] h-4 px-1">Mới</Badge>
                     )}
                 </div>
                 
-                <p className={cn("text-sm line-clamp-2 leading-relaxed", isUnread ? "text-foreground/80" : "text-muted-foreground")}>
+                {/* [COMPACT] Giảm line-clamp xuống 2 và chỉnh text size */}
+                <p className={cn("text-xs line-clamp-2 leading-relaxed", isUnread ? "text-foreground/80" : "text-muted-foreground")}>
                     {notification.NOI_DUNG}
                 </p>
 
-                {/* --- Metadata Chips (Điểm số, Hạn chót...) --- */}
+                {/* Metadata Chips */}
                 {(metaData.deadline || metaData.quota || metaData.score) && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="flex flex-wrap gap-1.5 mt-1.5">
                         {metaData.deadline && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">
                                 <Clock className="w-3 h-3 mr-1" />
                                 Hạn: {format(new Date(metaData.deadline), 'HH:mm dd/MM')}
                             </span>
                         )}
                         {metaData.score && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 border border-yellow-200">
                                 <Zap className="w-3 h-3 mr-1" />
                                 Điểm: {metaData.score}
                             </span>
                         )}
                         {metaData.quota && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-indigo-100 text-indigo-700 border border-indigo-200">
                                 Chỉ tiêu: {metaData.quota}
                             </span>
                         )}
                     </div>
                 )}
                 
-                <div className="flex items-center gap-3 text-xs text-muted-foreground pt-1">
+                <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1">
                     <span className="flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         {formatDistanceToNow(new Date(notification.NGAY_TAO), { addSuffix: true, locale: vi })}
@@ -141,21 +137,21 @@ const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
             </div>
 
             {/* Dropdown Actions */}
-            <div className="absolute top-3 right-3" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-2 right-2" onClick={(e) => e.stopPropagation()}>
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <MoreVertical className="h-4 w-4" />
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:bg-background/50 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <MoreVertical className="h-3.5 w-3.5" />
                         </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                         {!notification.DA_DOC && (
                             <DropdownMenuItem onClick={() => onMarkRead(notification.ID_THONGBAO)}>
-                                <MailOpen className="mr-2 h-4 w-4" /> Đánh dấu đã đọc
+                                <MailOpen className="mr-2 h-3.5 w-3.5" /> Đánh dấu đã đọc
                             </DropdownMenuItem>
                         )}
                         <DropdownMenuItem onClick={() => onDelete(notification.ID_THONGBAO)} className="text-destructive focus:text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" /> Xóa thông báo
+                            <Trash2 className="mr-2 h-3.5 w-3.5" /> Xóa thông báo
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
@@ -166,7 +162,7 @@ const NotificationCard = ({ notification, onMarkRead, onDelete }) => {
 
 // --- 3. MAIN PAGE ---
 export default function NotificationPage() {
-    const [currentTab, setCurrentTab] = useState('all'); // all | unread | important
+    const [currentTab, setCurrentTab] = useState('all'); 
     const [search, setSearch] = useState('');
     const [debouncedSearch] = useDebounce(search, 300);
     const queryClient = useQueryClient();
@@ -176,7 +172,6 @@ export default function NotificationPage() {
     const positionCodes = user?.giangvien?.chucvus?.map(c => c.MA_CHUCVU) || [];
     const canBroadcast = role === 'Admin' || positionCodes.includes('TRUONG_KHOA') || positionCodes.includes('GIAO_VU');
 
-    // 1. Lấy thống kê số lượng
     const { data: countData } = useQuery({
         queryKey: ['unreadCount'],
         queryFn: getUnreadCount,
@@ -184,22 +179,20 @@ export default function NotificationPage() {
     });
     const unreadCount = countData?.count || 0;
 
-    // 2. Lấy danh sách thông báo (Có lọc server-side theo tab)
     const { data: notiData, isLoading } = useQuery({
         queryKey: ['notifications-page', currentTab, debouncedSearch], 
         queryFn: () => getNotifications({ 
             page: 1, 
             per_page: 50, 
             filter: currentTab === 'unread' ? 'unread' : null,
-            priority: currentTab === 'important' ? 'important' : null, // Gửi tham số priority lên server
-            search: debouncedSearch // Nếu backend hỗ trợ tìm kiếm
+            priority: currentTab === 'important' ? 'important' : null,
+            search: debouncedSearch 
         }),
         keepPreviousData: true,
     });
 
     const allNotifications = notiData?.data || [];
 
-    // Mutations
     const markReadMutation = useMutation({
         mutationFn: markAsRead,
         onSuccess: () => {
@@ -216,10 +209,8 @@ export default function NotificationPage() {
         }
     });
 
-    // Filter Logic (Client-side fallback cho search)
     const filteredNotifications = useMemo(() => {
         let items = allNotifications;
-        // Filter search client-side nếu backend chưa hỗ trợ full text search
         if (debouncedSearch) {
             const s = debouncedSearch.toLowerCase();
             items = items.filter(n => n.TIEU_DE.toLowerCase().includes(s) || n.NOI_DUNG.toLowerCase().includes(s));
@@ -227,7 +218,6 @@ export default function NotificationPage() {
         return items;
     }, [allNotifications, debouncedSearch]);
 
-    // Group by Date
     const groupedNotifications = useMemo(() => {
         const groups = { today: [], yesterday: [], older: [] };
         filteredNotifications.forEach(item => {
@@ -239,11 +229,9 @@ export default function NotificationPage() {
         return groups;
     }, [filteredNotifications]);
 
-    // Thống kê giả định cho UI (Trong thực tế có thể lấy từ API nếu cần chính xác)
     const stats = {
         total: notiData?.total || 0,
         unread: unreadCount,
-        // Đếm số quan trọng trong trang hiện tại
         important: allNotifications.filter(n => ['HIGH', 'URGENT'].includes(n.DO_UU_TIEN)).length,
         today: allNotifications.filter(n => isToday(new Date(n.NGAY_TAO))).length
     };
@@ -252,11 +240,11 @@ export default function NotificationPage() {
         if (!items || items.length === 0) return null;
         return (
             <div className="mb-6 animate-in slide-in-from-bottom-2 duration-500">
-                <div className="flex items-center justify-between mb-3 px-1">
-                    <h3 className="text-sm font-bold text-foreground">{title}</h3>
-                    <Badge variant="secondary" className="text-[10px] h-5 px-2">{items.length}</Badge>
+                <div className="flex items-center justify-between mb-2 px-1 sticky top-0 bg-background/95 backdrop-blur z-10 py-1">
+                    <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">{title}</h3>
+                    <Badge variant="outline" className="text-[10px] h-4 px-1.5 font-normal">{items.length}</Badge>
                 </div>
-                <div className="space-y-1">
+                <div>
                     {items.map(noti => (
                         <NotificationCard 
                             key={noti.ID_THONGBAO} 
@@ -270,16 +258,11 @@ export default function NotificationPage() {
         );
     };
 
+    const compactStatCardClass = "p-2 shadow-sm border bg-card hover:bg-accent/5 transition-colors cursor-pointer"; 
+
     return (
-        <div className="container mx-auto p-4 md:p-8 max-w-5xl space-y-6">
-            
-            {/* 1. HEADER & ACTIONS */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Thông báo</h1>
-                    <p className="text-muted-foreground text-sm">Cập nhật các hoạt động mới nhất từ hệ thống.</p>
-                </div>
-                
+        <div className="h-full flex flex-col p-8 gap-4 bg-background overflow-hidden animate-in fade-in duration-500">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 shrink-0">          
                 {canBroadcast && (
                     <div className="flex shrink-0">
                         <CreateNotificationDialog />
@@ -287,100 +270,101 @@ export default function NotificationPage() {
                 )}
             </div>
 
-            {/* 2. Stat Cards (Sử dụng dữ liệu thực tế hơn) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {/* 2. Stat Cards (Shrink 0) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
                 <StatCard 
                     title="Tất cả" 
                     value={stats.total} 
-                    description="Tổng số tin"
                     icon={Bell} 
                     isActive={currentTab === 'all'}
                     onClick={() => setCurrentTab('all')}
+                    className={compactStatCardClass}
                 />
                 <StatCard 
                     title="Chưa đọc" 
                     value={stats.unread} 
-                    description="Cần xem ngay" 
                     icon={BellOff} 
                     iconBgClass="bg-blue-100 dark:bg-blue-900/20" 
                     iconColorClass="text-blue-600 dark:text-blue-400" 
                     isActive={currentTab === 'unread'}
                     onClick={() => setCurrentTab('unread')}
                     hasStatusDot={stats.unread > 0}
+                    className={compactStatCardClass}
                 />
                 <StatCard 
                     title="Quan trọng" 
-                    value={stats.important} // Hiển thị số lượng quan trọng trong trang hiện tại
-                    description="Khẩn cấp / Cao" 
+                    value={null} 
                     icon={Star} 
                     iconBgClass="bg-orange-100 dark:bg-orange-900/20" 
                     iconColorClass="text-orange-600 dark:text-orange-400" 
                     isActive={currentTab === 'important'}
                     onClick={() => setCurrentTab('important')}
+                    className={compactStatCardClass}
                 />
                 <StatCard 
                     title="Hôm nay" 
                     value={stats.today} 
-                    description="Mới nhất" 
                     icon={Calendar} 
                     iconBgClass="bg-emerald-100 dark:bg-emerald-900/20" 
                     iconColorClass="text-emerald-600 dark:text-emerald-400" 
+                    className={compactStatCardClass}
                 />
             </div>
 
-            {/* 3. Search & Tabs */}
-            <div className="space-y-4">
-                <div className="relative">
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                    <Input 
-                        placeholder="Tìm kiếm theo tiêu đề hoặc nội dung..." 
-                        className="pl-12 h-12 rounded-xl bg-background border-input shadow-sm text-base focus-visible:ring-1 focus-visible:ring-primary"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                    />
-                </div>
-
-                <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-                    <div className="flex flex-wrap items-center justify-between mb-4 gap-2">
-                        <TabsList className="h-10 bg-muted p-1 rounded-lg">
-                            <TabsTrigger value="all" className="px-4">Tất cả</TabsTrigger>
-                            <TabsTrigger value="unread" className="px-4">Chưa đọc</TabsTrigger>
-                            <TabsTrigger value="important" className="px-4 text-orange-700 dark:text-orange-400 data-[state=active]:text-orange-800 data-[state=active]:font-bold">
-                                <AlertTriangle className="w-3.5 h-3.5 mr-1.5" /> Quan trọng
+            {/* 3. Filter & Content (Flex 1 + Overflow) */}
+            <div className="flex-1 flex flex-col gap-4 min-h-0">
+                
+                {/* Filters */}
+                <div className="flex flex-col sm:flex-row gap-3 shrink-0">
+                    <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Tìm kiếm thông báo..." 
+                            className="pl-9 h-9 bg-muted/30"
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                        />
+                    </div>
+                    
+                    <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full sm:w-auto">
+                        <TabsList className="h-9 w-full sm:w-auto">
+                            <TabsTrigger value="all" className="text-xs px-3">Tất cả</TabsTrigger>
+                            <TabsTrigger value="unread" className="text-xs px-3">Chưa đọc</TabsTrigger>
+                            <TabsTrigger value="important" className="text-xs px-3 text-orange-700 dark:text-orange-400">
+                                Quan trọng
                             </TabsTrigger>
                         </TabsList>
+                    </Tabs>
 
-                        <Button variant="outline" size="sm" onClick={() => markReadMutation.mutate(null)} disabled={unreadCount === 0}>
-                            <CheckCircle className="w-4 h-4 mr-2" /> Đánh dấu đã đọc tất cả
-                        </Button>
-                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => markReadMutation.mutate(null)} disabled={unreadCount === 0} className="h-9">
+                        <CheckCircle className="w-3.5 h-3.5 mr-1.5" /> Đọc tất cả
+                    </Button>
+                </div>
 
-                    <div className="min-h-[400px]">
-                        {isLoading ? (
-                            <div className="space-y-4 mt-4">
-                                {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+                {/* Scrollable List */}
+                <div className="flex-1 overflow-y-auto pr-2 min-h-0">
+                    {isLoading ? (
+                        <div className="space-y-3 mt-2">
+                            {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+                        </div>
+                    ) : filteredNotifications.length > 0 ? (
+                        <div className="pb-10">
+                            {renderGroup("Hôm nay", groupedNotifications.today)}
+                            {renderGroup("Hôm qua", groupedNotifications.yesterday)}
+                            {renderGroup("Cũ hơn", groupedNotifications.older)}
+                        </div>
+                    ) : (
+                        <div className="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-xl bg-muted/20 mt-4">
+                            <div className="bg-background p-3 rounded-full shadow-sm mb-3">
+                                <BellOff className="h-6 w-6 text-muted-foreground" />
                             </div>
-                        ) : filteredNotifications.length > 0 ? (
-                            <div className="mt-4">
-                                {renderGroup("Hôm nay", groupedNotifications.today)}
-                                {renderGroup("Hôm qua", groupedNotifications.yesterday)}
-                                {renderGroup("Cũ hơn", groupedNotifications.older)}
-                            </div>
-                        ) : (
-                            <div className="flex flex-col items-center justify-center py-20 border-2 border-dashed rounded-xl bg-muted/30 mt-4">
-                                <div className="bg-background p-4 rounded-full shadow-sm mb-4">
-                                    <BellOff className="h-8 w-8 text-muted-foreground" />
-                                </div>
-                                <h3 className="text-lg font-semibold">Không tìm thấy thông báo</h3>
-                                <p className="text-muted-foreground text-sm">
-                                    {currentTab === 'important' 
-                                        ? "Bạn không có thông báo quan trọng nào." 
-                                        : "Bạn chưa nhận được thông báo nào phù hợp."}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </Tabs>
+                            <h3 className="text-sm font-semibold">Không có thông báo</h3>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                {currentTab === 'important' ? "Bạn không có thông báo quan trọng nào." : "Chưa có thông báo mới."}
+                            </p>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

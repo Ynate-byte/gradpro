@@ -217,43 +217,46 @@ const GroupsManagementPage = () => {
   };
 
   return (
-    <div className="p-4 md:p-8 space-y-8 max-w-[1600px] mx-auto">
-      {/* Header Section */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800">
-             <Users className="w-5 h-5 text-blue-600" />
-             <span className="font-semibold text-blue-800 dark:text-blue-300">{groups.length}</span>
-             <span className="text-blue-600/80 dark:text-blue-400 text-sm">nhóm đang hướng dẫn</span>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      {loading ? (
-        <div className="flex flex-col justify-center items-center h-[60vh] text-muted-foreground">
-          <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
-          <p className="text-lg font-medium">Đang tải danh sách nhóm...</p>
-        </div>
-      ) : groups.length === 0 ? (
-        <div className="flex flex-col items-center justify-center h-[60vh] border-2 border-dashed border-muted-foreground/20 rounded-xl bg-muted/5">
-          <div className="p-6 bg-muted rounded-full mb-4">
-             <GraduationCap className="h-16 w-16 text-muted-foreground/50" />
+    // [FIX SCROLL] Thêm h-full và overflow-y-auto
+    <div className="h-full overflow-y-auto p-4 md:p-8 bg-gray-50/50 dark:bg-background">
+      <div className="max-w-[1600px] mx-auto space-y-8 pb-20">
+          {/* Header Section */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-100 dark:border-blue-800">
+                 <Users className="w-5 h-5 text-blue-600" />
+                 <span className="font-semibold text-blue-800 dark:text-blue-300">{groups.length}</span>
+                 <span className="text-blue-600/80 dark:text-blue-400 text-sm">nhóm đang hướng dẫn</span>
+            </div>
           </div>
-          <h3 className="text-xl font-semibold text-foreground">Chưa có nhóm nào</h3>
-          <p className="text-muted-foreground mt-2 max-w-md text-center">
-            Hiện tại bạn chưa được phân công hướng dẫn nhóm nào. Khi sinh viên đăng ký đề tài, danh sách sẽ hiển thị tại đây.
-          </p>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-            {groups.map((group) => (
-                <GroupCard 
-                    key={group.ID_PHANCONG} 
-                    group={group} 
-                    onViewDetails={handleViewDetails} 
-                />
-            ))}
-        </div>
-      )}
+
+          {/* Main Content */}
+          {loading ? (
+            <div className="flex flex-col justify-center items-center h-[60vh] text-muted-foreground">
+              <Loader2 className="h-12 w-12 animate-spin mb-4 text-primary" />
+              <p className="text-lg font-medium">Đang tải danh sách nhóm...</p>
+            </div>
+          ) : groups.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-[60vh] border-2 border-dashed border-muted-foreground/20 rounded-xl bg-muted/5">
+              <div className="p-6 bg-muted rounded-full mb-4">
+                 <GraduationCap className="h-16 w-16 text-muted-foreground/50" />
+              </div>
+              <h3 className="text-xl font-semibold text-foreground">Chưa có nhóm nào</h3>
+              <p className="text-muted-foreground mt-2 max-w-md text-center">
+                Hiện tại bạn chưa được phân công hướng dẫn nhóm nào. Khi sinh viên đăng ký đề tài, danh sách sẽ hiển thị tại đây.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+                {groups.map((group) => (
+                    <GroupCard 
+                        key={group.ID_PHANCONG} 
+                        group={group} 
+                        onViewDetails={handleViewDetails} 
+                    />
+                ))}
+            </div>
+          )}
+      </div>
     </div>
   );
 };

@@ -307,7 +307,7 @@ export default function FindGroupPage() {
     }
 
     return (
-        <div className="p-4 md:p-8 space-y-6 container mx-auto max-w-7xl animate-in fade-in duration-500">
+        <div className="p-4 md:p-8 space-y-6 container mx-auto h-full overflow-auto max-w-7xl animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <Button variant="ghost" className="pl-0 hover:bg-transparent" onClick={() => navigate(-1)}>

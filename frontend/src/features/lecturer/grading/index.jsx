@@ -218,7 +218,7 @@ const LecturerGradingPage = () => {
 
     return (
         <motion.div
-            className="flex-1 space-y-6 p-4 md:p-8 container mx-auto max-w-7xl"
+            className="h-full overflow-y-auto space-y-6 p-4 md:p-8 bg-gray-50/50 dark:bg-background"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }}
         >
             <motion.div variants={itemVariants} initial="hidden" animate="visible" transition={{ delay: 0.1 }}>

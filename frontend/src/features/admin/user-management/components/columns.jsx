@@ -139,13 +139,14 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="-ml-3" // Căn lề trái cho header khớp với nội dung
             >
                 Người dùng
                 <SortIndicator column={column} />
             </Button>
         ),
         cell: ({ row }) => (
-            <div className="flex items-center gap-3 pl-2">
+            <div className="flex items-center gap-3 pl-1 py-1">
                 <Avatar className="h-9 w-9 border">
                     <AvatarFallback>{getInitials(row.original.HODEM_VA_TEN)}</AvatarFallback>
                 </Avatar>
@@ -168,7 +169,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         accessorKey: "MA_DINHDANH",
         header: "Mã định danh",
         cell: ({ row }) => (
-            <div className="font-mono text-sm">
+            <div className="flex items-center h-full font-mono text-sm"> {/* Flex để căn giữa dọc */}
                 {row.original.MA_DINHDANH}
             </div>
         ),
@@ -180,6 +181,7 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             <Button
                 variant="ghost"
                 onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+                className="-ml-3"
             >
                 Ngày sinh
                 <SortIndicator column={column} />
@@ -188,27 +190,25 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         cell: ({ row }) => {
             const ngaySinh = row.original.NGAYSINH;
             const formattedDate = formatNgaySinh(ngaySinh);
-            if (!formattedDate) {
-                return <span className="text-xs text-muted-foreground">Chưa có</span>;
-            }
-            return <div className="text-sm">{formattedDate}</div>;
+            // [FIX] Thêm flex items-center h-full để căn thẳng hàng với các cột khác
+            return (
+                <div className="flex items-center h-full text-sm">
+                    {formattedDate || <span className="text-xs text-muted-foreground">Chưa có</span>}
+                </div>
+            );
         },
         size: 120,
     },
     {
         id: "vai_tro",
         accessorKey: "vaitro.TEN_VAITRO",
-        header: "Vai trò / Chức vụ", // [UI] Đổi tiêu đề cột cho rõ nghĩa
+        header: "Vai trò / Chức vụ",
         cell: ({ row }) => {
             const user = row.original;
             const roleName = user.vaitro.TEN_VAITRO;
             const chucVus = user.giangvien?.chucvus || [];
-
-            // 1. Tìm chức vụ ưu tiên cao nhất
             const highestPosition = getHighestPriorityPosition(chucVus);
             
-            // 2. Xác định tên hiển thị chính
-            // Nếu có chức vụ cao (VD: Phó trưởng khoa), hiển thị nó. Nếu không, hiển thị Vai trò gốc (Giảng viên)
             let displayRoleName = roleName;
             let isPosition = false;
 
@@ -217,67 +217,58 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
                  isPosition = true;
             }
             
-            // 3. Chọn config (màu sắc, icon) dựa trên tên hiển thị
-            // Fallback về config mặc định nếu không tìm thấy key
             const config = roleConfig[displayRoleName] || { icon: Briefcase, color: "bg-gray-100 text-gray-800" };
             const Icon = config.icon;
 
+            // [FIX] Thêm flex items-center h-full
             return (
-                <TooltipProvider delayDuration={100}>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Badge 
-                                variant="outline" 
-                                className={cn(
-                                    'gap-1.5 text-xs py-0.5 cursor-default', 
-                                    config.color,
-                                    isPosition && 'border-dashed border-2' // Làm nổi bật nếu là chức vụ
-                                )}
-                            >
-                                {Icon && <Icon className="h-3.5 w-3.5" />}
-                                {displayRoleName}
-                            </Badge>
-                        </TooltipTrigger>
-                        
-                        {/* Tooltip hiển thị chi tiết tất cả chức vụ */}
-                        {(chucVus.length > 0 || roleName !== displayRoleName) && (
-                            <TooltipContent 
-                                className="max-w-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 shadow-xl p-3 z-50"
-                                side="top"
-                            >
-                                <p className="font-semibold mb-1 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                    Vai trò gốc
-                                </p>
-                                <p className="text-sm font-medium mb-2">
-                                    {roleName}
-                                </p>
-
-                                {chucVus.length > 0 && (
-                                    <>
-                                        <div className="h-px bg-slate-100 dark:bg-slate-800 my-2" />
-                                        <p className="font-semibold mb-1 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                            Chức vụ kiêm nhiệm
-                                        </p>
-                                        <ul className="list-disc list-inside text-xs space-y-1">
-                                            {chucVus.map((cv) => (
-                                                <li 
-                                                    key={cv.ID_CHUCVU} 
-                                                    className={cn(
-                                                        cv.ID_CHUCVU === highestPosition?.ID_CHUCVU 
-                                                            ? "text-blue-600 dark:text-blue-400 font-bold"
-                                                            : "text-slate-700 dark:text-slate-300"
-                                                    )}
-                                                >
-                                                    {cv.TEN_CHUCVU}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </>
-                                )}
-                            </TooltipContent>
-                        )}
-                    </Tooltip>
-                </TooltipProvider>
+                <div className="flex items-center h-full">
+                    <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Badge 
+                                    variant="outline" 
+                                    className={cn(
+                                        'gap-1.5 text-xs py-0.5 cursor-default', 
+                                        config.color,
+                                        isPosition && 'border-dashed border-2' 
+                                    )}
+                                >
+                                    {Icon && <Icon className="h-3.5 w-3.5" />}
+                                    {displayRoleName}
+                                </Badge>
+                            </TooltipTrigger>
+                            
+                            {(chucVus.length > 0 || roleName !== displayRoleName) && (
+                                <TooltipContent 
+                                    className="max-w-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-50 shadow-xl p-3 z-50"
+                                    side="top"
+                                >
+                                    {/* ... (Giữ nguyên nội dung tooltip) ... */}
+                                    <p className="font-semibold mb-1 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                        Vai trò gốc
+                                    </p>
+                                    <p className="text-sm font-medium mb-2">{roleName}</p>
+                                    {chucVus.length > 0 && (
+                                        <>
+                                            <div className="h-px bg-slate-100 dark:bg-slate-800 my-2" />
+                                            <p className="font-semibold mb-1 text-[10px] uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                                Chức vụ kiêm nhiệm
+                                            </p>
+                                            <ul className="list-disc list-inside text-xs space-y-1">
+                                                {chucVus.map((cv) => (
+                                                    <li key={cv.ID_CHUCVU} className={cn(cv.ID_CHUCVU === highestPosition?.ID_CHUCVU ? "text-blue-600 font-bold" : "")}>
+                                                        {cv.TEN_CHUCVU}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </>
+                                    )}
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
             );
         },
         minSize: 180,
@@ -287,27 +278,26 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         header: "Đơn vị / Chuyên ngành",
         cell: ({ row }) => {
             const user = row.original;
-            if (user.vaitro.TEN_VAITRO === 'Sinh viên') {
-                return (
-                    <div className="text-xs text-muted-foreground">
-                        {user.sinhvien?.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}
-                    </div>
-                );
-            }
-            if (user.giangvien) {
-                return (
-                    <div className="text-xs text-muted-foreground font-medium">
-                        {user.giangvien?.khoabomon?.TEN_KHOA_BOMON || 'N/A'}
-                    </div>
-                );
-            }
+            // [FIX] Thêm flex items-center h-full
             return (
-                <div className="text-xs text-muted-foreground">N/A</div>
+                <div className="flex items-center h-full">
+                    {user.vaitro.TEN_VAITRO === 'Sinh viên' ? (
+                        <div className="text-xs text-muted-foreground">
+                            {user.sinhvien?.chuyennganh?.TEN_CHUYENNGANH || 'N/A'}
+                        </div>
+                    ) : user.giangvien ? (
+                        <div className="text-xs text-muted-foreground font-medium">
+                            {user.giangvien?.khoabomon?.TEN_KHOA_BOMON || 'N/A'}
+                        </div>
+                    ) : (
+                        <div className="text-xs text-muted-foreground">N/A</div>
+                    )}
+                </div>
             );
         },
         minSize: 200,
     },
-    // Các cột ẩn để phục vụ Filter
+    // ... (Giữ nguyên các cột ẩn filter) ...
     {
         id: "chuyen_nganh_id",
         accessorFn: row => String(row.original?.sinhvien?.ID_CHUYENNGANH),
@@ -338,8 +328,9 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         header: "Trạng thái",
         cell: ({ row }) => {
             const isActive = row.getValue("trang_thai");
+            // [FIX] Thêm flex items-center h-full
             return (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center h-full gap-2">
                     <Circle className={cn("h-2.5 w-2.5", isActive ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500')} />
                     <span className="text-muted-foreground text-xs">
                         {isActive ? "Hoạt động" : "Vô hiệu"}
@@ -359,19 +350,22 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         cell: ({ row }) => {
             if (!row.original.NGAYTAO) return null;
             const date = new Date(row.original.NGAYTAO);
+            // [FIX] Thêm flex items-center h-full
             return (
-                <TooltipProvider delayDuration={100}>
-                    <Tooltip>
-                        <TooltipTrigger>
-                            <div className="text-xs text-muted-foreground cursor-help">
-                                {formatDistanceToNow(date, { addSuffix: true, locale: vi })}
-                            </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p>{format(date, 'dd/MM/yyyy HH:mm:ss')}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
+                <div className="flex items-center h-full">
+                    <TooltipProvider delayDuration={100}>
+                        <Tooltip>
+                            <TooltipTrigger>
+                                <div className="text-xs text-muted-foreground cursor-help">
+                                    {formatDistanceToNow(date, { addSuffix: true, locale: vi })}
+                                </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>{format(date, 'dd/MM/yyyy HH:mm:ss')}</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                </div>
             );
         },
         size: 130,
@@ -379,7 +373,9 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
     {
         id: "actions",
         cell: ({ row }) => (
-            <DataTableRowActions row={row} onEdit={onEdit} onSuccess={onSuccess} onViewDetails={onViewDetails} />
+            <div className="flex items-center h-full justify-center">
+                <DataTableRowActions row={row} onEdit={onEdit} onSuccess={onSuccess} onViewDetails={onViewDetails} />
+            </div>
         ),
         size: 60,
     },

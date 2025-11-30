@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef, useLayoutEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "framer-motion";
@@ -195,19 +195,10 @@ const ListNhomChamDiem = () => {
 
   const columns = useMemo(() => getColumns(handleGradeClick), [handleGradeClick]);
 
-  // Animation height cho bảng
-  const [tableHeight, setTableHeight] = useState('auto');
-  const tableRef = useRef(null);
-  useLayoutEffect(() => {
-    if (tableRef.current) {
-      const height = tableRef.current.getBoundingClientRect().height;
-      setTableHeight(height);
-    }
-  }, [data, isLoadingGroups, pagination]);
-
   return (
-    <div className="p-4 md:p-8 space-y-6 h-full flex flex-col">
-      {/* Stat Cards Section */}
+    // [FIX] Thêm overflow-hidden vào container chính
+    <div className="p-4 md:p-8 space-y-6 h-full flex flex-col overflow-hidden">
+      {/* Stat Cards Section - [FIX] Thêm flex-shrink-0 */}
       <motion.div
         className="grid gap-4 md:grid-cols-3 flex-shrink-0"
         variants={variants.container}
@@ -246,7 +237,7 @@ const ListNhomChamDiem = () => {
         </motion.div>
       </motion.div>
 
-      {/* Filter Section */}
+      {/* Filter Section - [FIX] Thêm flex-shrink-0 */}
       <div className="flex justify-start flex-shrink-0">
         <div className="max-w-xs w-full space-y-2">
           <Label htmlFor="plan-select" className="text-sm font-medium">Lọc theo Kế hoạch</Label>
@@ -274,16 +265,16 @@ const ListNhomChamDiem = () => {
         </div>
       </div>
 
-      {/* Data Table Section */}
+      {/* Data Table Section - [FIX] Sử dụng flex-grow, min-h-0 và bỏ animation height */}
       <motion.div
         initial={false}
-        animate={{ height: tableHeight }}
+        animate={{ opacity: 1 }}
         transition={{ duration: isReduced ? 0 : 0.5, ease: [0.4, 0, 0.2, 1] }}
-        style={{ overflow: 'hidden' }}
-        className="flex-grow"
+        className="flex-grow flex flex-col min-h-0"
       >
-        <div ref={tableRef}>
+        <div className="h-full flex flex-col">
           <DataTable
+            flexLayout={true} // [FIX] Bật chế độ Flex Layout cho bảng
             columns={columns}
             data={data}
             pageCount={pageCount}

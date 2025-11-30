@@ -456,7 +456,7 @@ export default function DetailDashboard() {
     const hasGroup = !!group;
 
     return (
-        <div className="flex flex-col min-h-full bg-gray-50/30 dark:bg-background">
+        <div className="flex flex-col h-full overflow-auto bg-gray-50/30 dark:bg-background">
             
             {/* HEADER */}
             <div className="h-14 border-b bg-background flex items-center justify-between px-6 shrink-0 sticky top-0 z-20 shadow-sm">

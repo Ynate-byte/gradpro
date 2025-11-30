@@ -27,17 +27,19 @@ export const getColumns = ({ onViewDetails, onSuccess }) => [
     accessorKey: "phancong.detai.TEN_DETAI",
     header: "Tên Đề tài / Nhóm",
     cell: ({ row }) => (
-      <div className="flex flex-col space-y-1">
+      <div className="flex flex-col space-y-1 max-w-[300px]">
         <button
-          className="font-medium text-left hover:underline text-blue-600 dark:text-blue-400 line-clamp-1 text-sm"
+          className="font-medium text-left hover:underline text-blue-600 dark:text-blue-400 line-clamp-2 text-sm"
           onClick={() => onViewDetails(row.original)}
           title={row.original.phancong?.detai?.TEN_DETAI}
         >
           {row.original.phancong?.detai?.TEN_DETAI || 'N/A'}
         </button>
-        <span className="text-xs text-muted-foreground truncate">
-          Nhóm: <span className="font-semibold">{row.original.phancong?.nhom?.TEN_NHOM || 'N/A'}</span>
-        </span>
+        <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground bg-muted px-1.5 rounded truncate max-w-[120px]">
+                {row.original.phancong?.nhom?.TEN_NHOM || 'N/A'}
+            </span>
+        </div>
       </div>
     )
   },
@@ -61,9 +63,9 @@ export const getColumns = ({ onViewDetails, onSuccess }) => [
       </Button>
     ),
     cell: ({ row }) => (
-      <span className="text-xs text-muted-foreground pl-4 whitespace-nowrap">
+      <span className="text-xs text-muted-foreground pl-4 whitespace-nowrap block">
         {row.original.NGAY_NOP 
-          ? format(new Date(row.original.NGAY_NOP), 'dd/MM/yyyy HH:mm', { locale: vi }) 
+          ? format(new Date(row.original.NGAY_NOP), 'HH:mm dd/MM/yyyy', { locale: vi }) 
           : 'N/A'}
       </span>
     )

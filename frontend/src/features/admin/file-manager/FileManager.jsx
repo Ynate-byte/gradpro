@@ -1,13 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as API from '@/api/fileManagerService';
 import { 
     Folder, FileText, Image as ImageIcon, FileArchive, Home, Trash2, RefreshCw, 
-    Search, ArrowLeft, UploadCloud, FolderPlus, Download, X 
+    Search, ArrowLeft, UploadCloud, FolderPlus, Download, X, HardDrive, File, CheckSquare 
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import {
   Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbSeparator,
@@ -17,14 +16,19 @@ import {
 } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { Card } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
+// --- HELPER ICONS ---
 const FileIcon = ({ type, extension, className }) => {
     if (type === 'folder') return <Folder className={cn("fill-blue-500 text-blue-500", className)} />;
     switch (extension) {
         case 'pdf': return <FileText className={cn("text-red-500", className)} />;
-        case 'zip': case 'rar': case '7z': return <FileArchive className={cn("text-yellow-500", className)} />;
-        case 'jpg': case 'png': case 'jpeg': case 'webp': return <ImageIcon className={cn("text-purple-500", className)} />;
-        default: return <FileText className={cn("text-gray-500", className)} />;
+        case 'zip': case 'rar': case '7z': return <FileArchive className={cn("text-yellow-600", className)} />;
+        case 'jpg': case 'png': case 'jpeg': case 'webp': case 'gif': return <ImageIcon className={cn("text-purple-600", className)} />;
+        case 'doc': case 'docx': return <FileText className={cn("text-blue-700", className)} />;
+        case 'xls': case 'xlsx': return <FileText className={cn("text-green-600", className)} />;
+        default: return <File className={cn("text-gray-400", className)} />;
     }
 };
 
@@ -34,16 +38,16 @@ export default function FileManager() {
     const [selectedItems, setSelectedItems] = useState(new Set());
     const [isCreateFolderOpen, setIsCreateFolderOpen] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
-    const [isDeleting, setIsDeleting] = useState(false); // Dialog xác nhận xóa
+    const [isDeleting, setIsDeleting] = useState(false); 
     
     const fileInputRef = useRef(null);
     const queryClient = useQueryClient();
 
     // 1. GET DATA
-    const { data, isLoading, refetch } = useQuery({
+    const { data, isLoading, refetch, isRefetching } = useQuery({
         queryKey: ['files', currentPath],
         queryFn: () => API.getFiles(currentPath),
-        staleTime: 0, // Luôn fetch mới
+        staleTime: 0, 
     });
 
     // 2. MUTATIONS
@@ -52,7 +56,7 @@ export default function FileManager() {
         onSuccess: () => {
             toast.success("Upload thành công!");
             refetch();
-            fileInputRef.current.value = null; // Reset input
+            fileInputRef.current.value = null; 
         },
         onError: (err) => toast.error("Lỗi upload: " + err.message)
     });
@@ -113,186 +117,241 @@ export default function FileManager() {
         }
     };
 
-    // 4. FILTERING
-    const filteredData = data?.data?.filter(item => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return item.name.toLowerCase().includes(term) || 
-               (item.metadata && item.metadata.toLowerCase().includes(term)) ||
-               item.real_name.toLowerCase().includes(term);
-    }) || [];
+    // 4. FILTERING & STATS
+    const filteredData = useMemo(() => {
+        return data?.data?.filter(item => {
+            if (!searchTerm) return true;
+            const term = searchTerm.toLowerCase();
+            return item.name.toLowerCase().includes(term) || 
+                   (item.metadata && item.metadata.toLowerCase().includes(term)) ||
+                   item.real_name.toLowerCase().includes(term);
+        }) || [];
+    }, [data, searchTerm]);
+
+    const stats = useMemo(() => {
+        const folders = filteredData.filter(i => i.type === 'folder').length;
+        const files = filteredData.length - folders;
+        return { folders, files };
+    }, [filteredData]);
 
     return (
-        <div className="h-[calc(100vh-100px)] flex flex-col bg-card rounded-lg border shadow-sm">
+        // [LAYOUT FIX] h-full và overflow-hidden để container cha kiểm soát cuộn
+        <div className="h-full flex flex-col bg-muted/10 overflow-hidden animate-in fade-in duration-500">
             
-            {/* --- TOOLBAR --- */}
-            <div className="p-3 border-b flex flex-col md:flex-row md:items-center justify-between bg-muted/20 gap-3">
-                
-                {/* Left: Navigation */}
-                <div className="flex items-center gap-2 overflow-hidden flex-1">
-                    <Button variant="ghost" size="icon" onClick={() => {
-                         const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
-                         handleNavigate(parentPath);
-                    }} disabled={currentPath === '/'}>
-                        <ArrowLeft className="h-4 w-4" />
-                    </Button>
-
-                    <Breadcrumb className="hidden md:block">
-                        <BreadcrumbList>
-                            {data?.breadcrumbs?.map((crumb, index) => (
-                                <React.Fragment key={crumb.path}>
-                                    <BreadcrumbItem>
-                                        <BreadcrumbLink 
-                                            onClick={() => handleNavigate(crumb.path)}
-                                            className={`cursor-pointer flex items-center gap-1 hover:text-primary ${index === data.breadcrumbs.length - 1 ? 'font-bold text-foreground pointer-events-none' : ''}`}
-                                        >
-                                            {crumb.path === '/' ? <Home className="h-4 w-4"/> : crumb.name}
-                                        </BreadcrumbLink>
-                                    </BreadcrumbItem>
-                                    {index < data.breadcrumbs.length - 1 && <BreadcrumbSeparator />}
-                                </React.Fragment>
-                            ))}
-                        </BreadcrumbList>
-                    </Breadcrumb>
+            {/* --- HEADER --- */}
+            <div className="px-6 pt-6 pb-2 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                        <span className="flex items-center gap-1"><Folder className="w-3 h-3" /> {stats.folders} thư mục</span>
+                        <Separator orientation="vertical" className="h-3" />
+                        <span className="flex items-center gap-1"><File className="w-3 h-3" /> {stats.files} tập tin</span>
+                    </div>
                 </div>
 
-                {/* Right: Actions */}
                 <div className="flex items-center gap-2">
-                    <div className="relative w-40 md:w-52">
-                        <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Tìm kiếm..." 
-                            className="pl-8 h-9" 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                    <Button variant="outline" className="bg-background shadow-sm" onClick={() => setIsCreateFolderOpen(true)}>
+                        <FolderPlus className="h-4 w-4 mr-2" /> Thư mục mới
+                    </Button>
+                    <Button className="shadow-md" onClick={() => fileInputRef.current.click()} disabled={uploadMutation.isPending}>
+                        {uploadMutation.isPending ? <RefreshCw className="h-4 w-4 mr-2 animate-spin"/> : <UploadCloud className="h-4 w-4 mr-2" />}
+                        Tải lên
+                    </Button>
+                    <input type="file" multiple className="hidden" ref={fileInputRef} onChange={handleUpload} />
+                </div>
+            </div>
+
+            {/* --- MAIN TOOLBAR --- */}
+            <div className="px-6 py-4">
+                <Card className="p-2 flex flex-col md:flex-row md:items-center justify-between gap-3 shadow-sm border-muted-foreground/20">
+                    
+                    {/* Navigation */}
+                    <div className="flex items-center gap-2 overflow-hidden px-2 flex-1">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="shrink-0 h-8 w-8"
+                            onClick={() => {
+                                 const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
+                                 handleNavigate(parentPath);
+                            }} 
+                            disabled={currentPath === '/'}
+                        >
+                            <ArrowLeft className="h-4 w-4" />
+                        </Button>
+
+                        <Separator orientation="vertical" className="h-6" />
+
+                        <div className="flex-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+                            <Breadcrumb>
+                                <BreadcrumbList className="flex-nowrap">
+                                    {data?.breadcrumbs?.map((crumb, index) => (
+                                        <React.Fragment key={crumb.path}>
+                                            <BreadcrumbItem>
+                                                <BreadcrumbLink 
+                                                    onClick={() => handleNavigate(crumb.path)}
+                                                    className={cn(
+                                                        "cursor-pointer flex items-center gap-1 transition-colors px-1.5 py-1 rounded-md hover:bg-muted",
+                                                        index === data.breadcrumbs.length - 1 ? 'font-semibold text-foreground pointer-events-none' : 'text-muted-foreground'
+                                                    )}
+                                                >
+                                                    {crumb.path === '/' ? <Home className="h-3.5 w-3.5"/> : crumb.name}
+                                                </BreadcrumbLink>
+                                            </BreadcrumbItem>
+                                            {index < data.breadcrumbs.length - 1 && <BreadcrumbSeparator />}
+                                        </React.Fragment>
+                                    ))}
+                                </BreadcrumbList>
+                            </Breadcrumb>
+                        </div>
                     </div>
 
-                    {/* Selection Mode Actions */}
-                    {selectedItems.size > 0 ? (
-                        <div className="flex items-center gap-1 animate-in fade-in slide-in-from-right-5 bg-accent/50 p-1 rounded-md">
-                            <Button variant="destructive" size="sm" onClick={() => setIsDeleting(true)}>
-                                <Trash2 className="h-4 w-4 mr-2" /> Xóa ({selectedItems.size})
+                    {/* Search & Refresh */}
+                    <div className="flex items-center gap-2 px-2 border-l pl-4 md:w-auto w-full">
+                        <div className="relative w-full md:w-60">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                            <Input 
+                                placeholder="Tìm kiếm tập tin..." 
+                                className="pl-8 h-9 text-sm bg-muted/30 border-muted-foreground/20 focus-visible:bg-background transition-all" 
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => refetch()} title="Làm mới">
+                            <RefreshCw className={cn("h-4 w-4", (isLoading || isRefetching) && "animate-spin")} />
+                        </Button>
+                    </div>
+                </Card>
+            </div>
+
+            {/* --- SELECTION BAR (Conditional) --- */}
+            {selectedItems.size > 0 && (
+                <div className="px-6 pb-4 animate-in slide-in-from-top-2 fade-in duration-300">
+                    <div className="bg-primary/10 border border-primary/20 text-primary rounded-lg p-2 px-4 flex items-center justify-between">
+                        <span className="text-sm font-medium flex items-center gap-2">
+                            <CheckSquare className="h-4 w-4" /> Đã chọn {selectedItems.size} mục
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <Button 
+                                variant="outline" 
+                                size="sm" 
+                                className="h-8 border-primary/30 hover:bg-primary/20 text-primary"
+                                onClick={() => downloadMutation.mutate(Array.from(selectedItems))}
+                                disabled={downloadMutation.isPending}
+                            >
+                                <Download className="h-3.5 w-3.5 mr-2" /> Tải về
                             </Button>
-                            <Button variant="outline" size="sm" onClick={() => downloadMutation.mutate(Array.from(selectedItems))}>
-                                <Download className="h-4 w-4 mr-2" /> Tải về
+                            <Button 
+                                variant="destructive" 
+                                size="sm" 
+                                className="h-8 shadow-sm"
+                                onClick={() => setIsDeleting(true)}
+                            >
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Xóa
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => setSelectedItems(new Set())}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-primary/20 text-primary" onClick={() => setSelectedItems(new Set())}>
                                 <X className="h-4 w-4" />
                             </Button>
                         </div>
-                    ) : (
-                        /* Default Actions */
-                        <>
-                            <Button variant="outline" size="sm" onClick={() => setIsCreateFolderOpen(true)}>
-                                <FolderPlus className="h-4 w-4 mr-2" /> Thư mục
-                            </Button>
-                            <Button variant="default" size="sm" onClick={() => fileInputRef.current.click()}>
-                                <UploadCloud className="h-4 w-4 mr-2" /> Upload
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => refetch()}>
-                                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-                            </Button>
-                            <input 
-                                type="file" 
-                                multiple 
-                                className="hidden" 
-                                ref={fileInputRef} 
-                                onChange={handleUpload} 
-                            />
-                        </>
-                    )}
+                    </div>
                 </div>
-            </div>
+            )}
 
-            {/* --- SELECT ALL BAR --- */}
-            <div className="px-4 py-2 border-b bg-muted/10 flex items-center gap-2 text-xs text-muted-foreground">
-                <Checkbox 
-                    checked={filteredData.length > 0 && selectedItems.size === filteredData.length}
-                    onCheckedChange={selectAll}
-                />
-                <span>Chọn tất cả ({filteredData.length} mục)</span>
-                <div className="ml-auto font-medium">
-                    {uploadMutation.isPending && <span className="text-blue-600 flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin"/> Đang tải lên...</span>}
-                    {downloadMutation.isPending && <span className="text-green-600 flex items-center gap-1"><RefreshCw className="h-3 w-3 animate-spin"/> Đang nén & tải...</span>}
-                </div>
-            </div>
-
-            {/* --- MAIN CONTENT --- */}
-            <ScrollArea className="flex-1 p-4 bg-muted/5">
+            {/* --- CONTENT AREA --- */}
+            {/* [LAYOUT FIX] flex-1 và overflow-y-auto ở đây để cuộn nội dung */}
+            <div className="flex-1 overflow-y-auto px-6 pb-6">
                 {isLoading ? (
-                    <div className="flex h-full items-center justify-center text-muted-foreground">Đang tải...</div>
+                    <div className="flex h-60 items-center justify-center text-muted-foreground flex-col gap-3">
+                        <RefreshCw className="h-8 w-8 animate-spin text-primary/50" />
+                        <p className="text-sm">Đang tải dữ liệu...</p>
+                    </div>
                 ) : filteredData.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center text-muted-foreground opacity-50">
-                        <Folder className="h-16 w-16 mb-2 stroke-1" />
-                        <p>Thư mục trống</p>
+                    <div className="flex h-64 flex-col items-center justify-center text-muted-foreground border-2 border-dashed border-muted-foreground/10 rounded-xl bg-muted/5">
+                        <div className="bg-muted/30 p-4 rounded-full mb-3">
+                            <Folder className="h-10 w-10 stroke-1 opacity-50" />
+                        </div>
+                        <p className="font-medium">Thư mục trống</p>
+                        <p className="text-xs mt-1">Chưa có tập tin nào được tải lên</p>
+                        <Button variant="link" className="mt-2" onClick={() => fileInputRef.current.click()}>Tải lên ngay</Button>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-10">
-                        {filteredData.map((item) => {
-                            const isSelected = selectedItems.has(item.path);
-                            return (
-                                <div 
-                                    key={item.path} 
-                                    className={cn(
-                                        "group relative flex flex-col p-3 rounded-xl border transition-all cursor-pointer select-none",
-                                        isSelected ? "bg-blue-50 border-blue-400 ring-1 ring-blue-400 shadow-sm" : "bg-background hover:border-primary/50 hover:shadow-md"
-                                    )}
-                                    onClick={(e) => {
-                                        if (e.ctrlKey || e.metaKey) {
-                                            toggleSelection(item.path);
-                                        } else {
-                                            // Nếu đang ở chế độ chọn (đã có item chọn), click thường cũng là chọn
-                                            if(selectedItems.size > 0) {
+                    <>
+                        <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground px-1">
+                            <div className="flex items-center gap-2">
+                                <Checkbox 
+                                    checked={filteredData.length > 0 && selectedItems.size === filteredData.length}
+                                    onCheckedChange={selectAll}
+                                    id="select-all"
+                                />
+                                <label htmlFor="select-all" className="cursor-pointer">Chọn tất cả</label>
+                            </div>
+                            <span>{filteredData.length} mục</span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                            {filteredData.map((item) => {
+                                const isSelected = selectedItems.has(item.path);
+                                return (
+                                    <div 
+                                        key={item.path} 
+                                        className={cn(
+                                            "group relative flex flex-col p-3 rounded-xl border transition-all cursor-pointer select-none",
+                                            isSelected 
+                                                ? "bg-primary/5 border-primary ring-1 ring-primary shadow-sm" 
+                                                : "bg-card hover:border-primary/50 hover:shadow-md border-transparent hover:bg-accent/5"
+                                        )}
+                                        onClick={(e) => {
+                                            if (e.ctrlKey || e.metaKey || selectedItems.size > 0) {
                                                 toggleSelection(item.path);
                                             } else {
                                                 if(item.type === 'folder') handleNavigate(item.path);
                                                 else window.open(item.url, '_blank');
                                             }
-                                        }
-                                    }}
-                                >
-                                    {/* Checkbox Overlay */}
-                                    <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
-                                        <Checkbox 
-                                            checked={isSelected}
-                                            onCheckedChange={() => toggleSelection(item.path)}
-                                            className={cn("data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 transition-opacity", 
-                                                !isSelected && "opacity-0 group-hover:opacity-100"
-                                            )}
-                                        />
-                                    </div>
-
-                                    <div className="flex items-start gap-3 mb-2">
-                                        <div className="h-10 w-10 shrink-0 flex items-center justify-center bg-muted/20 rounded-lg">
-                                            <FileIcon type={item.type} extension={item.extension} className="h-6 w-6" />
+                                        }}
+                                    >
+                                        {/* Checkbox Overlay */}
+                                        <div className="absolute top-2 right-2 z-10" onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox 
+                                                checked={isSelected}
+                                                onCheckedChange={() => toggleSelection(item.path)}
+                                                className={cn(
+                                                    "data-[state=checked]:bg-primary data-[state=checked]:border-primary transition-opacity bg-background/80 backdrop-blur-sm", 
+                                                    !isSelected && "opacity-0 group-hover:opacity-100"
+                                                )}
+                                            />
                                         </div>
-                                        <div className="flex-1 min-w-0 pt-0.5">
-                                            <p className="text-sm font-medium leading-tight truncate break-words" title={item.name}>
+
+                                        <div className="aspect-square w-full mb-3 bg-muted/10 rounded-lg flex items-center justify-center overflow-hidden">
+                                            {/* Preview ảnh nếu là ảnh */}
+                                            {['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(item.extension) ? (
+                                                <img 
+                                                    src={item.url} 
+                                                    alt={item.name} 
+                                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" 
+                                                    loading="lazy"
+                                                />
+                                            ) : (
+                                                <FileIcon type={item.type} extension={item.extension} className="h-12 w-12 opacity-80 group-hover:opacity-100 transition-opacity" />
+                                            )}
+                                        </div>
+
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium leading-tight truncate" title={item.name}>
                                                 {item.name}
                                             </p>
-                                            {item.metadata ? (
-                                                <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2 leading-tight" title={item.metadata}>
-                                                    {item.metadata}
-                                                </p>
-                                            ) : item.real_name !== item.name ? (
-                                                <p className="text-[10px] text-muted-foreground mt-0.5 font-mono truncate">{item.real_name}</p>
-                                            ) : null}
+                                            <div className="flex items-center justify-between mt-1.5 text-[10px] text-muted-foreground">
+                                                <span>{item.type === 'folder' ? `${item.items_count || 0} mục` : item.size}</span>
+                                                {item.last_modified && <span>{new Date(item.last_modified).toLocaleDateString('vi-VN')}</span>}
+                                            </div>
                                         </div>
                                     </div>
-
-                                    <div className="mt-auto flex items-center justify-between pt-2 border-t text-[10px] text-muted-foreground">
-                                        <span>{item.type === 'folder' ? `${item.items_count} mục` : item.size}</span>
-                                        <span>{new Date(item.last_modified).toLocaleDateString('vi-VN')}</span>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                );
+                            })}
+                        </div>
+                    </>
                 )}
-            </ScrollArea>
+            </div>
 
-            {/* --- DIALOG TẠO THƯ MỤC --- */}
+            {/* --- DIALOGS --- */}
             <Dialog open={isCreateFolderOpen} onOpenChange={setIsCreateFolderOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -300,12 +359,15 @@ export default function FileManager() {
                     </DialogHeader>
                     <div className="py-4">
                         <Input 
-                            placeholder="Tên thư mục (VD: TaiLieu_ThamKhao)" 
+                            placeholder="Nhập tên thư mục..." 
                             value={newFolderName}
                             onChange={(e) => setNewFolderName(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && createFolderMutation.mutate()}
+                            autoFocus
                         />
-                        <p className="text-xs text-muted-foreground mt-2">Chỉ dùng chữ cái, số, gạch dưới (_) và gạch ngang (-).</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Tên thư mục không được chứa các ký tự đặc biệt.
+                        </p>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsCreateFolderOpen(false)}>Hủy</Button>
@@ -314,20 +376,27 @@ export default function FileManager() {
                 </DialogContent>
             </Dialog>
 
-            {/* --- DIALOG XÓA --- */}
             <Dialog open={isDeleting} onOpenChange={setIsDeleting}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Xác nhận xóa?</DialogTitle>
+                        <DialogTitle className="text-destructive flex items-center gap-2">
+                            <Trash2 className="h-5 w-5" /> Xác nhận xóa
+                        </DialogTitle>
                     </DialogHeader>
                     <div className="py-4">
-                        <p>Bạn đang xóa <strong>{selectedItems.size}</strong> mục.</p>
-                        <p className="text-sm text-muted-foreground mt-1">Hành động này không thể hoàn tác. Các file đã xóa sẽ mất vĩnh viễn.</p>
+                        <p>Bạn có chắc chắn muốn xóa <strong>{selectedItems.size}</strong> mục đã chọn?</p>
+                        <div className="bg-destructive/10 border border-destructive/20 rounded-md p-3 mt-3 text-sm text-destructive">
+                            Hành động này không thể hoàn tác. Dữ liệu sẽ bị xóa vĩnh viễn.
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setIsDeleting(false)}>Hủy</Button>
-                        <Button variant="destructive" onClick={() => bulkDeleteMutation.mutate(Array.from(selectedItems))} disabled={bulkDeleteMutation.isPending}>
-                            {bulkDeleteMutation.isPending ? "Đang xóa..." : "Xác nhận xóa"}
+                        <Button 
+                            variant="destructive" 
+                            onClick={() => bulkDeleteMutation.mutate(Array.from(selectedItems))} 
+                            disabled={bulkDeleteMutation.isPending}
+                        >
+                            {bulkDeleteMutation.isPending ? "Đang xóa..." : "Xóa vĩnh viễn"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

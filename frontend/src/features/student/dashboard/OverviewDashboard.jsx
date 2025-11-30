@@ -243,7 +243,7 @@ export default function OverviewDashboard() {
     const newsList = Array.isArray(data?.news) ? data.news : [];
 
     return (
-        <div className="min-h-screen bg-gray-50/50 dark:bg-background p-4 md:p-8">
+        <div className="h-full overflow-auto bg-gray-50/50 dark:bg-background p-4 md:p-8">
             <div className="max-w-7xl mx-auto space-y-8">
                 <div className="flex justify-between items-start">
                     <Button variant="outline" onClick={() => navigate('/notifications')} className="hidden md:flex">

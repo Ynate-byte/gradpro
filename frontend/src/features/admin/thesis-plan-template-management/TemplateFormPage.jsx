@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useId, useCallback } from 'react';
+import React, { useState, useEffect, useId, useCallback, useRef } from 'react';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,10 +19,10 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import RichTextEditor from "@/components/ui/RichTextEditor"; // Import RichTextEditor
+import RichTextEditor from "@/components/ui/RichTextEditor";
 
 // ──────────────────────────────────────────────────────────────
-// FIX LAG: Wrapper Debounce cho RichTextEditor
+// WRAPPER DEBOUNCE (Giữ nguyên logic)
 // ──────────────────────────────────────────────────────────────
 const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
   const [localValue, setLocalValue] = useState(value ?? '');
@@ -38,7 +38,7 @@ const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
       if (localValue !== value) {
         onChange(localValue);
       }
-    }, 800); // Delay 800ms
+    }, 800); 
 
     return () => clearTimeout(timer);
   }, [localValue, onChange, value]);
@@ -52,7 +52,7 @@ const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
   );
 });
 
-// Schema validation (no change)
+// Schema validation (Giữ nguyên)
 const templateSchema = z.object({
   TEN_MAU: z.string().min(3, "Tên bản mẫu phải có ít nhất 3 ký tự.").max(100),
   HEDAOTAO_MACDINH: z.string().min(1, "Hệ đào tạo không được trống."),
@@ -79,10 +79,9 @@ const templateSchema = z.object({
   ).min(1, "Phải có ít nhất một mốc thời gian."),
 });
 
-// Role options (no change)
 const ROLES_OPTIONS = ["Sinh viên", "Giảng viên", "Giáo vụ", "Trưởng bộ môn", "Trưởng khoa"];
 
-// --- REDESIGNED MilestoneTemplateItem ---
+// --- MilestoneTemplateItem (Giữ nguyên) ---
 const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, handleProps, style, ...props }, ref) => {
     return (
         <div
@@ -119,7 +118,6 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
                     render={({ field: fld }) => (
                         <FormItem>
                             <FormLabel className="text-sm">Mô tả</FormLabel>
-                            {/* SỬA: Dùng DebouncedRichTextEditor thay vì Textarea */}
                             <FormControl>
                                 <div className="rich-text-wrapper">
                                     <DebouncedRichTextEditor
@@ -203,25 +201,22 @@ const MilestoneTemplateItem = React.forwardRef(({ index, field, remove, form, ha
 });
 MilestoneTemplateItem.displayName = 'MilestoneTemplateItem';
 
-// Sortable wrapper (no change)
 const SortableItemWrapper = ({ id, children }) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   return React.cloneElement(React.Children.only(children), { ref: setNodeRef, style: style, ...attributes, handleProps: listeners });
 };
 
-// --- Loading Skeleton ---
+// --- Loading Skeleton (Updated Layout) ---
 const FormSkeleton = () => (
-    <div className="space-y-6 p-4 md:p-8">
-        <div className="flex items-center justify-between">
+    <div className="space-y-6 p-4 md:p-8 h-full overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between shrink-0 mb-8">
             <div>
                 <Skeleton className="h-8 w-24 mb-2" />
-                <Skeleton className="h-10 w-64" />
-                <Skeleton className="h-4 w-80 mt-1" />
             </div>
             <Skeleton className="h-10 w-32" />
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start flex-1">
             <Card className="lg:col-span-1">
                  <CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader>
                  <CardContent className="space-y-4">
@@ -246,12 +241,16 @@ const FormSkeleton = () => (
 );
 
 export default function TemplateFormPage() {
-    // --- (Hooks and state initialization - no change) ---
     const { templateId } = useParams();
     const navigate = useNavigate();
     const isEditMode = !!templateId;
     const [isLoading, setIsLoading] = useState(isEditMode);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    // State cho hiệu ứng cuộn
+    const scrollContainerRef = useRef(null);
+    const [isScrolled, setIsScrolled] = useState(false);
+
     const form = useForm({
         resolver: zodResolver(templateSchema),
         defaultValues: {
@@ -266,7 +265,25 @@ export default function TemplateFormPage() {
     });
     const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
 
-    // --- (useEffect for loading data - no change) ---
+    // --- Lắng nghe sự kiện cuộn (Scroll Listener) ---
+    useEffect(() => {
+        const handleScroll = () => {
+          if (scrollContainerRef.current) {
+            setIsScrolled(scrollContainerRef.current.scrollTop > 10);
+          }
+        };
+        const container = scrollContainerRef.current;
+        if (container) {
+          container.addEventListener('scroll', handleScroll);
+        }
+        return () => {
+          if (container) {
+            container.removeEventListener('scroll', handleScroll);
+          }
+        };
+    }, [isLoading]); // Chạy khi load xong và ref đã gán
+
+    // --- Load Data ---
      useEffect(() => {
         if (isEditMode && templateId) {
             setIsLoading(true);
@@ -313,8 +330,6 @@ export default function TemplateFormPage() {
         }
     }, [templateId, isEditMode, form, navigate]);
 
-
-    // handleDragEnd (no change)
      const handleDragEnd = useCallback((event) => {
         const { active, over } = event;
         if (active && over && active.id !== over.id) {
@@ -326,14 +341,11 @@ export default function TemplateFormPage() {
         }
     }, [fields, move]);
 
-
-    // onSubmit (no change)
      const onSubmit = async (data) => {
         setIsSubmitting(true);
         const payload = {
             ...data,
             mocThoigians: data.mocThoigians.map(m => ({
-                // Check if 'id' is a number (existing ID) or UUID (new/temp ID)
                 ID_MAU_MOC: typeof m.ID_MAU_MOC === 'number' ? m.ID_MAU_MOC : null,
                 TEN_SUKIEN: m.TEN_SUKIEN,
                 OFFSET_BATDAU: m.OFFSET_BATDAU,
@@ -367,118 +379,130 @@ export default function TemplateFormPage() {
 
     return (
         <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 p-4 md:p-8">
-                {/* Header Section */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-                    <div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => navigate('/admin/templates')} className="mb-2">
-                            <ChevronLeft className="mr-2 h-4 w-4" /> Quay lại
+            {/* [UPDATE] Layout: h-full, flex-col, overflow-hidden */}
+            <form onSubmit={form.handleSubmit(onSubmit)} className="h-full flex flex-col overflow-hidden">
+                
+                {/* [UPDATE] Header cố định (Fixed Header) */}
+                <div className="flex-none p-4 md:px-8 pb-4 border-b bg-background z-10 shrink-0">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                             <Button type="button" variant="outline" size="sm" onClick={() => navigate('/admin/templates')}>
+                                <ChevronLeft className="mr-2 h-4 w-4" /> Quay lại
+                            </Button>
+                        </div>
+                        <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto">
+                            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {isEditMode ? 'Lưu thay đổi' : 'Tạo bản mẫu'}
                         </Button>
                     </div>
-                    {/* Save Button */}
-                    <Button type="submit" disabled={isSubmitting || !form.formState.isValid} className="w-full sm:w-auto">
-                        {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {isEditMode ? 'Lưu thay đổi' : 'Tạo bản mẫu'}
-                    </Button>
                 </div>
 
-                {/* --- Two-Column Layout --- */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                    {/* Left Column: General Info Card */}
-                    <motion.div
-                        className="lg:col-span-1 lg:sticky lg:top-[calc(theme(spacing.14)_+_theme(spacing.8))]"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4, ease: "easeOut" }}
-                    >
-                        <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
-                            <CardHeader className="pb-4">
-                                <CardTitle className="text-lg font-semibold flex items-center gap-2">
-                                     <Info className="h-5 w-5 text-primary" /> Thông tin chung
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-5 pt-2">
-                                <FormField name="TEN_MAU" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên bản mẫu*</FormLabel><FormControl><Input placeholder="VD: KLTN Cử nhân HK1" {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <FormField name="HEDAOTAO_MACDINH" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Hệ ĐT MĐ*</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Cử nhân">Cử nhân</SelectItem><SelectItem value="Kỹ sư">Kỹ sư</SelectItem><SelectItem value="Thạc sỹ">Thạc sỹ</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
-                                    <FormField name="SO_TUAN_MACDINH" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Số tuần MĐ*</FormLabel><FormControl><Input type="number" min="1" placeholder="12" {...field} /></FormControl><FormMessage /></FormItem> )}/>
-                                </div>
-                                <FormField name="MO_TA" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Mô tả (tùy chọn)</FormLabel><FormControl><Textarea rows={3} placeholder="Mô tả ngắn về bản mẫu..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
+                {/* [UPDATE] Vùng nội dung cuộn (Scrollable Area) */}
+                <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 md:p-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                        
+                        {/* Cột Trái: Thông tin chung (Sticky Effect) */}
+                        <motion.div
+                             className={cn(
+                               "lg:col-span-1 lg:sticky",
+                               "lg:top-0", 
+                               "lg:flex lg:flex-col lg:justify-center",
+                               "transition-all duration-300 ease-out",
+                               isScrolled ? "lg:scale-95 lg:origin-top" : "" 
+                             )}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.4, ease: "easeOut" }}
+                        >
+                            <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
+                                <CardHeader className="pb-4">
+                                    <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                                         <Info className="h-5 w-5 text-primary" /> Thông tin chung
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-5 pt-2">
+                                    <FormField name="TEN_MAU" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Tên bản mẫu*</FormLabel><FormControl><Input placeholder="VD: KLTN Cử nhân HK1" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <FormField name="HEDAOTAO_MACDINH" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Hệ ĐT MĐ*</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="Cử nhân">Cử nhân</SelectItem><SelectItem value="Kỹ sư">Kỹ sư</SelectItem><SelectItem value="Thạc sỹ">Thạc sỹ</SelectItem></SelectContent></Select><FormMessage /></FormItem> )}/>
+                                        <FormField name="SO_TUAN_MACDINH" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Số tuần MĐ*</FormLabel><FormControl><Input type="number" min="1" placeholder="12" {...field} /></FormControl><FormMessage /></FormItem> )}/>
+                                    </div>
+                                    <FormField name="MO_TA" control={form.control} render={({ field }) => ( <FormItem><FormLabel>Mô tả (tùy chọn)</FormLabel><FormControl><Textarea rows={3} placeholder="Mô tả ngắn về bản mẫu..." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem> )}/>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
 
-                    {/* Right Column: Milestones */}
-                    <motion.div
-                        className="lg:col-span-2 space-y-4"
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
-                    >
-                         <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
-                             <CardHeader className="flex flex-row items-center justify-between pb-4">
-                                 <CardTitle className="text-lg font-semibold">Mốc thời gian ({fields.length})</CardTitle>
-                                 <Button
-                                     type="button"
-                                     variant="outline"
-                                     size="sm"
-                                     onClick={() => append({
-                                         id: crypto.randomUUID(),
-                                         arrayId: crypto.randomUUID(),
-                                         ID_MAU_MOC: null,
-                                         TEN_SUKIEN: '',
-                                         OFFSET_BATDAU: 0,
-                                         THOI_LUONG: 1,
-                                         MOTA: '',
-                                         VAITRO_THUCHIEN_MACDINH: null
-                                     })}
-                                 >
-                                     <PlusCircle className="mr-2 h-4 w-4" /> Thêm mục
-                                 </Button>
-                             </CardHeader>
-                             <CardContent className="pt-2">
-                                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                                    <SortableContext items={fields.map(field => field.id)} strategy={verticalListSortingStrategy}>
-                                        <div className="space-y-4">
-                                            {fields.map((field, index) => (
-                                                <div key={field.arrayId} className="group relative pl-7">
-                                                    <SortableItemWrapper id={field.id}>
-                                                        <MilestoneTemplateItem
-                                                            index={index}
-                                                            field={field}
-                                                            remove={remove}
-                                                            form={form}
-                                                        />
-                                                    </SortableItemWrapper>
-                                                    <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                                                        <Button
-                                                            type="button"
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-6 w-6 p-0 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
-                                                            onClick={() => insert(index + 1, {
-                                                                id: crypto.randomUUID(),
-                                                                arrayId: crypto.randomUUID(),
-                                                                ID_MAU_MOC: null,
-                                                                TEN_SUKIEN: '',
-                                                                OFFSET_BATDAU: 0,
-                                                                THOI_LUONG: 1,
-                                                                MOTA: '',
-                                                                VAITRO_THUCHIEN_MACDINH: null
-                                                            })}
-                                                            title="Chèn mục mới bên dưới"
-                                                        >
-                                                            <PlusCircle className="h-4 w-4" />
-                                                        </Button>
+                        {/* Cột Phải: Mốc thời gian */}
+                        <motion.div
+                            className="lg:col-span-2 space-y-4"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.4, ease: "easeOut", delay: 0.1 }}
+                        >
+                             <Card className="border-blue-200 dark:border-blue-800 shadow-sm">
+                                 <CardHeader className="flex flex-row items-center justify-between pb-4">
+                                     <CardTitle className="text-lg font-semibold">Mốc thời gian ({fields.length})</CardTitle>
+                                     <Button
+                                         type="button"
+                                         variant="outline"
+                                         size="sm"
+                                         onClick={() => append({
+                                             id: crypto.randomUUID(),
+                                             arrayId: crypto.randomUUID(),
+                                             ID_MAU_MOC: null,
+                                             TEN_SUKIEN: '',
+                                             OFFSET_BATDAU: 0,
+                                             THOI_LUONG: 1,
+                                             MOTA: '',
+                                             VAITRO_THUCHIEN_MACDINH: null
+                                         })}
+                                     >
+                                         <PlusCircle className="mr-2 h-4 w-4" /> Thêm mục
+                                     </Button>
+                                 </CardHeader>
+                                 <CardContent className="pt-2">
+                                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                                        <SortableContext items={fields.map(field => field.id)} strategy={verticalListSortingStrategy}>
+                                            <div className="space-y-4">
+                                                {fields.map((field, index) => (
+                                                    <div key={field.arrayId} className="group relative pl-7">
+                                                        <SortableItemWrapper id={field.id}>
+                                                            <MilestoneTemplateItem
+                                                                index={index}
+                                                                field={field}
+                                                                remove={remove}
+                                                                form={form}
+                                                            />
+                                                        </SortableItemWrapper>
+                                                        <div className="w-full h-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity mt-1">
+                                                            <Button
+                                                                type="button"
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                className="h-6 w-6 p-0 rounded-full bg-muted text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                                                onClick={() => insert(index + 1, {
+                                                                    id: crypto.randomUUID(),
+                                                                    arrayId: crypto.randomUUID(),
+                                                                    ID_MAU_MOC: null,
+                                                                    TEN_SUKIEN: '',
+                                                                    OFFSET_BATDAU: 0,
+                                                                    THOI_LUONG: 1,
+                                                                    MOTA: '',
+                                                                    VAITRO_THUCHIEN_MACDINH: null
+                                                                })}
+                                                                title="Chèn mục mới bên dưới"
+                                                            >
+                                                                <PlusCircle className="h-4 w-4" />
+                                                            </Button>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </SortableContext>
-                                </DndContext>
-                             </CardContent>
-                          </Card>
-                    </motion.div>
+                                                ))}
+                                            </div>
+                                        </SortableContext>
+                                    </DndContext>
+                                 </CardContent>
+                              </Card>
+                        </motion.div>
+                    </div>
                 </div>
             </form>
         </Form>

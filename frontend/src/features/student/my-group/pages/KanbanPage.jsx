@@ -56,7 +56,7 @@ export default function KanbanPage() {
     });
 
     return (
-        <div className="p-4 md:p-8 space-y-3">
+        <div className="p-4 md:p-8 space-y-3 h-full overflow-auto">
             <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Quay lại Nhóm của tôi
