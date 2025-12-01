@@ -178,13 +178,11 @@ export default function ThesisPlanManagementPage() {
 
     return (
         <motion.div 
-            // [FIX LAYOUT]: Đặt chiều cao full, không cuộn body, flex column
             className="flex flex-col h-full space-y-4 p-4 md:p-6 overflow-hidden"
             initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
         >
-            {/* Header: Không co giãn (shrink-0) */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
                 {canCreate && (
                     <Button onClick={handleOpenCreate} className="shrink-0 shadow-sm">
@@ -193,7 +191,6 @@ export default function ThesisPlanManagementPage() {
                 )}
             </div>
 
-            {/* Tabs & Table Container: Chiếm toàn bộ không gian còn lại */}
             <div className="flex-1 min-h-0 flex flex-col">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col space-y-4">
                     <div className="shrink-0">

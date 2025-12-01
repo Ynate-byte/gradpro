@@ -37,8 +37,6 @@ const ListHoiDong = () => {
   const fetchAll = async () => {
     try {
       setLoading(true);
-      // [SỬA] Gọi API lấy danh sách Bộ môn (Thay vì chuyên ngành)
-      // Giả định backend đã có endpoint này hoặc dùng /khoa-bo-mons
       const [hdRes, khRes, bmRes] = await Promise.all([
         axiosClient.get("/giangvien/my-hoidong"),
         axiosClient.get("/admin/hoidong/kehoach-options"),

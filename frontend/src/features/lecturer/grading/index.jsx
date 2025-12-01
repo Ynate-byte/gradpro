@@ -190,7 +190,6 @@ const LecturerGradingPage = () => {
     };
 
     const handleSaveSuccess = () => {
-        handleModalClose();
         queryClient.invalidateQueries({ queryKey: ["myGradingTasks"] });
     };
 

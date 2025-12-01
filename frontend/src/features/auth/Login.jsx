@@ -43,7 +43,6 @@ export default function Login() {
 
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4 md:p-8">
-            {/* --- ĐOẠN ĐÃ SỬA --- */}
             <style>{`
                 input:-webkit-autofill,
                 input:-webkit-autofill:hover, 
@@ -62,18 +61,17 @@ export default function Login() {
                     -webkit-text-fill-color: #ffffff !important;
                 }
             `}</style>
-            {/* ------------------- */}
 
             <div 
                 className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-700 dark:opacity-0"
                 style={{
-                    backgroundImage: `url('https://statictuoitre.mediacdn.vn/thumb_w/640/2017/7-1512755474943.jpg')`,
+                    backgroundImage: `url('https://huit.edu.vn/images/tin-tuc-hoat-dong/thu-vien-hang-chuc-ty-sang-chanh-nhu-khach-san-5-sao-o-sai-gon-13.jpg')`,
                 }}
             />
             <div 
                 className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat opacity-0 transition-opacity duration-700 dark:opacity-100"
                 style={{
-                    backgroundImage: `url('https://cdn-media.sforum.vn/storage/app/media/anh-dep-83.jpg')`,
+                    backgroundImage: `url('https://huit.edu.vn/images/tin-tuc-hoat-dong/thu-vien-hang-chuc-ty-sang-chanh-nhu-khach-san-5-sao-o-sai-gon.jpg')`,
                 }}
             />
 

@@ -145,7 +145,7 @@ export default function BackupPage() {
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-foreground">
                             <ShieldCheck className="w-8 h-8 text-primary" /> 
-                            Sao lưu & Phục hồi
+                            BACKUP & RESTORE
                         </h1>
                         <p className="text-muted-foreground mt-1">
                             Quản lý các bản sao lưu Database và Dữ liệu hệ thống.

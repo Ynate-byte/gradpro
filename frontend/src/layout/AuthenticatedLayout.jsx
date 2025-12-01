@@ -9,14 +9,13 @@ import {
     BreadcrumbPage, BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Moon, Sun } from "lucide-react";
+import { CalendarDays, Moon, Sun, Bell } from "lucide-react";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { getUnreadCount, getNotifications } from '@/api/notificationService';
 import { NotificationDropdown } from '@/components/shared/notifications/NotificationDropdown';
 import { useTheme } from "@/components/theme-provider";
 
-// ... (Giữ nguyên phần routeNameMap như cũ)
 const routeNameMap = {
     '/': 'Trang chủ',
     '/news': 'Tin tức & Sự kiện',
@@ -55,7 +54,7 @@ const routeNameMap = {
     '/lecturer/calendar': 'Lịch làm việc',
     '/department-head/topic-reviewer-assignment': 'Phân công phản biện',
     '/admin': 'Quản trị',
-    '/admin/dashboard': 'Dashboard',
+    '/admin/dashboard': 'Tổng quan',
     '/admin/users': 'Người dùng',
     '/admin/groups': 'Nhóm sinh viên',
     '/admin/news': 'Tin tức',
@@ -77,24 +76,28 @@ const routeNameMap = {
 };
 
 const HeaderSkeleton = () => (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background px-4">
-        <div className="flex items-center gap-3">
-            <Skeleton className="h-7 w-7 rounded-md" />
-            <Separator orientation="vertical" className="h-6" />
-            <Skeleton className="h-5 w-32 rounded-md" />
+    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b px-4">
+        <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-8 rounded-md" />
+            <Separator orientation="vertical" className="mr-2 h-4" />
+            <Skeleton className="h-4 w-48 rounded-md" />
         </div>
         <div className="flex items-center gap-2">
-            <Skeleton className="h-9 w-9 rounded-full" />
+            <Skeleton className="h-8 w-8 rounded-full" />
+            <Skeleton className="h-8 w-8 rounded-full" />
         </div>
     </header>
 );
 
 const MainSkeleton = () => (
-    <main className="flex-1 overflow-hidden bg-muted/40 p-4 sm:p-6">
-        <div className="bg-card text-card-foreground rounded-lg border shadow-sm h-full overflow-hidden p-4 md:p-6 space-y-4">
-            <Skeleton className="h-8 w-1/3" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-48 w-full" />
+    <main className="flex-1 p-6">
+        <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-3">
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-32 rounded-xl" />
+                <Skeleton className="h-32 rounded-xl" />
+            </div>
+            <Skeleton className="h-[400px] rounded-xl" />
         </div>
     </main>
 );
@@ -131,7 +134,7 @@ export default function AuthenticatedLayout() {
         items.push(
             <BreadcrumbItem key="root">
                 <BreadcrumbLink asChild>
-                    <Link to="/">GradPro</Link>
+                    <Link to="/" className="hover:text-foreground">HUIT</Link>
                 </BreadcrumbLink>
             </BreadcrumbItem>
         );
@@ -163,7 +166,7 @@ export default function AuthenticatedLayout() {
             if (isLast) {
                 items.push(
                     <BreadcrumbItem key={currentPath}>
-                        <BreadcrumbPage>{displayName}</BreadcrumbPage>
+                        <BreadcrumbPage className="font-semibold">{displayName}</BreadcrumbPage>
                     </BreadcrumbItem>
                 );
             } else {
@@ -171,7 +174,7 @@ export default function AuthenticatedLayout() {
                     <BreadcrumbItem key={currentPath}>
                         {routeName ? (
                              <BreadcrumbLink asChild>
-                                <Link to={matchedRoute}>{displayName}</Link>
+                                <Link to={matchedRoute} className="hover:text-foreground">{displayName}</Link>
                             </BreadcrumbLink>
                         ) : (
                             <span className="text-muted-foreground">{displayName}</span>
@@ -215,41 +218,41 @@ export default function AuthenticatedLayout() {
 
     return (
         <SidebarProvider>
-            <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
+            <div className="flex h-screen w-full bg-sidebar-muted/20 text-foreground overflow-hidden">
                 <AppSidebar />
-                <SidebarInset className="flex flex-col h-full w-full overflow-hidden">
-                    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 z-10">
-                        <div className="flex items-center gap-3 overflow-hidden">
-                             <SidebarTrigger />
-                             <Separator orientation="vertical" className="h-6" />
-                             <Breadcrumb className="hidden md:flex">
+                <SidebarInset className="flex flex-col h-full w-full overflow-hidden transition-all duration-300 ease-in-out">
+                    <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b bg-background/80 backdrop-blur-md px-4 sm:px-6 z-10 sticky top-0 transition-all">
+                        <div className="flex items-center gap-2">
+                            <SidebarTrigger className="-ml-1" />
+                            <Separator orientation="vertical" className="mr-2 h-4" />
+                            <Breadcrumb className="hidden md:flex">
                                 <BreadcrumbList>{breadcrumbItems}</BreadcrumbList>
                             </Breadcrumb>
                         </div>
                         
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="relative h-9 w-9 rounded-full"
-                                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-                            >
-                                <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                                <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                                <span className="sr-only">Toggle theme</span>
-                            </Button>
-
+                        <div className="flex items-center gap-1 sm:gap-2">
                             {isLecturerOrHigher && (
                                 <Button 
                                     variant="ghost" 
                                     size="icon" 
-                                    className="relative h-9 w-9 rounded-full text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                    className="h-9 w-9 text-muted-foreground hover:text-foreground"
                                     onClick={() => navigate('/lecturer/calendar')}
                                     title="Lịch làm việc"
                                 >
                                     <CalendarDays className="h-5 w-5" />
                                 </Button>
                             )}
+
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 text-muted-foreground hover:text-foreground"
+                                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                            >
+                                <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                                <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                                <span className="sr-only">Toggle theme</span>
+                            </Button>
 
                             <NotificationDropdown 
                                 notifications={notifications} 
@@ -258,10 +261,11 @@ export default function AuthenticatedLayout() {
                             />
                         </div>
                     </header>
-                    
-                    <main className="flex-1 overflow-hidden bg-muted/40">
-                         <div className="h-full w-full bg-card text-card-foreground rounded-2xl border-2 border-blue-200 dark:border-blue-900 shadow-lg overflow-hidden flex flex-col transition-colors">
-                            <Outlet />
+                    <main className="flex-1 overflow-auto bg-muted/20 p-4 md:p-0">
+                        <div className="mx-auto max-w-full h-full flex flex-col">
+                            <div className="relative flex-1 rounded-xl bg-background shadow-sm border border-border/60 overflow-hidden flex flex-col">
+                                <Outlet />
+                            </div>
                         </div>
                     </main>
                 </SidebarInset>

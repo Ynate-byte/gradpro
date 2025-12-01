@@ -62,6 +62,11 @@ const thesisTopicService = {
         return response;
     },
 
+    bulkApproveTopics: async (topicIds) => {
+        const response = await axiosConfig.post('/admin/detai/bulk-approve', { topic_ids: topicIds });
+        return response.data;
+    },
+
     // Add suggestion to topic
     addSuggestion: async (id, suggestionData) => {
         const response = await axiosConfig.post(`/detai/${id}/suggestions`, suggestionData);

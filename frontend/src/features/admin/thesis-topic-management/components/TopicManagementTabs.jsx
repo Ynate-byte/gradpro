@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, FileDown } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, FileDown, CheckCheck } from "lucide-react"; // Thêm CheckCheck
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"; // Import AlertDialog
 import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
@@ -20,6 +30,7 @@ import { useTheme } from "@/components/theme-provider";
 import StatCard from '@/components/shared/StatCard';
 
 const getVariants = (shouldReduce) => {
+    // ... (Giữ nguyên)
     if (shouldReduce) {
         return { container: { visible: { opacity: 1 } }, item: { visible: { opacity: 1, y: 0 } }, table: { visible: { opacity: 1, y: 0 } } };
     }
@@ -33,6 +44,7 @@ const getVariants = (shouldReduce) => {
 const columnVisibility = { "department_id": false };
 
 const TopicManagementTabs = () => {
+    // ... (Giữ nguyên các state cũ)
     const [allTopics, setAllTopics] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingStats, setLoadingStats] = useState(true);
@@ -57,11 +69,16 @@ const TopicManagementTabs = () => {
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [actionType, setActionType] = useState("");
 
+    // [NEW] State cho Bulk Action
+    const [showBulkApproveAlert, setShowBulkApproveAlert] = useState(false);
+    const [isBulkApproving, setIsBulkApproving] = useState(false);
+
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
+    // ... (Giữ nguyên useEffect init data và loadTopics) ...
     // 1. Init Data
     useEffect(() => {
         const init = async () => {
@@ -113,6 +130,7 @@ const TopicManagementTabs = () => {
             const topicsData = topicRes.data || topicRes || []; 
             
             setAllTopics(Array.isArray(topicsData) ? topicsData : (topicsData.data || []));
+            setRowSelection({}); // Reset selection khi load lại
 
         } catch (error) {
             console.error("Error loading topics:", error);
@@ -124,7 +142,7 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // 3. Process Data (Filter & Sort)
+    // 3. Process Data (Filter & Sort) - Giữ nguyên
     const processedData = useMemo(() => {
         let filtered = allTopics.filter(t => {
             const matchesSearch =
@@ -181,7 +199,7 @@ const TopicManagementTabs = () => {
         return { pagedData, pageCount, stats, allFiltered: filtered };
     }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
 
-    // 4. Navigation Logic
+    // ... (Navigation Logic & Single Action Handlers giữ nguyên) ...
     const currentList = useMemo(() => {
         return processedData.allFiltered || [];
     }, [processedData.allFiltered]);
@@ -213,7 +231,6 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // 5. Actions
     const handleApprove = async (topicId) => {
         try {
             let nextTopicId = null;
@@ -288,6 +305,61 @@ const TopicManagementTabs = () => {
         toast.info("Tính năng xuất danh sách đang phát triển.");
     };
 
+    // [NEW] Bulk Action Logic
+    const handleBulkApproveClick = () => {
+        const selectedCount = Object.keys(rowSelection).length;
+        if (selectedCount === 0) return;
+        setShowBulkApproveAlert(true);
+    };
+
+    const confirmBulkApprove = async () => {
+        setIsBulkApproving(true);
+        try {
+            // Lấy danh sách ID từ rowSelection (key của object rowSelection là index, cần map sang ID thực)
+            // DataTable của Tanstack Table lưu rowSelection theo id của row.
+            // Nếu không set getRowId, mặc định là index.
+            // Cách tốt nhất là duyệt qua pagedData hoặc allFiltered để lấy ID.
+            
+            // Tuy nhiên, processedData.pagedData chỉ chứa trang hiện tại. 
+            // rowSelection chứa state của toàn bộ bảng nếu enableRowSelection được cấu hình đúng.
+            
+            // Lấy ra các row ID được chọn (ở đây row ID = ID_DETAI nếu ta cấu hình getRowId cho DataTable, 
+            // hoặc ta phải map từ index nếu dùng mặc định).
+            // Để an toàn, ta sẽ filter từ processedData.allFiltered dựa trên trạng thái rowSelection.
+            
+            // Ở component DataTable, ta truyền data là processedData.pagedData
+            // Nên rowSelection chỉ chứa index của trang hiện tại (nếu manualPagination)
+            
+            // CÁCH FIX: Trong DataTable, row.original chứa dữ liệu gốc. 
+            // Chúng ta cần lấy các item được chọn từ dữ liệu hiện có.
+            
+            // Đơn giản nhất: Duyệt qua processedData.pagedData và check rowSelection
+            // Lưu ý: rowSelection object keys là row index (string).
+            
+            const selectedIds = Object.keys(rowSelection).map(index => {
+                 const row = processedData.pagedData[parseInt(index)];
+                 return row ? row.ID_DETAI : null;
+            }).filter(id => id !== null);
+
+            if (selectedIds.length === 0) {
+                 toast.warning("Vui lòng chọn ít nhất 1 đề tài.");
+                 return;
+            }
+
+            await thesisTopicService.bulkApproveTopics(selectedIds);
+            toast.success(`Đã duyệt thành công ${selectedIds.length} đề tài.`);
+            setRowSelection({}); // Reset selection
+            await loadTopics(selectedPlanId);
+
+        } catch (error) {
+            console.error("Bulk approve error:", error);
+            toast.error(error.response?.data?.message || "Lỗi khi duyệt hàng loạt.");
+        } finally {
+            setIsBulkApproving(false);
+            setShowBulkApproveAlert(false);
+        }
+    };
+
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [activeTab, columnFilters, debouncedSearchTerm, selectedPlanId]);
@@ -300,6 +372,8 @@ const TopicManagementTabs = () => {
     }), [handleApprove, handleReject, handleRequestEdit]);
 
     const renderDataTable = () => {
+        const selectedCount = Object.keys(rowSelection).length;
+
         return (
             <motion.div
                 initial={{ opacity: 0 }}
@@ -337,7 +411,20 @@ const TopicManagementTabs = () => {
                     onImportUser={null}
                     addBtnText=""
                     
-                    // [QUAN TRỌNG] Flex Layout Props
+                    // [NEW] Bulk Actions Slot
+                    bulkActions={
+                         selectedCount > 0 && activeTab === "Chờ duyệt" ? (
+                            <Button 
+                                size="sm" 
+                                className="bg-green-600 hover:bg-green-700 text-white h-8 ml-2 animate-in fade-in zoom-in duration-200"
+                                onClick={handleBulkApproveClick}
+                            >
+                                <CheckCheck className="mr-2 h-4 w-4" />
+                                Duyệt {selectedCount} đề tài
+                            </Button>
+                         ) : null
+                    }
+                    
                     flexLayout={true}
                     containerClassName="h-full border-none shadow-none"
                     className="h-full"
@@ -346,7 +433,6 @@ const TopicManagementTabs = () => {
         );
     };
 
-    // Danh sách các tab trạng thái
     const TABS = [
         "Chờ duyệt", 
         "Đã duyệt", 
@@ -361,53 +447,51 @@ const TopicManagementTabs = () => {
             initial={isReduced ? { opacity: 1 } : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
-            // [UPDATE] Cấu hình layout full height, không cuộn trang
             className="flex flex-col h-full space-y-4 p-4 md:p-6 overflow-hidden"
         >
             {/* Header Section */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
                  <div className="flex items-center gap-2 w-full md:w-auto">
-                     <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
-                     <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
-                         <SelectTrigger className="w-full md:w-[400px] shadow-sm">
-                             <SelectValue placeholder="Chọn một kế hoạch..." />
-                         </SelectTrigger>
-                         <SelectContent>
-                             {plans.length > 0 ? (
-                                 plans.map(plan => (
-                                     <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
-                                         <div className="flex items-center justify-between w-full gap-2">
-                                             <span className="truncate">{plan.TEN_DOT}</span>
-                                             <span className="text-xs text-muted-foreground">({plan.NAMHOC})</span>
-                                         </div>
-                                     </SelectItem>
-                                 ))
-                             ) : (
-                                 <div className="p-4 text-center text-sm text-muted-foreground">Không tìm thấy kế hoạch nào.</div>
-                             )}
-                         </SelectContent>
-                     </Select>
-                 </div>
-                 <div className="flex items-center gap-2">
-                    <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId} className="shadow-sm">
-                         <FileDown className="mr-2 h-4 w-4" /> Xuất danh sách
-                     </Button>
-                 </div>
+                      <BookOpen className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                          <SelectTrigger className="w-full md:w-[400px] shadow-sm">
+                              <SelectValue placeholder="Chọn một kế hoạch..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {plans.length > 0 ? (
+                                  plans.map(plan => (
+                                      <SelectItem key={plan.ID_KEHOACH} value={String(plan.ID_KEHOACH)}>
+                                          <div className="flex items-center justify-between w-full gap-2">
+                                              <span className="truncate">{plan.TEN_DOT}</span>
+                                              <span className="text-xs text-muted-foreground">({plan.NAMHOC})</span>
+                                          </div>
+                                      </SelectItem>
+                                  ))
+                              ) : (
+                                  <div className="p-4 text-center text-sm text-muted-foreground">Không tìm thấy kế hoạch nào.</div>
+                              )}
+                          </SelectContent>
+                      </Select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                     <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId} className="shadow-sm">
+                          <FileDown className="mr-2 h-4 w-4" /> Xuất danh sách
+                      </Button>
+                  </div>
             </div>
 
-            {/* Stats Cards - Fixed Height */}
+            {/* Stats Cards */}
             <motion.div
                 className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 shrink-0"
                 variants={variants.container}
                 initial="hidden"
                 animate="visible"
             >
-                <motion.div variants={variants.item} className="h-full">
+                 <motion.div variants={variants.item} className="h-full">
                     <StatCard
                         icon={BookOpen}
                         title="Tổng số Đề tài"
                         value={loadingStats ? 'loading' : processedData.stats.total}
-                        // [FIX] Dùng onClick thay vì onAction
                         onClick={() => setActiveTab("Tất cả")}
                         iconBgClass="bg-blue-100 dark:bg-blue-900/30"
                         iconColorClass="text-blue-600 dark:text-blue-400"
@@ -454,7 +538,7 @@ const TopicManagementTabs = () => {
                 </motion.div>
             </motion.div>
 
-            {/* Tabs & Table - Expand to Fill Space */}
+            {/* Tabs & Table */}
             <div className="flex-1 min-h-0 flex flex-col bg-card rounded-lg border shadow-sm">
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
                     <div className="px-4 pt-4 pb-2 border-b shrink-0">
@@ -510,6 +594,32 @@ const TopicManagementTabs = () => {
                 topic={selectedTopic}
                 actionType={actionType}
             />
+
+            {/* [NEW] Bulk Approve Alert Dialog */}
+            <AlertDialog open={showBulkApproveAlert} onOpenChange={setShowBulkApproveAlert}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Xác nhận duyệt hàng loạt?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Bạn có chắc chắn muốn duyệt <strong>{Object.keys(rowSelection).length}</strong> đề tài đã chọn không?
+                            <br />
+                            Hành động này sẽ gửi thông báo đến các giảng viên tương ứng.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isBulkApproving}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={confirmBulkApprove} 
+                            disabled={isBulkApproving}
+                            className="bg-green-600 hover:bg-green-700"
+                        >
+                            {isBulkApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Duyệt ngay
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
         </motion.div>
     );
 };

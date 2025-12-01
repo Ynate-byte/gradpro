@@ -17,29 +17,35 @@ import {
 import {
     Sidebar, SidebarHeader, SidebarContent, SidebarFooter, SidebarGroup,
     SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton,
-    SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem
+    SidebarMenuItem, SidebarMenuSub, SidebarMenuSubButton, SidebarMenuSubItem,
+    SidebarSeparator
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from "@/components/theme-provider";
 import { cn } from '@/lib/utils';
 
-// --- 1. Helper: Kiểm tra URL active ---
+// --- Helper (GIỮ NGUYÊN) ---
 const checkActive = (href, currentUrl) => {
     if (!href) return false;
     if (href === '/') return currentUrl === '/';
     return currentUrl === href || currentUrl.startsWith(`${href}/`);
 };
 
-// --- 2. Component Menu Item (Xử lý logic hiển thị từng mục) ---
+// --- Component Menu Item (Compact & High Contrast) ---
 const MenuItem = ({ item, currentUrl }) => {
     if (item.hidden) return null;
 
-    // Kiểm tra xem mục này hoặc con của nó có đang active không
     const isSubItemActive = item.subItems?.some(sub => checkActive(sub.href, currentUrl));
     const isDirectActive = checkActive(item.href, currentUrl);
     const isActive = isSubItemActive || isDirectActive;
 
-    // Trường hợp 1: Menu có cấp con (Collapsible)
+    const iconClass = cn(
+        "size-4 shrink-0 transition-colors duration-200",
+        isActive ? "text-primary-foreground" : "text-foreground/70 group-hover/btn:text-foreground"
+    );
+
+    const inactiveTextClass = "text-foreground/80 group-hover/btn:text-foreground font-medium";
+
     if (item.subItems && item.subItems.length > 0) {
         return (
             <Collapsible defaultOpen={isActive} className="group/collapsible">
@@ -47,18 +53,27 @@ const MenuItem = ({ item, currentUrl }) => {
                     <CollapsibleTrigger asChild>
                         <SidebarMenuButton
                             tooltip={item.title}
-                            className={cn("w-full", isActive && "font-semibold text-primary")}
+                            className={cn(
+                                "group/btn w-full justify-between pr-2 transition-all duration-200 h-9 mb-0.5 rounded-md",
+                                "group-data-[collapsible=icon]:justify-center",
+                                isActive 
+                                    ? "text-primary font-bold bg-primary/10 hover:bg-primary/15"
+                                    : "hover:bg-sidebar-accent hover:text-foreground"
+                            )}
                             isActive={isActive}
                         >
-                            {item.icon && <item.icon className="size-4 shrink-0" />}
-                            <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
-                                {item.title}
+                            <span className="flex items-center gap-2.5 w-full">
+                                {item.icon && <item.icon className={cn("size-4 shrink-0", isActive ? "text-primary" : "text-foreground/60")} />}
+                                <span className={cn("truncate group-data-[collapsible=icon]:hidden transition-all", isActive ? "text-primary" : inactiveTextClass)}>
+                                    {item.title}
+                                </span>
                             </span>
-                            <ChevronRight className="ml-auto size-4 shrink-0 transition-transform duration-200 ease-in-out group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
+                            <ChevronRight className="ml-auto size-4 shrink-0 text-foreground/50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
                         </SidebarMenuButton>
                     </CollapsibleTrigger>
+                    
                     <CollapsibleContent>
-                        <SidebarMenuSub>
+                        <SidebarMenuSub className="border-l border-border/60 ml-3.5 pl-2 my-0.5 space-y-0.5">
                             {item.subItems.map((subItem, idx) => {
                                 if (subItem.hidden) return null;
                                 const isSubActive = checkActive(subItem.href, currentUrl);
@@ -67,7 +82,12 @@ const MenuItem = ({ item, currentUrl }) => {
                                         <SidebarMenuSubButton
                                             asChild
                                             isActive={isSubActive}
-                                            className={isSubActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium' : ''}
+                                            className={cn(
+                                                "h-8 transition-colors rounded-md",
+                                                isSubActive 
+                                                    ? "bg-primary text-primary-foreground font-bold shadow-sm"
+                                                    : "text-foreground/70 hover:text-foreground hover:bg-sidebar-accent"
+                                            )}
                                         >
                                             <Link to={subItem.href}>{subItem.title}</Link>
                                         </SidebarMenuSubButton>
@@ -81,7 +101,7 @@ const MenuItem = ({ item, currentUrl }) => {
         );
     }
 
-    // Trường hợp 2: Menu đơn (Link trực tiếp)
+    // Trường hợp 2: Menu đơn
     if (item.href) {
         return (
             <SidebarMenuItem>
@@ -89,11 +109,17 @@ const MenuItem = ({ item, currentUrl }) => {
                     asChild
                     tooltip={item.title}
                     isActive={isActive}
-                    className={isActive ? 'bg-sidebar-accent text-sidebar-accent-foreground font-bold border-r-4 border-primary' : ''}
+                    className={cn(
+                        "group/btn transition-all duration-200 h-9 mb-0.5 rounded-md",
+                        "group-data-[collapsible=icon]:justify-center",
+                        isActive 
+                            ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 font-bold" // Active đơn: Nền đậm
+                            : "hover:bg-sidebar-accent hover:text-foreground"
+                    )}
                 >
                     <Link to={item.href}>
-                        {item.icon && <item.icon className={cn("size-4 shrink-0", isActive && "text-primary")} />}
-                        <span className="flex-1 text-left transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:hidden">
+                        {item.icon && <item.icon className={iconClass} />}
+                        <span className={cn("flex-1 truncate group-data-[collapsible=icon]:hidden transition-all", isActive ? "text-primary-foreground" : inactiveTextClass)}>
                             {item.title}
                         </span>
                     </Link>
@@ -105,44 +131,40 @@ const MenuItem = ({ item, currentUrl }) => {
     return null;
 };
 
-// --- 3. Component Chính: AppSidebar ---
+// --- AppSidebar Main ---
 export function AppSidebar() {
     const { user, logout } = useAuth();
-    // Lấy context Theme & Settings
     const { reduceMotion, setReduceMotion, fontSize, setFontSize } = useTheme();
     
     const location = useLocation();
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- A. Logic Phân Quyền ---
+    // --- Logic Phân Quyền (GIỮ NGUYÊN) ---
     const roleName = user?.vaitro?.TEN_VAITRO;
     const positions = user?.giangvien?.chucvus || [];
     const positionCodes = positions.map(p => p.MA_CHUCVU);
     const positionNames = positions.map(p => p.TEN_CHUCVU);
-
     const isSinhVien = roleName === 'Sinh viên';
     const isAdminAccount = roleName === 'Admin';
     const hasLecturerProfile = !!user?.giangvien;
     const isTruongKhoa = positionCodes.includes('TRUONG_KHOA');
     const isGiaoVu = positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
     const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
-    
-    // Admin Area: Admin hệ thống, Trưởng khoa, Giáo vụ
     const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu;
 
-    // --- B. Cấu hình Menu Platform (Người dùng) ---
+    // --- Config Menu (GIỮ NGUYÊN) ---
     const platformMenu = {
-        label: "Platform",
+        label: "Hệ thống",
         items: [
             {
                 title: "Tổng quan",
                 icon: LayoutDashboard,
                 href: "/",
                 subItems: [
-                    { href: "/student/dashboard", title: "Tổng quan (SV)", hidden: !isSinhVien },
-                    { href: "/lecturer/dashboard", title: "Tổng quan (GV)", hidden: !hasLecturerProfile },
-                    { href: "/admin/dashboard", title: "Dashboard (Admin)", hidden: !canAccessAdminArea },
+                    { href: "/student/dashboard", title: "Tổng quan", hidden: !isSinhVien },
+                    { href: "/lecturer/dashboard", title: "Tổng quan", hidden: !hasLecturerProfile },
+                    { href: "/admin/dashboard", title: "Bảng điều khiển", hidden: !canAccessAdminArea },
                     { href: "/notifications", title: "Thông báo" },
                     { href: "/history", title: "Lịch sử hoạt động" },
                 ],
@@ -154,17 +176,14 @@ export function AppSidebar() {
                 href: "/projects",
                 hidden: isAdminAccount && !hasLecturerProfile,
                 subItems: [
-                    // Sinh viên
                     { href: "/projects/topics", title: "Danh sách Đề tài", hidden: !isSinhVien },
                     { href: "/projects/my-plans", title: "Kế hoạch tham gia", hidden: !isSinhVien },
                     { href: "/projects/my-group", title: "Nhóm của tôi", hidden: !isSinhVien },
                     { href: "/projects/find-group", title: "Tìm kiếm nhóm", hidden: !isSinhVien },
-                    // Giảng viên
                     { href: "/lecturer/thesis-topics", title: "Đề tài của tôi", hidden: !hasLecturerProfile },
                     { href: "/lecturer/groups-management", title: "Nhóm hướng dẫn", hidden: !hasLecturerProfile },
                     { href: "/lecturer/submissions", title: "Duyệt nộp bài", hidden: !hasLecturerProfile },
                     { href: "/lecturer/quota-management", title: "Thông tin Quota", hidden: !hasLecturerProfile },
-                    // Trưởng bộ môn
                     { href: "/department-head/topic-reviewer-assignment", title: "Phân công Góp ý", hidden: !isTruongBoMon },
                 ],
             },
@@ -173,7 +192,6 @@ export function AppSidebar() {
         ],
     };
 
-    // --- C. Cấu hình Menu Admin (Quản trị) ---
     const adminMenu = {
         label: "Quản trị",
         items: [
@@ -182,7 +200,7 @@ export function AppSidebar() {
             { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
             { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
             { title: "Mẫu kế hoạch", href: "/admin/templates", icon: FileText },
-            { title: "Phân công Quota", href: "/admin/quota-management", icon: Layers },
+            { title: "Phân bổ đê tài", href: "/admin/quota-management", icon: Layers },
             { title: "Quản lý Đề tài", href: "/admin/thesis-topics", icon: BookCopy },
             { title: "Quản lý Hội đồng", href: "/admin/hoidong", icon: GraduationCap },
             { title: "Bảng điểm tổng", href: "/admin/cham-diem", icon: Star },
@@ -194,7 +212,6 @@ export function AppSidebar() {
         ],
     };
 
-    // Helper hiển thị tên chức vụ/vai trò
     const getUserDisplayTitle = () => {
         if (hasLecturerProfile && positionNames.length > 0) {
             return positionNames.join(', ');
@@ -203,47 +220,45 @@ export function AppSidebar() {
     };
 
     return (
-        <Sidebar collapsible="icon" className="group border-r border-border/50">
-            {/* === HEADER === */}
-            <SidebarHeader>
+        <Sidebar collapsible="icon" className="group border-r border-sidebar-border bg-sidebar-background">
+            <SidebarHeader className="pb-2">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="w-full justify-start gap-3 p-2 text-left group-data-[collapsible=icon]:justify-center">
-                            <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+                        <Button variant="ghost" className="h-10 w-full justify-start gap-2.5 px-2 text-left hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center">
+                            <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground shadow-sm">
                                 <BookCopy className="size-4" />
                             </div>
-                            <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden">
-                                <span className="text-sm font-semibold">GradPro</span>
-                                <span className="text-xs text-muted-foreground truncate w-32">
+                            <div className="flex flex-col items-start gap-0 overflow-hidden transition-all group-data-[collapsible=icon]:hidden min-w-0">
+                                <span className="text-sm font-bold tracking-tight text-foreground truncate">HUIT GRADPRO</span>
+                                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate w-32">
                                     {getUserDisplayTitle()}
                                 </span>
                             </div>
-                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden" />
+                            <ChevronsUpDown className="ml-auto size-3 text-muted-foreground group-data-[collapsible=icon]:hidden" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent side="right" align="start" className="w-56">
-                        <DropdownMenuLabel>GradPro System</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={() => navigate('/')}>
-                            <LayoutDashboard className="mr-2 size-4" /> Trang chủ
+                    {/* Content Dropdown giữ nguyên logic */}
+                    <DropdownMenuContent side="right" align="start" className="w-56 rounded-md border-border shadow-md">
+                        <DropdownMenuItem onClick={() => navigate('/')} className="cursor-pointer">
+                            <LayoutDashboard className="mr-2 size-4 text-primary" /> Trang chủ
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>
             </SidebarHeader>
 
-            {/* === CONTENT === */}
-            {/* [CẬP NHẬT] Sửa class ở đây để tùy chỉnh thanh cuộn */}
             <SidebarContent 
-                className="py-2 
-                [&::-webkit-scrollbar]:w-1.5 
-                [&::-webkit-scrollbar-track]:bg-transparent 
-                [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20 
-                hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/40 
+                className="px-2 pt-2
+                overflow-y-auto overflow-x-hidden
+                [&::-webkit-scrollbar]:w-1.5
+                [&::-webkit-scrollbar-track]:bg-transparent
+                [&::-webkit-scrollbar-thumb]:bg-muted-foreground/20
+                dark:[&::-webkit-scrollbar-thumb]:bg-white/10
+                hover:[&::-webkit-scrollbar-thumb]:bg-muted-foreground/50
+                dark:hover:[&::-webkit-scrollbar-thumb]:bg-white/20
                 [&::-webkit-scrollbar-thumb]:rounded-full"
             >
-                {/* 1. Nhóm Menu Platform */}
-                <SidebarGroup>
-                    <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden">
+                <SidebarGroup className="p-0">
+                    <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold text-foreground/50 uppercase tracking-widest px-2 mb-1 mt-1">
                         {platformMenu.label}
                     </SidebarGroupLabel>
                     <SidebarGroupContent>
@@ -255,11 +270,14 @@ export function AppSidebar() {
                     </SidebarGroupContent>
                 </SidebarGroup>
 
-                {/* 2. Nhóm Menu Quản trị */}
+                {/* 2. Admin Group */}
                 {canAccessAdminArea && (
-                    <SidebarGroup className="border-t mt-2 pt-2">
-                        <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-primary font-semibold">
-                            {adminMenu.label}
+                    <>
+                    {/* Đường phân cách rõ hơn */}
+                    <SidebarSeparator className="my-2 mx-2 bg-border/60"/>
+                    <SidebarGroup className="p-0">
+                        <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold text-foreground/50 uppercase tracking-widest px-2 mb-1">
+                             {adminMenu.label}
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
@@ -269,70 +287,75 @@ export function AppSidebar() {
                             </SidebarMenu>
                         </SidebarGroupContent>
                     </SidebarGroup>
+                    </>
                 )}
             </SidebarContent>
-
-            {/* === FOOTER (User Menu) === */}
-            <SidebarFooter>
+            <SidebarFooter className="p-2 border-t border-sidebar-border/60">
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="w-full justify-start gap-3 p-2 text-left group-data-[collapsible=icon]:justify-center">
-                            <Avatar className="size-8 rounded-lg">
+                        <Button variant="ghost" className="h-auto w-full justify-start gap-2.5 p-1.5 text-left rounded-md hover:bg-sidebar-accent group-data-[collapsible=icon]:justify-center">
+                            <Avatar className="size-8 rounded-md border border-border">
                                 <AvatarImage src={user?.AVATAR_URL} alt={user?.HODEM_VA_TEN} />
-                                <AvatarFallback className="rounded-lg">{user?.HODEM_VA_TEN?.charAt(0) ?? 'U'}</AvatarFallback>
+                                <AvatarFallback className="rounded-md text-[10px] bg-primary/10 text-primary font-bold">{user?.HODEM_VA_TEN?.charAt(0) ?? 'U'}</AvatarFallback>
                             </Avatar>
-                            <div className="flex flex-col items-start transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden min-w-0 flex-1">
-                                <span className="text-sm font-semibold truncate w-full">{user?.HODEM_VA_TEN}</span>
-                                <span className="text-xs text-muted-foreground truncate w-full">{user?.EMAIL}</span>
+                            <div className="flex flex-col items-start gap-0 overflow-hidden transition-all group-data-[collapsible=icon]:hidden min-w-0 flex-1">
+                                <span className="text-xs font-bold text-foreground truncate w-full">{user?.HODEM_VA_TEN}</span>
+                                <span className="text-[10px] text-muted-foreground truncate w-full">{user?.EMAIL}</span>
                             </div>
-                            <ChevronsUpDown className="ml-auto size-4 text-muted-foreground transition-opacity duration-200 ease-in-out group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:hidden shrink-0" />
                         </Button>
                     </DropdownMenuTrigger>
                     
-                    <DropdownMenuContent side="right" align="start" className="w-64">
-                        <DropdownMenuLabel>Tài khoản</DropdownMenuLabel>
+                    <DropdownMenuContent side="right" align="end" className="w-60 rounded-md shadow-lg border-border mb-1">
+                            <div className="p-3 flex items-center gap-3 border-b border-border pb-3 mb-1 bg-muted/20">
+                            <Avatar className="size-9 rounded-full border border-border">
+                                <AvatarImage src={user?.AVATAR_URL} />
+                                <AvatarFallback>{user?.HODEM_VA_TEN?.charAt(0) ?? 'U'}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex flex-col overflow-hidden">
+                                <span className="text-sm font-bold truncate">{user?.HODEM_VA_TEN}</span>
+                                <span className="text-[11px] text-muted-foreground truncate">{user?.EMAIL}</span>
+                            </div>
+                        </div>
+                        
+                        <DropdownMenuItem asChild className="cursor-pointer text-xs font-medium py-2">
+                            <Link to="/profile"><CircleUserRound className="mr-2 size-3.5" /> Thông tin cá nhân</Link>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild className="cursor-pointer text-xs font-medium py-2">
+                            <Link to="/history"><History className="mr-2 size-3.5" /> Lịch sử hoạt động</Link>
+                        </DropdownMenuItem>
+                        
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem asChild>
-                            <Link to="/profile" className="cursor-pointer w-full flex items-center">
-                                <CircleUserRound className="mr-2 size-4" /> Thông tin cá nhân
-                            </Link>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                            <Link to="/history" className="cursor-pointer w-full flex items-center">
-                                <History className="mr-2 size-4" /> Lịch sử hoạt động
-                            </Link>
-                        </DropdownMenuItem>
+                        
                         <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>
-                                <Palette className="mr-2 size-4" />
+                            <DropdownMenuSubTrigger className="cursor-pointer text-xs font-medium py-2">
+                                <Palette className="mr-2 size-3.5" />
                                 <span>Giao diện</span>
                             </DropdownMenuSubTrigger>
                             <DropdownMenuPortal>
-                                <DropdownMenuSubContent className="w-56 ml-2 p-2">
-                                    <div className="mb-3">
-                                        <div className="text-xs font-semibold text-muted-foreground mb-2 px-1 flex items-center gap-1">
+                                <DropdownMenuSubContent className="w-52 ml-2 p-1 rounded-md border-border shadow-md bg-popover">
+                                    {/* 1. Phần Cỡ chữ */}
+                                    <div className="px-2 py-2">
+                                        <div className="text-[10px] font-semibold text-muted-foreground mb-1.5 flex items-center gap-1">
                                             <Type className="size-3" /> Cỡ chữ hiển thị
                                         </div>
-                                        <div className="flex items-center gap-1 bg-muted/30 p-1 rounded-lg border">
+                                        <div className="flex items-center gap-1 bg-muted p-0.5 rounded border border-border/50">
                                             {[
-                                                { label: 'Nhỏ', value: 'small', sizeClass: 'text-xs' },
-                                                { label: 'Vừa', value: 'normal', sizeClass: 'text-sm' },
-                                                { label: 'Lớn', value: 'large', sizeClass: 'text-base' },
+                                                { value: 'small', sizeClass: 'text-[10px]' },
+                                                { value: 'normal', sizeClass: 'text-xs' },
+                                                { value: 'large', sizeClass: 'text-sm' },
                                             ].map((item) => (
                                                 <button
                                                     key={item.value}
                                                     onClick={(e) => {
-                                                        e.preventDefault(); // QUAN TRỌNG: Chặn sự kiện đóng menu
-                                                        e.stopPropagation();
+                                                        e.preventDefault(); e.stopPropagation();
                                                         setFontSize(item.value);
                                                     }}
                                                     className={cn(
-                                                        "flex-1 flex flex-col items-center justify-center py-1.5 rounded-md transition-all duration-200 outline-none focus:ring-2 focus:ring-primary/20",
+                                                        "flex-1 flex items-center justify-center py-1 rounded transition-all",
                                                         fontSize === item.value 
-                                                            ? "bg-background text-primary shadow-sm ring-1 ring-border font-bold" 
+                                                            ? "bg-background shadow-sm ring-1 ring-border font-bold text-primary" 
                                                             : "text-muted-foreground hover:bg-background/50 hover:text-foreground"
                                                     )}
-                                                    title={item.label}
                                                 >
                                                     <span className={cn("leading-none", item.sizeClass)}>Aa</span>
                                                 </button>
@@ -340,40 +363,39 @@ export function AppSidebar() {
                                         </div>
                                     </div>
 
-                                    <DropdownMenuSeparator />
+                                    <DropdownMenuSeparator className="my-1 opacity-50"/>
+
+                                    {/* 2. [ĐÃ THÊM LẠI] Phần Giảm hiệu ứng */}
                                     <DropdownMenuItem 
                                         onSelect={(e) => {
-                                            e.preventDefault();
+                                            e.preventDefault(); // Chặn việc đóng menu khi click
                                             setReduceMotion(!reduceMotion);
                                         }}
-                                        className="cursor-pointer focus:bg-accent focus:text-accent-foreground"
+                                        className="cursor-pointer text-xs font-medium px-2 py-1.5 flex items-center justify-between"
                                     >
-                                        {reduceMotion 
-                                            ? <ZapOff className="mr-2 size-4 text-orange-500" /> 
-                                            : <Zap className="mr-2 size-4 text-blue-500" />
-                                        }
-                                        <div className="flex flex-col">
+                                        <div className="flex items-center gap-2">
+                                            {reduceMotion 
+                                                ? <ZapOff className="size-3.5 text-orange-500" /> 
+                                                : <Zap className="size-3.5 text-blue-500" />
+                                            }
                                             <span>Giảm hiệu ứng</span>
-                                            <span className="text-[10px] text-muted-foreground font-normal">
-                                                {reduceMotion ? "Đang bật (Nhanh)" : "Đang tắt (Mượt)"}
-                                            </span>
                                         </div>
-                                        {reduceMotion && <Check className="ml-auto size-4" />}
+                                        {/* Icon Check khi bật */}
+                                        {reduceMotion && <Check className="size-3.5 text-primary" />}
                                     </DropdownMenuItem>
 
-                                    <DropdownMenuSeparator />
+                                    <DropdownMenuSeparator className="my-1 opacity-50"/>
 
-                                    <DropdownMenuItem onClick={() => navigate('/settings/appearance')}>
-                                        <Settings className="mr-2 size-4" />
-                                        <span>Cài đặt chi tiết...</span>
+                                    <DropdownMenuItem onClick={() => navigate('/settings/appearance')} className="cursor-pointer text-xs font-medium px-2 py-1.5">
+                                        <Settings className="mr-2 size-3.5" /> Cài đặt chi tiết...
                                     </DropdownMenuItem>
-
                                 </DropdownMenuSubContent>
                             </DropdownMenuPortal>
                         </DropdownMenuSub>
+                        
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive cursor-pointer">
-                            <LogOut className="mr-2 size-4" /> Đăng xuất
+                        <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive cursor-pointer text-xs font-bold py-2 bg-destructive/5 hover:bg-destructive/10">
+                            <LogOut className="mr-2 size-3.5" /> Đăng xuất
                         </DropdownMenuItem>
                     </DropdownMenuContent>
                 </DropdownMenu>

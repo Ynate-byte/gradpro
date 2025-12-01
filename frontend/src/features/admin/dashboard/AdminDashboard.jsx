@@ -422,8 +422,6 @@ export default function AdminDashboard() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b pb-4 mb-8 gap-4">
                 <div>
                     <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-                        Hệ thống quản lý khóa luận tốt nghiệp
-                        <span className="w-1 h-1 bg-muted-foreground rounded-full"></span>
                         {format(new Date(), "EEEE, dd 'tháng' MM, yyyy", { locale: vi })}
                     </p>
                 </div>

@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\DB;
 
 class DetaiAdminController extends Controller
 {
@@ -160,6 +161,69 @@ class DetaiAdminController extends Controller
         }
 
         return response()->json(['message' => $message]);
+    }
+
+    /**
+     * Duyệt hàng loạt đề tài
+     */
+    public function bulkApprove(Request $request)
+    {
+        $currentUser = Auth::user();
+        
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
+            return response()->json(['message' => 'Không có quyền thực hiện.'], 403);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'topic_ids' => 'required|array|min:1',
+            'topic_ids.*' => 'exists:DETAI,ID_DETAI',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $topicIds = $request->input('topic_ids');
+        $count = 0;
+
+        DB::beginTransaction();
+        try {
+            $count = Detai::whereIn('ID_DETAI', $topicIds)
+                ->where('TRANGTHAI', 'Chờ duyệt')
+                ->update([
+                    'TRANGTHAI' => 'Đã duyệt',
+                    'ID_NGUOI_DUYET' => $currentUser->ID_NGUOIDUNG,
+                    'NGAY_DUYET' => now(),
+                    'LYDO_TUCHOI' => null,
+                    'LA_TAISUDUNG' => false, 
+                ]);
+
+            $topics = Detai::whereIn('ID_DETAI', $topicIds)
+                           ->where('TRANGTHAI', 'Đã duyệt')
+                           ->with('nguoiDexuat.nguoidung')
+                           ->get();
+
+            foreach ($topics as $topic) {
+                if ($topic->nguoiDexuat && $topic->nguoiDexuat->nguoidung) {
+                     NotificationService::send(
+                        $topic->nguoiDexuat->nguoidung->ID_NGUOIDUNG,
+                        "Đề tài được duyệt",
+                        "Đề tài '{$topic->TEN_DETAI}' của bạn đã được phê duyệt.",
+                        'ACADEMIC',
+                        '/lecturer/thesis-topics',
+                        ['topic_id' => $topic->ID_DETAI],
+                        'HIGH'
+                    );
+                }
+            }
+
+            DB::commit();
+            return response()->json(['message' => "Đã duyệt thành công {$count} đề tài."]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Lỗi khi duyệt hàng loạt: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

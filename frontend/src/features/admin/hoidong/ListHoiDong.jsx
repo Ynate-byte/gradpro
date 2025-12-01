@@ -550,11 +550,7 @@ const ListHoiDong = () => {
 
   return (
     <>
-      {/* [QUAN TRỌNG] Layout cha: 
-        - h-full: Để chiếm toàn bộ chiều cao của component cha (AuthenticatedLayout)
-        - overflow-hidden: Để ngăn scroll của body, buộc scroll xảy ra bên trong.
-      */}
-      <div className="p-4 md:p-8 space-y-6 h-full flex flex-col overflow-hidden">
+      <div className="p-4 md:p-6 space-y-6 h-full flex flex-col overflow-hidden">
         
         {/* 1. STAT CARDS SECTION (Flex shrink 0 để không bị co lại) */}
         <motion.div 

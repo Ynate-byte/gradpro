@@ -408,7 +408,7 @@ export default function PersonalHistoryPage() {
             
             {/* 1. HEADER & ACTIONS - Shrink 0 */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shrink-0"> 
-                <h1 className="text-2xl font-bold tracking-tight">Lịch sử hoạt động</h1>
+                <h1 className="text-2xl font-bold tracking-tight"></h1>
                 <div className="flex gap-2">
                     <Button 
                         variant={isAutoRefresh ? "secondary" : "outline"} 

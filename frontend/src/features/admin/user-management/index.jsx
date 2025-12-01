@@ -218,8 +218,7 @@ export default function UserManagementPage() {
     };
 
     return (
-        <div className="h-full flex flex-col p-4 gap-4">
-            {/* [FIX] Stats Cards: Sử dụng StatCard xịn import từ shared để có hiệu ứng */}
+        <div className="h-full flex flex-col p-6 gap-4">
             <motion.div 
                 className="flex-none grid gap-4 grid-cols-2 lg:grid-cols-4"
                 variants={variants.container}

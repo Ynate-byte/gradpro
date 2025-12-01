@@ -280,6 +280,7 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('/statistics', [DetaiAdminController::class, 'getStatistics']);
             Route::get('/{id}', [DetaiAdminController::class, 'show']);
             Route::post('/{id}/approve-reject', [DetaiAdminController::class, 'approveOrReject']);
+            Route::post('/bulk-approve', [DetaiAdminController::class, 'bulkApprove']); // <--- Thêm dòng này
         });
         
         // Quản lý Quota
@@ -440,6 +441,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/combined/{nhom}', [ChamDiemController::class, 'saveCombined']);
         Route::get('/tongket/{id}', [ChamDiemController::class, 'getTong']);
         Route::post('/phanbien/{nhom}/reject', [ChamDiemController::class, 'submitZeroPhanBien']);
+        Route::get('/students-grading', [ChamDiemController::class, 'getStudentGradingList']);
+        Route::get('/student-statistics', [ChamDiemController::class, 'getStudentGradingStatistics']);
     });
 });
 

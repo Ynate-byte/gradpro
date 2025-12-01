@@ -185,7 +185,6 @@ const PlanSettingsPage = () => {
     );
 
     return (
-        // [FIX] Thêm h-full và overflow-y-auto
         <div className="h-full overflow-y-auto">
             <div className="space-y-6 p-6 max-w-5xl mx-auto">
                 <div>

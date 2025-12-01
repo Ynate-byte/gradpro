@@ -103,7 +103,7 @@ export default function TemplateManagementPage() {
 
     return (
         <motion.div 
-            className="h-full flex flex-col space-y-4 p-4 md:p-8 overflow-hidden"
+            className="h-full flex flex-col space-y-4 p-4 md:p-6 overflow-hidden"
             initial="hidden"
             animate="visible"
             variants={variants.container}

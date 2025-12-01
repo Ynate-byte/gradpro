@@ -91,3 +91,11 @@ export const getGradingStatistics = (planId) => {
 export const getGroupsForGradingList = (params) => {
     return axiosClient.get('/chamdiem/groups-grading', { params }).then(res => res.data);
 };
+
+export const getStudentGradingList = (params) => {
+    return axiosClient.get('/chamdiem/students-grading', { params }).then(res => res.data);
+};
+
+export const getStudentGradingStatistics = (planId) => {
+    return axiosClient.get('/chamdiem/student-statistics', { params: { plan_id: planId } }).then(res => res.data);
+};

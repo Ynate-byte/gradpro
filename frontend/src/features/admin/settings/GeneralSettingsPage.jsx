@@ -306,14 +306,12 @@ const GeneralSettingsPage = () => {
     };
 
     return (
-        // [FIX] Thêm h-full, overflow-y-auto và relative
         <div className="h-full overflow-y-auto relative">
-            <div className="space-y-6 p-4 md:p-6 max-w-6xl mx-auto pb-20">
-                {/* --- Header Gọn gàng --- */}
+            <div className="space-y-6 p-4 md:p-6 mx-auto pb-20">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight flex items-center gap-2 text-foreground">
-                            <Settings className="h-6 w-6" /> Thiết lập chung
+                            <Settings className="h-6 w-6" /> THIẾT LẬP CHUNG
                         </h2>
                         <p className="text-sm text-muted-foreground">
                             Cấu hình hệ thống & thời gian cho kế hoạch.

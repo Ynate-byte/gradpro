@@ -629,4 +629,133 @@ class ChamDiemController extends Controller
             return response()->json(['error' => 'Lỗi xử lý điểm.'], 500);
         }
     }
+    
+    public function getStudentGradingList(Request $request)
+    {
+        $planId = $request->input('plan_id');
+        $search = $request->input('search');
+        $resultFilter = $request->input('result'); // 'passed', 'failed', 'pending'
+        $perPage = $request->input('per_page', 10);
+
+        $query = \App\Models\Nguoidung::query()
+            ->join('SINHVIEN', 'NGUOIDUNG.ID_NGUOIDUNG', '=', 'SINHVIEN.ID_NGUOIDUNG')
+            ->join('THANHVIEN_NHOM', 'NGUOIDUNG.ID_NGUOIDUNG', '=', 'THANHVIEN_NHOM.ID_NGUOIDUNG')
+            ->join('NHOM', 'THANHVIEN_NHOM.ID_NHOM', '=', 'NHOM.ID_NHOM')
+            ->leftJoin('PHANCONG_DETAI_NHOM', 'NHOM.ID_NHOM', '=', 'PHANCONG_DETAI_NHOM.ID_NHOM')
+            ->leftJoin('DETAI', 'PHANCONG_DETAI_NHOM.ID_DETAI', '=', 'DETAI.ID_DETAI')
+            ->leftJoin('DIEM_TONGKET', 'NHOM.ID_NHOM', '=', 'DIEM_TONGKET.ID_NHOM')
+            ->leftJoin('DIEM_PHANBIEN', 'NHOM.ID_NHOM', '=', 'DIEM_PHANBIEN.ID_NHOM')
+            ->leftJoin('HOIDONG_NHOM', 'NHOM.ID_NHOM', '=', 'HOIDONG_NHOM.ID_NHOM')
+            ->select(
+                'NGUOIDUNG.ID_NGUOIDUNG',
+                'NGUOIDUNG.HODEM_VA_TEN',
+                'NGUOIDUNG.MA_DINHDANH',
+                'NHOM.TEN_NHOM',
+                'NHOM.ID_NHOM',
+                'DETAI.TEN_DETAI',
+                'DIEM_TONGKET.DIEM_TONG',
+                'DIEM_PHANBIEN.DIEM as DIEM_PB_RAW',
+                'HOIDONG_NHOM.ID_HOIDONG'
+            );
+
+        // 1. Filter cơ bản
+        if ($planId) $query->where('NHOM.ID_KEHOACH', $planId);
+        
+        // Chỉ lấy nhóm ĐÃ NỘP và ĐƯỢC DUYỆT
+        $query->whereHas('thanhvienNhom.nhom.phancongDetaiNhom.submissions', function ($q) {
+            $q->where('TRANGTHAI', 'Đã xác nhận');
+        });
+
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('NGUOIDUNG.HODEM_VA_TEN', 'like', '%' . $search . '%')
+                  ->orWhere('NGUOIDUNG.MA_DINHDANH', 'like', '%' . $search . '%');
+            });
+        }
+
+        // 2. Filter theo KẾT QUẢ (Logic phức tạp)
+        if ($resultFilter) {
+            if ($resultFilter === 'passed') {
+                // Đậu: Có điểm tổng và >= 4.0
+                $query->where('DIEM_TONGKET.DIEM_TONG', '>=', 4.0);
+            } elseif ($resultFilter === 'failed') {
+                // Rớt: (Có điểm tổng và < 4.0) HOẶC (Điểm PB = 0) HOẶC (Không có hội đồng)
+                $query->where(function($q) {
+                    $q->where('DIEM_TONGKET.DIEM_TONG', '<', 4.0)
+                      ->orWhere('DIEM_PHANBIEN.DIEM', '=', 0)
+                      ->orWhereNull('HOIDONG_NHOM.ID_HOIDONG');
+                });
+            } elseif ($resultFilter === 'pending') {
+                // Chưa chấm xong: Chưa có điểm tổng VÀ (Điểm PB != 0 hoặc null) VÀ (Có hội đồng)
+                $query->whereNull('DIEM_TONGKET.DIEM_TONG')
+                      ->where(function($q) {
+                          $q->where('DIEM_PHANBIEN.DIEM', '!=', 0)
+                            ->orWhereNull('DIEM_PHANBIEN.DIEM');
+                      })
+                      ->whereNotNull('HOIDONG_NHOM.ID_HOIDONG');
+            }
+        }
+
+        $students = $query->orderBy('NGUOIDUNG.MA_DINHDANH', 'asc')->paginate($perPage);
+
+        // 3. Transform hiển thị (Giống cũ)
+        $students->getCollection()->transform(function ($student) {
+            $diemTong = $student->DIEM_TONG;
+            $diemPB = $student->DIEM_PB_RAW;
+            $hasCouncil = !is_null($student->ID_HOIDONG);
+
+            $student->KET_QUA = 'Chưa chấm xong';
+            
+            if (!$hasCouncil) {
+                $student->KET_QUA = 'Rớt'; // Không được bảo vệ
+            } elseif ($diemTong !== null) {
+                $student->KET_QUA = ($diemTong >= 4.0) ? 'Đậu' : 'Rớt';
+            } elseif ($diemPB !== null && (float)$diemPB == 0) {
+                $student->KET_QUA = 'Rớt'; // Điểm liệt phản biện
+                $student->DIEM_TONG = 0.00;
+            }
+            
+            return $student;
+        });
+
+        return response()->json($students);
+    }
+
+    /**
+     * API Thống kê riêng cho sinh viên (Stat Cards)
+     */
+    public function getStudentGradingStatistics(Request $request)
+    {
+        $planId = $request->input('plan_id');
+        if (!$planId) return response()->json(['total' => 0, 'passed' => 0, 'failed' => 0]);
+
+        // Base Query (Copy logic join để đảm bảo chính xác)
+        $baseQuery = \App\Models\Nguoidung::query()
+            ->join('SINHVIEN', 'NGUOIDUNG.ID_NGUOIDUNG', '=', 'SINHVIEN.ID_NGUOIDUNG')
+            ->join('THANHVIEN_NHOM', 'NGUOIDUNG.ID_NGUOIDUNG', '=', 'THANHVIEN_NHOM.ID_NGUOIDUNG')
+            ->join('NHOM', 'THANHVIEN_NHOM.ID_NHOM', '=', 'NHOM.ID_NHOM')
+            ->leftJoin('DIEM_TONGKET', 'NHOM.ID_NHOM', '=', 'DIEM_TONGKET.ID_NHOM')
+            ->leftJoin('DIEM_PHANBIEN', 'NHOM.ID_NHOM', '=', 'DIEM_PHANBIEN.ID_NHOM')
+            ->leftJoin('HOIDONG_NHOM', 'NHOM.ID_NHOM', '=', 'HOIDONG_NHOM.ID_NHOM')
+            ->where('NHOM.ID_KEHOACH', $planId)
+            ->whereHas('thanhvienNhom.nhom.phancongDetaiNhom.submissions', function ($q) {
+                $q->where('TRANGTHAI', 'Đã xác nhận');
+            });
+
+        $total = (clone $baseQuery)->count();
+
+        $passed = (clone $baseQuery)->where('DIEM_TONGKET.DIEM_TONG', '>=', 4.0)->count();
+
+        $failed = (clone $baseQuery)->where(function($q) {
+            $q->where('DIEM_TONGKET.DIEM_TONG', '<', 4.0)
+              ->orWhere('DIEM_PHANBIEN.DIEM', '=', 0)
+              ->orWhereNull('HOIDONG_NHOM.ID_HOIDONG');
+        })->count();
+
+        return response()->json([
+            'total' => $total,
+            'passed' => $passed,
+            'failed' => $failed
+        ]);
+    }
 }
