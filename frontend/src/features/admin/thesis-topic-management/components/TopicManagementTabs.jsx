@@ -305,7 +305,6 @@ const TopicManagementTabs = () => {
         toast.info("Tính năng xuất danh sách đang phát triển.");
     };
 
-    // [NEW] Bulk Action Logic
     const handleBulkApproveClick = () => {
         const selectedCount = Object.keys(rowSelection).length;
         if (selectedCount === 0) return;
@@ -315,27 +314,6 @@ const TopicManagementTabs = () => {
     const confirmBulkApprove = async () => {
         setIsBulkApproving(true);
         try {
-            // Lấy danh sách ID từ rowSelection (key của object rowSelection là index, cần map sang ID thực)
-            // DataTable của Tanstack Table lưu rowSelection theo id của row.
-            // Nếu không set getRowId, mặc định là index.
-            // Cách tốt nhất là duyệt qua pagedData hoặc allFiltered để lấy ID.
-            
-            // Tuy nhiên, processedData.pagedData chỉ chứa trang hiện tại. 
-            // rowSelection chứa state của toàn bộ bảng nếu enableRowSelection được cấu hình đúng.
-            
-            // Lấy ra các row ID được chọn (ở đây row ID = ID_DETAI nếu ta cấu hình getRowId cho DataTable, 
-            // hoặc ta phải map từ index nếu dùng mặc định).
-            // Để an toàn, ta sẽ filter từ processedData.allFiltered dựa trên trạng thái rowSelection.
-            
-            // Ở component DataTable, ta truyền data là processedData.pagedData
-            // Nên rowSelection chỉ chứa index của trang hiện tại (nếu manualPagination)
-            
-            // CÁCH FIX: Trong DataTable, row.original chứa dữ liệu gốc. 
-            // Chúng ta cần lấy các item được chọn từ dữ liệu hiện có.
-            
-            // Đơn giản nhất: Duyệt qua processedData.pagedData và check rowSelection
-            // Lưu ý: rowSelection object keys là row index (string).
-            
             const selectedIds = Object.keys(rowSelection).map(index => {
                  const row = processedData.pagedData[parseInt(index)];
                  return row ? row.ID_DETAI : null;

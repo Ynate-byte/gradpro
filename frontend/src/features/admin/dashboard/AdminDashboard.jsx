@@ -416,7 +416,7 @@ export default function AdminDashboard() {
     }
 
     return (
-        <div className="p-4 md:px-8 max-w-[1800px] mx-auto h-full overflow-y-auto bg-gray-50/30 dark:bg-background">      
+        <div className="p-4 md:px-8 h-full overflow-y-auto bg-gray-50/30 dark:bg-background">      
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b pb-4 mb-6 gap-4">
                 <div>
                     <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">

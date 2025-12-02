@@ -73,9 +73,6 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import RichTextEditor from "@/components/ui/RichTextEditor"
 
-// ──────────────────────────────────────────────────────────────
-// FIX LAG 1: Wrapper Debounce cho Input thường
-// ──────────────────────────────────────────────────────────────
 const DebouncedInput = React.memo(({ value, onChange, onBlur, ...props }) => {
   const [localValue, setLocalValue] = useState(value ?? '');
 
@@ -112,9 +109,6 @@ const DebouncedInput = React.memo(({ value, onChange, onBlur, ...props }) => {
   );
 });
 
-// ──────────────────────────────────────────────────────────────
-// FIX LAG 2: Wrapper Debounce cho RichTextEditor
-// ──────────────────────────────────────────────────────────────
 const DebouncedRichTextEditor = React.memo(({ value, onChange }) => {
   const [localValue, setLocalValue] = useState(value ?? '');
 
@@ -1142,13 +1136,11 @@ export default function PlanFormPage() {
               <motion.div
                  className={cn(
                    "lg:col-span-1 lg:sticky",
-                   // [FIX] Điều chỉnh top cho sticky khi nằm trong scroll container
                    "lg:top-0", 
                    "lg:flex lg:flex-col lg:justify-center",
                    "transition-all duration-300 ease-out",
-                   // Logic isScrolled sẽ làm giảm chiều cao khi cuộn
                    isScrolled
-                     ? "lg:scale-95 lg:origin-top" // Ví dụ: Thu nhỏ nhẹ
+                     ? "lg:scale-95 lg:origin-top"
                      : "" 
                  )}
                 initial={{ opacity: 0, x: -20 }}

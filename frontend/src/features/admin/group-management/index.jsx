@@ -207,7 +207,6 @@ export default function GroupAdminPage() {
                         icon={Users}
                         title="SV chưa có nhóm"
                         value={stats?.studentsWithoutGroup}
-                        // [FIX] Sửa prop onAction thành onClick để khớp với StatCard dùng chung
                         onClick={() => setIsUngroupedStudentOpen(true)}
                         iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
                         iconColorClass="text-yellow-600 dark:text-yellow-400"
@@ -219,7 +218,6 @@ export default function GroupAdminPage() {
                         icon={UserX}
                         title="SV chưa đăng nhập"
                         value={stats?.inactiveStudents}
-                        // [FIX] Sửa prop onAction thành onClick để khớp với StatCard dùng chung
                         onClick={() => setIsInactiveStudentOpen(true)}
                         iconBgClass="bg-orange-100 dark:bg-orange-900/30"
                         iconColorClass="text-orange-600 dark:text-orange-400"

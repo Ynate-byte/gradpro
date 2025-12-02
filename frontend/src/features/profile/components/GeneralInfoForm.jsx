@@ -78,11 +78,10 @@ export function GeneralInfoForm() {
             let className = '';
 
             if (svData) {
-                // [FIX] Kiểm tra kỹ cả key hoa và thường
                 const rawId = svData.ID_CHUYENNGANH ?? svData.id_chuyennganh;
                 
                 if (rawId !== null && rawId !== undefined) {
-                    majorId = String(rawId); // Chuyển sang chuỗi để khớp với Select
+                    majorId = String(rawId);
                 }
                 
                 className = svData.TEN_LOP || svData.ten_lop || '';
@@ -262,11 +261,10 @@ export function GeneralInfoForm() {
                                                     </div>
                                                 </FormControl>
                                                 <SelectContent>
-                                                    {/* [FIX QUAN TRỌNG] Xử lý map dữ liệu an toàn với cả key hoa và thường */}
                                                     {chuyenNganhs.map((cn) => {
                                                         const id = cn.ID_CHUYENNGANH ?? cn.id_chuyennganh;
                                                         const name = cn.TEN_CHUYENNGANH ?? cn.ten_chuyennganh;
-                                                        if (!id) return null; // Bỏ qua nếu không có ID
+                                                        if (!id) return null;
                                                         
                                                         return (
                                                             <SelectItem key={id} value={String(id)}>

@@ -14,49 +14,66 @@ use ZipArchive;
 class FileManagerController extends Controller
 {
     /**
-     * Lấy danh sách file và thư mục (kèm Mapping tên hiển thị từ DB)
+     * Lấy danh sách file và thư mục.
+     * Thực hiện ánh xạ (mapping) từ tên thư mục hệ thống (ID) sang tên hiển thị (Tên đề tài/Nhóm) từ Database.
      */
     public function index(Request $request)
     {
-        // 1. Check quyền (Admin, Giáo vụ, Trưởng khoa)
+        // 1. Kiểm tra quyền hạn (Chỉ Admin, Giáo vụ, Trưởng khoa mới được truy cập)
         if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
         try {
             $path = $request->input('folder', '/');
-            // Chuẩn hóa đường dẫn
-            if ($path === 'root' || $path === '' || $path === null) $path = '/';
-            // Chặn traverse path (../)
-            if (str_contains($path, '..')) return response()->json(['message' => 'Invalid path'], 400);
+
+            // Chuẩn hóa đường dẫn đầu vào
+            if ($path === 'root' || $path === '' || $path === null) {
+                $path = '/';
+            }
+
+            // Bảo mật: Chặn hành vi path traversal (dùng ../ để truy cập thư mục hệ thống)
+            if (str_contains($path, '..')) {
+                return response()->json(['message' => 'Invalid path'], 400);
+            }
 
             $disk = Storage::disk('public');
             
-            // Nếu folder không tồn tại, quay về root
-            if (!$disk->exists($path)) $path = '/';
+            // Nếu thư mục yêu cầu không tồn tại, quay về thư mục gốc
+            if (!$disk->exists($path)) {
+                $path = '/';
+            }
 
-            // 2. Lấy danh sách thô từ ổ cứng
+            // 2. Lấy danh sách thô (đường dẫn vật lý) từ ổ cứng
             $rawDirs = $disk->directories($path);
             $rawFiles = $disk->files($path);
 
             // ====================================================
-            // 🟡 PHẦN 1: MAPPING TÊN THƯ MỤC (PLAN / GROUP)
+            // 🟡 PHẦN 1: XỬ LÝ MAPPING TÊN THƯ MỤC (PLAN / GROUP)
             // ====================================================
             $planIds = [];
             $groupIds = [];
 
-            // Quét ID từ tên thư mục để query DB 1 lần
+            // Quét tên các thư mục để lấy ID phục vụ query DB (giảm thiểu số lần query)
             foreach ($rawDirs as $dirPath) {
                 $dirName = basename($dirPath);
+
+                // Regex bắt pattern "plan_123"
                 if (preg_match('/^plan_(\d+)$/', $dirName, $matches)) {
                     $planIds[] = $matches[1];
-                } elseif (preg_match('/^group_(\d+)$/', $dirName, $matches)) {
+                } 
+                // Regex bắt pattern "group_456"
+                elseif (preg_match('/^group_(\d+)$/', $dirName, $matches)) {
                     $groupIds[] = $matches[1];
                 }
             }
 
-            $plans = !empty($planIds) ? KehoachKhoaluan::whereIn('ID_KEHOACH', $planIds)->pluck('TEN_DOT', 'ID_KEHOACH') : collect();
+            // Lấy thông tin Kế hoạch từ DB
+            $plans = !empty($planIds) 
+                ? KehoachKhoaluan::whereIn('ID_KEHOACH', $planIds)->pluck('TEN_DOT', 'ID_KEHOACH') 
+                : collect();
             
+            // Lấy thông tin Nhóm và Đề tài từ DB
             $groups = collect();
             if (!empty($groupIds)) {
                 $groups = Nhom::with(['phancongDetaiNhom.detai'])
@@ -68,10 +85,10 @@ class FileManagerController extends Controller
             $directories = [];
             foreach ($rawDirs as $dirPath) {
                 $dirName = basename($dirPath);
-                $displayName = $dirName; // Mặc định là tên gốc
+                $displayName = $dirName; // Mặc định hiển thị tên gốc
                 $metadata = null;
 
-                // Mapping tên Kế hoạch
+                // Ánh xạ tên thư mục Kế hoạch (VD: plan_1 -> 📂 KH: Kóa luận 2024)
                 if (preg_match('/^plan_(\d+)$/', $dirName, $matches)) {
                     $id = $matches[1];
                     if (isset($plans[$id])) {
@@ -79,7 +96,7 @@ class FileManagerController extends Controller
                         $metadata = "ID: plan_{$id}";
                     }
                 }
-                // Mapping tên Nhóm
+                // Ánh xạ tên thư mục Nhóm (VD: group_5 -> 👥 Nhóm 1 - Website Bán Hàng)
                 elseif (preg_match('/^group_(\d+)$/', $dirName, $matches)) {
                     $id = $matches[1];
                     if (isset($groups[$id])) {
@@ -102,22 +119,23 @@ class FileManagerController extends Controller
             }
 
             // ====================================================
-            // 🟢 PHẦN 2: MAPPING TÊN FILE TỪ DATABASE
+            // 🟢 PHẦN 2: XỬ LÝ MAPPING TÊN FILE TỪ DATABASE
             // ====================================================
             
-            // Lấy tên gốc từ bảng FILE_NOP_SANPHAM dựa trên đường dẫn hash
+            // Lấy tên gốc từ bảng FILE_NOP_SANPHAM dựa trên đường dẫn hash/lưu trữ
             $dbSubmissionFiles = FileNopSanpham::whereIn('DUONG_DAN_HOAC_NOI_DUNG', $rawFiles)
                 ->pluck('TEN_FILE_GOC', 'DUONG_DAN_HOAC_NOI_DUNG');
 
             $files = [];
             foreach ($rawFiles as $file) {
-                if (str_starts_with(basename($file), '.')) continue; // Bỏ qua file ẩn (.gitignore)
+                // Bỏ qua các file ẩn hệ thống (ví dụ .gitignore)
+                if (str_starts_with(basename($file), '.')) continue; 
 
                 $realName = basename($file);
                 $displayName = $realName; 
                 $metadata = null;
 
-                // Nếu tìm thấy trong DB -> dùng tên gốc
+                // Nếu tìm thấy mapping trong DB -> hiển thị tên file gốc (dễ đọc cho người dùng)
                 if (isset($dbSubmissionFiles[$file])) {
                     $displayName = $dbSubmissionFiles[$file]; 
                     $metadata = "File nộp bài (" . substr($realName, 0, 8) . "...)"; 
@@ -149,16 +167,19 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Upload File
+     * Upload File lên hệ thống.
+     * Xử lý tự động đổi tên nếu file bị trùng lặp.
      */
     public function upload(Request $request)
     {
-        if (!$this->isAdmin() && !$this->isGiaoVu()) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!$this->isAdmin() && !$this->isGiaoVu()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $request->validate([
             'path' => 'required|string',
             'files' => 'required|array',
-            'files.*' => 'file|max:102400', // Max 100MB
+            'files.*' => 'file|max:102400', // Giới hạn 100MB mỗi file
         ]);
 
         $path = $request->input('path');
@@ -166,7 +187,8 @@ class FileManagerController extends Controller
 
         foreach ($request->file('files') as $file) {
             $filename = $file->getClientOriginalName();
-            // Tự động đổi tên nếu trùng (thêm số đếm)
+            
+            // Logic xử lý trùng tên: thêm số đếm (1), (2)...
             $i = 1;
             while (Storage::disk('public')->exists($path . '/' . $filename)) {
                 $filename = pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME) . " ($i)." . $file->getClientOriginalExtension();
@@ -181,15 +203,18 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Tạo thư mục mới
+     * Tạo thư mục mới.
      */
     public function createFolder(Request $request)
     {
-        if (!$this->isAdmin()) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $path = $request->input('path');
         $name = $request->input('name');
         
+        // Validate tên thư mục: chỉ cho phép chữ, số, gạch dưới, gạch ngang
         if (!preg_match('/^[a-zA-Z0-9_\-\s]+$/', $name)) {
             return response()->json(['message' => 'Tên thư mục không hợp lệ'], 400);
         }
@@ -204,24 +229,29 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Xóa file hoặc folder (Đơn lẻ)
+     * Xóa file hoặc thư mục (Xử lý đơn lẻ).
      */
     public function delete(Request $request)
     {
-        if (!$this->isAdmin()) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
         
         $path = $request->input('path');
+        
         return $this->performDelete($path) 
             ? response()->json(['message' => 'Đã xóa thành công'])
             : response()->json(['message' => 'Không tìm thấy file/thư mục'], 404);
     }
 
     /**
-     * Xóa hàng loạt (Bulk Delete)
+     * Xóa hàng loạt (Bulk Delete).
      */
     public function bulkDelete(Request $request)
     {
-        if (!$this->isAdmin()) return response()->json(['message' => 'Unauthorized'], 403);
+        if (!$this->isAdmin()) {
+            return response()->json(['message' => 'Unauthorized'], 403);
+        }
 
         $items = $request->input('items', []);
         $deletedCount = 0;
@@ -236,7 +266,8 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Tải xuống đơn lẻ (GET) - Hỗ trợ trả về tên gốc
+     * Tải xuống đơn lẻ (GET).
+     * Hỗ trợ trả về tên file gốc nếu có trong DB.
      */
     public function download(Request $request)
     {
@@ -247,23 +278,26 @@ class FileManagerController extends Controller
         $path = $request->query('path');
         $disk = Storage::disk('public');
 
-        if (!$disk->exists($path)) abort(404, 'File not found');
+        if (!$disk->exists($path)) {
+            abort(404, 'File not found');
+        }
 
-        // TRƯỜNG HỢP 1: Là File đơn lẻ -> Tải luôn (Stream)
+        // TRƯỜNG HỢP 1: Là File đơn lẻ -> Tải trực tiếp (Stream)
         if (is_file($disk->path($path))) {
-            // Tra cứu tên gốc từ DB
+            // Tra cứu tên gốc từ DB để khi tải về người dùng thấy tên đúng
             $dbFile = FileNopSanpham::where('DUONG_DAN_HOAC_NOI_DUNG', $path)->first();
             $downloadName = $dbFile ? $dbFile->TEN_FILE_GOC : basename($path);
 
             return $disk->download($path, $downloadName);
         }
 
-        // TRƯỜNG HỢP 2: Là Thư mục -> Nén Zip rồi tải
+        // TRƯỜNG HỢP 2: Là Thư mục -> Chuyển sang xử lý nén Zip
         return $this->processDownload([$path], basename($path));
     }
 
     /**
-     * Tải xuống hàng loạt (POST) - Nén Zip nhiều mục
+     * Tải xuống hàng loạt (POST).
+     * Nén nhiều file/thư mục thành 1 file Zip.
      */
     public function bulkDownload(Request $request)
     {
@@ -272,11 +306,13 @@ class FileManagerController extends Controller
         }
 
         $paths = $request->input('paths', []);
-        if (empty($paths)) return response()->json(['message' => 'No files selected'], 400);
+        if (empty($paths)) {
+            return response()->json(['message' => 'No files selected'], 400);
+        }
 
         $zipName = 'archive_' . date('Ymd_His');
         
-        // Nếu chỉ chọn 1 thư mục thì lấy tên thư mục đó làm tên zip
+        // Nếu chỉ chọn 1 thư mục thì lấy tên thư mục đó làm tên file zip
         if (count($paths) === 1) {
             $zipName = basename($paths[0]);
         }
@@ -285,9 +321,12 @@ class FileManagerController extends Controller
     }
 
     // ====================================================
-    // PRIVATE HELPERS (Xử lý Logic cốt lõi)
+    // PRIVATE HELPERS (Các hàm hỗ trợ xử lý Logic cốt lõi)
     // ====================================================
 
+    /**
+     * Thực hiện lệnh xóa vật lý trên ổ đĩa.
+     */
     private function performDelete($path)
     {
         $disk = Storage::disk('public');
@@ -301,17 +340,19 @@ class FileManagerController extends Controller
     }
 
     /**
-     * Helper xử lý tạo file Zip và trả về response download
-     * Logic: 
-     * 1. Gom tất cả file vật lý cần nén
-     * 2. Tra cứu tên gốc từ DB
-     * 3. Đổi tên file trong Zip (handle trùng tên)
+     * Helper xử lý tạo file Zip và trả về response download.
+     * Logic phức tạp: 
+     * 1. Gom tất cả file vật lý cần nén (kể cả trong thư mục con).
+     * 2. Tra cứu tên gốc từ DB để đổi tên file hash thành tên thật.
+     * 3. Xử lý trùng tên file trong file Zip.
      */
     private function processDownload(array $paths, $downloadName)
     {
         $disk = Storage::disk('public');
         
-        // Nếu là 1 file đơn lẻ thì tải luôn, không zip
+        
+
+        // Nếu danh sách chỉ có 1 file đơn lẻ thì tải luôn, không cần Zip
         if (count($paths) === 1 && is_file($disk->path($paths[0]))) {
             $path = $paths[0];
             $dbFile = FileNopSanpham::where('DUONG_DAN_HOAC_NOI_DUNG', $path)->first();
@@ -319,7 +360,7 @@ class FileManagerController extends Controller
             return $disk->download($path, $name);
         }
 
-        // Tạo thư mục tạm
+        // Tạo thư mục tạm để chứa file zip
         $tempDir = 'temp_zips';
         if (!$disk->exists($tempDir)) $disk->makeDirectory($tempDir);
 
@@ -329,10 +370,10 @@ class FileManagerController extends Controller
 
         $zipFilePath = $disk->path($tempDir . '/' . $downloadName);
 
-        // [BƯỚC 1] Lấy danh sách file cần nén (Map: Path vật lý => Relative path trong zip)
+        // [BƯỚC 1] Lấy danh sách toàn bộ file cần nén (Map: Path vật lý => Path tương đối trong zip)
         $allPhysicalFiles = $this->getAllPhysicalFiles($disk, $paths);
         
-        // [BƯỚC 2] Tra cứu tên gốc cho toàn bộ file này (Query 1 lần)
+        // [BƯỚC 2] Tra cứu tên gốc cho toàn bộ file này (Query 1 lần tối ưu hiệu năng)
         $nameMap = FileNopSanpham::whereIn('DUONG_DAN_HOAC_NOI_DUNG', array_keys($allPhysicalFiles))
             ->pluck('TEN_FILE_GOC', 'DUONG_DAN_HOAC_NOI_DUNG')
             ->toArray();
@@ -340,24 +381,26 @@ class FileManagerController extends Controller
         $zip = new ZipArchive;
         if ($zip->open($zipFilePath, ZipArchive::CREATE | ZipArchive::OVERWRITE) === TRUE) {
             
-            // Mảng theo dõi tên file trong zip để xử lý trùng lặp
+            // Mảng theo dõi tên file đã thêm vào zip để xử lý trùng lặp
             $usedZipNames = []; 
 
             foreach ($allPhysicalFiles as $physicalPath => $relativePathFolder) {
-                // Lấy tên file gốc từ DB, nếu không có thì dùng tên hash
+                // Lấy tên file gốc từ DB, nếu không có thì dùng tên hash/tên vật lý
                 $originalFilename = $nameMap[$physicalPath] ?? basename($physicalPath);
                 
-                // Tạo đường dẫn đầy đủ trong file Zip
+                // Tạo đường dẫn đầy đủ bên trong file Zip
                 // Ví dụ: $relativePathFolder="group_1/", $originalFilename="BaoCao.pdf"
                 $zipEntryPath = $relativePathFolder . $originalFilename;
 
-                // [XỬ LÝ TRÙNG TÊN] Ví dụ: 2 file khác nhau cùng tên "BaoCao.pdf"
+                // [XỬ LÝ TRÙNG TÊN TRONG ZIP]
+                // Ví dụ: 2 file khác nhau (hash khác nhau) nhưng cùng tên gốc "BaoCao.pdf".
+                // Cần đổi thành "BaoCao (1).pdf" để tránh ghi đè hoặc lỗi zip.
                 while (isset($usedZipNames[$zipEntryPath])) {
                     $info = pathinfo($originalFilename);
                     $ext = $info['extension'] ?? '';
                     $name = $info['filename'];
                     $count = $usedZipNames[$zipEntryPath] + 1;
-                    $usedZipNames[$zipEntryPath]++; // Tăng biến đếm
+                    $usedZipNames[$zipEntryPath]++; // Tăng biến đếm cho path cũ
                     
                     // Tạo tên mới: BaoCao (1).pdf
                     $originalFilename = "{$name} ({$count})" . ($ext ? ".{$ext}" : "");
@@ -374,13 +417,13 @@ class FileManagerController extends Controller
             abort(500, 'Could not create ZIP file');
         }
 
-        // Trả về file và xóa sau khi gửi xong
+        // Trả về file download và tự động xóa file zip tạm sau khi gửi xong
         return response()->download($zipFilePath)->deleteFileAfterSend(true);
     }
 
     /**
-     * Đệ quy lấy tất cả file vật lý từ danh sách input paths
-     * Trả về mảng: ['path/vat/ly/file.pdf' => 'folder/trong/zip/']
+     * Đệ quy lấy tất cả file vật lý từ danh sách input paths.
+     * Trả về mảng dạng: ['path/vat/ly/file.pdf' => 'folder/trong/zip/']
      */
     private function getAllPhysicalFiles($disk, $inputPaths)
     {
@@ -391,16 +434,16 @@ class FileManagerController extends Controller
                 // Nếu input là file lẻ, nó nằm ngay root của zip (relative path rỗng)
                 $results[$rootPath] = ''; 
             } else {
-                // Nếu input là folder, lấy tất cả file bên trong
+                // Nếu input là folder, lấy tất cả file bên trong (đệ quy của Laravel Storage)
                 $files = $disk->allFiles($rootPath);
                 $rootFolderName = basename($rootPath); // Ví dụ: group_1
 
                 foreach ($files as $file) {
-                    // Tính đường dẫn tương đối để giữ cấu trúc thư mục
+                    // Tính đường dẫn tương đối để giữ cấu trúc thư mục trong file zip
                     // $file = "submissions/plan_1/group_1/code/index.php"
                     // $rootPath = "submissions/plan_1/group_1"
                     
-                    // Lấy phần đuôi: "code/index.php"
+                    // Cắt bỏ phần rootPath để lấy phần đuôi: "code/index.php"
                     $subPath = substr($file, strlen($rootPath) + 1); 
                     $dirName = dirname($subPath); // "code"
                     
@@ -419,6 +462,9 @@ class FileManagerController extends Controller
         return $results;
     }
 
+    /**
+     * Format dung lượng file sang đơn vị dễ đọc (KB, MB, GB).
+     */
     private function formatSize($bytes)
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -426,6 +472,9 @@ class FileManagerController extends Controller
         return round($bytes, 2) . ' ' . $units[$i];
     }
 
+    /**
+     * Tạo breadcrumbs điều hướng thư mục.
+     */
     private function makeBreadcrumbs($path)
     {
         $parts = array_filter(explode('/', $path));

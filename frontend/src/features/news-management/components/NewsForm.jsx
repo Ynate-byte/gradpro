@@ -33,23 +33,19 @@ const NewsForm = ({ news, onSuccess, onCancel }) => {
     });
     const [fileName, setFileName] = useState("");
     const [loading, setLoading] = useState(false);
-    const [isFetchingData, setIsFetchingData] = useState(false); // [NEW] State loading khi fetch dữ liệu cũ
+    const [isFetchingData, setIsFetchingData] = useState(false);
     const [errorMessage, setErrorMessage] = useState("");
     
     const pdfInputRef = useRef(null);
     const coverInputRef = useRef(null);
 
-    // [FIXED] Logic load dữ liệu: Nếu có ID, gọi API lấy chi tiết
     useEffect(() => {
         const loadNewsData = async () => {
             if (news?.id) {
                 setIsFetchingData(true);
                 try {
-                    // Gọi API lấy dữ liệu mới nhất từ server
                     const res = await axios.get(`/news/${news.id}`);
                     const data = res.data;
-
-                    // Parse target_roles
                     let roles = ['ALL'];
                     if (data.target_roles) {
                          try { 

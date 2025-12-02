@@ -264,9 +264,7 @@ export function SubmissionDialog({ isOpen, setIsOpen, phancong }) {
         </DialogHeader>
 
         {/* BODY (Split View) */}
-        <div className="flex-1 flex overflow-hidden">
-            
-            {/* LEFT: FORM (Fixed width 400px) */}
+        <div className="flex-1 flex overflow-hidden">            
             <div className="w-[400px] border-r border-border bg-muted/10 flex flex-col shrink-0">
                 <ScrollArea className="flex-1">
                     <div className="p-5 space-y-6">
@@ -304,7 +302,6 @@ export function SubmissionDialog({ isOpen, setIsOpen, phancong }) {
                                     />
                                 </div>
 
-                                {/* FIX QUAN TRỌNG: type="button" để tránh reset connection */}
                                 <Button 
                                     type="button" 
                                     onClick={handleSubmit} 

@@ -61,8 +61,6 @@ class SubmissionController extends Controller
                 'phancong.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN' 
             ]);
 
-            // --- [FIX QUAN TRỌNG: LOGIC PHÂN QUYỀN & LỌC] ---
-
             // 1. Nếu request có lecturer_id (do Frontend gửi lên), LỌC LUÔN theo đó
             if ($request->filled('lecturer_id')) {
                 $gvId = $request->lecturer_id;
@@ -149,7 +147,6 @@ class SubmissionController extends Controller
         $planId = $request->plan_id;
         $user = Auth::user();
 
-        // --- [FIX] XÁC ĐỊNH QUYỀN HẠN ĐỂ LỌC SỐ LIỆU ---
         // Nếu không phải Admin/GVu/TKhoa thì lấy ID giảng viên để lọc
         $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
         $gvId = ($user->giangvien && !$isManager) ? $user->giangvien->ID_GIANGVIEN : null;
@@ -159,7 +156,6 @@ class SubmissionController extends Controller
         $assignmentsQuery = PhancongDetaiNhom::query()
             ->where('TRANGTHAI', 'Đang thực hiện');
 
-        // [FIX] Nếu là GV thường -> Chỉ đếm nhóm mình hướng dẫn
         if ($gvId) {
             $assignmentsQuery->where('ID_GVHD', $gvId);
         }
@@ -177,7 +173,6 @@ class SubmissionController extends Controller
             ->whereIn('TRANGTHAI', ['Chờ xác nhận', 'Đã xác nhận', 'Yêu cầu nộp lại'])
             ->distinct('ID_PHANCONG');
 
-        // [FIX] Nếu là GV thường -> Chỉ đếm bài nộp của nhóm mình
         if ($gvId) {
             $submittedQuery->whereHas('phancong', function($q) use ($gvId) {
                 $q->where('ID_GVHD', $gvId);
@@ -195,7 +190,6 @@ class SubmissionController extends Controller
         // 3. Tính số lượng theo từng trạng thái cụ thể
         $baseSubmissionQuery = NopSanpham::query();
 
-        // [FIX] Nếu là GV thường -> Chỉ đếm bài nộp của nhóm mình
         if ($gvId) {
             $baseSubmissionQuery->whereHas('phancong', function($q) use ($gvId) {
                 $q->where('ID_GVHD', $gvId);

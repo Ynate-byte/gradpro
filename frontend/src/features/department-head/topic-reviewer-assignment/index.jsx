@@ -436,7 +436,6 @@ const TopicReviewerAssignmentPage = () => {
     };
 
     return (
-        // [FIX SCROLL] Thêm h-full và overflow-y-auto
         <div className="h-full overflow-y-auto p-4 md:p-8 bg-muted/10">
             <div className="max-w-[1600px] mx-auto space-y-6">
                 <Card>

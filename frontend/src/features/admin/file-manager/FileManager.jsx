@@ -135,7 +135,6 @@ export default function FileManager() {
     }, [filteredData]);
 
     return (
-        // [LAYOUT FIX] h-full và overflow-hidden để container cha kiểm soát cuộn
         <div className="h-full flex flex-col bg-muted/10 overflow-hidden animate-in fade-in duration-500">
             
             {/* --- HEADER --- */}
@@ -257,7 +256,6 @@ export default function FileManager() {
             )}
 
             {/* --- CONTENT AREA --- */}
-            {/* [LAYOUT FIX] flex-1 và overflow-y-auto ở đây để cuộn nội dung */}
             <div className="flex-1 overflow-y-auto px-6 pb-6">
                 {isLoading ? (
                     <div className="flex h-60 items-center justify-center text-muted-foreground flex-col gap-3">

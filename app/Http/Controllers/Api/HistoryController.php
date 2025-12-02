@@ -118,7 +118,6 @@ class HistoryController extends Controller
         $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
         $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
         
-        // Fix lỗi check GVHD: Eager load hoặc query trực tiếp để tránh null pointer
         $isGvhd = false;
         if ($user->giangvien) {
             $isGvhd = \App\Models\PhancongDetaiNhom::where('ID_NHOM', $groupId)
@@ -299,7 +298,6 @@ class HistoryController extends Controller
 
     /**
      * Lấy dữ liệu so sánh thông minh.
-     * [FIXED] Xử lý vấn đề thời gian không khớp khi chỉnh sửa nhanh ngay sau khi tạo
      */
     public function getComparisonData(Request $request, $topicId)
     {
@@ -321,7 +319,6 @@ class HistoryController extends Controller
              // Nếu có Admin yêu cầu: Lấy mốc đó, trừ đi 5 phút để tránh lệch giây
              $cutoffDate = \Carbon\Carbon::parse($lastAdminAction->NGAY_TAO)->subMinutes(5);
         } else {
-             // [FIX QUAN TRỌNG]: Nếu chưa có Admin tác động (tức là Đề tài mới tạo)
              // Lấy ngày tạo đề tài và TRỪ ĐI 24 GIỜ.
              // Điều này đảm bảo dù bạn vừa tạo xong và sửa ngay lập tức (cách nhau 1s),
              // hệ thống vẫn coi log sửa đó là "nằm sau" mốc thời gian này.
@@ -372,7 +369,7 @@ class HistoryController extends Controller
     {
         $query = LichSuHoatDong::where(function($q) use ($topicId) {
                 $q->whereJsonContains('CHI_TIET->topic_id', (int)$topicId)
-                  ->orWhereJsonContains('CHI_TIET->topic_id', (string)$topicId) // [FIX] Hỗ trợ string
+                  ->orWhereJsonContains('CHI_TIET->topic_id', (string)$topicId)
                   ->orWhereJsonContains('CHI_TIET->model_id', (int)$topicId);
             })
             ->with('nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN')

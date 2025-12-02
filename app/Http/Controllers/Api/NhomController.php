@@ -342,7 +342,6 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn đã gửi yêu cầu tới nhóm này rồi.'], 409);
         }
 
-        // [FIX] Thêm Transaction và Log
         DB::transaction(function () use ($nhom, $user, $request) {
             YeucauVaoNhom::create([
                 'ID_NHOM' => $nhom->ID_NHOM,
@@ -392,7 +391,6 @@ class NhomController extends Controller
             return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
         }
 
-        // [FIX] Check dynamic max members
         $nhom->load('kehoach');
         $maxMembers = $nhom->kehoach->SO_THANHVIEN_TOIDA ?? 4;
 
@@ -443,7 +441,6 @@ class NhomController extends Controller
              return response()->json(['message' => 'Bạn đã gửi lời mời tới sinh viên này rồi.'], 409);
         }
 
-        // [FIX] Transaction & Log
         DB::transaction(function () use ($nhom, $memberToInvite, $user, $validated) {
             $invite = LoimoiNhom::create([
                 'ID_NHOM' => $nhom->ID_NHOM,
@@ -532,7 +529,6 @@ class NhomController extends Controller
             ->whereIn('ID_NGUOI_DUOCMOI', $userIds)
             ->pluck('ID_NGUOI_DUOCMOI');
 
-        // [FIX 1] Khai báo $invitesToCreate và $realUserIds
         $invitesToCreate = [];
         $realUserIds = []; // Mảng lưu ID người được mời để gửi thông báo sau
 
@@ -558,7 +554,6 @@ class NhomController extends Controller
             return response()->json(['message' => 'Các sinh viên này đã được mời trước đó và đang chờ phản hồi.'], 409);
         }
 
-        // [FIX 2] Sử dụng đúng biến $invitesToCreate và $realUserIds trong transaction
         DB::transaction(function () use ($invitesToCreate, $nhom, $realUserIds, $user) {
             LoimoiNhom::insert($invitesToCreate);
             

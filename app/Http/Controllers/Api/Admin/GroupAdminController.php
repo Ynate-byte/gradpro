@@ -744,7 +744,6 @@ class GroupAdminController extends Controller
 
     /**
      * Gán một đề tài cụ thể cho nhóm (Admin/Giáo vụ thực hiện).
-     * [FIXED] Cập nhật lại logic tính SO_NHOM_HIENTAI khi đổi đề tài.
      */
     public function assignTopic(Request $request, Nhom $nhom)
     {
@@ -764,9 +763,7 @@ class GroupAdminController extends Controller
             return response()->json(['message' => 'Chỉ có thể gán các đề tài đã được duyệt.'], 400);
         }
 
-        DB::transaction(function () use ($nhom, $topic) {
-            // --- [START LOGIC FIX] ---
-            
+        DB::transaction(function () use ($nhom, $topic) {            
             // Kiểm tra xem nhóm này hiện tại đang có đề tài nào không
             $oldAssignment = \App\Models\PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)->first();
 

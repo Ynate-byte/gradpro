@@ -125,8 +125,6 @@ export function GroupDataTable({
                 // Layout props
                 flexLayout={flexLayout}
                 className={className}
-                
-                // [FIX] Xóa border-none shadow-none để hiển thị lại viền
                 containerClassName="h-full bg-card" 
                 
                 // Toolbar props

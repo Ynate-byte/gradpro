@@ -134,7 +134,6 @@ export default function BackupPage() {
     const totalBackups = backups ? backups.length : 0;
 
     return (
-        // [LAYOUT FIX] Sử dụng h-full và overflow-hidden cho container chính
         <div className="h-full flex flex-col bg-muted/10 overflow-hidden">
             
             {/* Scrollable Content Area */}

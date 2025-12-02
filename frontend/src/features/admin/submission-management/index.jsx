@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { BookCopy, CheckCircle, Clock, AlertCircle, FileCheck, FileWarning, Search, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"; // [FIX] Import TabsContent nếu cần dùng, nhưng ở đây ta dùng Tabs làm controller cho DataTable
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import StatCard from '@/components/shared/StatCard';
 import { useDebounce } from '@/hooks/useDebounce';
 import { Input } from "@/components/ui/input";

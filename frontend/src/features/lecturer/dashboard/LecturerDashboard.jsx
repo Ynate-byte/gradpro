@@ -387,14 +387,9 @@ export default function LecturerDashboard() {
     const topicsCreated = myQuotaData?.topics_created || 0;
 
     return (
-        // [FIX SCROLL] Thêm h-full và overflow-y-auto
         <div className="h-full overflow-y-auto bg-gray-50/50 dark:bg-background p-4 md:p-8">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 pb-10">
-                
-                {/* --- CỘT TRÁI (2/3): KẾ HOẠCH & NHẮC NHỞ & DANH SÁCH NHÓM --- */}
-                <div className="xl:col-span-2 space-y-8">
-                    
-                    {/* 1. Timeline các kế hoạch đang chạy */}
+                <div className="xl:col-span-2 space-y-8">                    
                     <section>
                         <h2 className="text-lg font-bold text-foreground mb-3 flex items-center gap-2">
                             <Target className="w-5 h-5 text-blue-600" />

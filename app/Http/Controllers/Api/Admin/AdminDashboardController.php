@@ -53,12 +53,12 @@ class AdminDashboardController extends Controller
             $totalGroups = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->count();
             $groupsWithTopic = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->has('phancongDetaiNhom')->count();
             
-            // [CẬP NHẬT YÊU CẦU 1] Chỉ đếm Đề tài "Đã duyệt"
+            //Chỉ đếm Đề tài "Đã duyệt"
             $approvedTopics = Detai::where('ID_KEHOACH', $plan->ID_KEHOACH)
                 ->where('TRANGTHAI', 'Đã duyệt')
                 ->count();
             
-            // Target topics (Quota)
+            // topics Quota
             $targetTopics = QuotaKhoaBomon::where('ID_KEHOACH', $plan->ID_KEHOACH)->sum('SO_DETAI_QUOTA');
             $totalStudents = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)->count();
             if ($targetTopics == 0 && $totalStudents > 0) {
@@ -70,14 +70,12 @@ class AdminDashboardController extends Controller
                 ->leftJoin('DETAI', function($join) use ($plan) {
                     $join->on('KHOA_BOMON.ID_KHOA_BOMON', '=', 'DETAI.ID_KHOA_BOMON')
                          ->where('DETAI.ID_KEHOACH', '=', $plan->ID_KEHOACH)
-                         ->where('DETAI.TRANGTHAI', '=', 'Đã duyệt'); // Chỉ tính đề tài đã duyệt
+                         ->where('DETAI.TRANGTHAI', '=', 'Đã duyệt');
                 })
                 ->select(
                     'KHOA_BOMON.ID_KHOA_BOMON',
                     'KHOA_BOMON.TEN_KHOA_BOMON as name',
-                    // Đếm số đề tài ĐÃ DUYỆT thuộc bộ môn này
                     DB::raw('COUNT(DETAI.ID_DETAI) as da_tao'),
-                    // Đếm số đề tài đã được giao cho nhóm
                     DB::raw('SUM(CASE WHEN DETAI.SO_NHOM_HIENTAI > 0 THEN 1 ELSE 0 END) as da_giao')
                 )
                 ->groupBy('KHOA_BOMON.ID_KHOA_BOMON', 'KHOA_BOMON.TEN_KHOA_BOMON')
@@ -95,7 +93,7 @@ class AdminDashboardController extends Controller
                 'phase_actors' => $currentPhase ? $currentPhase->VAITRO_THUCHIEN : null,
                 'groups_registered' => $groupsWithTopic,
                 'groups_total' => $totalGroups,
-                'topics_current' => $approvedTopics, // Trả về số lượng Đã duyệt
+                'topics_current' => $approvedTopics,
                 'topics_target' => $targetTopics,
                 'department_stats' => $deptStats 
             ];
@@ -121,7 +119,6 @@ class AdminDashboardController extends Controller
             $workflow['topic_percent'] = $totalTopicsAll > 0 ? round(($approvedTopicsAll / $totalTopicsAll) * 100) : 0;
 
             // C. Council & Grading
-            // [CẬP NHẬT YÊU CẦU 2] Workflow cho Hội đồng chỉ tính trên nhóm ĐÃ NỘP BÀI XONG
             $totalGroupsAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)->count();
             
             $groupsReadyForCouncil = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
@@ -176,7 +173,7 @@ class AdminDashboardController extends Controller
     }
 
     /**
-     * API Nhắc nhở & Cảnh báo thông minh (To-Do List)
+     * Nhắc nhở & Cảnh báo thông minh
      */
     public function getReminders(Request $request)
     {
@@ -304,7 +301,6 @@ class AdminDashboardController extends Controller
         }
 
         // B. Nhóm chưa có Hội đồng
-        // [CẬP NHẬT YÊU CẦU 2] Cũng áp dụng logic chỉ đếm nhóm đã nộp bài cho phần nhắc nhở
         $groupsMissingCouncil = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
             ->whereHas('phancongDetaiNhom.submissions', function ($q) {
                 $q->where('TRANGTHAI', 'Đã xác nhận');

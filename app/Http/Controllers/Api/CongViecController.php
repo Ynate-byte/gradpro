@@ -231,7 +231,6 @@ class CongViecController extends Controller
             'ID_COT' => 'sometimes|exists:COT_CONGVIEC,ID_COT', // Cho phép đổi cột trong dialog
         ]);
 
-        // [FIX LOG 2 LẦN] Kiểm tra xem có gì thay đổi không
         $congviec->fill($validated);
 
         
@@ -298,7 +297,6 @@ class CongViecController extends Controller
             'sibling_task_ids' => 'nullable|array', 
         ]);
 
-        // [FIX LOG] Lưu trạng thái cột cũ
         $oldColumnId = $congviec->ID_COT;
         $newColumnId = $validated['ID_COT_MOI'];
 

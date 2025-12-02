@@ -12,7 +12,6 @@ const InlineDiff = ({ oldValue = "", newValue = "", className }) => {
         return <div className={className}>{strNew}</div>;
     }
 
-    // 2. [FIX]: Trường hợp CŨ là RỖNG, MỚI có dữ liệu
     // Hiển thị rõ icon báo "Trước đó để trống"
     if (!strOld && strNew) {
         return (
@@ -31,7 +30,6 @@ const InlineDiff = ({ oldValue = "", newValue = "", className }) => {
         );
     }
 
-    // 3. [FIX]: Trường hợp CŨ có dữ liệu, MỚI là RỖNG (Bị xóa hết)
     if (strOld && !strNew) {
         return (
             <div className={`flex flex-col gap-1 ${className}`}>

@@ -21,7 +21,6 @@ class ProfileController extends Controller
         /** @var \App\Models\Nguoidung $user */
         $user = Auth::user();
 
-        // [FIX] Load quan hệ sinh viên/giảng viên để tránh lỗi null khi truy cập
         $user->load(['sinhvien', 'giangvien']);
 
         // 1. Validate dữ liệu
@@ -33,7 +32,6 @@ class ProfileController extends Controller
                 // Bỏ qua check trùng nếu là email của chính user này
                 Rule::unique('NGUOIDUNG', 'EMAIL')->ignore($user->ID_NGUOIDUNG, 'ID_NGUOIDUNG')
             ],
-            // [FIX] Regex đơn giản hóa: chỉ chấp nhận 10-11 chữ số, không khoảng trắng
             'SO_DIENTHOAI' => ['required', 'regex:/^[0-9]{10,11}$/'],
             
             // ID_CHUYENNGANH chỉ validate nếu có gửi lên và khác null
@@ -54,7 +52,6 @@ class ProfileController extends Controller
 
             // 3. Nếu là Sinh viên (có bản ghi sinhvien), cập nhật Chuyên ngành
             if ($user->sinhvien) {
-                // [FIX LOGIC] Kiểm tra request có chứa key ID_CHUYENNGANH không
                 if ($request->has('ID_CHUYENNGANH')) {
                     $chuyenNganhId = $request->input('ID_CHUYENNGANH');
                     

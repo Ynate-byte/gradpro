@@ -21,7 +21,6 @@ export default function AppearancePage() {
     ];
 
     return (
-        // [FIX] Thêm h-full và overflow-y-auto để kích hoạt cuộn
         <div className="h-full overflow-y-auto">
             <div className="max-w-5xl mx-auto space-y-10 py-6 px-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                 <div className="space-y-4">

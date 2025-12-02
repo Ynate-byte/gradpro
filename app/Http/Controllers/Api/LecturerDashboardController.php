@@ -29,7 +29,6 @@ class LecturerDashboardController extends Controller
 
         // --- 1. THỐNG KÊ CÁC CON SỐ ---
 
-        // [FIX LỖI] Số nhóm đang hướng dẫn
         // Đếm tất cả các nhóm mà GV này là GVHD, không quan tâm kế hoạch đang ở trạng thái nào,
         // miễn là phân công chưa bị hủy.
         $nhomHuongDanCount = PhancongDetaiNhom::where('ID_GVHD', $giangvienId)

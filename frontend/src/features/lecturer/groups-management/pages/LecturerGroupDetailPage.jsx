@@ -130,9 +130,8 @@ export default function LecturerGroupDetailPage() {
     const currentPlan = groupDetails.kehoach; 
 
     return (
-        // [FIX SCROLL] Thêm h-full và overflow-y-auto vào container chính
         <div className="h-full overflow-y-auto bg-gray-50/50 dark:bg-background p-4 md:p-8">
-            <div className="max-w-6xl mx-auto space-y-6 pb-20">
+            <div className="mx-auto space-y-6 pb-20">
                 <Button variant="outline" size="sm" onClick={() => navigate(-1)}>
                     <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại Quản lý Nhóm
                 </Button>

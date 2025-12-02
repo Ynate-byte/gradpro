@@ -159,13 +159,13 @@ class NewsController extends Controller
             // Xử lý file PDF
             if ($request->hasFile('pdf_file')) {
                 $path = $request->file('pdf_file')->store('news/pdfs', 'public');
-                $data['pdf_url'] = Storage::url($path);
+                $data['pdf_file'] = $path;
             }
 
             // Xử lý ảnh bìa
             if ($request->hasFile('cover_image')) {
                 $path = $request->file('cover_image')->store('news/covers', 'public');
-                $data['cover_image_url'] = Storage::url($path);
+                $data['cover_image'] = $path;
             }
 
             // Tạo bản ghi News
@@ -273,39 +273,38 @@ class NewsController extends Controller
 
             // Xử lý PDF (Thay thế hoặc Xóa)
             if ($request->hasFile('pdf_file')) {
-                // Xóa file cũ
-                if ($news->pdf_url) {
-                    $oldPath = str_replace('/storage/', '', $news->pdf_url);
-                    Storage::disk('public')->delete($oldPath);
-                }
-                // Lưu file mới
-                $path = $request->file('pdf_file')->store('news/pdfs', 'public');
-                $news->pdf_url = Storage::url($path);
+            if ($news->pdf_file && Storage::disk('public')->exists($news->pdf_file)) {
+                Storage::disk('public')->delete($news->pdf_file);
+            }
+            $path = $request->file('pdf_file')->store('news/pdfs', 'public');
+
+            $news->pdf_file = $path;
+
             } elseif ($request->boolean('remove_pdf')) {
-                if ($news->pdf_url) {
-                    $oldPath = str_replace('/storage/', '', $news->pdf_url);
-                    Storage::disk('public')->delete($oldPath);
+                if ($news->pdf_file && Storage::disk('public')->exists($news->pdf_file)) {
+                    Storage::disk('public')->delete($news->pdf_file);
                 }
-                $news->pdf_url = null;
+
+                $news->pdf_file = null;
             }
 
-            // Xử lý Ảnh bìa (Thay thế hoặc Xóa)
-            if ($request->hasFile('cover_image')) {
-                if ($news->cover_image_url) {
-                    $oldPath = str_replace('/storage/', '', $news->cover_image_url);
-                    Storage::disk('public')->delete($oldPath);
-                }
-                $path = $request->file('cover_image')->store('news/covers', 'public');
-                $news->cover_image_url = Storage::url($path);
-            } elseif ($request->boolean('remove_cover_image')) {
-                if ($news->cover_image_url) {
-                    $oldPath = str_replace('/storage/', '', $news->cover_image_url);
-                    Storage::disk('public')->delete($oldPath);
-                }
-                $news->cover_image_url = null;
+        if ($request->hasFile('cover_image')) {
+            if ($news->cover_image && Storage::disk('public')->exists($news->cover_image)) {
+                Storage::disk('public')->delete($news->cover_image);
+            }
+            $path = $request->file('cover_image')->store('news/covers', 'public');
+            
+            $news->cover_image = $path;
+
+        } elseif ($request->boolean('remove_cover_image')) {
+            if ($news->cover_image && Storage::disk('public')->exists($news->cover_image)) {
+                Storage::disk('public')->delete($news->cover_image);
             }
 
-            $news->save();
+            $news->cover_image = null;
+        }
+
+        $news->save();
 
             // Xử lý xóa ảnh phụ (deleted_images gửi lên là mảng path hoặc url)
             if ($request->filled('deleted_images')) {

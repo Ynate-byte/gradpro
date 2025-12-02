@@ -190,7 +190,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         cell: ({ row }) => {
             const ngaySinh = row.original.NGAYSINH;
             const formattedDate = formatNgaySinh(ngaySinh);
-            // [FIX] Thêm flex items-center h-full để căn thẳng hàng với các cột khác
             return (
                 <div className="flex items-center h-full text-sm">
                     {formattedDate || <span className="text-xs text-muted-foreground">Chưa có</span>}
@@ -220,7 +219,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
             const config = roleConfig[displayRoleName] || { icon: Briefcase, color: "bg-gray-100 text-gray-800" };
             const Icon = config.icon;
 
-            // [FIX] Thêm flex items-center h-full
             return (
                 <div className="flex items-center h-full">
                     <TooltipProvider delayDuration={100}>
@@ -278,7 +276,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         header: "Đơn vị / Chuyên ngành",
         cell: ({ row }) => {
             const user = row.original;
-            // [FIX] Thêm flex items-center h-full
             return (
                 <div className="flex items-center h-full">
                     {user.vaitro.TEN_VAITRO === 'Sinh viên' ? (
@@ -328,7 +325,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         header: "Trạng thái",
         cell: ({ row }) => {
             const isActive = row.getValue("trang_thai");
-            // [FIX] Thêm flex items-center h-full
             return (
                 <div className="flex items-center h-full gap-2">
                     <Circle className={cn("h-2.5 w-2.5", isActive ? 'fill-green-500 text-green-500' : 'fill-red-500 text-red-500')} />
@@ -350,7 +346,6 @@ export const getColumns = ({ onEdit, onSuccess, onViewDetails }) => [
         cell: ({ row }) => {
             if (!row.original.NGAYTAO) return null;
             const date = new Date(row.original.NGAYTAO);
-            // [FIX] Thêm flex items-center h-full
             return (
                 <div className="flex items-center h-full">
                     <TooltipProvider delayDuration={100}>

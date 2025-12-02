@@ -204,10 +204,7 @@ const NewsDetail = () => {
     const createdDate = new Date(news.created_at);
 
     return (
-        // [FIX SCROLL] Thêm h-full và overflow-y-auto để cho phép cuộn nội dung trong Layout cha
         <div className="h-full overflow-y-auto bg-white dark:bg-gray-950">
-            
-            {/* --- THANH ĐIỀU HƯỚNG TOP (Sticky) --- */}
             <div className="border-b sticky top-0 bg-white/90 dark:bg-gray-950/90 backdrop-blur z-40">
                 <div className="container max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
                     <Button variant="ghost" size="sm" onClick={() => navigate("/news")} className="-ml-2 text-muted-foreground hover:text-foreground">

@@ -5,7 +5,7 @@ import {
     PointerSensor, 
     useSensor, 
     useSensors,
-    closestCorners, // [FIX] Thuật toán va chạm tốt hơn cho cột
+    closestCorners,
     pointerWithin,
     getFirstCollision
 } from '@dnd-kit/core';
@@ -47,7 +47,6 @@ export function KanbanBoard({ nhomId, start_date, end_date }) {
         if (data) {
             setColumns(data.columns || []);
             
-            // [FIX QUAN TRỌNG] Ép kiểu ID cột sang String để đồng bộ với dnd-kit
             // Và đảm bảo ID task cũng là string nếu cần (thường dnd-kit cần ID unique dạng string)
             const normalizedTasks = {};
             
@@ -82,7 +81,6 @@ export function KanbanBoard({ nhomId, start_date, end_date }) {
             queryClient.setQueryData(['kanbanBoard', nhomId, start_date, end_date], variables.previousBoardData); 
         },
         onSettled: () => {
-             // [FIX] Sử dụng exact: false để invalidate tất cả các query liên quan đến bảng này (bất kể ngày tháng)
             queryClient.invalidateQueries({ queryKey: ['kanbanBoard', nhomId], exact: false });
             queryClient.invalidateQueries({ queryKey: ['taskStats', nhomId] });
         }
@@ -91,12 +89,11 @@ export function KanbanBoard({ nhomId, start_date, end_date }) {
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 5, // Giữ nguyên để tránh click nhầm thành drag
+                distance: 5,
             },
         })
     );
 
-    // [FIX] Custom Collision Detection để sửa lỗi không kéo được sang cột bên cạnh
     // Thuật toán này ưu tiên con trỏ chuột, giúp việc thả vào cột rỗng dễ dàng hơn
     const customCollisionDetection = useCallback((args) => {
         const pointerCollisions = pointerWithin(args);
@@ -203,7 +200,6 @@ export function KanbanBoard({ nhomId, start_date, end_date }) {
                             <KanbanColumn
                                 key={col.ID_COT}
                                 column={col}
-                                // [FIX] Đảm bảo ID cột là String khi truy xuất tasks
                                 tasks={tasks[String(col.ID_COT)] || []}
                                 onAddTask={(colId) => {
                                     setDialogState({ isOpen: true, task: null, colId: String(colId) });

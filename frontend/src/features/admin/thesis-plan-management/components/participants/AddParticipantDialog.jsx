@@ -15,7 +15,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 
-// Helper (Lấy 2 chữ cái đầu)
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -23,7 +22,6 @@ const getInitials = (name) => {
     return name.substring(0, 2).toUpperCase();
 };
 
-// Skeleton (Fix Dark Mode visibility)
 const StudentSearchSkeleton = ({ count = 6 }) => (
     <div className="space-y-2">
         {Array.from({ length: count }).map((_, i) => (
@@ -117,15 +115,12 @@ export function AddParticipantDialog({ isOpen, setIsOpen, onSuccess, plan }) {
         }
     };
 
-    // Component hiển thị Item Sinh viên (Fix Dark Mode Colors)
     const StudentItemCompact = ({ student, isSelected, onToggle, showRemoveIcon = false }) => (
         <div 
             onClick={() => onToggle(student)}
             className={cn(
                 "flex items-center gap-3 p-2 rounded-md border mb-2 cursor-pointer transition-all duration-200 text-sm group select-none",
-                // Cột TRÁI (Chưa chọn):
                 !isSelected && !showRemoveIcon && "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/30 dark:hover:bg-blue-900/20",
-                // Cột PHẢI (Đã chọn):
                 showRemoveIcon && "bg-white dark:bg-slate-900 border-indigo-200 dark:border-indigo-900 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50/30 dark:hover:bg-red-900/20"
             )}
         >
@@ -191,7 +186,6 @@ export function AddParticipantDialog({ isOpen, setIsOpen, onSuccess, plan }) {
                     {/* CỘT TRÁI: TÌM KIẾM */}
                     <div className="md:col-span-7 flex flex-col h-full overflow-hidden bg-white dark:bg-slate-950">
                         <div className="p-4 space-y-4 shrink-0 border-b border-slate-100 dark:border-slate-800 border-dashed">
-                            {/* Ô tìm kiếm (Fix background tối) */}
                             <div className="relative group">
                                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                     <Search className="h-4 w-4 text-slate-400 dark:text-slate-500 group-focus-within:text-blue-500 transition-colors" />

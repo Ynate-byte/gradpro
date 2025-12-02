@@ -18,7 +18,6 @@ class GroupsExport implements FromCollection, WithHeadings, WithMapping
 
     public function collection()
     {
-        // Tải trước các relationship và lọc theo ID_KEHOACH
         return Nhom::where('ID_KEHOACH', $this->planId)
                     ->with('nhomtruong', 'thanhviens.nguoidung')
                     ->get();
@@ -46,7 +45,7 @@ class GroupsExport implements FromCollection, WithHeadings, WithMapping
             return [[
                 $nhom->ID_NHOM,
                 $nhom->TEN_NHOM,
-                $nhom->nhomtruong?->HODEM_VA_TEN ?? 'N/A', // Sử dụng null-safe operator
+                $nhom->nhomtruong?->HODEM_VA_TEN ?? 'N/A',
                 $nhom->SO_THANHVIEN_HIENTAI,
                 '(Nhóm trống)', '', '',
             ]];
@@ -59,7 +58,6 @@ class GroupsExport implements FromCollection, WithHeadings, WithMapping
             $memberEmail = $thanhvien->nguoidung?->EMAIL ?? 'N/A';
 
             if ($index === 0) {
-                // Dòng đầu tiên chứa thông tin nhóm
                 $rows[] = [
                     $nhom->ID_NHOM,
                     $nhom->TEN_NHOM,
@@ -72,7 +70,7 @@ class GroupsExport implements FromCollection, WithHeadings, WithMapping
             } else {
                 // Các dòng tiếp theo chỉ chứa thông tin thành viên
                 $rows[] = [
-                    '', '', '', '', // Bỏ trống
+                    '', '', '', '',
                     $memberName,
                     $memberCode,
                     $memberEmail,

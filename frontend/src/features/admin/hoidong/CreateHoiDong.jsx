@@ -158,7 +158,6 @@ export const CreateHoiDongDialog = ({ isOpen, setIsOpen, onSuccess }) => {
           const mappedData = data.map(item => ({
               ...item,
               suggested_councils: Math.ceil(item.group_count / ratio) || 1,
-              // [UPDATED] Hiển thị prefix đúng theo loại
               prefix_name: `${form.LOAI === 'hoidong' ? 'HĐ Bảo vệ' : (form.LOAI === 'hoidong5' ? 'HĐ Bảo vệ (5)' : 'HĐ Phản biện')} - ${item.MA_KHOA_BOMON}`
           }));
           setDeptStats(mappedData);

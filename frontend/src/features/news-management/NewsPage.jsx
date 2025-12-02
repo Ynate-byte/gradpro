@@ -65,10 +65,7 @@ const NewsPage = () => {
     };
 
     return (
-        // [FIX SCROLL] Thêm id để tham chiếu scroll và class h-full overflow-y-auto
         <div id="news-container" className="h-full overflow-y-auto space-y-8 p-4 md:p-8">
-            
-            {/* Header */}
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">         
                 {canManageNews && (
                     <Button onClick={handleToggleAddForm} className="shadow-lg">
@@ -78,7 +75,6 @@ const NewsPage = () => {
                 )}
             </div>
 
-            {/* Vùng hiển thị Form (inline) */}
             {canManageNews && editingNews && (
                 <div ref={formRef} className="scroll-mt-20">
                     <Card className="border-primary/40 shadow-lg animate-in fade-in-50 duration-300">

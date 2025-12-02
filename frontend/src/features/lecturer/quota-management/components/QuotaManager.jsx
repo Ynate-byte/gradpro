@@ -476,7 +476,6 @@ const QuotaManager = () => {
   };
 
   return (
-    // [FIX SCROLL] Thêm h-full và overflow-y-auto cho container chính
     <motion.div
       className="h-full overflow-y-auto flex-1 space-y-6 p-4 md:p-8 bg-muted/10"
       initial={{ opacity: 0 }}

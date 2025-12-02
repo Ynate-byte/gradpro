@@ -403,7 +403,6 @@ export default function PersonalHistoryPage() {
     };
 
     return (
-        // [FIX] Layout: h-full, flex-col, overflow-hidden
         <div className="h-full flex flex-col p-4 md:p-6 gap-6 bg-background overflow-hidden animate-in fade-in duration-500">
             
             {/* 1. HEADER & ACTIONS - Shrink 0 */}
@@ -475,7 +474,6 @@ export default function PersonalHistoryPage() {
                     </div>
                 </CardHeader>
                 
-                {/* [FIX] Container cuộn nằm ở đây */}
                 <CardContent className="p-0 flex-1 overflow-auto relative">
                     <Table>
                         <TableHeader className="bg-muted/30 sticky top-0 z-10 shadow-sm">

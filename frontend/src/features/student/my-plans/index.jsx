@@ -219,7 +219,6 @@ export default function MyPlansPage() {
   }, [fetchPlans]);
 
   return (
-    // [FIX SCROLL] Thêm h-full overflow-y-auto để fix lỗi cuộn
     <div className="h-full overflow-y-auto p-4 md:p-8 bg-muted/10">
         <div className="max-w-5xl mx-auto space-y-6 pb-20">
             {/* Nâng cấp logic render */}

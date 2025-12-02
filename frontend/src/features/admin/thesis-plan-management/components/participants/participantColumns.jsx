@@ -52,7 +52,6 @@ export const getParticipantColumns = ({ onSuccess, onViewDetails }) => [
             </Button>
         ),
         cell: ({ row }) => (
-            // [FIX] Căn giữa dọc
             <div className="flex items-center h-full w-full">
                 <button
                     className="flex items-center gap-3 text-left w-full"

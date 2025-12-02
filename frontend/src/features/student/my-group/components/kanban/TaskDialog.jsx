@@ -113,7 +113,6 @@ export function TaskDialog({ state, setState, nhomId, members = [], columns = []
 
     // --- REFRESH LOGIC ---
     const invalidateBoardAndClose = () => {
-        // [FIX LỖI KHÔNG CẬP NHẬT]: Gọi callback onSuccess từ cha để refresh đúng query key có ngày tháng
         if (onSuccess) {
             onSuccess();
         } else {

@@ -15,10 +15,6 @@ class SendLecturerReminders extends Command
      * Tên lệnh để gọi trong terminal hoặc scheduler
      */
     protected $signature = 'app:send-lecturer-reminders';
-
-    /**
-     * Mô tả lệnh
-     */
     protected $description = 'Gửi thông báo nhắc nhở cho giảng viên (Hội đồng, Lịch họp, Chấm bài)';
 
     /**

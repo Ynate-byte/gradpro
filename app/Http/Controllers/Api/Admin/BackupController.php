@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\File;
-use Illuminate\Support\Facades\DB; // <--- Bắt buộc có dòng này
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
-use ZipArchive; // <--- Bắt buộc có dòng này
+use ZipArchive;
 
 class BackupController extends Controller
 {

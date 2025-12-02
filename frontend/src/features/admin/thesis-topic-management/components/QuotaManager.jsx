@@ -503,7 +503,6 @@ const QuotaManager = () => {
 							</Button>
 						</div>
 					</CardHeader>
-					{/* [FIX SCROLL] Card Content chứa bảng: flex-1, overflow-y-auto */}
 					<CardContent className="p-0 flex-1 overflow-y-auto">
 						{departments.length === 0 ? (
 							<div className="py-8 text-center text-muted-foreground border-2 border-dashed rounded-lg">

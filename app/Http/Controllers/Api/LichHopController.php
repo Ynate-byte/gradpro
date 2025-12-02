@@ -21,7 +21,6 @@ class LichHopController extends Controller
 {
     /**
      * Kiểm tra quyền truy cập vào lịch họp của một nhóm
-     * (Fix lỗi 403: Truy vấn trực tiếp DB để chắc chắn)
      */
     private function checkGroupAccess(Nhom $nhom)
     {

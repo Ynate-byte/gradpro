@@ -472,10 +472,7 @@ export default function LecturerCalendarPage() {
 
     return (
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            {/* [FIX SCROLL] Sử dụng h-full để container chiếm hết chiều cao */}
             <div className="flex h-full flex-col md:flex-row overflow-hidden bg-background text-foreground">
-
-                {/* [FIX SCROLL] Sidebar Group: Đặt h-full và overflow-y-auto để cuộn độc lập */}
                 <div className="w-full md:w-72 bg-card border-r p-4 flex flex-col gap-4 shadow-sm z-20 shrink-0 h-1/4 md:h-full">
                     <div className="flex-shrink-0">
                         <h2 className="font-bold text-lg flex items-center gap-2 text-foreground">
@@ -510,7 +507,6 @@ export default function LecturerCalendarPage() {
                     </div>
                 </div>
 
-                {/* [FIX SCROLL] Calendar Area: Đặt h-full và flex-1 để chiếm phần còn lại */}
                 <div className="flex-1 flex flex-col min-w-0 bg-muted/10 h-3/4 md:h-full overflow-hidden">
                     <div className="flex items-center justify-between p-4 border-b bg-card shrink-0">
                         <div className="flex items-center gap-2">
@@ -533,8 +529,6 @@ export default function LecturerCalendarPage() {
                                 <Loader2 className="h-10 w-10 animate-spin text-primary" />
                             </div>
                         )}
-
-                        {/* [FIX SCROLL] Calendar Grid Container: overflow-auto để cuộn lịch */}
                         <div className="calendar-container shadow-sm border h-full w-full overflow-auto custom-scrollbar bg-background">
                             <div className="calendar-grid">
                                 <div className="calendar-header bg-muted/50 text-muted-foreground sticky top-0 left-0 z-30 border-b border-r">Buổi</div>

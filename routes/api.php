@@ -61,7 +61,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
 
     // =================================================================================
-    // B. LỊCH SỬ HOẠT ĐỘNG (Đã fix lỗi 404)
+    // B. LỊCH SỬ HOẠT ĐỘNG
     // =================================================================================
     Route::get('/history/personal/stats', [HistoryController::class, 'getPersonalStats']);
     Route::get('/history/personal', [HistoryController::class, 'getPersonalHistory']);

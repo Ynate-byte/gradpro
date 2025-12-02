@@ -53,7 +53,7 @@ const NewsItem = ({ news, onClick }) => (
 const PlanCard = ({ plan }) => {
     const navigate = useNavigate();
     const hasGroup = !!plan.group;
-    const council = plan.group?.council; // Lấy thông tin hội đồng
+    const council = plan.group?.council;
     const cardBorderClass = hasGroup ? "border-l-4 border-l-indigo-500" : "border-l-4 border-l-orange-400 border-dashed";
 
     return (
@@ -202,7 +202,6 @@ const UrgentItem = ({ item }) => {
         );
     }
 
-    // Default (Meeting)
     return (
         <div onClick={handleClick} 
             className="flex items-start gap-3 p-3 rounded-lg border-l-4 border-l-blue-500 bg-blue-50/30 hover:bg-blue-50 transition-colors cursor-pointer group">
@@ -244,7 +243,7 @@ export default function OverviewDashboard() {
 
     return (
         <div className="h-full overflow-auto bg-gray-50/50 dark:bg-background p-4 md:p-8">
-            <div className="max-w-7xl mx-auto space-y-8">
+            <div className="mx-auto space-y-8">
                 <div className="flex justify-between items-start">
                     <Button variant="outline" onClick={() => navigate('/notifications')} className="hidden md:flex">
                         <MessageSquare className="w-4 h-4 mr-2" /> Thông báo
