@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { GeneralInfoForm } from './components/GeneralInfoForm';
 import { ChangePasswordForm } from './components/ChangePasswordForm';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,10 +17,17 @@ const getInitials = (name) => {
 
 export default function ProfilePage() {
     const { user } = useAuth();
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        if (searchParams.get('action') === 'change_password' && user?.LA_DANGNHAP_LANDAU) {
+            toast.warning("Vì lý do bảo mật, vui lòng đổi mật khẩu mặc định.");
+        }
+    }, [searchParams, user]);
 
     if (!user) return null;
 
-    // Xác định Role Label
     let roleLabel = "Người dùng";
     let roleColor = "secondary";
     
@@ -27,15 +36,13 @@ export default function ProfilePage() {
         roleColor = "destructive";
     } else if (user.sinhvien) {
         roleLabel = "Sinh viên";
-        roleColor = "default"; // Blue/Primary
+        roleColor = "default";
     } else if (user.giangvien) {
         roleLabel = "Giảng viên";
         roleColor = "outline"; 
         
-        // Nếu có chức vụ, hiển thị chức vụ cao nhất
         const positions = user.giangvien.chucvus;
         if (positions && positions.length > 0) {
-            // Ưu tiên hiển thị Trưởng khoa/Trưởng bộ môn
             const vip = positions.find(p => p.MA_CHUCVU.includes('TRUONG'));
             roleLabel = vip ? vip.TEN_CHUCVU : positions[0].TEN_CHUCVU;
         }
@@ -64,12 +71,10 @@ export default function ProfilePage() {
             <Separator />
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Cột trái: Thông tin chung (Chiếm 2/3) */}
                 <div className="lg:col-span-2 space-y-6">
                     <GeneralInfoForm />
                 </div>
 
-                {/* Cột phải: Bảo mật (Chiếm 1/3) */}
                 <div className="lg:col-span-1 space-y-6">
                     <ChangePasswordForm />
                 </div>

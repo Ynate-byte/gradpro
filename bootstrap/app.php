@@ -13,8 +13,18 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-         $middleware->prependToGroup('api', ConvertEmptyStringsToNull::class);
+        $middleware->prependToGroup('api', ConvertEmptyStringsToNull::class);
+        
+        $middleware->alias([
+            'force.change.password' => \App\Http\Middleware\ForceChangePassword::class,
+        ]);
+        $middleware->append(\App\Http\Middleware\SecurityHeaders::class);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->dontFlash([
+            'current_password',
+            'password',
+            'password_confirmation',
+            'MATKHAU_BAM',
+        ]);
     })->create();

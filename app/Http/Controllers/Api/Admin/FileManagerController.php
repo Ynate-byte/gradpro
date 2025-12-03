@@ -13,157 +13,167 @@ use ZipArchive;
 
 class FileManagerController extends Controller
 {
-    /**
-     * Lấy danh sách file và thư mục.
-     * Thực hiện ánh xạ (mapping) từ tên thư mục hệ thống (ID) sang tên hiển thị (Tên đề tài/Nhóm) từ Database.
+/**
+     * Lấy danh sách file và thư mục (Phiên bản bảo mật)
+     * Không nhận raw path, chỉ nhận ID để server tự build path.
      */
     public function index(Request $request)
     {
-        // 1. Kiểm tra quyền hạn (Chỉ Admin, Giáo vụ, Trưởng khoa mới được truy cập)
+        // 1. Kiểm tra quyền hạn (Chỉ Admin, Giáo vụ, Trưởng khoa)
         if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 
+        // 2. Validate input (Chỉ chấp nhận ID số nguyên)
+        $request->validate([
+            'plan_id'  => 'nullable|integer',
+            'group_id' => 'nullable|integer',
+        ]);
+
         try {
-            $path = $request->input('folder', '/');
+            $rootPath = 'submissions';
+            $currentPath = $rootPath;
+            $level = 'root';
 
-            // Chuẩn hóa đường dẫn đầu vào
-            if ($path === 'root' || $path === '' || $path === null) {
-                $path = '/';
-            }
-
-            // Bảo mật: Chặn hành vi path traversal (dùng ../ để truy cập thư mục hệ thống)
-            if (str_contains($path, '..')) {
-                return response()->json(['message' => 'Invalid path'], 400);
-            }
-
-            $disk = Storage::disk('public');
-            
-            // Nếu thư mục yêu cầu không tồn tại, quay về thư mục gốc
-            if (!$disk->exists($path)) {
-                $path = '/';
-            }
-
-            // 2. Lấy danh sách thô (đường dẫn vật lý) từ ổ cứng
-            $rawDirs = $disk->directories($path);
-            $rawFiles = $disk->files($path);
-
-            // ====================================================
-            // 🟡 PHẦN 1: XỬ LÝ MAPPING TÊN THƯ MỤC (PLAN / GROUP)
-            // ====================================================
-            $planIds = [];
-            $groupIds = [];
-
-            // Quét tên các thư mục để lấy ID phục vụ query DB (giảm thiểu số lần query)
-            foreach ($rawDirs as $dirPath) {
-                $dirName = basename($dirPath);
-
-                // Regex bắt pattern "plan_123"
-                if (preg_match('/^plan_(\d+)$/', $dirName, $matches)) {
-                    $planIds[] = $matches[1];
-                } 
-                // Regex bắt pattern "group_456"
-                elseif (preg_match('/^group_(\d+)$/', $dirName, $matches)) {
-                    $groupIds[] = $matches[1];
+            if ($request->plan_id) {
+                $currentPath .= '/plan_' . $request->plan_id;
+                $level = 'plan';
+                
+                if ($request->group_id) {
+                    $currentPath .= '/group_' . $request->group_id;
+                    $level = 'group';
                 }
             }
 
-            // Lấy thông tin Kế hoạch từ DB
-            $plans = !empty($planIds) 
-                ? KehoachKhoaluan::whereIn('ID_KEHOACH', $planIds)->pluck('TEN_DOT', 'ID_KEHOACH') 
-                : collect();
-            
-            // Lấy thông tin Nhóm và Đề tài từ DB
-            $groups = collect();
-            if (!empty($groupIds)) {
-                $groups = Nhom::with(['phancongDetaiNhom.detai'])
-                    ->whereIn('ID_NHOM', $groupIds)
-                    ->get()
-                    ->keyBy('ID_NHOM');
+            $disk = Storage::disk('local'); 
+
+            if (!$disk->exists($currentPath)) {
+                return response()->json([
+                    'current_path' => $currentPath,
+                    'breadcrumbs'  => $this->buildSafeBreadcrumbs($request->plan_id, $request->group_id),
+                    'data'         => []
+                ]);
             }
 
-            $directories = [];
+            // 4. Lấy danh sách file và folder vật lý
+            $rawDirs = $disk->directories($currentPath);
+            $rawFiles = $disk->files($currentPath);
+            $items = [];
+
+            // Chuẩn bị data mapping để tránh query N+1 trong vòng lặp
+            $folderMap = [];
+            
+            if ($level === 'root') {
+                // Đang ở root -> Lấy danh sách Kế hoạch
+                $planIds = [];
+                foreach ($rawDirs as $dir) {
+                    if (preg_match('/plan_(\d+)$/', basename($dir), $matches)) {
+                        $planIds[] = $matches[1];
+                    }
+                }
+                $folderMap = KehoachKhoaluan::whereIn('ID_KEHOACH', $planIds)->pluck('TEN_DOT', 'ID_KEHOACH');
+            } 
+            elseif ($level === 'plan') {
+                $groupIds = [];
+                foreach ($rawDirs as $dir) {
+                    if (preg_match('/group_(\d+)$/', basename($dir), $matches)) {
+                        $groupIds[] = $matches[1];
+                    }
+                }
+                $folderMap = Nhom::whereIn('ID_NHOM', $groupIds)->pluck('TEN_NHOM', 'ID_NHOM');
+            }
+
             foreach ($rawDirs as $dirPath) {
                 $dirName = basename($dirPath);
-                $displayName = $dirName; // Mặc định hiển thị tên gốc
+                $displayName = $dirName;
                 $metadata = null;
+                $navigateParams = [];
 
-                // Ánh xạ tên thư mục Kế hoạch (VD: plan_1 -> 📂 KH: Kóa luận 2024)
-                if (preg_match('/^plan_(\d+)$/', $dirName, $matches)) {
-                    $id = $matches[1];
-                    if (isset($plans[$id])) {
-                        $displayName = "📂 KH: " . $plans[$id]; 
-                        $metadata = "ID: plan_{$id}";
-                    }
-                }
-                // Ánh xạ tên thư mục Nhóm (VD: group_5 -> 👥 Nhóm 1 - Website Bán Hàng)
-                elseif (preg_match('/^group_(\d+)$/', $dirName, $matches)) {
-                    $id = $matches[1];
-                    if (isset($groups[$id])) {
-                        $g = $groups[$id];
-                        $topicName = $g->phancongDetaiNhom?->detai?->TEN_DETAI ?? 'Chưa có đề tài';
-                        $displayName = "👥 " . $g->TEN_NHOM; 
-                        $metadata = $topicName;
-                    }
+                if ($level === 'root' && preg_match('/^plan_(\d+)$/', $dirName, $matches)) {
+                    $pid = $matches[1];
+                    $displayName = isset($folderMap[$pid]) ? "KH: " . $folderMap[$pid] : $dirName;
+                    $navigateParams = ['plan_id' => $pid];
+                } 
+                elseif ($level === 'plan' && preg_match('/^group_(\d+)$/', $dirName, $matches)) {
+                    $gid = $matches[1];
+                    $displayName = isset($folderMap[$gid]) ? " " . $folderMap[$gid] : $dirName;
+                    $navigateParams = ['plan_id' => $request->plan_id, 'group_id' => $gid];
                 }
 
-                $directories[] = [
-                    'type' => 'folder',
-                    'name' => $displayName,
-                    'real_name' => $dirName,
-                    'path' => $dirPath,
-                    'metadata' => $metadata,
-                    'items_count' => count($disk->files($dirPath)) + count($disk->directories($dirPath)),
+                $items[] = [
+                    'type'          => 'folder',
+                    'name'          => $displayName,
+                    'real_name'     => $dirName,
+                    'path'          => $dirPath, // Path vật lý (để debug hoặc xóa)
+                    'navigate'      => $navigateParams, // Frontend dùng cái này để gọi lại API index
                     'last_modified' => date('Y-m-d H:i:s', $disk->lastModified($dirPath)),
+                    'items_count'   => count($disk->files($dirPath)) + count($disk->directories($dirPath)),
                 ];
             }
 
-            // ====================================================
-            // 🟢 PHẦN 2: XỬ LÝ MAPPING TÊN FILE TỪ DATABASE
-            // ====================================================
-            
-            // Lấy tên gốc từ bảng FILE_NOP_SANPHAM dựa trên đường dẫn hash/lưu trữ
-            $dbSubmissionFiles = FileNopSanpham::whereIn('DUONG_DAN_HOAC_NOI_DUNG', $rawFiles)
-                ->pluck('TEN_FILE_GOC', 'DUONG_DAN_HOAC_NOI_DUNG');
+            $dbFiles = FileNopSanpham::whereIn('DUONG_DAN_HOAC_NOI_DUNG', $rawFiles)
+                ->get()
+                ->keyBy('DUONG_DAN_HOAC_NOI_DUNG');
 
-            $files = [];
-            foreach ($rawFiles as $file) {
-                // Bỏ qua các file ẩn hệ thống (ví dụ .gitignore)
-                if (str_starts_with(basename($file), '.')) continue; 
+            foreach ($rawFiles as $filePath) {
+                if (str_starts_with(basename($filePath), '.')) continue;
 
-                $realName = basename($file);
-                $displayName = $realName; 
-                $metadata = null;
+                $fileInfo = $dbFiles->get($filePath);
+                $realName = basename($filePath);
+                $displayName = $fileInfo ? $fileInfo->TEN_FILE_GOC : $realName;
 
-                // Nếu tìm thấy mapping trong DB -> hiển thị tên file gốc (dễ đọc cho người dùng)
-                if (isset($dbSubmissionFiles[$file])) {
-                    $displayName = $dbSubmissionFiles[$file]; 
-                    $metadata = "File nộp bài (" . substr($realName, 0, 8) . "...)"; 
-                }
-
-                $files[] = [
-                    'type' => 'file',
-                    'name' => $displayName,
-                    'real_name' => $realName,
-                    'path' => $file,
-                    'metadata' => $metadata,
-                    'size' => $this->formatSize($disk->size($file)),
-                    'extension' => strtolower(pathinfo($file, PATHINFO_EXTENSION)),
-                    'url' => $disk->url($file),
-                    'last_modified' => date('Y-m-d H:i:s', $disk->lastModified($file)),
+                $items[] = [
+                    'type'          => 'file',
+                    'id'            => $fileInfo ? $fileInfo->ID_FILE : null,
+                    'name'          => $displayName,
+                    'real_name'     => $realName,
+                    'path'          => $filePath,
+                    'size'          => $this->formatSize($disk->size($filePath)),
+                    'extension'     => strtolower(pathinfo($filePath, PATHINFO_EXTENSION)),
+                    'last_modified' => date('Y-m-d H:i:s', $disk->lastModified($filePath)),
+                    // URL tải xuống an toàn qua SecureFileController (cần route này)
+                    'download_url'  => $fileInfo ? "/api/secure-download/{$fileInfo->ID_FILE}" : null 
                 ];
             }
 
             return response()->json([
-                'current_path' => $path,
-                'breadcrumbs' => $this->makeBreadcrumbs($path),
-                'data' => array_merge($directories, $files)
+                'current_level' => $level,
+                'breadcrumbs'   => $this->buildSafeBreadcrumbs($request->plan_id, $request->group_id),
+                'data'          => $items
             ]);
 
         } catch (\Exception $e) {
             Log::error("FileManager Error: " . $e->getMessage());
             return response()->json(['message' => 'Lỗi Server: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Helper: Tạo Breadcrumbs dựa trên ID thay vì parse chuỗi
+     */
+    private function buildSafeBreadcrumbs($planId, $groupId)
+    {
+        $crumbs = [
+            ['name' => 'Thư mục gốc', 'params' => []] // Root
+        ];
+
+        if ($planId) {
+            $planName = KehoachKhoaluan::where('ID_KEHOACH', $planId)->value('TEN_DOT') ?? "Plan $planId";
+            $crumbs[] = [
+                'name' => $planName,
+                'params' => ['plan_id' => $planId]
+            ];
+        }
+
+        if ($groupId) {
+            $groupName = Nhom::where('ID_NHOM', $groupId)->value('TEN_NHOM') ?? "Group $groupId";
+            $crumbs[] = [
+                'name' => $groupName,
+                'params' => ['plan_id' => $planId, 'group_id' => $groupId]
+            ];
+        }
+
+        return $crumbs;
     }
 
     /**

@@ -6,6 +6,8 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Gate;
 use App\Models\Nguoidung;
 use App\Models\Nhom;
+use App\Policies\NhomPolicy;
+use Illuminate\Validation\Rules\Password;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -22,8 +24,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Chỉ định nghĩa Gate nếu không chạy trong Console (để tránh lỗi migration khi chưa có bảng)
+        Password::defaults(function () {
+            $rule = Password::min(8)
+                ->letters()
+                ->mixedCase()
+                ->numbers();
+
+            if ($this->app->isProduction()) {
+                $rule->uncompromised();
+            }
+
+            return $rule;
+        });
+
+        Gate::policy(Nhom::class, NhomPolicy::class);
+
         if (!$this->app->runningInConsole()) {
+            
             Gate::define('access-grading-admin', function (?Nguoidung $user) {
                 if (!$user) return false;
                 
@@ -34,7 +51,7 @@ class AppServiceProvider extends ServiceProvider
                     $positionCodes = $user->giangvien->chucvus->pluck('MA_CHUCVU')->toArray();
 
                     return in_array('TRUONG_KHOA', $positionCodes) 
-                        || in_array('GIAO_VU', $positionCodes)
+                        || in_array('GIAO_VU', $positionCodes) 
                         || in_array('PHO_KHOA', $positionCodes);
                 }
 

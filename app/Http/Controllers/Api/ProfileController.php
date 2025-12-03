@@ -7,9 +7,10 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
-use App\Services\ActivityLogger;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password; // Import Rules Password
+use App\Services\ActivityLogger;
 
 class ProfileController extends Controller
 {
@@ -29,12 +30,10 @@ class ProfileController extends Controller
                 'required', 
                 'email', 
                 'max:100',
-                // Bỏ qua check trùng nếu là email của chính user này
                 Rule::unique('NGUOIDUNG', 'EMAIL')->ignore($user->ID_NGUOIDUNG, 'ID_NGUOIDUNG')
             ],
             'SO_DIENTHOAI' => ['required', 'regex:/^[0-9]{10,11}$/'],
             
-            // ID_CHUYENNGANH chỉ validate nếu có gửi lên và khác null
             'ID_CHUYENNGANH' => ['nullable', 'exists:CHUYENNGANH,ID_CHUYENNGANH'],
         ], [
             'EMAIL.unique' => 'Email này đã được sử dụng bởi người khác.',
@@ -56,7 +55,6 @@ class ProfileController extends Controller
                     $chuyenNganhId = $request->input('ID_CHUYENNGANH');
                     
                     // Chỉ update nếu giá trị hợp lệ (khác rỗng/null)
-                    // Điều này ngăn chặn việc update null vào cột ID_CHUYENNGANH nếu DB không cho phép null
                     if (!empty($chuyenNganhId)) {
                         $user->sinhvien()->update([
                             'ID_CHUYENNGANH' => $chuyenNganhId
@@ -79,7 +77,6 @@ class ProfileController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            // Log lỗi ra file để debug nếu cần
             Log::error("Update Profile Error: " . $e->getMessage());
             
             return response()->json([
@@ -90,15 +87,15 @@ class ProfileController extends Controller
 
     /**
      * Đổi mật khẩu
+     * Yêu cầu mật khẩu mạnh & Thu hồi Token cũ
      */
     public function changePassword(Request $request)
     {
         $request->validate([
             'current_password' => 'required',
-            'new_password' => 'required|min:6|confirmed',
+            'new_password' => ['required', 'confirmed', Password::defaults()],
         ], [
             'new_password.confirmed' => 'Mật khẩu xác nhận không khớp.',
-            'new_password.min' => 'Mật khẩu mới phải có ít nhất 6 ký tự.',
         ]);
 
         $user = Auth::user();
@@ -117,9 +114,13 @@ class ProfileController extends Controller
         $user->update([
             'MATKHAU_BAM' => Hash::make($request->new_password)
         ]);
+        $user->tokens()->delete();
 
         ActivityLogger::log('CHANGE_PASSWORD', 'Đổi mật khẩu đăng nhập');
 
-        return response()->json(['message' => 'Đổi mật khẩu thành công.']);
+        return response()->json([
+            'message' => 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
+            'require_login' => true
+        ]);
     }
 }

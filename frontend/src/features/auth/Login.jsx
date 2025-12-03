@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { UserSquare, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Login() {
     const [identifier, setIdentifier] = useState('');
@@ -14,7 +15,9 @@ export default function Login() {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    
     const auth = useAuth();
+    const navigate = useNavigate(); // [NEW]
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -23,15 +26,28 @@ export default function Login() {
 
         try {
             const data = await loginService(identifier, password);
+            
             auth.login(data.user, data.access_token, remember);
+
+            if (data.user.LA_DANGNHAP_LANDAU) {
+                navigate('/profile?action=change_password', { replace: true });
+            } else {
+            }
+
         } catch (err) {
-            if (err.response && err.response.data) {
-                const message = err.response.data.message || 'Có lỗi xảy ra.';
-                const errors = err.response.data.errors;
-                if (errors && (errors.identifier || errors.IDENTIFIER)) {
-                    setError((errors.identifier || errors.IDENTIFIER)[0]);
-                } else {
-                    setError(message);
+            if (err.response) {
+                const status = err.response.status;
+                const data = err.response.data;
+
+                if (status === 429) {
+                    setError(data.message || "Bạn đã thử quá nhiều lần. Vui lòng đợi một chút.");
+                } 
+                else if (status === 422 && data.errors) {
+                    const errorMsg = data.errors.identifier || data.errors.IDENTIFIER || data.errors.password;
+                    setError(Array.isArray(errorMsg) ? errorMsg[0] : "Thông tin không hợp lệ");
+                } 
+                else {
+                    setError(data.message || 'Có lỗi xảy ra.');
                 }
             } else {
                 setError('Không thể kết nối đến máy chủ. Vui lòng thử lại sau.');
@@ -43,7 +59,8 @@ export default function Login() {
 
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4 md:p-8">
-            <style>{`
+            {/* ... (Phần style CSS giữ nguyên) ... */}
+             <style>{`
                 input:-webkit-autofill,
                 input:-webkit-autofill:hover, 
                 input:-webkit-autofill:focus, 

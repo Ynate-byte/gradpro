@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\SecureFileController;
 use App\Http\Controllers\Api\NhomController;
 use App\Http\Controllers\Api\InvitationController;
 use App\Http\Controllers\Api\NotificationController;
@@ -36,22 +37,17 @@ use App\Http\Controllers\Api\Admin\FileManagerController;
 use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Api\Admin\BackupController;
 
-/*
-|--------------------------------------------------------------------------
-| API Routes
-|--------------------------------------------------------------------------
-*/
-
-// 1. Route công khai
 Route::post('/login', [AuthController::class, 'login']);
 
-// 2. Route bảo vệ (Yêu cầu đăng nhập)
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->group(function () {
+    
+    Route::get('/secure-download/{fileId}', [SecureFileController::class, 'download']);
     
     // =================================================================================
     // A. XÁC THỰC & PROFILE
     // =================================================================================
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::get('/me', [AuthController::class, 'me']); // Thêm route lấy thông tin user hiện tại
     Route::put('/user/profile', [ProfileController::class, 'updateProfile']);
     Route::put('/user/change-password', [ProfileController::class, 'changePassword']);
     

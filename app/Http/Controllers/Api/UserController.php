@@ -392,6 +392,9 @@ class UserController extends Controller
         $user->MATKHAU_BAM = Hash::make('123456');
         $user->LA_DANGNHAP_LANDAU = true;
         $user->save();
+
+        $user->tokens()->delete();
+
         return response()->json(['message' => 'Mật khẩu đã được reset thành công về "123456".']);
     }
 
@@ -469,12 +472,18 @@ class UserController extends Controller
         ]);
 
         $count = count($validated['userIds']);
+
         Nguoidung::whereIn('ID_NGUOIDUNG', $validated['userIds'])->update([
             'MATKHAU_BAM' => Hash::make('123456'),
             'LA_DANGNHAP_LANDAU' => true,
         ]);
 
-        return response()->json(['message' => "Đã reset mật khẩu cho {$count} người dùng thành công."]);
+        DB::table('personal_access_tokens')
+            ->whereIn('tokenable_id', $validated['userIds'])
+            ->where('tokenable_type', Nguoidung::class)
+            ->delete();
+
+        return response()->json(['message' => "Đã reset mật khẩu và hủy phiên đăng nhập cho {$count} người dùng thành công."]);
     }
 
     // CÁC HÀM TIỆN ÍCH (HELPERS)

@@ -380,15 +380,10 @@ class NhomController extends Controller
      */
     public function inviteMember(Request $request, Nhom $nhom)
     {
-        // [MỚI] Kiểm tra giai đoạn nhóm
+        $this->authorize('manage', $nhom);
+
         if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
-            return response()->json(['message' => 'Giai đoạn mời thành viên đã kết thúc.'], 403);
-        }
-
-        $user = $request->user();
-
-        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
-            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+             return response()->json(['message' => 'Giai đoạn mời thành viên đã kết thúc.'], 403);
         }
 
         $nhom->load('kehoach');
@@ -480,19 +475,14 @@ class NhomController extends Controller
     }
 
     /**
-     * [MỚI] Mời nhiều thành viên vào nhóm (chỉ nhóm trưởng).
+     * Mời nhiều thành viên vào nhóm (chỉ nhóm trưởng).
      */
     public function inviteMultipleMembers(Request $request, Nhom $nhom)
     {
-        // [MỚI] Kiểm tra giai đoạn nhóm
+        $this->authorize('manage', $nhom);
+        
         if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
             return response()->json(['message' => 'Giai đoạn mời thành viên đã kết thúc.'], 403);
-        }
-
-        $user = $request->user();
-
-        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
-            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
         }
 
         $validated = $request->validate([
@@ -594,19 +584,14 @@ class NhomController extends Controller
      */
     public function handleJoinRequest(Request $request, Nhom $nhom, YeucauVaoNhom $yeucau)
     {
-        // [MỚI] Kiểm tra giai đoạn nhóm
+        $this->authorize('manage', $nhom);
+
         if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
             return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
         }
-
-        $user = $request->user();
-
-        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG || $yeucau->ID_NHOM !== $nhom->ID_NHOM) {
-            return response()->json(['message' => 'Không có quyền thực hiện.'], 403);
-        }
-
-        if ($yeucau->TRANGTHAI !== YeucauVaoNhom::STATUS_PENDING) {
-             return response()->json(['message' => 'Yêu cầu này đã được xử lý hoặc đã hủy.'], 400);
+        
+        if ($yeucau->ID_NHOM !== $nhom->ID_NHOM) {
+            return response()->json(['message' => 'Yêu cầu không hợp lệ.'], 403);
         }
 
         $validated = $request->validate(['action' => 'required|in:accept,decline']);
@@ -833,15 +818,10 @@ class NhomController extends Controller
      */
     public function transferLeadership(Request $request, Nhom $nhom, $newLeaderId)
     {
-        // [MỚI] Kiểm tra giai đoạn nhóm
+        $this->authorize('update', $nhom); 
+
         if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
              return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
-        }
-
-        $user = $request->user();
-
-        if ($nhom->ID_NHOMTRUONG !== $user->ID_NGUOIDUNG) {
-            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
         }
 
         if ($nhom->ID_NHOMTRUONG == $newLeaderId) {
@@ -877,14 +857,7 @@ class NhomController extends Controller
 
     public function getGroupDetailsById(Request $request, Nhom $nhom)
     {
-        $user = $request->user();
-        $isGvhd = $user->giangvien?->ID_GIANGVIEN === $nhom->phancongDetaiNhom?->ID_GVHD;
-        $isMember = $nhom->thanhviens()->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)->exists();
-        $isAdmin = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
-
-        if (!$isAdmin && !$isGvhd && !$isMember) {
-            return response()->json(['message' => 'Không có quyền truy cập nhóm này.'], 403);
-        }
+        $this->authorize('view', $nhom);
         
         $nhom->load([
             'kehoach',
@@ -968,8 +941,27 @@ class NhomController extends Controller
         }
 
         $validated = $request->validate([
-            'BaoCaoPDF' => 'nullable|file|mimes:pdf|max:20480',
-            'SourceCodeZIP' => 'nullable|file|mimes:zip,rar,7z|max:102400',
+            'BaoCaoPDF' => [
+                'nullable', 'file', 'mimes:pdf', 'max:20480',
+                function ($attribute, $value, $fail) {
+                    $ext = strtolower($value->getClientOriginalExtension());
+                    if ($ext !== 'pdf') {
+                        $fail("File báo cáo phải có định dạng PDF.");
+                    }
+                }
+            ],
+            'SourceCodeZIP' => [
+                'nullable', 'file', 'mimes:zip,rar,7z', 'max:102400',
+                function ($attribute, $value, $fail) {
+                    $dangerous = ['php', 'phtml', 'exe', 'sh'];
+                    $name = strtolower($value->getClientOriginalName());
+                    foreach ($dangerous as $ext) {
+                        if (str_ends_with($name, '.' . $ext)) {
+                            $fail("Tên file không an toàn.");
+                        }
+                    }
+                }
+            ],
             'LinkDemo' => 'nullable|url|max:500',
             'LinkRepository' => 'nullable|url|max:500',
         ]);
@@ -992,7 +984,7 @@ class NhomController extends Controller
                 foreach (['BaoCaoPDF', 'SourceCodeZIP'] as $fileType) {
                     if ($request->hasFile($fileType)) {
                         $file = $request->file($fileType);
-                        $path = $file->store($storagePath, 'public');
+                        $path = $file->store($storagePath, 'local');
 
                         $filesToInsert[] = [
                             'ID_NOP_SANPHAM' => $submission->ID_NOP_SANPHAM,

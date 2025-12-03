@@ -14,52 +14,17 @@ use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 use App\Services\ActivityLogger;
 use App\Services\NotificationService;
-// Import models cần dùng cho check trực tiếp
-use App\Models\ThanhvienNhom;
 
 class LichHopController extends Controller
 {
-    /**
-     * Kiểm tra quyền truy cập vào lịch họp của một nhóm
-     */
-    private function checkGroupAccess(Nhom $nhom)
-    {
-        $user = Auth::user();
-        if (!$user) return false;
-
-        // 1. Admin / Quản lý
-        if ($this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa()) {
-            return true;
-        }
-
-        // 2. Thành viên nhóm (Sinh viên) - Check trực tiếp bảng THANHVIEN_NHOM
-        $isMember = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
-            ->where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
-            ->exists();
-            
-        if ($isMember) return true;
-
-        // 3. GVHD - Check trực tiếp bảng PHANCONG_DETAI_NHOM
-        if ($user->giangvien) {
-            $isGvhd = PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                ->where('ID_GVHD', $user->giangvien->ID_GIANGVIEN)
-                ->exists();
-            if ($isGvhd) return true;
-        }
-
-        return false;
-    }
-
     /**
      * Lấy tất cả lịch họp (sắp tới và đã qua) của một nhóm.
      */
     public function getMeetingsForGroup(Nhom $nhom, Request $request)
     {
-        if (!$this->checkGroupAccess($nhom)) {
-            return response()->json(['message' => 'Bạn không có quyền xem lịch họp của nhóm này.'], 403);
-        }
+        $this->authorize('view', $nhom);
 
-        // Tải thông tin nhóm cần thiết
+        // Tải thông tin nhóm cần thiết để hiển thị header nếu cần
         $nhom->loadMissing([
             'phancongDetaiNhom.detai.nguoiDexuat.nguoidung',
             'phancongDetaiNhom.gvhd.nguoidung',
@@ -95,24 +60,7 @@ class LichHopController extends Controller
      */
     public function storeMeetingForGroup(Request $request, Nhom $nhom)
     {
-        $user = Auth::user();
-        
-        // Kiểm tra quyền quản lý nhóm (Trưởng nhóm hoặc GVHD hoặc Quản lý)
-        $isLeader = $nhom->ID_NHOMTRUONG === $user->ID_NGUOIDUNG;
-        
-        // Check GVHD trực tiếp DB
-        $isGvhd = false;
-        if ($user->giangvien) {
-            $isGvhd = PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)
-                ->where('ID_GVHD', $user->giangvien->ID_GIANGVIEN)
-                ->exists();
-        }
-
-        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
-
-        if (!$isLeader && !$isGvhd && !$isManager) {
-            return response()->json(['message' => 'Chỉ Nhóm trưởng, GVHD hoặc Quản lý mới có thể tạo lịch họp.'], 403);
-        }
+        $this->authorize('manage', $nhom);
 
         $validated = $request->validate([
             'TIEUDE_LICHHOP' => 'required|string|max:255',
@@ -132,25 +80,25 @@ class LichHopController extends Controller
 
         $lichHop = $nhom->lichHops()->create(array_merge(
             $validated,
-            ['ID_NGUOITAO' => $user->ID_NGUOIDUNG]
+            ['ID_NGUOITAO' => Auth::id()]
         ));
 
-        // Gửi thông báo cho các thành viên khác
-        $memberIds = ThanhvienNhom::where('ID_NHOM', $nhom->ID_NHOM)
-            ->where('ID_NGUOIDUNG', '!=', $user->ID_NGUOIDUNG)
-            ->pluck('ID_NGUOIDUNG')
-            ->toArray();
+        // Gửi thông báo cho các thành viên khác trong nhóm
+        // Logic: Lấy danh sách thành viên + GVHD (nếu có), trừ người tạo
+        $memberIds = $nhom->thanhviens()->pluck('ID_NGUOIDUNG')->toArray();
 
-        // Nếu GVHD tạo -> Gửi cho SV. Nếu SV tạo -> Gửi cho GVHD (nếu có)
-        $assignment = PhancongDetaiNhom::where('ID_NHOM', $nhom->ID_NHOM)->first();
-        if ($assignment && $assignment->ID_GVHD != $user->ID_NGUOIDUNG) {
-            // Tránh duplicate nếu GVHD vô tình cũng là thành viên (hiếm nhưng an toàn)
+        $assignment = $nhom->phancongDetaiNhom;
+        if ($assignment && $assignment->ID_GVHD) {
             if (!in_array($assignment->ID_GVHD, $memberIds)) {
                 $memberIds[] = $assignment->ID_GVHD;
             }
         }
 
+        $currentUserId = Auth::id();
+        
         foreach ($memberIds as $mid) {
+            if ($mid == $currentUserId) continue;
+
             NotificationService::send(
                 $mid,
                 "Lịch họp mới: {$lichHop->TIEUDE_LICHHOP}",
@@ -159,7 +107,7 @@ class LichHopController extends Controller
                 "/projects/my-group/schedule/{$nhom->ID_NHOM}"
             );
         }
-
+        
         ActivityLogger::log(
             'CREATE_MEETING', 
             "Lên lịch họp: {$lichHop->TIEUDE_LICHHOP}", 
@@ -175,12 +123,7 @@ class LichHopController extends Controller
      */
     public function updateMeeting(Request $request, LichHop $lichhop)
     {
-        $isCreator = $lichhop->ID_NGUOITAO === Auth::id();
-        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
-
-        if (!$isCreator && !$isManager) {
-            return response()->json(['message' => 'Bạn không có quyền sửa lịch họp này.'], 403);
-        }
+        $this->authorize('manage', $lichhop->nhom);
 
         $validated = $request->validate([
             'TIEUDE_LICHHOP' => 'sometimes|required|string|max:255',
@@ -213,15 +156,7 @@ class LichHopController extends Controller
      */
     public function cancelMeeting(LichHop $lichhop)
     {
-        $user = Auth::user();
-        
-        // 1. Kiểm tra quyền (Người tạo hoặc Quản lý)
-        $isCreator = $lichhop->ID_NGUOITAO === $user->ID_NGUOIDUNG;
-        $isManager = $this->isAdmin() || $this->isGiaoVu() || $this->isTruongKhoa();
-
-        if (!$isCreator && !$isManager) {
-            return response()->json(['message' => 'Bạn không có quyền hủy lịch họp này.'], 403);
-        }
+        $this->authorize('manage', $lichhop->nhom);
 
         if ($lichhop->TRANGTHAI === 'Đã diễn ra') {
             return response()->json(['message' => 'Không thể hủy lịch họp đã diễn ra.'], 400);
@@ -229,31 +164,31 @@ class LichHopController extends Controller
 
         $lichhop->update(['TRANGTHAI' => 'Đã hủy']);
 
-        if ($user->giangvien || $isManager) {
-            $nhom = $lichhop->nhom;
-            
-            $recipientIds = $nhom->thanhviens->pluck('ID_NGUOIDUNG')->toArray();
-            
-            foreach ($recipientIds as $uid) {
-                if ($uid == $user->ID_NGUOIDUNG) continue; 
+        // Gửi thông báo hủy
+        $user = Auth::user();
+        $nhom = $lichhop->nhom;
+        $recipientIds = $nhom->thanhviens->pluck('ID_NGUOIDUNG')->toArray();
 
-                NotificationService::send(
-                    $uid,
-                    "Hủy lịch họp: {$lichhop->TIEUDE_LICHHOP}",
-                    "Giảng viên {$user->HODEM_VA_TEN} đã hủy cuộc họp dự kiến vào " . $lichhop->THOIGIAN_BATDAU->format('H:i d/m') . ".",
-                    'TASK',
-                    "/projects/my-group/schedule/{$nhom->ID_NHOM}",
-                    null,
-                    'URGENT'
-                );
-            }
+        // Nếu GVHD hủy thì báo cho SV và ngược lại (đơn giản hóa: gửi cho tất cả trừ người hủy)
+        foreach ($recipientIds as $uid) {
+            if ($uid == $user->ID_NGUOIDUNG) continue; 
+
+            NotificationService::send(
+                $uid,
+                "Hủy lịch họp: {$lichhop->TIEUDE_LICHHOP}",
+                "Người dùng {$user->HODEM_VA_TEN} đã hủy cuộc họp dự kiến vào " . $lichhop->THOIGIAN_BATDAU->format('H:i d/m') . ".",
+                'TASK',
+                "/projects/my-group/schedule/{$nhom->ID_NHOM}",
+                null,
+                'URGENT'
+            );
         }
 
         return response()->json(['message' => 'Đã hủy lịch họp thành công.']);
     }
 
     /**
-     * Lấy danh sách các nhóm mà giảng viên đang hướng dẫn 
+     * Lấy danh sách các nhóm mà giảng viên đang hướng dẫn (Để hiện trong Calendar Filter)
      */
     public function getLecturerGroups(Request $request)
     {
@@ -266,7 +201,6 @@ class LichHopController extends Controller
         $activePlanIds = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm'])
             ->pluck('ID_KEHOACH');
 
-        // Sử dụng PhancongDetaiNhom để link chuẩn xác hơn
         $groups = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
             ->join('PHANCONG_DETAI_NHOM', 'NHOM.ID_NHOM', '=', 'PHANCONG_DETAI_NHOM.ID_NHOM')
             ->where('PHANCONG_DETAI_NHOM.ID_GVHD', $gvId)
@@ -278,7 +212,7 @@ class LichHopController extends Controller
     }
 
     /**
-     * Lấy toàn bộ lịch họp do Giảng viên tạo ra
+     * Lấy toàn bộ lịch họp do Giảng viên tạo ra hoặc được mời
      */
     public function getLecturerSchedule(Request $request)
     {
@@ -286,6 +220,7 @@ class LichHopController extends Controller
         $startDate = $request->query('start_date');
         $endDate = $request->query('end_date');
 
+        // Lấy các lịch họp do GV tạo
         $query = LichHop::query()
             ->where('ID_NGUOITAO', $user->ID_NGUOIDUNG)
             ->where('TRANGTHAI', '!=', 'Đã hủy')
@@ -301,6 +236,9 @@ class LichHopController extends Controller
         return response()->json($meetings);
     }
 
+    /**
+     * Tạo nhanh lịch họp từ Calendar (Dành cho Giảng viên)
+     */
     public function createQuickMeeting(Request $request)
     {
         $request->validate([
@@ -308,12 +246,15 @@ class LichHopController extends Controller
             'START_TIME' => 'required'
         ]);
 
+        $nhom = Nhom::findOrFail($request->ID_NHOM);
+        
+        $this->authorize('manage', $nhom);
+
         $user = Auth::user();
         
         $startTime = Carbon::parse($request->START_TIME);
         $endTime = $startTime->copy()->addMinutes(45);
 
-        $nhom = Nhom::find($request->ID_NHOM);
         $title = "Họp hướng dẫn - " . $nhom->TEN_NHOM;
 
         $lichHop = LichHop::create([
@@ -327,9 +268,23 @@ class LichHopController extends Controller
             'GHICHU' => 'Lịch hẹn nhanh qua Calendar'
         ]);
 
+        $memberIds = $nhom->thanhviens()->pluck('ID_NGUOIDUNG');
+        foreach ($memberIds as $mid) {
+            NotificationService::send(
+                $mid,
+                "Lịch họp mới từ GVHD",
+                "{$title} vào lúc " . $startTime->format('H:i d/m'),
+                'TASK',
+                "/projects/my-group/schedule/{$nhom->ID_NHOM}"
+            );
+        }
+
         return response()->json($lichHop->load('nhom'), 201);
     }
 
+    /**
+     * Đánh giá cuộc họp (Chỉ người tạo mới được đánh giá)
+     */
     public function rateMeeting(Request $request, $id)
     {
         $request->validate([

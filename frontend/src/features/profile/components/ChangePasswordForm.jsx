@@ -10,11 +10,16 @@ import { Input } from "@/components/ui/input";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { changePassword } from '@/api/profileService';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
-// Schema validation cho mật khẩu
 const passwordSchema = z.object({
     current_password: z.string().min(1, "Vui lòng nhập mật khẩu hiện tại"),
-    new_password: z.string().min(6, "Mật khẩu mới phải có ít nhất 6 ký tự"),
+    new_password: z.string()
+        .min(8, "Mật khẩu mới phải có ít nhất 8 ký tự")
+        .regex(/[A-Z]/, "Phải chứa ít nhất 1 chữ hoa")
+        .regex(/[a-z]/, "Phải chứa ít nhất 1 chữ thường")
+        .regex(/[0-9]/, "Phải chứa ít nhất 1 số"),
     new_password_confirmation: z.string().min(1, "Vui lòng xác nhận mật khẩu"),
 }).refine((data) => data.new_password === data.new_password_confirmation, {
     message: "Mật khẩu xác nhận không khớp",
@@ -22,6 +27,9 @@ const passwordSchema = z.object({
 });
 
 export function ChangePasswordForm() {
+    const { logout } = useAuth();
+    const navigate = useNavigate();
+
     const form = useForm({
         resolver: zodResolver(passwordSchema),
         defaultValues: {
@@ -33,17 +41,28 @@ export function ChangePasswordForm() {
 
     const mutation = useMutation({
         mutationFn: changePassword,
-        onSuccess: () => {
-            toast.success("Đổi mật khẩu thành công!");
-            form.reset();
+        onSuccess: (data) => {
+            if (data.require_login) {
+                toast.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
+                logout();
+                navigate('/login');
+            } else {
+                toast.success("Đổi mật khẩu thành công!");
+                form.reset();
+            }
         },
         onError: (err) => {
-            // Xử lý lỗi từ backend (ví dụ: mật khẩu cũ không đúng)
             const msg = err.response?.data?.message || "Đổi mật khẩu thất bại.";
-            if (err.response?.status === 422 && err.response?.data?.errors?.current_password) {
-                 form.setError('current_password', { message: err.response.data.errors.current_password[0] });
+            if (err.response?.status === 422 && err.response?.data?.errors) {
+                const errors = err.response.data.errors;
+                if (errors.current_password) {
+                    form.setError('current_password', { message: errors.current_password[0] });
+                }
+                if (errors.new_password) {
+                    form.setError('new_password', { message: errors.new_password[0] });
+                }
             } else {
-                 toast.error(msg);
+                toast.error(msg);
             }
         }
     });
@@ -58,7 +77,10 @@ export function ChangePasswordForm() {
                 <CardTitle className="flex items-center gap-2">
                     <KeyRound className="h-5 w-5 text-orange-500"/> Bảo mật
                 </CardTitle>
-                <CardDescription>Đổi mật khẩu định kỳ để bảo vệ tài khoản của bạn.</CardDescription>
+                <CardDescription>
+                    Đổi mật khẩu định kỳ để bảo vệ tài khoản.<br/>
+                    <span className="text-xs text-muted-foreground">Yêu cầu: Tối thiểu 8 ký tự, bao gồm chữ hoa, thường và số.</span>
+                </CardDescription>
             </CardHeader>
             <CardContent>
                 <Form {...form}>

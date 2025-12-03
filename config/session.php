@@ -169,7 +169,8 @@ return [
     |
     */
 
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // [BẢO MẬT] Bật Secure để bắt buộc HTTPS (trừ khi local dev set env=false)
+    'secure' => env('SESSION_SECURE_COOKIE', true),
 
     /*
     |--------------------------------------------------------------------------
@@ -182,7 +183,8 @@ return [
     |
     */
 
-    'http_only' => env('SESSION_HTTP_ONLY', true),
+    // [BẢO MẬT] Ngăn chặn JS đọc cookie (chống XSS)
+    'http_only' => true,
 
     /*
     |--------------------------------------------------------------------------
