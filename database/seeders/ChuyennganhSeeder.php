@@ -9,31 +9,29 @@ class ChuyenNganhSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('CHUYENNGANH')->delete();
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        DB::table('CHUYENNGANH')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
-        $cnpmId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'CNPM')->value('ID_KHOA_BOMON');
-        $htttId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'HTTT')->value('ID_KHOA_BOMON');
-        $mmtId  = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'MMT')->value('ID_KHOA_BOMON');
-        $khmtId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'KHMT')->value('ID_KHOA_BOMON');
-        $cnstId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'CNS')->value('ID_KHOA_BOMON');
+        $khdt = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'KHDT')->value('ID_KHOA_BOMON');
+        $httt = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'HTTT')->value('ID_KHOA_BOMON');
+        $ktpm = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'KTPM')->value('ID_KHOA_BOMON');
+        $mmt  = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'MMT&ATTT')->value('ID_KHOA_BOMON');
+        $cns  = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'CNS')->value('ID_KHOA_BOMON');
 
-        DB::table('CHUYENNGANH')->insert([
-            [
-                'MA_CHUYENNGANH' => 'CNTT',
-                'TEN_CHUYENNGANH' => 'Công nghệ Thông tin',
-                'ID_KHOA_BOMON' => null,
-                'MOTA' => 'Đào tạo kỹ sư phát triển ứng dụng web, mobile và hệ thống doanh nghiệp.',
+        $dsChuyenNganh = [
+            ['MA' => 'CN.ATTT', 'TEN' => 'An toàn thông tin', 'ID_BM' => null],
+            ['MA' => 'CN.CNS',  'TEN' => 'Công nghệ Thông tin', 'ID_BM' => null],
+        ];
+
+        foreach ($dsChuyenNganh as $cn) {
+            DB::table('CHUYENNGANH')->insert([
+                'MA_CHUYENNGANH' => $cn['MA'],
+                'TEN_CHUYENNGANH' => $cn['TEN'],
+                'ID_KHOA_BOMON' => $cn['ID_BM'],
                 'TRANGTHAI_KICHHOAT' => true,
-                'NGAYTAO' => now(),
-            ],
-            [
-                'MA_CHUYENNGANH' => 'ATTT',
-                'TEN_CHUYENNGANH' => 'An toàn Thông tin',
-                'ID_KHOA_BOMON' => null,
-                'MOTA' => 'Quản lý và thiết lập mạng.',
-                'TRANGTHAI_KICHHOAT' => true,
-                'NGAYTAO' => now(),
-            ],
-        ]);
+                'NGAYTAO' => now()
+            ]);
+        }
     }
 }

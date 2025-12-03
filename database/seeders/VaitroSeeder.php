@@ -9,26 +9,28 @@ class VaitroSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('VAITRO')->delete();
+        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
+        DB::table('VAITRO')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
 
         DB::table('VAITRO')->insert([
             [
-                'ID_VAITRO' => 1,
-                'TEN_VAITRO' => 'Admin',
-                'MOTA' => 'Quản trị viên hệ thống, có toàn quyền truy cập và cấu hình.',
-                'NGAYTAO' => now(),
+                'ID_VAITRO' => 1, 
+                'TEN_VAITRO' => 'Admin', 
+                'MOTA' => 'Quản trị viên hệ thống', 
+                'NGAYTAO' => now()
             ],
             [
-                'ID_VAITRO' => 2,
-                'TEN_VAITRO' => 'Giảng viên',
-                'MOTA' => 'Giảng viên tham gia hướng dẫn, phản biện và chấm hội đồng.',
-                'NGAYTAO' => now(),
+                'ID_VAITRO' => 2, 
+                'TEN_VAITRO' => 'Giảng viên', 
+                'MOTA' => 'Giảng viên thuộc khoa', 
+                'NGAYTAO' => now()
             ],
             [
-                'ID_VAITRO' => 3,
-                'TEN_VAITRO' => 'Sinh viên',
-                'MOTA' => 'Sinh viên thực hiện khóa luận tốt nghiệp.',
-                'NGAYTAO' => now(),
+                'ID_VAITRO' => 3, 
+                'TEN_VAITRO' => 'Sinh viên', 
+                'MOTA' => 'Sinh viên thực hiện khóa luận', 
+                'NGAYTAO' => now()
             ],
         ]);
     }

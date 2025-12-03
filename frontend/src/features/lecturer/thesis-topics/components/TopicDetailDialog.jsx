@@ -776,7 +776,7 @@ const TopicDetailDialog = ({
                     {/* === TAB 2: LỊCH SỬ THAY ĐỔI === */}
                     {topic && activeTab === 'history' && (
                         <div className="h-full p-6 overflow-y-auto custom-scrollbar bg-background animate-in fade-in duration-300">
-                            <div className="max-w-3xl mx-auto">
+                            <div className="mx-auto">
                                 <div className="mb-6 flex items-center gap-2 text-muted-foreground">
                                     <Clock className="w-5 h-5" />
                                     <h3 className="text-lg font-semibold text-foreground">Lịch sử hoạt động của đề tài</h3>
