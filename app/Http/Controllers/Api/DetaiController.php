@@ -671,34 +671,73 @@ class DetaiController extends Controller
     /**
      * Lấy các đề tài có sẵn cho sinh viên đăng ký
      */
+    /**
+     * Lấy các đề tài có sẵn cho sinh viên đăng ký (Đã tối ưu Performance & Pagination)
+     */
     public function getAvailableTopics(Request $request)
     {
         $request->validate([
             'plan_id' => 'required|exists:KEHOACH_KHOALUAN,ID_KEHOACH'
         ]);
 
-        $query = Detai::with(['nguoiDexuat.nguoidung', 'khoaBomon'])
+        $query = Detai::select([
+                'ID_DETAI', 
+                'MA_DETAI', 
+                'TEN_DETAI', 
+                'MOTA', 
+                'ID_NGUOI_DEXUAT', 
+                'ID_KHOA_BOMON', 
+                'SO_NHOM_TOIDA', 
+                'SO_NHOM_HIENTAI',
+                'TRANGTHAI',
+                'NGAYTAO'
+            ])
             ->where('TRANGTHAI', 'Đã duyệt')
-            ->where('ID_KEHOACH', $request->plan_id);
+            ->where('ID_KEHOACH', $request->plan_id)
+            ->whereColumn('SO_NHOM_HIENTAI', '<', 'SO_NHOM_TOIDA');
 
+        $query->with([
+            'nguoiDexuat.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN', 
+            'khoaBomon:ID_KHOA_BOMON,TEN_KHOA_BOMON'
+        ]);
+        
         if ($request->filled('lecturer_id') && $request->lecturer_id !== 'all') {
             $query->where('ID_NGUOI_DEXUAT', $request->lecturer_id);
         }
 
-        // [SỬA] Lọc theo Bộ môn (Thay vì chuyên ngành)
         if ($request->filled('department_id') && $request->department_id !== 'all') {
             $query->where('ID_KHOA_BOMON', $request->department_id);
         }
 
         if ($request->filled('search')) {
-            $query->where('TEN_DETAI', 'like', '%' . $request->search . '%');
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('TEN_DETAI', 'like', '%' . $search . '%')
+                  ->orWhere('MA_DETAI', 'like', '%' . $search . '%');
+            });
         }
 
-        $topics = $query->orderBy('NGAYTAO', 'desc')->get();
+        $query->orderBy('NGAYTAO', 'desc');
 
-        return response()->json([
-            'data' => $topics
-        ]);
+        $topics = $query->paginate($request->input('per_page', 20));
+
+        $topics->getCollection()->transform(function ($topic) {
+            return [
+                'ID_DETAI' => $topic->ID_DETAI,
+                'MA_DETAI' => $topic->MA_DETAI,
+                'TEN_DETAI' => $topic->TEN_DETAI,
+                'MOTA' => $topic->MOTA, 
+                'slots_remaining' => $topic->SO_NHOM_TOIDA - $topic->SO_NHOM_HIENTAI,
+                'current_slots' => $topic->SO_NHOM_HIENTAI,
+                'total_slots' => $topic->SO_NHOM_TOIDA,
+                'lecturer_name' => $topic->nguoiDexuat?->nguoidung?->HODEM_VA_TEN ?? 'N/A',
+                'department_name' => $topic->khoaBomon?->TEN_KHOA_BOMON ?? 'N/A',
+                'nguoi_dexuat' => $topic->nguoiDexuat,
+                'khoa_bomon' => $topic->khoaBomon
+            ];
+        });
+
+        return response()->json($topics);
     }
 
     /**

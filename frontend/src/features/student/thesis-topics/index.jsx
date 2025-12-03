@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'; // Thêm useMemo nếu chưa có
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,25 +20,33 @@ import {
 } from '@/components/ui/dialog';
 import {
     Loader2, UserPlus, Search, BookCopy, Lock, Filter,
-    AlertCircle, CheckCircle, BookOpen, Users, Info, FileText, Ban, User, Layers
+    AlertCircle, CheckCircle, Users, Info, FileText, Ban, Layers, User
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import { format, parseISO } from 'date-fns';
+
+// Hooks & API
+import { useDebounce } from '@/hooks/useDebounce';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { thesisTopicService } from '@/api/thesisTopicService';
 import { getKhoaBomons } from '@/api/userService';
 import { getMyActivePlans } from '@/api/groupService';
-import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 import { getThesisPlanById } from '@/api/thesisPlanService';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { format, parseISO } from 'date-fns';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Progress } from '@/components/ui/progress';
-import { useDebounce } from '@/hooks/useDebounce';
-import axios from '@/api/axiosConfig';
 
-// --- Helper Functions ---
+// --- HELPER FUNCTIONS ---
 const getLecturerName = (topic) => {
-    if (topic.ten_giang_vien && topic.ten_giang_vien !== 'N/A') return topic.ten_giang_vien;
+    // Ưu tiên lấy từ field đã transform ở backend để tối ưu
+    if (topic.lecturer_name && topic.lecturer_name !== 'N/A') return topic.lecturer_name;
     return topic.nguoi_dexuat?.nguoidung?.HODEM_VA_TEN || 'Chưa cập nhật';
+};
+
+const getDepartmentName = (topic) => {
+    if (topic.department_name && topic.department_name !== 'N/A') return topic.department_name;
+    // Fallback cho các trường hợp cũ
+    return topic.khoa_bomon?.TEN_KHOA_BOMON || topic.khoaBomon?.TEN_KHOA_BOMON || 'Chưa cập nhật bộ môn';
 };
 
 const getStatusBadge = (status) => {
@@ -54,29 +62,25 @@ const getStatusBadge = (status) => {
     return <Badge className={`${statusColors[status] || 'bg-gray-300'} hover:${statusColors[status]}`}>{status}</Badge>;
 };
 
-// --- Component: Thẻ Đề tài (List View) ---
+// --- SUB-COMPONENT: TopicCard ---
 const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopicId, canRegister, onViewDetails, onRegister }) => {
-    const currentGroups = topic.SO_NHOM_HIENTAI || 0;
-    const maxGroups = topic.SO_NHOM_TOIDA || 1;
+    // Sử dụng dữ liệu đã tính toán sẵn từ Backend nếu có (current_slots, total_slots)
+    const currentGroups = topic.current_slots ?? topic.SO_NHOM_HIENTAI ?? 0;
+    const maxGroups = topic.total_slots ?? topic.SO_NHOM_TOIDA ?? 1;
+    
     const progress = Math.min((currentGroups / maxGroups) * 100, 100);
     const isFull = currentGroups >= maxGroups;
     const isMyTopic = hasRegisteredTopic && topic.ID_DETAI === myRegisteredTopicId;
     
     const progressColor = isFull ? "bg-red-500" : (progress >= 75 ? "bg-yellow-500" : "bg-blue-500");
     const lecturerName = getLecturerName(topic);
-
-    // [SỬA QUAN TRỌNG] Kiểm tra cả khoa_bomon (snake_case do Laravel trả về mặc định)
-    const departmentName = 
-        topic.khoa_bomon?.TEN_KHOA_BOMON || // Trường hợp Laravel trả về snake_case
-        topic.khoaBomon?.TEN_KHOA_BOMON || // Trường hợp Laravel trả về camelCase (ít gặp hơn ở default serializer)
-        topic.ten_bo_mon ||                // Trường hợp API custom trả về
-        'Chưa cập nhật bộ môn';
+    const departmentName = getDepartmentName(topic);
 
     return (
         <div className={`group flex flex-col md:flex-row items-center justify-between p-4 border rounded-lg bg-white shadow-sm hover:shadow-md transition-all duration-200 gap-4 ${isMyTopic ? 'border-l-4 border-l-green-500 bg-green-50/30' : 'border-l-4 border-l-transparent hover:border-l-blue-500'}`}>
-              
-            {/* 1. CỘT TRÁI: Thông tin */}
-            <div className="w-full md:w-[40%] flex flex-col justify-center shrink-0 gap-1.5">
+            
+            {/* 1. CỘT TRÁI: Thông tin chính */}
+            <div className="w-full md:w-[45%] flex flex-col justify-center shrink-0 gap-1.5">
                 <div className="flex items-start gap-2">
                     <h3 
                         onClick={() => onViewDetails(topic.ID_DETAI)}
@@ -100,8 +104,6 @@ const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopic
                         <User className="h-3.5 w-3.5 text-blue-500" /> {lecturerName}
                     </span>
                     <span className="text-gray-300">|</span>
-                    
-                    {/* Hiển thị tên bộ môn */}
                     <span className="truncate text-gray-500 flex items-center gap-1" title={departmentName}>
                         <Layers className="h-3.5 w-3.5 text-indigo-500" />
                         {departmentName}
@@ -109,20 +111,20 @@ const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopic
                 </div>
                 
                 {isMyTopic && (
-                    <span className="text-xs font-semibold text-green-600 flex items-center gap-1">
+                    <span className="text-xs font-semibold text-green-600 flex items-center gap-1 mt-1">
                         <CheckCircle className="w-3 h-3" /> Nhóm bạn đã đăng ký đề tài này
                     </span>
                 )}
             </div>
 
-            {/* 2. CỘT GIỮA: Mô tả */}
+            {/* 2. CỘT GIỮA: Mô tả ngắn */}
             <div className="hidden md:flex flex-1 px-6 border-l border-r border-dashed border-gray-200 h-full items-center">
                 <p className="text-sm text-gray-600 italic line-clamp-2 w-full">
                     "{topic.MOTA ? topic.MOTA : "Chưa có mô tả chi tiết..."}"
                 </p>
             </div>
 
-            {/* 3. CỘT PHẢI: Hành động */}
+            {/* 3. CỘT PHẢI: Trạng thái & Hành động */}
             <div className="w-full md:w-[180px] flex items-center justify-between md:justify-end gap-4 shrink-0">
                 <div className="flex flex-col items-end min-w-[80px]">
                     <span className={`text-xs font-bold mb-1 ${isFull ? 'text-red-600' : 'text-blue-600'}`}>
@@ -152,11 +154,12 @@ const TopicCard = ({ topic, isGroupLeader, hasRegisteredTopic, myRegisteredTopic
     );
 };
 
-// --- Component: Dialog Chi tiết (Giữ nguyên logic, chỉ cập nhật departmentName) ---
+// --- SUB-COMPONENT: Dialog Chi tiết ---
 const TopicDetailDialog = ({ open, onOpenChange, topicId, isGroupLeader, onRegisterGroup, hasRegisteredTopic, canRegister }) => {
     const [topic, setTopic] = useState(null);
     const [loading, setLoading] = useState(false);
 
+    // Fetch chi tiết khi mở dialog (vì list chỉ chứa thông tin tóm tắt)
     useEffect(() => {
         if (open && topicId) {
             setLoading(true);
@@ -164,17 +167,14 @@ const TopicDetailDialog = ({ open, onOpenChange, topicId, isGroupLeader, onRegis
                 .then(res => setTopic(res.data))
                 .catch(err => console.error(err))
                 .finally(() => setLoading(false));
+        } else {
+            setTopic(null);
         }
     }, [open, topicId]);
 
     if (!open) return null;
 
-    // [SỬA] Lấy tên bộ môn an toàn cho Dialog
-    const departmentName = 
-        topic?.khoa_bomon?.TEN_KHOA_BOMON || 
-        topic?.khoaBomon?.TEN_KHOA_BOMON || 
-        topic?.ten_bo_mon || 
-        'Chưa cập nhật';
+    const departmentName = getDepartmentName(topic || {});
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -264,7 +264,7 @@ const Section = ({ title, content }) => {
     );
 };
 
-// ... (RegisterConfirmDialog giữ nguyên)
+// --- SUB-COMPONENT: Dialog Xác nhận Đăng ký ---
 const RegisterConfirmDialog = ({ open, onOpenChange, topic, onSuccess }) => {
     const [loading, setLoading] = useState(false);
 
@@ -318,14 +318,20 @@ const RegisterConfirmDialog = ({ open, onOpenChange, topic, onSuccess }) => {
     );
 };
 
-// --- MAIN COMPONENT ---
+// ==================================================================================
+// === MAIN PAGE COMPONENT ===
+// ==================================================================================
+
 const StudentThesisTopicsPage = () => {
-    // ... (Logic trong Main Component giữ nguyên như file bạn gửi trước đó, chỉ đảm bảo import đúng)
-    // Lưu ý: Logic fetch đã được sửa trong câu trả lời trước đó để dùng department_id thay vì major_id
-    
+    // Data States
     const [topics, setTopics] = useState([]);
-    const [loading, setLoading] = useState(true);
-    
+    const [loading, setLoading] = useState(false);        // Loading ban đầu
+    const [loadingMore, setLoadingMore] = useState(false); // Loading trang tiếp theo
+
+    // Pagination States
+    const [page, setPage] = useState(1);
+    const [hasMore, setHasMore] = useState(true);
+
     // Filters
     const [searchTerm, setSearchTerm] = useState('');
     const debouncedSearch = useDebounce(searchTerm, 500);
@@ -333,26 +339,27 @@ const StudentThesisTopicsPage = () => {
     const [selectedPlan, setSelectedPlan] = useState('');
     const [selectedLecturer, setSelectedLecturer] = useState('all');
     
-    // Data sources
+    // Filter Options Data
     const [plans, setPlans] = useState([]);
     const [departments, setDepartments] = useState([]); 
     const [lecturers, setLecturers] = useState([]);
     
-    // User context
+    // User Context Data
     const [isGroupLeader, setIsGroupLeader] = useState(false);
     const [hasRegisteredTopic, setHasRegisteredTopic] = useState(false);
     const [myRegisteredTopic, setMyRegisteredTopic] = useState(null);
 
-    // UI state
+    // UI States
     const [showTopicDetailDialog, setShowTopicDetailDialog] = useState(false);
     const [showRegisterDialog, setShowRegisterDialog] = useState(false);
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopic, setSelectedTopic] = useState(null);
-
     const [fullPlanData, setFullPlanData] = useState(null);
+
+    // Hooks
     const canRegisterFlag = useFeatureFlag(fullPlanData, 'SV_DANGKY_DE');
 
-    // 1. Init Data
+    // 1. Init Data: Lấy Plans, Departments & Trạng thái nhóm
     useEffect(() => {
         const initData = async () => {
             try {
@@ -369,54 +376,107 @@ const StudentThesisTopicsPage = () => {
                     const activePlan = plansData.find(p => p.TRANGTHAI === 'Đang thực hiện') || plansData[0];
                     setSelectedPlan(String(activePlan.ID_KEHOACH));
                 } else if (plansData.length === 0) {
-                    setLoading(false);
+                    // Không có plan nào -> Dừng loading
                 }
 
                 await checkGroupStatus();
             } catch (error) {
                 console.error("Init error:", error);
                 toast.error("Lỗi tải dữ liệu ban đầu.");
-                setLoading(false);
             }
         };
         initData();
     }, []);
 
-    // 2. Load Plan Details, Lecturers & Topics
+    // 2. Load Lecturers khi chọn Plan (để filter)
     useEffect(() => {
-        if (!selectedPlan) {
-            setTopics([]);
-            return;
-        }
-
-        const fetchData = async () => {
-            setLoading(true);
+        if (!selectedPlan) return;
+        const fetchLecturers = async () => {
             try {
                 const planDetails = await getThesisPlanById(selectedPlan);
                 setFullPlanData(planDetails);
 
                 const lecturersRes = await thesisTopicService.getSupervisorsByPlan(selectedPlan);
                 setLecturers(lecturersRes || []);
-
-                // Load topics
-                const params = {
-                    plan_id: selectedPlan,
-                    search: debouncedSearch,
-                    department_id: selectedDepartment !== 'all' ? selectedDepartment : undefined, 
-                    lecturer_id: selectedLecturer !== 'all' ? selectedLecturer : undefined,
-                };
-                const res = await thesisTopicService.getAvailableTopics(params);
-                setTopics(Array.isArray(res.data) ? res.data : (res.data.data || []));
-                
             } catch (error) {
-                console.error('Error loading data:', error);
-            } finally {
-                setLoading(false);
+                console.error("Error fetching plan details/lecturers:", error);
             }
         };
+        fetchLecturers();
+    }, [selectedPlan]);
 
-        fetchData();
+    // 3. Reset Pagination khi Filter thay đổi
+    useEffect(() => {
+        setTopics([]);
+        setPage(1);
+        setHasMore(true);
     }, [selectedPlan, debouncedSearch, selectedDepartment, selectedLecturer]);
+
+    // 4. Fetch Topics (Core Logic)
+    const fetchTopics = useCallback(async (currentPage, isLoadMore = false) => {
+        if (!selectedPlan) return;
+        
+        isLoadMore ? setLoadingMore(true) : setLoading(true);
+        
+        try {
+            const params = {
+                plan_id: selectedPlan,
+                search: debouncedSearch,
+                department_id: selectedDepartment !== 'all' ? selectedDepartment : undefined, 
+                lecturer_id: selectedLecturer !== 'all' ? selectedLecturer : undefined,
+                page: currentPage,
+                per_page: 20 // Load 20 item mỗi lần
+            };
+
+            const res = await thesisTopicService.getAvailableTopics(params);
+            
+            // Laravel Pagination Response structure:
+            // res.data = { data: [...], current_page: 1, last_page: 5, ... }
+            // HOẶC res.data = [...] (nếu backend trả về mảng - logic cũ)
+            
+            let newData = [];
+            let meta = {};
+
+            if (res.data && Array.isArray(res.data.data)) {
+                // Chuẩn pagination mới
+                newData = res.data.data;
+                meta = res.data;
+            } else if (Array.isArray(res.data)) {
+                // Fallback logic cũ (nếu backend chưa update kịp)
+                newData = res.data;
+                meta = { current_page: 1, last_page: 1 };
+            }
+
+            if (isLoadMore) {
+                setTopics(prev => [...prev, ...newData]);
+            } else {
+                setTopics(newData);
+            }
+
+            // Check if has more pages
+            setHasMore(meta.current_page < meta.last_page);
+
+        } catch (error) {
+            console.error('Error loading topics:', error);
+            toast.error("Không thể tải danh sách đề tài.");
+        } finally {
+            isLoadMore ? setLoadingMore(false) : setLoading(false);
+        }
+    }, [selectedPlan, debouncedSearch, selectedDepartment, selectedLecturer]);
+
+    // 5. Trigger Fetch khi page=1 (Init hoặc Reset Filter)
+    useEffect(() => {
+        if (page === 1 && selectedPlan) {
+            fetchTopics(1, false);
+        }
+    }, [fetchTopics, page, selectedPlan]);
+
+    // Helper: Load More
+    const handleLoadMore = () => {
+        const nextPage = page + 1;
+        setPage(nextPage);
+        fetchTopics(nextPage, true);
+    };
 
     const checkGroupStatus = async () => {
         try {
@@ -446,6 +506,7 @@ const StudentThesisTopicsPage = () => {
     const handleRegisterSuccess = (registeredTopic) => {
         setHasRegisteredTopic(true);
         setMyRegisteredTopic(registeredTopic);
+        // Update local state without refetch
         setTopics(prev => prev.map(t => 
             t.ID_DETAI === registeredTopic.ID_DETAI 
             ? { ...t, SO_NHOM_HIENTAI: (t.SO_NHOM_HIENTAI || 0) + 1 } 
@@ -454,7 +515,7 @@ const StudentThesisTopicsPage = () => {
     };
 
     return (
-        <div className="h-full overflow-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
+        <div className="h-full overflow-auto p-4 md:p-8 space-y-6 animate-in fade-in duration-500" id="scrollable-container">
             
             {/* Page Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b">
@@ -482,7 +543,7 @@ const StudentThesisTopicsPage = () => {
                 </div>
             </div>
 
-            {/* Alert */}
+            {/* Alert Status */}
             {selectedPlan && !canRegisterFlag && fullPlanData && (
                 <Alert variant="destructive" className="bg-yellow-50 border-yellow-200 text-yellow-800 shadow-sm">
                     <Lock className="h-4 w-4" />
@@ -495,8 +556,8 @@ const StudentThesisTopicsPage = () => {
                 </Alert>
             )}
 
-            {/* Filters */}
-            <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 items-center sticky top-2 z-10">
+            {/* Filters Bar */}
+            <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border shadow-sm grid grid-cols-1 md:grid-cols-4 gap-4 items-center sticky top-0 z-20">
                 {/* Search Box */}
                 <div className="md:col-span-2 relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -509,7 +570,7 @@ const StudentThesisTopicsPage = () => {
                     />
                 </div>
 
-                {/* Filter by Department [SỬA] */}
+                {/* Filter by Department */}
                 <div className="md:col-span-1">
                     <Select value={selectedDepartment} onValueChange={setSelectedDepartment} disabled={!selectedPlan}>
                         <SelectTrigger className="h-10 bg-slate-50/50 focus:bg-white transition-colors">
@@ -555,11 +616,12 @@ const StudentThesisTopicsPage = () => {
             </div>
 
             {/* List of Topics */}
-            <div className="space-y-3">
+            <div className="space-y-3 pb-10">
                 {loading ? (
+                    // Skeleton Loading
                     [...Array(5)].map((_, i) => (
-                        <div key={i} className="p-4 border rounded-lg bg-white shadow-sm">
-                             <div className="flex gap-4 items-center">
+                         <div key={i} className="p-4 border rounded-lg bg-white shadow-sm">
+                            <div className="flex gap-4 items-center">
                                 <Skeleton className="h-12 w-12 rounded-full" />
                                 <div className="space-y-2 flex-1">
                                     <Skeleton className="h-5 w-[40%]" />
@@ -571,8 +633,8 @@ const StudentThesisTopicsPage = () => {
                 ) : topics.length > 0 ? (
                     <>
                         <div className="flex justify-between items-center px-1">
-                             <div className="text-sm text-muted-foreground font-medium">
-                                Hiển thị tất cả <span className="text-foreground font-bold">{topics.length}</span> đề tài
+                            <div className="text-sm text-muted-foreground font-medium">
+                                Hiển thị <span className="text-foreground font-bold">{topics.length}</span> đề tài
                             </div>
                             {myRegisteredTopic && (
                                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 py-1">
@@ -595,8 +657,24 @@ const StudentThesisTopicsPage = () => {
                                 />
                             ))}
                         </div>
+
+                        {/* Load More Button */}
+                        {hasMore && (
+                            <div className="flex justify-center pt-6 pb-8">
+                                <Button 
+                                    variant="outline" 
+                                    onClick={handleLoadMore} 
+                                    disabled={loadingMore}
+                                    className="min-w-[200px] shadow-sm border-dashed"
+                                >
+                                    {loadingMore ? <Loader2 className="h-4 w-4 animate-spin mr-2"/> : null}
+                                    {loadingMore ? 'Đang tải thêm...' : 'Xem thêm đề tài'}
+                                </Button>
+                            </div>
+                        )}
                     </>
                 ) : (
+                    // Empty State
                     <div className="flex flex-col items-center justify-center py-20 text-center bg-slate-50/50 rounded-xl border-2 border-dashed">
                         {plans.length === 0 ? (
                             <>
