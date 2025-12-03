@@ -46,6 +46,21 @@ class Giangvien extends Model
         return $this->hasMany(Detai::class, 'ID_NGUOI_DEXUAT', 'ID_GIANGVIEN');
     }
 
+    public function quotaGiangviens()
+    {
+        return $this->hasMany(QuotaGiangvien::class, 'ID_GIANGVIEN', 'ID_GIANGVIEN');
+    }
+
+    public function phancongGvDetais()
+    {
+        return $this->hasMany(PhancongGvDetai::class, 'ID_GIANGVIEN', 'ID_GIANGVIEN');
+    }
+    
+    public function detais()
+    {
+        return $this->hasMany(Detai::class, 'ID_NGUOI_DEXUAT', 'ID_GIANGVIEN');
+    }
+
     public function hoidongs()
     {
         return $this->belongsToMany(

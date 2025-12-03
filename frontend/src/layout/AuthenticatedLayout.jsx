@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Outlet, Link, useNavigate, useLocation, matchPath } from 'react-router-dom';
+import { Outlet, Link, useNavigate, useLocation, matchPath, Navigate } from 'react-router-dom';
 import { AppSidebar } from '@/layout/AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar';
@@ -9,12 +9,13 @@ import {
     BreadcrumbPage, BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Moon, Sun, Bell } from "lucide-react";
+import { CalendarDays, Moon, Sun, Bell, LogOut, ShieldAlert } from "lucide-react"; // Thêm LogOut, ShieldAlert
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery } from '@tanstack/react-query';
 import { getUnreadCount, getNotifications } from '@/api/notificationService';
 import { NotificationDropdown } from '@/components/shared/notifications/NotificationDropdown';
 import { useTheme } from "@/components/theme-provider";
+import { ChangePasswordForm } from '@/features/profile/components/ChangePasswordForm'; 
 
 const routeNameMap = {
     '/': 'Trang chủ',
@@ -103,30 +104,35 @@ const MainSkeleton = () => (
 );
 
 export default function AuthenticatedLayout() {
-    const { user, loading: authLoading } = useAuth();
+    const { user, logout, loading: authLoading } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const { theme, setTheme } = useTheme();
 
+    const isFirstLogin = user?.LA_DANGNHAP_LANDAU == true || user?.LA_DANGNHAP_LANDAU == 1;
+
     const { data: countData } = useQuery({
         queryKey: ['unreadCount'],
         queryFn: getUnreadCount,
-        enabled: !!user,
-        refetchInterval: 30000,
+        enabled: !!user && !isFirstLogin,
+        refetchInterval: 300000,
         refetchOnWindowFocus: true,
+        retry: false,
     });
 
     const { data: latestNotiData, isLoading: loadingNoti } = useQuery({
         queryKey: ['notifications', 'latest'],
         queryFn: () => getNotifications({ page: 1, per_page: 5 }),
-        enabled: !!user,
-        refetchInterval: 30000,
+        enabled: !!user && !isFirstLogin,
+        refetchInterval: 300000,
+        retry: false,
     });
 
     const unreadCount = countData?.count || 0;
     const notifications = latestNotiData?.data || [];
 
     const breadcrumbItems = useMemo(() => {
+        // ... (Giữ nguyên logic breadcrumb cũ) ...
         const pathnames = location.pathname.split('/').filter(x => x);
         let currentPath = '';
         const items = [];
@@ -173,7 +179,7 @@ export default function AuthenticatedLayout() {
                 items.push(
                     <BreadcrumbItem key={currentPath}>
                         {routeName ? (
-                             <BreadcrumbLink asChild>
+                            <BreadcrumbLink asChild>
                                 <Link to={matchedRoute} className="hover:text-foreground">{displayName}</Link>
                             </BreadcrumbLink>
                         ) : (
@@ -198,14 +204,16 @@ export default function AuthenticatedLayout() {
 
     const isLecturerOrHigher = ['Giảng viên', 'Trưởng khoa', 'Giáo vụ'].includes(user?.vaitro?.TEN_VAITRO);
 
+    // 1. Xử lý Loading Auth
     if (authLoading) {
         return (
             <SidebarProvider>
                 <div className="flex h-screen w-full bg-background text-foreground">
-                    <AppSidebar />
+                    {/* Ẩn Sidebar khi loading để tránh giật */}
+                    <div className="w-64 h-full border-r bg-muted/10 hidden md:block" /> 
                     <SidebarInset>
-                         <HeaderSkeleton />
-                         <MainSkeleton />
+                        <HeaderSkeleton />
+                        <MainSkeleton />
                     </SidebarInset>
                 </div>
             </SidebarProvider>
@@ -214,6 +222,33 @@ export default function AuthenticatedLayout() {
 
     if (!user && !authLoading) {
         return <div className="flex h-screen w-full items-center justify-center">Vui lòng đăng nhập.</div>;
+    }
+
+    if (isFirstLogin) {
+        return (
+            <div className="min-h-screen w-full flex flex-col items-center justify-center bg-muted/30 p-4">
+                <div className="w-full max-w-md space-y-6">
+                    <div className="text-center space-y-2">
+                        <div className="inline-flex h-16 w-16 items-center justify-center rounded-full bg-orange-100 mb-2">
+                            <ShieldAlert className="h-8 w-8 text-orange-600" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-foreground">Cần đổi mật khẩu</h1>
+                        <p className="text-sm text-muted-foreground">
+                            Đây là lần đăng nhập đầu tiên của bạn.<br/>
+                            Vui lòng đổi mật khẩu mới để bảo mật tài khoản và tiếp tục sử dụng hệ thống.
+                        </p>
+                    </div>
+                    
+                    <ChangePasswordForm />
+
+                    <div className="flex justify-center">
+                        <Button variant="ghost" onClick={logout} className="text-muted-foreground hover:text-foreground">
+                            <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (

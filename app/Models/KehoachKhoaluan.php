@@ -78,10 +78,23 @@ class KehoachKhoaluan extends Model
         return $this->hasMany(Hoidong::class, 'ID_KEHOACH', 'ID_KEHOACH');
     }
 
+    public function detais()
+    {
+        return $this->hasMany(Detai::class, 'ID_KEHOACH', 'ID_KEHOACH');
+    }
+
+    public function quotaKhoaBomons()
+    {
+        return $this->hasMany(QuotaKhoaBomon::class, 'ID_KEHOACH', 'ID_KEHOACH');
+    }
+
+    public function quotaGiangviens()
+    {
+        return $this->hasMany(QuotaGiangvien::class, 'ID_KEHOACH', 'ID_KEHOACH');
+    }
+
     public function isFeatureActive(string $featureKey): bool
     {
-        // SỬA LỖI: Đảm bảo $this->SETTINGS là mảng trước khi truy cập key
-        // Nếu SETTINGS là null, gán nó là mảng rỗng []
         $settings = $this->SETTINGS ?? [];
         
         $featureConfig = $settings[$featureKey] ?? null;
@@ -94,10 +107,10 @@ class KehoachKhoaluan extends Model
         // 1. Kiểm tra cờ tắt thủ công (Ưu tiên cao nhất)
         if (isset($featureConfig['manual_override'])) {
             if ($featureConfig['manual_override'] === 'DISABLED') {
-                return false; // Bắt buộc tắt
+                return false;
             }
             if ($featureConfig['manual_override'] === 'ENABLED') {
-                return true; // Bắt buộc mở (bỏ qua ngày tháng)
+                return true;
             }
         }
 
@@ -114,7 +127,6 @@ class KehoachKhoaluan extends Model
             return false; 
         }
 
-        // Kiểm tra thời gian thực tế
         return now()->isBetween($start, $end);
     }
 }

@@ -17,7 +17,7 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
     
     const auth = useAuth();
-    const navigate = useNavigate(); // [NEW]
+    const navigate = useNavigate(); 
 
     const handleLogin = async (e) => {
         e.preventDefault();
@@ -29,10 +29,7 @@ export default function Login() {
             
             auth.login(data.user, data.access_token, remember);
 
-            if (data.user.LA_DANGNHAP_LANDAU) {
-                navigate('/profile?action=change_password', { replace: true });
-            } else {
-            }
+            navigate('/', { replace: true });
 
         } catch (err) {
             if (err.response) {
@@ -56,10 +53,9 @@ export default function Login() {
             setLoading(false);
         }
     };
-
+    
     return (
         <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-4 md:p-8">
-            {/* ... (Phần style CSS giữ nguyên) ... */}
              <style>{`
                 input:-webkit-autofill,
                 input:-webkit-autofill:hover, 
@@ -69,7 +65,6 @@ export default function Login() {
                     -webkit-text-fill-color: #0f172a !important;
                     transition: background-color 5000s ease-in-out 0s;
                 }
-                /* Sửa :global(.dark) thành .dark */
                 .dark input:-webkit-autofill,
                 .dark input:-webkit-autofill:hover, 
                 .dark input:-webkit-autofill:focus, 

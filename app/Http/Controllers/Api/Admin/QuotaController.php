@@ -88,41 +88,42 @@ class QuotaController extends Controller
             return response()->json(['message' => 'Plan ID is required'], 400);
         }
 
-        $departments = KhoaBomon::with(['giangvien'])->get();
+        //loading các quan hệ cần đếm
+        $departments = KhoaBomon::with([
+            'giangvien',
+            'quotaKhoaBomons' => function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            },
+            'detais' => function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId)
+                  ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt', 'Nháp']);
+            },
+            'nhoms' => function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            }
+        ])
+        // Để đếm số nhóm đã có đề tài, ta cần một cách tiếp cận khác vì quan hệ nested phức tạp.
+        ->get();
 
-        $result = $departments->map(function ($dept) use ($planId) {
-            $quota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
-                ->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON)
-                ->where('TRANGTHAI', 'Đang phân công')
-                ->first();
+        $groupsWithTopicsCounts = DB::table('NHOM')
+            ->join('PHANCONG_DETAI_NHOM', 'NHOM.ID_NHOM', '=', 'PHANCONG_DETAI_NHOM.ID_NHOM')
+            ->join('DETAI', 'PHANCONG_DETAI_NHOM.ID_DETAI', '=', 'DETAI.ID_DETAI')
+            ->where('NHOM.ID_KEHOACH', $planId)
+            ->select('DETAI.ID_KHOA_BOMON', DB::raw('count(*) as total'))
+            ->groupBy('DETAI.ID_KHOA_BOMON')
+            ->pluck('total', 'ID_KHOA_BOMON');
 
-            // [THAY ĐỔI]: Đếm số lượng đề tài đã tạo trực tiếp theo ID_KHOA_BOMON
-            $actualCreated = Detai::where('ID_KEHOACH', $planId)
-                ->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON)
-                ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt', 'Nháp'])
-                ->count();
-
-            // Thống kê số nhóm thuộc bộ môn này
-            $totalGroups = Nhom::where('ID_KEHOACH', $planId)
-                ->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON)
-                ->count();
-
-            // Thống kê số nhóm đã có đề tài thuộc bộ môn này
-            // Logic: Nhóm -> Phân công -> Đề tài (check ID_KHOA_BOMON của đề tài)
-            $groupsWithTopics = Nhom::where('ID_KEHOACH', $planId)
-                ->whereHas('phancongDetaiNhom.detai', function ($q) use ($dept) {
-                    $q->where('ID_KHOA_BOMON', $dept->ID_KHOA_BOMON);
-                })
-                ->count();
-
+        $result = $departments->map(function ($dept) use ($groupsWithTopicsCounts) {
+            $quota = $dept->quotaKhoaBomons->first(); 
+            
             return [
                 'ID_KHOA_BOMON' => $dept->ID_KHOA_BOMON,
                 'TEN_KHOA_BOMON' => $dept->TEN_KHOA_BOMON,
                 'total_lecturers' => $dept->giangvien->count(),
-                'total_groups' => $totalGroups,
-                'groups_registered' => $groupsWithTopics,
+                'total_groups' => $dept->nhoms->count(),
+                'groups_registered' => $groupsWithTopicsCounts[$dept->ID_KHOA_BOMON] ?? 0,
                 'quota_assigned' => $quota ? $quota->SO_DETAI_QUOTA : 0,
-                'actual_created' => $actualCreated,
+                'actual_created' => $dept->detais->count(),
             ];
         });
 

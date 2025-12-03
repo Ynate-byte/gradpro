@@ -18,24 +18,46 @@ use Carbon\Carbon;
 class AdminDashboardController extends Controller
 {
     /**
-     * Lấy thống kê tổng quan và danh sách kế hoạch Active
+     * Lấy thống kê tổng quan và danh sách kế hoạch Active (Đã tối ưu N+1 Query)
      */
     public function getStats()
     {
-        // 1. Lấy danh sách các kế hoạch đang chạy
-        $activePlansRaw = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa'])
+        // 1. Lấy danh sách các kế hoạch đang chạy kèm theo số liệu thống kê (Eager Loading Aggregate)
+        $activePlans = KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa'])
             ->with('mocThoigians')
+            ->withCount('nhoms as total_groups')
+            ->withCount(['nhoms as groups_registered' => function ($query) {
+                $query->has('phancongDetaiNhom');
+            }])
+            ->withCount(['detais as approved_topics' => function ($query) {
+                $query->where('TRANGTHAI', 'Đã duyệt');
+            }])
+            ->withCount('sinhvienThamgias as total_students')
+            ->withSum('quotaKhoaBomons as topics_target', 'SO_DETAI_QUOTA')
             ->orderBy('NGAYTAO', 'desc')
             ->get();
 
-        $activePlanIds = $activePlansRaw->pluck('ID_KEHOACH');
+        $activePlanIds = $activePlans->pluck('ID_KEHOACH');
+        $now = Carbon::now();
 
-        // Map dữ liệu chi tiết cho từng kế hoạch
-        $activePlansData = $activePlansRaw->map(function ($plan) {
-            $now = Carbon::now();
+        $allDeptStats = DB::table('KHOA_BOMON')
+            ->join('DETAI', 'KHOA_BOMON.ID_KHOA_BOMON', '=', 'DETAI.ID_KHOA_BOMON')
+            ->whereIn('DETAI.ID_KEHOACH', $activePlanIds)
+            ->where('DETAI.TRANGTHAI', 'Đã duyệt')
+            ->select(
+                'DETAI.ID_KEHOACH',
+                'KHOA_BOMON.ID_KHOA_BOMON',
+                'KHOA_BOMON.TEN_KHOA_BOMON as name',
+                DB::raw('COUNT(DETAI.ID_DETAI) as da_tao'),
+                DB::raw('SUM(CASE WHEN DETAI.SO_NHOM_HIENTAI > 0 THEN 1 ELSE 0 END) as da_giao')
+            )
+            ->groupBy('DETAI.ID_KEHOACH', 'KHOA_BOMON.ID_KHOA_BOMON', 'KHOA_BOMON.TEN_KHOA_BOMON')
+            ->get()
+            ->groupBy('ID_KEHOACH');
+
+        // 3. Map dữ liệu trả về (Lúc này không còn query DB nữa, chỉ xử lý Array/Collection)
+        $activePlansData = $activePlans->map(function ($plan) use ($now, $allDeptStats) {
             $currentPhase = null;
-            
-            // Xác định giai đoạn hiện tại
             foreach ($plan->mocThoigians as $moc) {
                 if ($now->between($moc->NGAY_BATDAU, $moc->NGAY_KETTHUC)) {
                     $currentPhase = $moc;
@@ -49,38 +71,13 @@ class AdminDashboardController extends Controller
                 $currentPhase = $plan->mocThoigians->sortByDesc('NGAY_KETTHUC')->first();
             }
 
-            // Thống kê cơ bản
-            $totalGroups = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->count();
-            $groupsWithTopic = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->has('phancongDetaiNhom')->count();
-            
-            //Chỉ đếm Đề tài "Đã duyệt"
-            $approvedTopics = Detai::where('ID_KEHOACH', $plan->ID_KEHOACH)
-                ->where('TRANGTHAI', 'Đã duyệt')
-                ->count();
-            
-            // topics Quota
-            $targetTopics = QuotaKhoaBomon::where('ID_KEHOACH', $plan->ID_KEHOACH)->sum('SO_DETAI_QUOTA');
-            $totalStudents = SinhvienThamgia::where('ID_KEHOACH', $plan->ID_KEHOACH)->count();
-            if ($targetTopics == 0 && $totalStudents > 0) {
-                $targetTopics = ceil(($totalStudents / 3) * 1.5);
+            $targetTopics = $plan->topics_target;
+            if (($targetTopics == 0 || $targetTopics == null) && $plan->total_students > 0) {
+                $targetTopics = ceil(($plan->total_students / 3) * 1.5);
             }
 
-            // Thống kê theo Bộ môn (Chỉ lấy đề tài đã duyệt hoặc chờ duyệt để phản ánh thực tế)
-            $deptStats = DB::table('KHOA_BOMON')
-                ->leftJoin('DETAI', function($join) use ($plan) {
-                    $join->on('KHOA_BOMON.ID_KHOA_BOMON', '=', 'DETAI.ID_KHOA_BOMON')
-                         ->where('DETAI.ID_KEHOACH', '=', $plan->ID_KEHOACH)
-                         ->where('DETAI.TRANGTHAI', '=', 'Đã duyệt');
-                })
-                ->select(
-                    'KHOA_BOMON.ID_KHOA_BOMON',
-                    'KHOA_BOMON.TEN_KHOA_BOMON as name',
-                    DB::raw('COUNT(DETAI.ID_DETAI) as da_tao'),
-                    DB::raw('SUM(CASE WHEN DETAI.SO_NHOM_HIENTAI > 0 THEN 1 ELSE 0 END) as da_giao')
-                )
-                ->groupBy('KHOA_BOMON.ID_KHOA_BOMON', 'KHOA_BOMON.TEN_KHOA_BOMON')
-                ->havingRaw('COUNT(DETAI.ID_DETAI) > 0')
-                ->get();
+            // Lấy stats bộ môn từ biến đã load sẵn bên ngoài
+            $deptStats = $allDeptStats->get($plan->ID_KEHOACH, []);
 
             return [
                 'id' => $plan->ID_KEHOACH,
@@ -91,35 +88,37 @@ class AdminDashboardController extends Controller
                 'phase_start' => $currentPhase ? $currentPhase->NGAY_BATDAU : null,
                 'phase_desc' => $currentPhase ? $currentPhase->MOTA : null,
                 'phase_actors' => $currentPhase ? $currentPhase->VAITRO_THUCHIEN : null,
-                'groups_registered' => $groupsWithTopic,
-                'groups_total' => $totalGroups,
-                'topics_current' => $approvedTopics,
+                'groups_registered' => $plan->groups_registered,
+                'groups_total' => $plan->total_groups,
+                'topics_current' => $plan->approved_topics,
                 'topics_target' => $targetTopics,
-                'department_stats' => $deptStats 
+                'department_stats' => $deptStats
             ];
         });
 
-        // 3. Tính toán Workflow tổng hợp
+        // 4. Tính toán Workflow tổng hợp (Phần này giữ nguyên logic nhưng tối ưu query đếm)
+        // Lưu ý: Phần này query độc lập, không nằm trong vòng lặp nên chấp nhận được.
+        // Tuy nhiên, có thể tối ưu thêm nếu cần thiết sau này.
         $workflow = [
             'quota_percent' => 0, 'quota_missing' => 0, 'topic_percent' => 0,
             'council_percent' => 0, 'grading_percent' => 0, 'groups_missing_council' => 0,
         ];
 
         if ($activePlanIds->isNotEmpty()) {
-            // A. Quota
+            // Tận dụng các biến count đã có nếu có thể, hoặc giữ nguyên query aggregated
             $totalDepts = KhoaBomon::where('TRANGTHAI_KICHHOAT', true)->count();
             $maxPossibleAssignments = $totalDepts * $activePlanIds->count();
             $actualAssignments = QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)->count();
             $workflow['quota_percent'] = $maxPossibleAssignments > 0 ? round(($actualAssignments / $maxPossibleAssignments) * 100) : 0;
             $workflow['quota_missing'] = max(0, $maxPossibleAssignments - $actualAssignments);
 
-            // B. Topic
+            // B. Topic (Dùng lại dữ liệu đã load nếu muốn chính xác hơn, ở đây query lại cho đơn giản code)
             $totalTopicsAll = Detai::whereIn('ID_KEHOACH', $activePlanIds)->count();
-            $approvedTopicsAll = Detai::whereIn('ID_KEHOACH', $activePlanIds)->where('TRANGTHAI', 'Đã duyệt')->count();
+            $approvedTopicsAll = $activePlans->sum('approved_topics'); // Lấy từ collection đã load
             $workflow['topic_percent'] = $totalTopicsAll > 0 ? round(($approvedTopicsAll / $totalTopicsAll) * 100) : 0;
 
             // C. Council & Grading
-            $totalGroupsAll = Nhom::whereIn('ID_KEHOACH', $activePlanIds)->count();
+            $totalGroupsAll = $activePlans->sum('total_groups');
             
             $groupsReadyForCouncil = Nhom::whereIn('ID_KEHOACH', $activePlanIds)
                 ->whereHas('phancongDetaiNhom.submissions', function ($q) {
@@ -142,7 +141,7 @@ class AdminDashboardController extends Controller
             $workflow['groups_missing_council'] = max(0, $groupsReadyForCouncil - $groupsWithCouncilAll);
         }
 
-        // 4. Actions & Risks
+        // 5. Actions & Risks (Query đếm đơn giản, chấp nhận được)
         $actions = [
             'pending_topics' => Detai::whereIn('ID_KEHOACH', $activePlanIds)->where('TRANGTHAI', 'Chờ duyệt')->count(),
             'pending_submissions' => NopSanpham::whereHas('phancong.nhom', fn($q) => $q->whereIn('ID_KEHOACH', $activePlanIds))->where('TRANGTHAI', 'Chờ xác nhận')->count(),
@@ -152,16 +151,11 @@ class AdminDashboardController extends Controller
             'students_no_group' => Nguoidung::whereHas('sinhvien.cacDotThamGia', fn($q) => $q->whereIn('ID_KEHOACH', $activePlanIds))
                 ->whereDoesntHave('thanhvienNhom.nhom', fn($q) => $q->whereIn('ID_KEHOACH', $activePlanIds))->count(),
             
-                'departments_missing_quota' => QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)
+            'departments_missing_quota' => QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)
                 ->where('TRANGTHAI', 'Đang phân công')
                 ->count(),
 
-            'groups_no_council' => Nhom::whereIn('ID_KEHOACH', $activePlanIds)
-                ->whereHas('phancongDetaiNhom.submissions', function ($q) {
-                    $q->where('TRANGTHAI', 'Đã xác nhận');
-                })
-                ->doesntHave('hoidongs')
-                ->count()
+            'groups_no_council' => $workflow['groups_missing_council']
         ];
 
         return response()->json([

@@ -97,36 +97,39 @@ class TopicAssignmentController extends Controller
     {
         $planId = $request->query('plan_id');
 
-        $departments = KhoaBomon::with(['giangvien.nguoidung'])->get();
+        $departments = KhoaBomon::with([
+            'giangvien.nguoidung',
+            
+            'giangvien.quotaGiangviens' => function ($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            },
 
-        $result = $departments->map(function($dept) use ($planId) {
-            $lecturers = $dept->giangvien->map(function($lecturer) use ($planId) {
-                // Get current quota assignment
-                $quotaAssignment = PhancongGvDetai::where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
-                    ->whereNull('ID_DETAI')
-                    ->where('TRANGTHAI', 'Đang phân công')
-                    ->first();
+            'giangvien.phancongGvDetais' => function ($q) use ($planId) {
+                $q->whereHas('detai', function ($sq) use ($planId) {
+                    $sq->where('ID_KEHOACH', $planId);
+                });
+            }
+        ])->get();
 
-                // Get actual assigned topics count
-                $actualAssigned = PhancongGvDetai::where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
-                    ->whereNotNull('ID_DETAI')
-                    ->where('TRANGTHAI', 'Đang phân công')
-                    ->when($planId, function($q) use ($planId) {
-                        $q->whereHas('detai', function($subQ) use ($planId) {
-                            $subQ->where('ID_KEHOACH', $planId);
-                        });
-                    })
-                    ->count();
+        $result = $departments->map(function($dept) {
+            $lecturers = $dept->giangvien->map(function($lecturer) {
+                
+                $quotaRecord = $lecturer->quotaGiangviens->first();
+                
+                $actualAssigned = $lecturer->phancongGvDetais->count();
 
                 return [
                     'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
                     'ten_giang_vien' => $lecturer->nguoidung->HODEM_VA_TEN ?? 'N/A',
                     'hoc_vi' => $lecturer->HOCVI,
-                    // 'chuc_vu' => $lecturer->CHUCVU, // Cột này đã xóa, có thể load từ chucvus nếu cần hiển thị
                     'so_nhom_toida' => $lecturer->SO_NHOM_TOIDA,
-                    'quota_assigned' => $quotaAssignment ? $quotaAssignment->SO_DETAI_PHANCONG : 0,
+                    
+                    'quota_assigned' => $quotaRecord ? $quotaRecord->SO_DETAI_QUOTA : 0,
+                    
                     'actual_assigned' => $actualAssigned,
-                    'remaining_quota' => ($quotaAssignment ? $quotaAssignment->SO_DETAI_PHANCONG : 0) - $actualAssigned,
+                    
+                    'remaining_quota' => ($quotaRecord ? $quotaRecord->SO_DETAI_QUOTA : 0) - $actualAssigned,
+                    
                     'chuyen_mon' => $lecturer->CHUYENMON,
                 ];
             });

@@ -87,20 +87,19 @@ class ProfileController extends Controller
 
     /**
      * Đổi mật khẩu
-     * Yêu cầu mật khẩu mạnh & Thu hồi Token cũ
      */
     public function changePassword(Request $request)
     {
         $request->validate([
             'current_password' => 'required',
-            'new_password' => ['required', 'confirmed', Password::defaults()],
+            'new_password' => ['required', 'confirmed', \Illuminate\Validation\Rules\Password::defaults()],
         ], [
             'new_password.confirmed' => 'Mật khẩu xác nhận không khớp.',
         ]);
 
+        /** @var \App\Models\Nguoidung $user */
         $user = Auth::user();
 
-        // 1. Kiểm tra mật khẩu cũ
         if (!Hash::check($request->current_password, $user->MATKHAU_BAM)) {
             return response()->json([
                 'message' => 'Dữ liệu không hợp lệ.',
@@ -110,17 +109,21 @@ class ProfileController extends Controller
             ], 422);
         }
 
-        // 2. Cập nhật mật khẩu mới
         $user->update([
-            'MATKHAU_BAM' => Hash::make($request->new_password)
+            'MATKHAU_BAM' => Hash::make($request->new_password),
+            'LA_DANGNHAP_LANDAU' => false
         ]);
+        
         $user->tokens()->delete();
+
+        $newToken = $user->createToken('auth_token')->plainTextToken;
 
         ActivityLogger::log('CHANGE_PASSWORD', 'Đổi mật khẩu đăng nhập');
 
         return response()->json([
-            'message' => 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.',
-            'require_login' => true
+            'message' => 'Đổi mật khẩu thành công.',
+            'access_token' => $newToken,
+            'user' => $user->load(['vaitro', 'giangvien.chucvus', 'sinhvien.chuyennganh'])
         ]);
     }
 }

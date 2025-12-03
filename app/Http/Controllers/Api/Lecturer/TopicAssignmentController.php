@@ -40,35 +40,31 @@ class TopicAssignmentController extends Controller
         // Lấy bộ môn của giảng viên
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        // Lấy tất cả giảng viên trong cùng bộ môn
         $lecturers = Giangvien::where('ID_KHOA_BOMON', $departmentId)
             ->with(['nguoidung'])
+            ->with(['phancongGvDetais' => function ($q) use ($planId) {
+                 $q->where(function($subQ) use ($planId) {
+                     $subQ->whereNull('ID_DETAI')
+                          ->where('ID_KEHOACH', $planId); 
+                })->orWhere(function($subQ) use ($planId) {
+                     $subQ->whereNotNull('ID_DETAI')
+                          ->whereHas('detai', function($dq) use ($planId) {
+                              $dq->where('ID_KEHOACH', $planId);
+                          });
+                });
+            }])
+            ->with(['detai' => function($q) use ($planId) {
+                 $q->where('ID_KEHOACH', $planId)
+                   ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt']);
+            }])
             ->get();
 
-        $result = $lecturers->map(function($lecturer) use ($planId) {
-            // Lấy thông tin quota phân công đề tài hiện tại
-            $quotaAssignment = PhancongGvDetai::where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
-                ->whereNull('ID_DETAI')
-                ->where('TRANGTHAI', 'Đang phân công')
-                ->first();
-
-            // Lấy số lượng đề tài thực tế đã được phân công cho kế hoạch này
-            $actualAssigned = PhancongGvDetai::where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
-                ->whereNotNull('ID_DETAI')
-                ->where('TRANGTHAI', 'Đang phân công')
-                ->whereHas('detai', function($q) use ($planId) {
-                    $q->where('ID_KEHOACH', $planId);
-                })
-                ->count();
-
-            // Lấy số lượng đề tài do giảng viên này tạo (chỉ đếm Đã duyệt hoặc Chờ duyệt)
-            $topicsCreated = Detai::where('ID_KEHOACH', $planId)
-                ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
-                ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt'])
-                ->count();
+        $result = $lecturers->map(function($lecturer) {
+            $quotaAssignment = $lecturer->phancongGvDetais->first(fn($i) => is_null($i->ID_DETAI));
+            $actualAssigned = $lecturer->phancongGvDetais->filter(fn($i) => !is_null($i->ID_DETAI))->count();
+            $topicsCreated = $lecturer->detai->count();
 
             $quotaAssigned = $quotaAssignment ? $quotaAssignment->SO_DETAI_PHANCONG : 0;
-            $topicsNeeded = max(0, $quotaAssigned - $topicsCreated);
 
             return [
                 'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
@@ -79,7 +75,7 @@ class TopicAssignmentController extends Controller
                 'quota_assigned' => $quotaAssigned,
                 'actual_assigned' => $actualAssigned,
                 'topics_created' => $topicsCreated,
-                'topics_needed' => $topicsNeeded,
+                'topics_needed' => max(0, $quotaAssigned - $topicsCreated),
                 'remaining_quota' => $quotaAssigned - $actualAssigned,
                 'CHUYENMON' => $lecturer->CHUYENMON,
             ];

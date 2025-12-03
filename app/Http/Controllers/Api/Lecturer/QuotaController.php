@@ -8,6 +8,7 @@ use App\Models\Giangvien;
 use App\Models\QuotaGiangvien;
 use App\Models\QuotaKhoaBomon;
 use App\Models\PhancongNguoiGopY;
+use App\Models\PhancongGvDetai;
 use App\Models\Thongbao;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -37,46 +38,33 @@ class QuotaController extends Controller
 
         $departmentId = $currentUser->giangvien->ID_KHOA_BOMON;
 
-        // 1. Lấy Quota tổng của Bộ môn
         $departmentQuota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
             ->where('ID_KHOA_BOMON', $departmentId)
-            ->first(); // Lấy bản ghi, bất kể trạng thái (Đang phân công hay Hoàn thành đều cần xem)
+            ->first();
 
-        // 2. Lấy tất cả giảng viên trong bộ môn
         $lecturers = Giangvien::where('ID_KHOA_BOMON', $departmentId)
             ->with(['nguoidung'])
+            ->with(['quotaGiangviens' => function($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId);
+            }])
+            ->withCount(['detais as topics_created' => function($q) use ($planId) {
+                $q->where('ID_KEHOACH', $planId)
+                  ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt']);
+            }])
             ->get();
 
-        // 3. Tính tổng quota đã phân công cho các GV (để tính số còn lại)
-        $totalAssigned = QuotaGiangvien::where('ID_KEHOACH', $planId)
-            ->whereHas('giangvien', function($q) use ($departmentId) {
-                $q->where('ID_KHOA_BOMON', $departmentId);
-            })
-            // Lấy tất cả quota đã gán, kể cả GV đó đã hoàn thành hay chưa
-            ->sum('SO_DETAI_QUOTA');
+        // Tổng Quota của cả bộ môn
+        $departmentQuota = QuotaKhoaBomon::where('ID_KEHOACH', $planId)
+            ->where('ID_KHOA_BOMON', $departmentId)
+            ->first();
 
-        $departmentQuotaValue = $departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0;
-
-        $result = $lecturers->map(function($lecturer) use ($planId, $departmentQuotaValue, $totalAssigned) {
-            // Quota cá nhân
-            $quota = QuotaGiangvien::where('ID_KEHOACH', $planId)
-                ->where('ID_GIANGVIEN', $lecturer->ID_GIANGVIEN)
-                ->first();
-
-            // Số đề tài đã tạo (Tính cả Đã duyệt & Chờ duyệt)
-            // [LOGIC]: Đề tài do GV này tạo (ID_NGUOI_DEXUAT)
-            $actualCreated = Detai::where('ID_KEHOACH', $planId)
-                ->where('ID_NGUOI_DEXUAT', $lecturer->ID_GIANGVIEN)
-                ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt'])
-                ->count();
-
+        $totalAssigned = 0;
+        
+        $result = $lecturers->map(function($lecturer) use (&$totalAssigned) {
+            $quota = $lecturer->quotaGiangviens->first();
             $lecturerAssigned = $quota ? $quota->SO_DETAI_QUOTA : 0;
             
-            // Quota còn lại có thể phân (Của bộ môn)
-            // = Tổng bộ môn - (Tổng đã phân cho tất cả - Quota hiện tại của người này) + Quota hiện tại của người này (để edit)
-            // Thực ra đơn giản là: (Quota Bộ Môn - Tổng đã phân)
-            // Nhưng ở UI, khi edit 1 người, ta cần biết "thêm được bao nhiêu nữa".
-            $availableQuota = $departmentQuotaValue - $totalAssigned;
+            $totalAssigned += $lecturerAssigned;
 
             return [
                 'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
@@ -84,13 +72,21 @@ class QuotaController extends Controller
                 'EMAIL' => $lecturer->nguoidung->EMAIL,
                 'HOCVI' => $lecturer->HOCVI,
                 'quota_assigned' => $lecturerAssigned,
-                'topics_created' => $actualCreated,
-                'available_quota' => max(0, $availableQuota), // Số dư của bộ môn để phân thêm
+                'topics_created' => $lecturer->topics_created,
+                'available_quota' => 0, 
             ];
         });
 
+        $departmentQuotaValue = $departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0;
+        $remainingGlobal = max(0, $departmentQuotaValue - $totalAssigned);
+
+        $result->transform(function($item) use ($remainingGlobal) {
+             $item['available_quota'] = $remainingGlobal; 
+             return $item;
+        });
+
         return response()->json([
-            'department_quota' => $departmentQuota ? $departmentQuota->SO_DETAI_QUOTA : 0,
+            'department_quota' => $departmentQuotaValue,
             'department_quota_status' => $departmentQuota ? $departmentQuota->TRANGTHAI : 'Chưa có',
             'total_assigned' => $totalAssigned,
             'lecturers' => $result,

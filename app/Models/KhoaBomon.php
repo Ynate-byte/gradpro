@@ -45,4 +45,9 @@ class KhoaBomon extends Model
     {
         return $this->hasMany(Hoidong::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
     }
+
+    public function quotaKhoaBomons()
+    {
+        return $this->hasMany(QuotaKhoaBomon::class, 'ID_KHOA_BOMON', 'ID_KHOA_BOMON');
+    }
 }

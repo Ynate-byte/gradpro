@@ -27,7 +27,7 @@ const passwordSchema = z.object({
 });
 
 export function ChangePasswordForm() {
-    const { logout } = useAuth();
+    const { login } = useAuth(); 
     const navigate = useNavigate();
 
     const form = useForm({
@@ -42,10 +42,14 @@ export function ChangePasswordForm() {
     const mutation = useMutation({
         mutationFn: changePassword,
         onSuccess: (data) => {
-            if (data.require_login) {
-                toast.success("Đổi mật khẩu thành công. Vui lòng đăng nhập lại.");
-                logout();
-                navigate('/login');
+            if (data.access_token && data.user) {
+                toast.success("Đổi mật khẩu thành công!");
+                
+                login(data.user, data.access_token);
+                
+                form.reset();
+
+                navigate('/');
             } else {
                 toast.success("Đổi mật khẩu thành công!");
                 form.reset();
@@ -78,7 +82,7 @@ export function ChangePasswordForm() {
                     <KeyRound className="h-5 w-5 text-orange-500"/> Bảo mật
                 </CardTitle>
                 <CardDescription>
-                    Đổi mật khẩu định kỳ để bảo vệ tài khoản.<br/>
+                    Đổi mật khẩu để bảo vệ tài khoản.<br/>
                     <span className="text-xs text-muted-foreground">Yêu cầu: Tối thiểu 8 ký tự, bao gồm chữ hoa, thường và số.</span>
                 </CardDescription>
             </CardHeader>
