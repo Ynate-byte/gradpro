@@ -4,57 +4,36 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use App\Models\Chuyennganh;
-use App\Models\KhoaBomon;
 
-class ChuyennganhSeeder extends Seeder
+class ChuyenNganhSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::statement('SET FOREIGN_KEY_CHECKS=0;');
-        Chuyennganh::truncate();
-        DB::statement('SET FOREIGN_KEY_CHECKS=1;');
+        DB::table('CHUYENNGANH')->delete();
 
-        $khdt = KhoaBomon::where('MA_KHOA_BOMON', 'KHDT')->value('ID_KHOA_BOMON');
-        $httt = KhoaBomon::where('MA_KHOA_BOMON', 'HTTT')->value('ID_KHOA_BOMON');
-        $ktpm = KhoaBomon::where('MA_KHOA_BOMON', 'KTPM')->value('ID_KHOA_BOMON');
-        $mmt  = KhoaBomon::where('MA_KHOA_BOMON', 'MMT&ATTT')->value('ID_KHOA_BOMON');
-        $cns  = KhoaBomon::where('MA_KHOA_BOMON', 'CNS')->value('ID_KHOA_BOMON');
+        $cnpmId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'CNPM')->value('ID_KHOA_BOMON');
+        $htttId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'HTTT')->value('ID_KHOA_BOMON');
+        $mmtId  = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'MMT')->value('ID_KHOA_BOMON');
+        $khmtId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'KHMT')->value('ID_KHOA_BOMON');
+        $cnstId = DB::table('KHOA_BOMON')->where('MA_KHOA_BOMON', 'CNS')->value('ID_KHOA_BOMON');
 
-        $chuyenNganhs = [
+        DB::table('CHUYENNGANH')->insert([
             [
-                'MA_CHUYENNGANH' => 'CN.KHDT',
-                'TEN_CHUYENNGANH' => 'Khoa học dữ liệu',
-                'ID_KHOA_BOMON' => $khdt
+                'MA_CHUYENNGANH' => 'CNTT',
+                'TEN_CHUYENNGANH' => 'Công nghệ Thông tin',
+                'ID_KHOA_BOMON' => null,
+                'MOTA' => 'Đào tạo kỹ sư phát triển ứng dụng web, mobile và hệ thống doanh nghiệp.',
+                'TRANGTHAI_KICHHOAT' => true,
+                'NGAYTAO' => now(),
             ],
             [
-                'MA_CHUYENNGANH' => 'CN.HTTT',
-                'TEN_CHUYENNGANH' => 'Hệ thống thông tin',
-                'ID_KHOA_BOMON' => $httt
+                'MA_CHUYENNGANH' => 'ATTT',
+                'TEN_CHUYENNGANH' => 'An toàn Thông tin',
+                'ID_KHOA_BOMON' => null,
+                'MOTA' => 'Quản lý và thiết lập mạng.',
+                'TRANGTHAI_KICHHOAT' => true,
+                'NGAYTAO' => now(),
             ],
-            [
-                'MA_CHUYENNGANH' => 'CN.KTPM',
-                'TEN_CHUYENNGANH' => 'Kỹ thuật phần mềm',
-                'ID_KHOA_BOMON' => $ktpm
-            ],
-            [
-                'MA_CHUYENNGANH' => 'CN.MMT',
-                'TEN_CHUYENNGANH' => 'Mạng máy tính và An ninh thông tin',
-                'ID_KHOA_BOMON' => $mmt
-            ],
-            [
-                'MA_CHUYENNGANH' => 'CN.CNS',
-                'TEN_CHUYENNGANH' => 'Công nghệ số',
-                'ID_KHOA_BOMON' => $cns
-            ],
-        ];
-        
-        foreach ($chuyenNganhs as $cn) {
-            if (!$cn['ID_KHOA_BOMON']) {
-                $cn['ID_KHOA_BOMON'] = KhoaBomon::first()->ID_KHOA_BOMON;
-            }
-            
-            Chuyennganh::create($cn);
-        }
+        ]);
     }
 }

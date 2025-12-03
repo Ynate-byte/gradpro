@@ -3,21 +3,39 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\CotCongViec;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Schema;
 
 class CotCongViecSeeder extends Seeder
 {
     public function run(): void
     {
-        Schema::disableForeignKeyConstraints();
-        DB::table('COT_CONGVIEC')->truncate();
-        Schema::enableForeignKeyConstraints();
-        
-        CotCongViec::create(['TEN_COT' => 'Cần làm', 'THUTU_HIENTHI' => 1]);
-        CotCongViec::create(['TEN_COT' => 'Đang làm', 'THUTU_HIENTHI' => 2]);
-        CotCongViec::create(['TEN_COT' => 'Chờ Review', 'THUTU_HIENTHI' => 3]);
-        CotCongViec::create(['TEN_COT' => 'Hoàn thành', 'THUTU_HIENTHI' => 4]);
+        DB::table('COT_CONGVIEC')->delete();
+
+        DB::table('COT_CONGVIEC')->insert([
+            [
+                'ID_COT' => 1,
+                'TEN_COT' => 'Cần làm',
+                'THUTU_HIENTHI' => 1,
+                'NGAYTAO' => now(),
+            ],
+            [
+                'ID_COT' => 2,
+                'TEN_COT' => 'Đang thực hiện',
+                'THUTU_HIENTHI' => 2,
+                'NGAYTAO' => now(),
+            ],
+            [
+                'ID_COT' => 3,
+                'TEN_COT' => 'Chờ Giảng viên duyệt',
+                'THUTU_HIENTHI' => 3,
+                'NGAYTAO' => now(),
+            ],
+            [
+                'ID_COT' => 4,
+                'TEN_COT' => 'Hoàn thành',
+                'THUTU_HIENTHI' => 4,
+                'NGAYTAO' => now(),
+            ],
+        ]);
     }
 }
