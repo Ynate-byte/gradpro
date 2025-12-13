@@ -27,7 +27,7 @@ export const getColumns = ({ onViewDetails, onSuccess }) => [
     accessorKey: "phancong.detai.TEN_DETAI",
     header: "Tên Đề tài / Nhóm",
     cell: ({ row }) => (
-      <div className="flex flex-col space-y-1 max-w-[300px]">
+      <div className="flex flex-col space-y-1 max-w-full">
         <button
           className="font-medium text-left hover:underline text-blue-600 dark:text-blue-400 line-clamp-2 text-sm"
           onClick={() => onViewDetails(row.original)}

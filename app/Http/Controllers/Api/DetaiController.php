@@ -648,7 +648,7 @@ class DetaiController extends Controller
             $assignment->update(['TRANGTHAI' => 'Hoàn thành']);
         }
 
-        if ($topic->TRANGTHAI === 'Chờ duyệt') {
+        if ($topic->TRANGTHAI === 'Chờ duyệt' && $request->boolean('is_edit_request')) {
             $topic->update(['TRANGTHAI' => 'Đang chỉnh sửa']);
         }
 

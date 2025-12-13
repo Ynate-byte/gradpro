@@ -25,11 +25,10 @@ import {
   PenSquare, Users, CheckCircle, BookMarked, 
   User, Layers, UserCheck, UserX, ListFilter, Filter, Info
 } from "lucide-react";
-// [MỚI] Import Popover components
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
 } from "@/components/ui/popover";
 import { useDebounce } from "@/hooks/useDebounce";
 import StatCard from "@/components/shared/StatCard";
@@ -66,7 +65,7 @@ const getVariants = (shouldReduce) => {
   };
 };
 
-// --- [MỚI] Component Popover Chi tiết điểm ---
+// --- Component Popover Chi tiết điểm ---
 const StudentScorePopover = ({ diemTong, diemHD, diemPB, diemHDong }) => {
     const score = parseFloat(diemTong);
     const colorClass = score >= 4.0 ? "text-emerald-600 dark:text-emerald-500" : "text-rose-600 dark:text-rose-500";
@@ -273,10 +272,8 @@ const getStudentColumns = () => [
         const diem = row.original.DIEM_TONG;
         if (diem === null || diem === undefined) return <span className="text-muted-foreground font-mono pl-2">-</span>;
         
-        // Lấy các điểm thành phần (Lưu ý: Backend cần trả về các trường này trong getStudentGradingList)
-        // Nếu backend chưa trả về đủ, UI sẽ hiện dấu '-'
         const diemHD = row.original.DIEM_HD;
-        const diemPB = row.original.DIEM_PB_RAW; // Đã có sẵn trong query gốc
+        const diemPB = row.original.DIEM_PB_RAW;
         const diemHDong = row.original.DIEM_HDONG;
 
         return (
@@ -354,21 +351,19 @@ const ListNhomChamDiem = () => {
 
         if (viewMode === 'groups') {
             const statusFilter = columnFilters.find(f => f.id === 'trang_thai_cham')?.value;
+            if (statusFilter) params.trang_thai_cham_diem = statusFilter;
             return await getGroupsForGradingList(params);
         } else {
             const resultFilter = columnFilters.find(f => f.id === 'KET_QUA')?.value;
             if (resultFilter && resultFilter.length > 0) {
-
                 const mapFilter = {
                     "Đậu": "passed",
                     "Rớt": "failed",
                     "Chưa chấm xong": "pending"
                 };
-                
                 const backendVal = mapFilter[resultFilter[0]];
                 if (backendVal) params.result = backendVal;
             }
-            
             return await getStudentGradingList(params);
         }
     },
@@ -441,7 +436,34 @@ const ListNhomChamDiem = () => {
       }
   };
 
-  // Render nội dung DataTable
+  const planFilter = (
+    <div className="w-[280px]"> 
+        <Select
+            value={selectedPlanId}
+            onValueChange={(value) => {
+                setSelectedPlanId(value === "all" ? "" : value);
+                setPagination({ pageIndex: 0, pageSize: 10 });
+            }}
+            disabled={!plansData}
+        >
+            <SelectTrigger className="h-9 text-xs bg-background border-dashed shadow-sm">
+                <div className="flex items-center gap-2">
+                    <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="Chọn kế hoạch..." />
+                </div>
+            </SelectTrigger>
+            <SelectContent align="end">
+                {plansData?.map((plan) => (
+                    <SelectItem key={plan.ID_KEHOACH} value={plan.ID_KEHOACH.toString()}>
+                        {plan.TEN_DOT}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    </div>
+  );
+
+  // --- 2. Render DataTable ---
   const renderDataTable = () => {
       return (
         <DataTable
@@ -465,35 +487,6 @@ const ListNhomChamDiem = () => {
             statusColumnId={viewMode === 'students' ? "KET_QUA" : null}
             statusOptions={statusOptions}
             
-            bulkActions={
-                <div className="flex items-center gap-2">
-                    <div className="w-[250px]">
-                        <Select
-                            value={selectedPlanId}
-                            onValueChange={(value) => {
-                                setSelectedPlanId(value === "all" ? "" : value);
-                                setPagination({ pageIndex: 0, pageSize: 10 });
-                            }}
-                            disabled={!plansData}
-                        >
-                            <SelectTrigger className="h-8 text-xs bg-background border-dashed">
-                                <div className="flex items-center gap-2">
-                                    <Filter className="w-3.5 h-3.5 text-muted-foreground" />
-                                    <SelectValue placeholder="Chọn kế hoạch..." />
-                                </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                            {plansData?.map((plan) => (
-                                <SelectItem key={plan.ID_KEHOACH} value={plan.ID_KEHOACH.toString()}>
-                                    {plan.TEN_DOT}
-                                </SelectItem>
-                            ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-            }
-
             containerClassName="border-none shadow-none"
         />
       );
@@ -501,6 +494,7 @@ const ListNhomChamDiem = () => {
 
   return (
     <div className="p-6 h-full flex flex-col gap-4">
+      {/* 3. Phần thống kê */}
       <motion.div
         className="flex-none grid gap-4 grid-cols-2 md:grid-cols-3"
         variants={variants.container}
@@ -513,7 +507,8 @@ const ListNhomChamDiem = () => {
 
       <div className="flex-1 min-h-0 flex flex-col bg-card rounded-lg border shadow-sm">
           <Tabs value={viewMode} onValueChange={setViewMode} className="flex-1 flex flex-col min-h-0">
-            <div className="px-4 pt-4 pb-2 border-b flex items-center justify-between bg-muted/10">
+            {/* --- KHU VỰC HEADER */}
+            <div className="px-4 pt-4 pb-2 border-b flex flex-col sm:flex-row items-center justify-between bg-muted/10 gap-3">
                 <TabsList className="bg-muted/50">
                     <TabsTrigger value="groups" className="gap-2">
                         <Layers className="w-4 h-4" /> Theo Nhóm
@@ -522,6 +517,7 @@ const ListNhomChamDiem = () => {
                         <User className="w-4 h-4" /> Theo Sinh Viên
                     </TabsTrigger>
                 </TabsList>
+                {planFilter}
             </div>
 
             <div className="flex-1 min-h-0 p-4 pt-2">

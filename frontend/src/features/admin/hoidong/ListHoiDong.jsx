@@ -189,7 +189,7 @@ const ListHoiDong = () => {
   const queryClient = useQueryClient();
 
   const [isStatsOpen, setIsStatsOpen] = useState(false);
-  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
+  const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 50 });
   const [sorting, setSorting] = useState([]);
   const [columnFilters, setColumnFilters] = useState([]); 
   const [rowSelection, setRowSelection] = useState({});
@@ -550,7 +550,7 @@ const ListHoiDong = () => {
 
   return (
     <>
-      <div className="p-4 md:p-6 space-y-6 h-full flex flex-col overflow-hidden">
+      <div className="p-4 md:p-6 space-y-6 flex flex-col">
         
         {/* 1. STAT CARDS SECTION (Flex shrink 0 để không bị co lại) */}
         <motion.div 
@@ -660,15 +660,9 @@ const ListHoiDong = () => {
           </div>
         </div>
 
-        {/* 3. DATA TABLE CONTAINER 
-          - flex-1: Chiếm toàn bộ không gian còn lại
-          - min-h-0: QUAN TRỌNG - Cho phép flex item co lại nhỏ hơn nội dung của nó (để scrollbar xuất hiện)
-          - overflow-hidden: Để nội dung bên trong (Table) tự xử lý scroll
-        */}
-        <div className="flex-1 min-h-0 overflow-hidden flex flex-col">
+        <div className="flex flex-col">
             <DataTable
-              // [QUAN TRỌNG] Bật chế độ Flex Layout cho DataTable
-              flexLayout={true}
+              flexLayout={false}
               
               columns={columns}
               data={data?.data ?? []}

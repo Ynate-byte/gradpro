@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
@@ -13,13 +13,13 @@ import { Separator } from '@/components/ui/separator';
 import {
     Send, BookOpen, User, Layers, Users,
     Target, Check, MessageSquare, Loader2,
-    CheckCircle, Edit, XCircle, ChevronLeft, ChevronRight,
+    CheckCircle, XCircle, ChevronLeft, ChevronRight,
     Clock, Info, AlertCircle, Save, X, Edit3, ArrowRight,
-    RotateCcw, AlertTriangle
+    RotateCcw, AlertTriangle, PenTool, Edit
 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
@@ -73,6 +73,19 @@ const MetadataCard = ({ icon: Icon, label, value, oldValue }) => {
     );
 };
 
+// Helper: Lấy tên viết tắt
+const getInitials = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) {
+        return parts[0].slice(0, 2).toUpperCase();
+    }
+    const first = parts[0][0] || '';
+    const last = parts[parts.length - 1][0] || '';
+    return (first + last).toUpperCase();
+};
+
 const ChatBubble = ({ user, message, isMe, time, role }) => (
     <div className={cn("flex gap-3 max-w-[90%]", isMe ? "ml-auto flex-row-reverse" : "")}>
         <Avatar className="h-8 w-8 mt-1 border border-border shrink-0">
@@ -114,6 +127,7 @@ const getStatusBadge = (status) => {
         'Yêu cầu chỉnh sửa': "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400",
         'Từ chối': "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400",
         'Nháp': "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400",
+        'Đang chỉnh sửa': "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300",
     };
     const defaultStyle = "bg-secondary text-secondary-foreground border-border";
 
@@ -122,19 +136,6 @@ const getStatusBadge = (status) => {
             {status}
         </Badge>
     );
-};
-
-const getInitials = (name) => {
-    if (!name || typeof name !== 'string') return '';
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return '';
-    if (parts.length === 1) {
-        return parts[0].slice(0, 2).toUpperCase();
-    }
-    // Lấy chữ cái đầu của tên và họ (hoặc 2 chữ cái đầu nếu ngắn)
-    const first = parts[0][0] || '';
-    const last = parts[parts.length - 1][0] || '';
-    return (first + last).toUpperCase();
 };
 
 // ==========================================
@@ -182,14 +183,27 @@ const TopicDetailDialog = ({
     const chatEndRef = useRef(null);
     const scrollAreaRef = useRef(null);
 
-    // --- Permission Check ---
-    const isOwner = topic && String(topic.ID_NGUOI_DEXUAT) === String(user?.giangvien?.ID_GIANGVIEN);
-    const isAdmin = ['Admin', 'Giáo vụ', 'Trưởng khoa'].includes(user?.vaitro?.TEN_VAITRO);
+    // --- [CẬP NHẬT] PERMISSION CHECK ---
+    // Lấy ID giảng viên hiện tại
+    const currentGvId = user?.giangvien?.ID_GIANGVIEN;
+    const userRole = user?.vaitro?.TEN_VAITRO;
+
+    // Check quyền Owner
+    const isOwner = topic && String(topic.ID_NGUOI_DEXUAT) === String(currentGvId);
     
+    // Check quyền Admin
+    const isAdmin = ['Admin', 'Giáo vụ', 'Trưởng khoa'].includes(userRole);
+    
+    // [MỚI] Check quyền Reviewer (Người được phân công góp ý)
+    const isReviewer = topic?.phancong_nguoi_gop_y?.some(
+        pc => String(pc.ID_GIANGVIEN) === String(currentGvId)
+    );
+
     const canEdit = topic && ((isOwner && ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa', 'Đã duyệt'].includes(topic.TRANGTHAI)) || isAdmin);
+    // Cho phép comment nếu chưa chốt
     const canComment = topic && !['Đã duyệt', 'Từ chối', 'Đã khóa', 'Đã đầy'].includes(topic.TRANGTHAI);
 
-    // --- [MỚI] Check Reuse ---
+    // --- Check Reuse ---
     const isReused = topic?.LA_TAISUDUNG;
     const isApproved = topic?.TRANGTHAI === 'Đã duyệt';
 
@@ -211,11 +225,10 @@ const TopicDetailDialog = ({
         }
     }, [open, topicId]);
 
-    // --- [ADD] KEYBOARD NAVIGATION ---
+    // Keyboard Navigation
     useEffect(() => {
         const handleKeyDown = (e) => {
             if (!open) return;
-            // Nếu đang chỉnh sửa, không điều hướng bằng phím để tránh xung đột khi gõ text
             if (isEditing) return;
 
             if (e.key === 'ArrowLeft' && hasPrevious) {
@@ -227,8 +240,7 @@ const TopicDetailDialog = ({
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [open, isEditing, hasNext, hasPrevious, onNext, onPrevious]); // <-- Quan trọng: Thêm onNext, onPrevious
-    // ---------------------------------
+    }, [open, isEditing, hasNext, hasPrevious, onNext, onPrevious]);
 
     useEffect(() => {
         if (open && topicId && activeTab === 'history') {
@@ -294,7 +306,6 @@ const TopicDetailDialog = ({
         }
     };
 
-    // --- HELPER: Lấy tên bộ môn từ ID ---
     const getDepartmentName = (id) => {
         if (!id) return null;
         const dept = departments.find(d => String(d.ID_KHOA_BOMON) === String(id));
@@ -313,8 +324,6 @@ const TopicDetailDialog = ({
             const res = await thesisTopicService.updateTopic(topicId, editFormData);
             setTopic(res.data);
             
-            // Nếu là đề tài tái sử dụng đã duyệt, backend sẽ tự đổi status về 'Chờ duyệt'
-            // Cần thông báo cho user biết
             if (isReused && isApproved && !isAdmin && res.data.TRANGTHAI === 'Chờ duyệt') {
                  toast.warning("Đề tài đã chuyển sang trạng thái 'Chờ duyệt' do có sự thay đổi.");
             } else {
@@ -323,8 +332,6 @@ const TopicDetailDialog = ({
 
             setIsEditing(false);
             if (onDataChange) onDataChange();
-            
-            // Load lại so sánh sau khi lưu
             loadComparison();
         } catch (error) {
             toast.error("Cập nhật thất bại.");
@@ -333,7 +340,6 @@ const TopicDetailDialog = ({
         }
     };
 
-    // [MỚI] Xử lý khi bấm nút Chỉnh sửa
     const handleEditClick = () => {
         if (isReused && isApproved && !isAdmin) {
             if (!window.confirm("CẢNH BÁO QUAN TRỌNG:\n\nĐây là đề tài Tái sử dụng đã được duyệt tự động.\nNếu bạn chỉnh sửa nội dung, trạng thái sẽ chuyển về 'Chờ duyệt' và cần cấp trên phê duyệt lại.\n\nBạn có chắc chắn muốn tiếp tục?")) {
@@ -360,17 +366,19 @@ const TopicDetailDialog = ({
         setEditFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    // --- CHAT LOGIC ---
-    const sendMessage = async (content, parentId = null) => {
+    // --- CHAT LOGIC (UPDATED) ---
+
+    const sendMessage = async (content, parentId = null, isEditRequest = false) => {
         if (!content.trim()) return;
         
+        // Tạo fake message để hiển thị ngay lập tức (Optimistic UI)
         const newMsg = {
             ID_GOIY: parentId || Date.now(),
             ID_PHANHOI: Date.now(),
             NOIDUNG: content, NOIDUNG_GOIY: content,
             NGAYTAO: new Date().toISOString(), created_at: new Date().toISOString(),
             giangvien: { nguoidung: user },
-            ID_GIANGVIEN: user?.giangvien?.ID_GIANGVIEN,
+            ID_GIANGVIEN: currentGvId,
             phanhois: []
         };
 
@@ -387,8 +395,18 @@ const TopicDetailDialog = ({
         }
 
         try {
-            if (parentId) await thesisTopicService.addReplyToSuggestion(parentId, { NOIDUNG: content });
-            else await thesisTopicService.addSuggestion(topicId, { NOIDUNG_GOIY: content });
+            // [UPDATE] Gửi thêm cờ is_edit_request
+            if (parentId) {
+                await thesisTopicService.addReplyToSuggestion(parentId, { 
+                    NOIDUNG: content, 
+                    is_edit_request: isEditRequest 
+                });
+            } else {
+                await thesisTopicService.addSuggestion(topicId, { 
+                    NOIDUNG_GOIY: content, 
+                    is_edit_request: isEditRequest 
+                });
+            }
             
             loadTopicDetails(false);
             if(onDataChange) onDataChange();
@@ -399,17 +417,20 @@ const TopicDetailDialog = ({
         }
     };
 
-    // --- RENDER HELPER: FIELD WITH DIFF ---
+    // [MỚI] Hàm xử lý khi bấm nút phản hồi nhanh
+    const handleQuickEditRequest = () => {
+        sendMessage("Tôi muốn chỉnh sửa một chút.", null, true);
+    };
+
+    // --- RENDER HELPER ---
     const renderField = (key, label, icon, isArea = false) => {
         const currentValue = topic?.[key] || "";
-
         const hasHistoryData = comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, key);
         const rawOldValue = hasHistoryData ? comparisonData[key] : undefined;
         
         const hasDiff = hasHistoryData && 
                         (String(rawOldValue || '') !== String(currentValue || '')) && 
                         !isEditing;
-
         const displayOldValue = rawOldValue || ""; 
 
         if (isEditing) {
@@ -478,7 +499,6 @@ const TopicDetailDialog = ({
                             <BookOpen className="h-6 w-6" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            {/* Check nếu loading và chưa có topic thì hiện skeleton hoặc chờ */}
                             {loading && !topic ? (
                                 <div className="h-6 w-48 bg-muted animate-pulse rounded" />
                             ) : isEditing ? (
@@ -494,7 +514,6 @@ const TopicDetailDialog = ({
                                 </DialogTitle>
                             )}
                             
-                            {/* Chỉ hiển thị badge khi không loading hoặc đã có data topic */}
                             {(!loading || topic) && topic && (
                                 <div className="flex items-center gap-3 mt-1.5">
                                     <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-5 border-border/50">{topic.MA_DETAI}</Badge>
@@ -564,10 +583,8 @@ const TopicDetailDialog = ({
                     </div>
                 </div>
 
-                {/* 3. BODY CONTENT - Dùng relative để chứa Loading Overlay */}
+                {/* 3. BODY CONTENT */}
                 <div className="flex-1 overflow-hidden bg-secondary/10 relative">
-                    
-                    {/* LOADING OVERLAY - Hiển thị đè lên nội dung thay vì thay thế toàn bộ DialogContent */}
                     {loading && (
                         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
                             <Loader2 className="w-10 h-10 animate-spin text-primary mb-2" />
@@ -575,7 +592,6 @@ const TopicDetailDialog = ({
                         </div>
                     )}
 
-                    {/* Chỉ render nội dung khi có data 'topic' (hoặc giữ lại UI cũ nếu đang loading đè lên) */}
                     {topic && activeTab === 'info' && (
                         <div className="flex h-full animate-in fade-in duration-300">
                             
@@ -583,7 +599,6 @@ const TopicDetailDialog = ({
                             <ScrollArea className="flex-1 h-full">
                                 <div className="p-6 max-w-5xl mx-auto space-y-8">
                                     
-                                    {/* [MỚI] Alert: Cảnh báo khi sửa đề tài tái sử dụng */}
                                     {isEditing && isReused && isApproved && !isAdmin && (
                                         <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
                                             <AlertTriangle className="h-4 w-4" />
@@ -594,7 +609,6 @@ const TopicDetailDialog = ({
                                         </Alert>
                                     )}
 
-                                    {/* Alert: Lý do từ chối / yêu cầu sửa */}
                                     {!isEditing && (topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && (
                                         <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 shadow-sm">
                                             <AlertCircle className="h-4 w-4" />
@@ -668,12 +682,11 @@ const TopicDetailDialog = ({
                                         {renderField('MOTA', 'Mô tả chi tiết', <Info className="w-4 h-4 text-blue-500" />, true)}
                                     </div>
 
-                                    {/* Padding bottom để không bị che bởi footer nếu màn hình nhỏ */}
                                     <div className="h-10"></div>
                                 </div>
                             </ScrollArea>
 
-                            {/* CỘT PHẢI: THẢO LUẬN (LUÔN HIỂN THỊ) */}
+                            {/* CỘT PHẢI: THẢO LUẬN */}
                             <div className="w-[380px] xl:w-[420px] flex flex-col border-l border-border bg-background transition-all duration-300 ease-in-out">
                                 <div className="p-4 border-b border-border flex items-center gap-2 bg-muted/20">
                                     <MessageSquare className="w-4 h-4 text-primary" />
@@ -740,9 +753,23 @@ const TopicDetailDialog = ({
                                     </div>
                                 </ScrollArea>
 
-                                {/* New Message Input */}
                                 {canComment && (
                                     <div className="p-3 border-t bg-background">
+                                        {topic.TRANGTHAI === 'Chờ duyệt' && (isOwner || isReviewer) && (
+                                            <div className="mb-2 flex">
+                                                <Button 
+                                                    variant="secondary" 
+                                                    size="sm" 
+                                                    className="h-7 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200"
+                                                    onClick={handleQuickEditRequest}
+                                                    disabled={isSending}
+                                                >
+                                                    <PenTool className="w-3 h-3 mr-1.5" />
+                                                    Yêu cầu chỉnh sửa / Tôi muốn sửa
+                                                </Button>
+                                            </div>
+                                        )}
+
                                         <div className="relative shadow-sm rounded-xl border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
                                             <Textarea 
                                                 placeholder="Nhập nội dung thảo luận mới..." 

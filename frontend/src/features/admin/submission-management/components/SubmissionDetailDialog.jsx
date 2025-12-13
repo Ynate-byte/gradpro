@@ -244,9 +244,6 @@ export function SubmissionDetailDialog({
                                     <div>
                                         <div className={labelStyle}><Users className="w-3.5 h-3.5" /> Nhóm sinh viên</div>
                                         <div className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                                            <div className="h-8 w-8 rounded bg-white border flex items-center justify-center font-bold text-slate-600 text-xs">
-                                                {details?.phancong?.nhom?.TEN_NHOM?.substring(0, 2) || "N"}
-                                            </div>
                                             <div className={valueStyle}>{details?.phancong?.nhom?.TEN_NHOM}</div>
                                         </div>
                                     </div>

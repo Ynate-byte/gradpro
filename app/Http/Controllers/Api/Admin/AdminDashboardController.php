@@ -96,9 +96,6 @@ class AdminDashboardController extends Controller
             ];
         });
 
-        // 4. Tính toán Workflow tổng hợp (Phần này giữ nguyên logic nhưng tối ưu query đếm)
-        // Lưu ý: Phần này query độc lập, không nằm trong vòng lặp nên chấp nhận được.
-        // Tuy nhiên, có thể tối ưu thêm nếu cần thiết sau này.
         $workflow = [
             'quota_percent' => 0, 'quota_missing' => 0, 'topic_percent' => 0,
             'council_percent' => 0, 'grading_percent' => 0, 'groups_missing_council' => 0,
