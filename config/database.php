@@ -59,12 +59,16 @@ return [
             'strict' => true,
             'engine' => null,
             'options' => extension_loaded('pdo_mysql') ? array_filter([
+                PDO::MYSQL_ATTR_SSL_CA => base_path('storage/app/ca.pem'),
+            ]) : [],
+            /*
+            'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
-
+             */
+            
             /*
              * CẤU HÌNH BACKUP (DUMP) CHO MYSQL
-             * Đã được di chuyển vào đúng vị trí này
              */
             'dump' => [
                 'dump_binary_path' => env('DB_DUMP_BINARY_PATH', 'C:/laragon/bin/mysql/mysql-8.0.30-winx64/bin'),
