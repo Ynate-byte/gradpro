@@ -550,70 +550,70 @@ const ListHoiDong = () => {
 
   return (
     <>
-      <div className="p-4 md:p-6 space-y-6 flex flex-col">
-        
-        {/* 1. STAT CARDS SECTION (Flex shrink 0 để không bị co lại) */}
-        <motion.div 
-          className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 flex-shrink-0"
-          variants={variants.container}
-          initial="hidden"
-          animate="visible"
-        >
-          {/* Card 1 */}
-          <motion.div variants={variants.item}>
-            <StatCard 
-              icon={AlertCircle} 
-              title="Nhóm chờ phân bổ" 
-              value={isLoadingStats ? 'loading' : stats?.nhomCanPhanBo} 
-              iconBgClass="bg-red-100" 
-              iconColorClass="text-red-600"
-              description="Đã nộp bài, chưa có HĐ"
-              onClick={() => navigate('/admin/hoidong/phanbo')}
-            />
-          </motion.div>
+      <div className="flex flex-col h-[calc(100vh-60px)] overflow-hidden p-4 md:p-6 gap-4">
+        <div className="shrink-0">
+            <motion.div 
+            className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+            variants={variants.container}
+            initial="hidden"
+            animate="visible"
+            >
+            {/* Card 1 */}
+            <motion.div variants={variants.item}>
+                <StatCard 
+                icon={AlertCircle} 
+                title="Nhóm chờ phân bổ" 
+                value={isLoadingStats ? 'loading' : stats?.nhomCanPhanBo} 
+                iconBgClass="bg-red-100" 
+                iconColorClass="text-red-600"
+                description="Đã nộp bài, chưa có HĐ"
+                onClick={() => navigate('/admin/hoidong/phanbo')}
+                />
+            </motion.div>
 
-          {/* Card 2 */}
-          <motion.div variants={variants.item}>
-            <StatCard 
-              icon={Shield} 
-              title="HĐ Bảo Vệ" 
-              value={isLoadingStats ? 'loading' : stats?.totalBaoVe} 
-              iconBgClass="bg-green-100" 
-              iconColorClass="text-green-600"
-              isActive={currentLoaiFilter === 'hoidong' || currentLoaiFilter === 'hoidong5'}
-              onClick={() => handleStatCardClick('LOAI', 'hoidong')}
-            />
-          </motion.div>
+            {/* Card 2 */}
+            <motion.div variants={variants.item}>
+                <StatCard 
+                icon={Shield} 
+                title="HĐ Bảo Vệ" 
+                value={isLoadingStats ? 'loading' : stats?.totalBaoVe} 
+                iconBgClass="bg-green-100" 
+                iconColorClass="text-green-600"
+                isActive={currentLoaiFilter === 'hoidong' || currentLoaiFilter === 'hoidong5'}
+                onClick={() => handleStatCardClick('LOAI', 'hoidong')}
+                />
+            </motion.div>
 
-          {/* Card 3 */}
-          <motion.div variants={variants.item}>
-            <StatCard 
-              icon={BookOpen} 
-              title="HĐ Phản Biện" 
-              value={isLoadingStats ? 'loading' : stats?.totalPhanBien} 
-              iconBgClass="bg-yellow-100" 
-              iconColorClass="text-yellow-600"
-              isActive={currentLoaiFilter === 'phanbien'}
-              onClick={() => handleStatCardClick('LOAI', 'phanbien')}
-            />
-          </motion.div>
+            {/* Card 3 */}
+            <motion.div variants={variants.item}>
+                <StatCard 
+                icon={BookOpen} 
+                title="HĐ Phản Biện" 
+                value={isLoadingStats ? 'loading' : stats?.totalPhanBien} 
+                iconBgClass="bg-yellow-100" 
+                iconColorClass="text-yellow-600"
+                isActive={currentLoaiFilter === 'phanbien'}
+                onClick={() => handleStatCardClick('LOAI', 'phanbien')}
+                />
+            </motion.div>
 
-          {/* Card 4 */}
-          <motion.div variants={variants.item}>
-            <StatCard 
-              icon={Users} 
-              title="Tổng Hội đồng" 
-              value={isLoadingStats ? 'loading' : stats?.totalHoiDong} 
-              iconBgClass="bg-blue-100" 
-              iconColorClass="text-blue-600"
-              isActive={!currentLoaiFilter}
-              onClick={() => handleStatCardClick('LOAI', undefined)}
-            />
-          </motion.div>
-        </motion.div>
+            {/* Card 4 */}
+            <motion.div variants={variants.item}>
+                <StatCard 
+                icon={Users} 
+                title="Tổng Hội đồng" 
+                value={isLoadingStats ? 'loading' : stats?.totalHoiDong} 
+                iconBgClass="bg-blue-100" 
+                iconColorClass="text-blue-600"
+                isActive={!currentLoaiFilter}
+                onClick={() => handleStatCardClick('LOAI', undefined)}
+                />
+            </motion.div>
+            </motion.div>
+        </div>
 
-        {/* 2. ACTION BAR (Flex shrink 0) */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 flex-shrink-0">
+        {/* 2. ACTION BAR - shrink-0 */}
+        <div className="shrink-0 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="w-full md:w-[300px]">
                 {isLoadingFilters ? (
@@ -660,9 +660,10 @@ const ListHoiDong = () => {
           </div>
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex-1 min-h-0 bg-card rounded-md border overflow-hidden">
             <DataTable
-              flexLayout={false}
+              flexLayout={true}
+              containerClassName="h-full border-none"
               
               columns={columns}
               data={data?.data ?? []}

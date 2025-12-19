@@ -207,8 +207,9 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         // Dashboard
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'getStats']);
         Route::get('/dashboard/reminders', [AdminDashboardController::class, 'getReminders']);
-
-        // [MỚI] QUẢN LÝ FILE (File Manager)
+        Route::get('/dashboard/incomplete-quotas', [AdminDashboardController::class, 'getIncompleteQuotaDetails']);
+        
+        // QUẢN LÝ FILE
         Route::get('/file-manager', [FileManagerController::class, 'index']);
         Route::post('/file-manager/upload', [FileManagerController::class, 'upload']);
         Route::post('/file-manager/create-folder', [FileManagerController::class, 'createFolder']);
@@ -289,6 +290,9 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::put('/{assignment}/status', [QuotaController::class, 'updateAssignmentStatus']);
             Route::delete('/{assignment}', [QuotaController::class, 'removeAssignment']);
             Route::post('/update-reuse-percentage', [QuotaController::class, 'updateReusePercentage']);
+            Route::post('/nudge-department', [QuotaController::class, 'nudgeDepartment']);
+            Route::post('/nudge-all', [QuotaController::class, 'nudgeAllDepartments']);
+            Route::post('/nudge-lecturer', [QuotaController::class, 'nudgeLecturer']);
         });
         
         // Quản lý Nộp bài

@@ -58,14 +58,15 @@ return [
             'prefix_indexes' => true,
             'strict' => true,
             'engine' => null,
-            'options' => extension_loaded('pdo_mysql') ? array_filter([
-                PDO::MYSQL_ATTR_SSL_CA => base_path('storage/app/ca.pem'),
-            ]) : [],
-            /*
+
+            // 'options' => extension_loaded('pdo_mysql') ? array_filter([
+            //     PDO::MYSQL_ATTR_SSL_CA => base_path('storage/app/ca.pem'),
+            // ]) : [],
+            
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
-             */
+            
             
             /*
              * CẤU HÌNH BACKUP (DUMP) CHO MYSQL

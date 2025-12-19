@@ -388,4 +388,122 @@ class QuotaController extends Controller
         $assignment->delete();
         return response()->json(['message' => 'Hủy phân công thành công']);
     }
+
+    public function nudgeDepartment(Request $request)
+    {
+        $request->validate([
+            'id_khoa' => 'required',
+            'id_kehoach' => 'required'
+        ]);
+
+        $deptId = $request->id_khoa;
+        $planId = $request->id_kehoach;
+
+        // Tìm Trưởng bộ môn của khoa đó
+        $heads = \App\Models\Giangvien::where('ID_KHOA_BOMON', $deptId)
+            ->whereHas('chucvus', function($q) {
+                $q->where('MA_CHUCVU', 'TRUONG_BOMON');
+            })
+            ->with('nguoidung')
+            ->get();
+
+        $count = 0;
+        foreach ($heads as $head) {
+            if ($head->nguoidung) {
+                \App\Services\NotificationService::send(
+                    $head->nguoidung->ID_NGUOIDUNG,
+                    "Nhắc nhở: Phân bổ chỉ tiêu",
+                    "Vui lòng hoàn tất phân bổ chỉ tiêu đề tài cho giảng viên thuộc bộ môn quản lý của bạn.",
+                    "ACADEMIC",
+                    "/department-head/quotas",
+                    ['plan_id' => $planId],
+                    "URGENT"
+                );
+                $count++;
+            }
+        }
+
+        if ($count == 0) {
+            return response()->json(['message' => 'Không tìm thấy Trưởng bộ môn để gửi thông báo.'], 404);
+        }
+
+        return response()->json(['message' => "Đã gửi thông báo nhắc nhở đến $count người."]);
+    }
+
+    public function nudgeAllDepartments(Request $request)
+    {
+        $activePlanIds = \App\Models\KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa'])
+            ->pluck('ID_KEHOACH');
+
+        // Lấy các Quota Bộ môn chưa hoàn thành
+        $incompleteDeptQuotas = \App\Models\QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)
+            ->get();
+
+        if ($incompleteDeptQuotas->isEmpty()) {
+            return response()->json(['message' => 'Không có bộ môn nào cần nhắc nhở.'], 200);
+        }
+
+        $count = 0;
+        $processedUserIds = [];
+
+        foreach ($incompleteDeptQuotas as $deptQuota) {
+            // Lấy tất cả giảng viên trong bộ môn đó
+            $lecturers = \App\Models\Giangvien::where('ID_KHOA_BOMON', $deptQuota->ID_KHOA_BOMON)
+                ->with(['nguoidung', 'quotaGiangviens' => function($q) use ($deptQuota) {
+                    $q->where('ID_KEHOACH', $deptQuota->ID_KEHOACH);
+                }])
+                ->get();
+
+            foreach ($lecturers as $gv) {
+                $quota = $gv->quotaGiangviens->first();
+                $target = $quota ? $quota->SO_DETAI_QUOTA : 0;
+                
+                if ($target > 0) {
+                    $created = \App\Models\Detai::where('ID_KEHOACH', $deptQuota->ID_KEHOACH)
+                        ->where('ID_NGUOI_DEXUAT', $gv->ID_GIANGVIEN)
+                        ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'])
+                        ->count();
+
+                    if ($created < $target) {
+                        $missing = $target - $created;
+                        if ($gv->nguoidung && !in_array($gv->nguoidung->ID_NGUOIDUNG, $processedUserIds)) {
+                            \App\Services\NotificationService::send(
+                                $gv->nguoidung->ID_NGUOIDUNG,
+                                "Nhắc nhở: Tiến độ đề tài (Khẩn)",
+                                "Hệ thống ghi nhận bạn còn thiếu $missing đề tài so với chỉ tiêu. Vui lòng bổ sung ngay.",
+                                "ACADEMIC",
+                                "/lecturer/thesis-topics",
+                                null,
+                                "URGENT"
+                            );
+                            $processedUserIds[] = $gv->nguoidung->ID_NGUOIDUNG;
+                            $count++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return response()->json(['message' => "Đã gửi thông báo nhắc nhở đến $count giảng viên còn thiếu chỉ tiêu."]);
+    }
+
+    public function nudgeLecturer(Request $request)
+    {
+        $request->validate([
+            'id_user' => 'required|exists:NGUOIDUNG,ID_NGUOIDUNG',
+            'missing_count' => 'required|integer'
+        ]);
+
+        \App\Services\NotificationService::send(
+            $request->id_user,
+            "Nhắc nhở: Tiến độ đề tài",
+            "Bạn vẫn còn thiếu {$request->missing_count} đề tài so với chỉ tiêu được giao. Vui lòng bổ sung sớm.",
+            "ACADEMIC",
+            "/lecturer/thesis-topics",
+            null,
+            "HIGH"
+        );
+
+        return response()->json(['message' => 'Đã gửi nhắc nhở.']);
+    }
 }

@@ -348,4 +348,62 @@ class AdminDashboardController extends Controller
             'reminders' => $reminders
         ]);
     }
+
+    public function getIncompleteQuotaDetails()
+    {
+        $activePlanIds = \App\Models\KehoachKhoaluan::whereIn('TRANGTHAI', ['Đang thực hiện', 'Đang chấm điểm', 'Chờ duyệt chỉnh sửa'])
+            ->pluck('ID_KEHOACH');
+
+        $data = \App\Models\QuotaKhoaBomon::whereIn('ID_KEHOACH', $activePlanIds)
+            ->with(['khoaBomon:ID_KHOA_BOMON,TEN_KHOA_BOMON', 'kehoach:ID_KEHOACH,TEN_DOT'])
+            ->get()
+            ->map(function ($q) {
+                
+                $allLecturers = \App\Models\Giangvien::where('ID_KHOA_BOMON', $q->ID_KHOA_BOMON)
+                    ->with(['nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN', 'quotaGiangviens' => function($query) use ($q) {
+                        $query->where('ID_KEHOACH', $q->ID_KEHOACH);
+                    }])
+                    ->get();
+
+                $lecturerStats = [];
+                $currentProgressTotal = 0;
+
+                foreach ($allLecturers as $gv) {
+                    $quota = $gv->quotaGiangviens->first();
+                    $target = $quota ? $quota->SO_DETAI_QUOTA : 0;
+                    
+                    // Đếm số đề tài thực tế đã tạo
+                    $created = \App\Models\Detai::where('ID_KEHOACH', $q->ID_KEHOACH)
+                        ->where('ID_NGUOI_DEXUAT', $gv->ID_GIANGVIEN)
+                        ->whereIn('TRANGTHAI', ['Đã duyệt', 'Chờ duyệt', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa'])
+                        ->count();
+
+                    $currentProgressTotal += $created;
+
+                    if ($target > 0 && $created < $target) {
+                         $lecturerStats[] = [
+                            'id_gv' => $gv->ID_GIANGVIEN,
+                            'id_user' => $gv->nguoidung->ID_NGUOIDUNG,
+                            'ten_gv' => $gv->nguoidung->HODEM_VA_TEN,
+                            'target' => $target,
+                            'current' => $created,
+                            'status' => 'incomplete'
+                        ];
+                    }
+                }
+
+                return [
+                    'id_quota' => $q->ID_QUOTA,
+                    'ten_khoa' => $q->khoaBomon->TEN_KHOA_BOMON,
+                    'ten_kehoach' => $q->kehoach->TEN_DOT,
+                    'id_kehoach' => $q->ID_KEHOACH,
+                    'id_khoa' => $q->ID_KHOA_BOMON,
+                    'target' => $q->SO_DETAI_QUOTA,
+                    'current' => (int)$currentProgressTotal,
+                    'missing_lecturers' => $lecturerStats
+                ];
+            });
+
+        return response()->json($data);
+    }
 }
