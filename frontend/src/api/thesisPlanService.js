@@ -63,7 +63,24 @@ export const previewNewPlan = (data) => {
     }).then(res => res.data);
 };
 
-// === MẪU KẾ HOẠCH ===
+export const archivePlan = (id, includeFiles = false) => {
+    return axiosClient.get(`/admin/thesis-plans/${id}/archive`, {
+        params: { include_files: includeFiles ? 1 : 0 },
+        responseType: 'blob', // Quan trọng: Để tải file binary
+    });
+};
+
+export const restorePlan = (file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return axiosClient.post('/admin/thesis-plans/restore', formData, {
+        headers: {
+            'Content-Type': 'multipart/form-data',
+        },
+    }).then(res => res.data);
+};
+
 export const getThesisPlanTemplates = () => {
     return axiosClient.get('/thesis-plan-templates').then(res => res.data);
 };
@@ -119,11 +136,7 @@ export const bulkRemoveParticipantsFromPlan = (planId, participantIds) => {
         .then(res => res.data);
 };
 
-// === IMPORT WIZARD API (ĐÃ ĐƯỢC TỐI ƯU & BẢO VỆ) ===
 
-/**
- * Giai đoạn 1: Phân tích file → trả về headers + preview
- */
 export const analyzePlanImport = (planId, file) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -132,9 +145,6 @@ export const analyzePlanImport = (planId, file) => {
     }).then(res => res.data);
 };
 
-/**
- * Giai đoạn 2 & 3: Preview + validate → trả về validRows, invalidRows
- */
 export const previewPlanImport = (planId, file, mapping, defaults, headerRowIndex, dataRowStartIndex) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -165,29 +175,15 @@ export const previewPlanImport = (planId, file, mapping, defaults, headerRowInde
     }).then(res => res.data);
 };
 
-/**
- * Giai đoạn 4: Gửi validRows → xử lý import
- * ĐÃ ĐƯỢC BẢO VỆ: validate cấu trúc trước khi gửi
- */
 export const processPlanImport = (planId, validRows, defaults) => {
-    // BẢO VỆ: Kiểm tra cấu trúc validRows trước khi gửi
     if (!Array.isArray(validRows)) {
         return Promise.reject(new Error('validRows phải là mảng'));
     }
 
     const sanitizedRows = validRows.map((row, index) => {
-        if (!row || typeof row !== 'object') {
-            console.warn(`Row ${index} không hợp lệ, bỏ qua:`, row);
-            return null;
-        }
-        if (!row.action || !['link', 'create_and_link'].includes(row.action)) {
-            console.warn(`Row ${index} action không hợp lệ:`, row.action);
-            return null;
-        }
-        if (!row.data || typeof row.data !== 'object') {
-            console.warn(`Row ${index} thiếu 'data':`, row);
-            return null;
-        }
+        if (!row || typeof row !== 'object') return null;
+        if (!row.action || !['link', 'create_and_link'].includes(row.action)) return null;
+        if (!row.data || typeof row.data !== 'object') return null;
         return row;
     }).filter(Boolean);
 
@@ -200,21 +196,14 @@ export const processPlanImport = (planId, validRows, defaults) => {
         defaults: defaults
     };
 
-    console.log('[Import] Gửi payload:', payload); // DEBUG
-
     return axiosClient.post(`/admin/thesis-plans/${planId}/import-process`, payload)
-        .then(res => res.data)
-        .catch(error => {
-            console.error('[Import] Lỗi server:', error.response?.data || error.message);
-            throw error;
-        });
+        .then(res => res.data);
 };
 
 export const getPlanSettings = (planId) => {
     return axiosClient.get(`/admin/thesis-plans/${planId}/settings`).then(res => res.data);
 };
 
-// [THÊM MỚI] Cập nhật cài đặt chi tiết
 export const updatePlanSettings = (planId, settings) => {
     return axiosClient.put(`/admin/thesis-plans/${planId}/settings`, settings).then(res => res.data);
 };

@@ -301,29 +301,98 @@ class ThesisPlanController extends Controller
      */
     public function destroy(KehoachKhoaluan $plan)
     {
-        $isTruongKhoa = $this->isTruongKhoa();
-        $isCreatorOrAdmin = ($plan->ID_NGUOITAO === Auth::id() || $this->isAdmin());
+        $currentUser = Auth::user();
+        
+        // 1. Kiểm tra Quyền hạn
+        // Admin hoặc Trưởng khoa được quyền tối cao
+        $isManager = $this->isAdmin() || $this->isTruongKhoa();
+        
+        // Người tạo (Giáo vụ) chỉ được quyền hạn chế
+        $isCreator = $plan->ID_NGUOITAO === $currentUser->ID_NGUOIDUNG;
 
-        if ($isTruongKhoa) {
-            if ($plan->TRANGTHAI === 'Đã hoàn thành') {
-                 return response()->json(['message' => 'Không thể xóa kế hoạch đã hoàn thành.'], 403);
-            }
-        } else if ($isCreatorOrAdmin) {
+        if ($isManager) {
+            // Admin/Trưởng khoa được phép xóa mọi trạng thái.
+            // Không cần check trạng thái nữa.
+        } elseif ($isCreator && $this->isGiaoVu()) {
+            // Giáo vụ chỉ được xóa Bản nháp
             if ($plan->TRANGTHAI !== 'Bản nháp') {
-                return response()->json(['message' => 'Chỉ có thể xóa kế hoạch ở trạng thái "Bản nháp".'], 403);
+                return response()->json(['message' => 'Giáo vụ chỉ có thể xóa kế hoạch ở trạng thái "Bản nháp". Vui lòng liên hệ Trưởng khoa.'], 403);
             }
         } else {
-             return response()->json(['message' => 'Bạn không có quyền xóa kế hoạch này.'], 403);
+            return response()->json(['message' => 'Bạn không có quyền xóa kế hoạch này.'], 403);
         }
-        Log::warning("Xóa kế hoạch khóa luận", [
-            'user_deleting' => Auth::id(),
-            'plan_id' => $plan->ID_KEHOACH,
-            'plan_name' => $plan->TEN_DOT,
-            'status' => $plan->TRANGTHAI
-        ]);
-        $plan->delete();
-        Cache::forget('plan_filter_options');
-        return response()->json(null, 204);
+
+        DB::beginTransaction();
+        try {
+            // 2. GIỮ LẠI ĐỀ TÀI (Tách khỏi kế hoạch)
+            // Cập nhật ID_KEHOACH = null cho các đề tài thuộc kế hoạch này
+            // Lưu ý: Cột ID_KEHOACH trong bảng DETAI phải cho phép NULL (nullable) trong Database
+            $plan->detais()->update(['ID_KEHOACH' => null]);
+            
+            // 3. XÓA DỮ LIỆU CON (Thủ công để đảm bảo sạch sẽ nếu không có Cascade DB)
+            
+            // A. Xóa Nhóm và dữ liệu liên quan đến nhóm
+            foreach ($plan->nhoms as $nhom) {
+                // Xóa dữ liệu trong nhóm
+                $nhom->thanhviens()->delete();
+                $nhom->congViecs()->delete(); // Kanban tasks
+                $nhom->lichHops()->delete();  // Calendar events
+                
+                // Xóa phân công & bài nộp
+                if ($nhom->phancongDetaiNhom) {
+                    // Xóa file nộp (Record DB) - File vật lý sẽ thành rác (chấp nhận hoặc dùng job dọn sau)
+                    foreach ($nhom->phancongDetaiNhom->submissions as $sub) {
+                        $sub->files()->delete();
+                        $sub->delete();
+                    }
+                    $nhom->phancongDetaiNhom()->delete();
+                }
+
+                // Xóa điểm số
+                $nhom->diemHuongDan()->delete();
+                $nhom->diemPhanBien()->delete();
+                $nhom->diemHoiDong()->delete();
+                $nhom->diemTongKet()->delete();
+
+                // Xóa chính nhóm đó
+                $nhom->delete();
+            }
+
+            // B. Xóa Hội đồng
+            foreach ($plan->hoidongs as $hoidong) {
+                $hoidong->giangviens()->detach(); // Xóa quan hệ trong bảng trung gian
+                $hoidong->nhoms()->detach();
+                $hoidong->delete();
+            }
+
+            // C. Xóa Sinh viên tham gia & Quota
+            $plan->sinhvienThamgias()->delete();
+            $plan->quotaKhoaBomons()->delete();
+            $plan->quotaGiangviens()->delete();
+
+            // D. Xóa Mốc thời gian
+            $plan->mocThoigians()->delete();
+
+            // 4. Xóa Kế hoạch
+            $plan->delete();
+
+            // Ghi log
+            Log::warning("Đã xóa hoàn toàn kế hoạch (Giữ đề tài)", [
+                'user' => $currentUser->EMAIL,
+                'plan_id' => $plan->ID_KEHOACH,
+                'plan_name' => $plan->TEN_DOT
+            ]);
+
+            DB::commit();
+            Cache::forget('plan_filter_options');
+            
+            return response()->json(['message' => 'Đã xóa kế hoạch thành công. Các đề tài đã được tách ra để tái sử dụng.'], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error("Lỗi xóa kế hoạch: " . $e->getMessage());
+            return response()->json(['message' => 'Lỗi server khi xóa kế hoạch: ' . $e->getMessage()], 500);
+        }
     }
 
     /**

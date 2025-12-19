@@ -36,6 +36,8 @@ use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\FileManagerController;
 use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Api\Admin\BackupController;
+// [MỚI] Import Controller xử lý Backup/Restore Kế hoạch
+use App\Http\Controllers\Api\Admin\PlanArchiveController;
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -47,7 +49,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
     // A. XÁC THỰC & PROFILE
     // =================================================================================
     Route::post('/logout', [AuthController::class, 'logout']);
-    Route::get('/me', [AuthController::class, 'me']); // Thêm route lấy thông tin user hiện tại
+    Route::get('/me', [AuthController::class, 'me']); 
     Route::put('/user/profile', [ProfileController::class, 'updateProfile']);
     Route::put('/user/change-password', [ProfileController::class, 'changePassword']);
     
@@ -61,7 +63,6 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
     // =================================================================================
     Route::get('/history/personal/stats', [HistoryController::class, 'getPersonalStats']);
     Route::get('/history/personal', [HistoryController::class, 'getPersonalHistory']);
-    // Đặt route này ở đây để đảm bảo nó được load
     Route::get('/history/group/{groupId}', [HistoryController::class, 'getGroupHistory']);
     Route::get('/history/topic/{topicId}', [HistoryController::class, 'getTopicHistory']);
     Route::get('/history/topic/{topicId}/comparison', [HistoryController::class, 'getComparisonData']);
@@ -204,25 +205,32 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
     // =================================================================================
     Route::prefix('admin')->group(function () {
         
-        // Dashboard
+        // --- Dashboard ---
         Route::get('/dashboard/stats', [AdminDashboardController::class, 'getStats']);
         Route::get('/dashboard/reminders', [AdminDashboardController::class, 'getReminders']);
         Route::get('/dashboard/incomplete-quotas', [AdminDashboardController::class, 'getIncompleteQuotaDetails']);
         
-        // QUẢN LÝ FILE
+        // --- File Manager ---
         Route::get('/file-manager', [FileManagerController::class, 'index']);
         Route::post('/file-manager/upload', [FileManagerController::class, 'upload']);
         Route::post('/file-manager/create-folder', [FileManagerController::class, 'createFolder']);
-        Route::post('/file-manager/delete', [FileManagerController::class, 'delete']); // Single delete
-        Route::post('/file-manager/bulk-delete', [FileManagerController::class, 'bulkDelete']); // Bulk delete
-        Route::get('/file-manager/download', [FileManagerController::class, 'download']); // Download single
-        Route::post('/file-manager/bulk-download', [FileManagerController::class, 'bulkDownload']); // Download multiple
+        Route::post('/file-manager/delete', [FileManagerController::class, 'delete']); 
+        Route::post('/file-manager/bulk-delete', [FileManagerController::class, 'bulkDelete']);
+        Route::get('/file-manager/download', [FileManagerController::class, 'download']);
+        Route::post('/file-manager/bulk-download', [FileManagerController::class, 'bulkDownload']);
 
-        // Kế hoạch Khóa luận
+        // --- Thesis Plans (Kế hoạch khóa luận) ---
         Route::get('thesis-plans/list-all', [ThesisPlanController::class, 'getAllPlans']);
         Route::post('thesis-plans/preview-new', [ThesisPlanController::class, 'previewNewPlan']);
         Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']);
+        
+        // [MỚI] Backup/Restore Kế hoạch cụ thể (Plan Archive)
+        // Lưu ý: Đặt trước apiResource để tránh xung đột
+        Route::get('thesis-plans/{id}/archive', [PlanArchiveController::class, 'archive']);
+        Route::post('thesis-plans/restore', [PlanArchiveController::class, 'restore']);
+
         Route::apiResource('thesis-plans', ThesisPlanController::class)->parameters(['thesis-plans' => 'plan']);
+        
         Route::get('thesis-plans/{plan}/settings', [ThesisPlanController::class, 'getPlanSettings']);
         Route::put('thesis-plans/{plan}/settings', [ThesisPlanController::class, 'updatePlanSettings']);
         Route::post('thesis-plans/{plan}/submit-approval', [ThesisPlanController::class, 'submitForApproval']);
@@ -232,7 +240,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         Route::get('thesis-plans/{plan}/preview-document', [ThesisPlanController::class, 'previewDocument']);
         Route::post('thesis-plans/{plan}/activate', [ThesisPlanController::class, 'activatePlan']);
 
-        // Sinh viên tham gia kế hoạch
+        // --- Plan Participants ---
         Route::prefix('thesis-plans/{plan}/participants')->group(function () {
             Route::get('/', [ThesisPlanController::class, 'getParticipants']);
             Route::post('/', [ThesisPlanController::class, 'addParticipants']);
@@ -242,12 +250,23 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         });
         Route::get('thesis-plans/{plan}/search-students', [ThesisPlanController::class, 'searchStudentsForPlan']);
         
-        // Import Wizard Sinh viên
+        // --- Import Wizard (Students into Plan) ---
         Route::post('thesis-plans/{plan}/import-analyze', [ThesisPlanController::class, 'importAnalyze']);
         Route::post('thesis-plans/{plan}/import-preview', [ThesisPlanController::class, 'importPreview']); 
         Route::post('thesis-plans/{plan}/import-process', [ThesisPlanController::class, 'importProcess']); 
 
-        // Quản lý Nhóm (Admin)
+        // --- User Management ---
+        Route::apiResource('users', UserController::class);
+        Route::post('users/bulk-action', [UserController::class, 'bulkAction']);
+        Route::post('users/bulk-delete', [UserController::class, 'bulkDelete']);
+        Route::post('users/bulk-reset-password', [UserController::class, 'bulkResetPassword']);
+        Route::post('users/{id}/reset-password', [UserController::class, 'resetPassword']);
+        // Import Users
+        Route::get('/users/import/template', [UserController::class, 'downloadImportTemplate']);
+        Route::post('/users/import/preview', [UserController::class, 'previewImport']);
+        Route::post('/users/import/process', [UserController::class, 'processImport']);
+
+        // --- Group Management (Admin) ---
         Route::prefix('groups')->group(function () {
             Route::get('/', [GroupAdminController::class, 'getGroups']);
             Route::get('/statistics', [GroupAdminController::class, 'getStatistics']);
@@ -266,21 +285,21 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::post('/{nhom}/assign-topic', [GroupAdminController::class, 'assignTopic']);
         });
 
-        // Quản lý Mẫu Kế hoạch
+        // --- Plan Templates ---
         Route::apiResource('thesis-plan-templates', AdminTemplateController::class)
             ->parameters(['thesis-plan-templates' => 'template']);
 
-        // Quản lý Đề tài (Admin)
+        // --- Topic Management (Admin) ---
         Route::prefix('detai')->group(function () {
             Route::get('/', [DetaiAdminController::class, 'index']);
             Route::get('/pending', [DetaiAdminController::class, 'getPendingTopics']);
             Route::get('/statistics', [DetaiAdminController::class, 'getStatistics']);
             Route::get('/{id}', [DetaiAdminController::class, 'show']);
             Route::post('/{id}/approve-reject', [DetaiAdminController::class, 'approveOrReject']);
-            Route::post('/bulk-approve', [DetaiAdminController::class, 'bulkApprove']); // <--- Thêm dòng này
+            Route::post('/bulk-approve', [DetaiAdminController::class, 'bulkApprove']);
         });
         
-        // Quản lý Quota
+        // --- Quota Management ---
         Route::prefix('quotas')->group(function () {
             Route::get('/departments', [QuotaController::class, 'getDepartments']);
             Route::get('/assignments', [QuotaController::class, 'getAssignments']);
@@ -295,7 +314,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::post('/nudge-lecturer', [QuotaController::class, 'nudgeLecturer']);
         });
         
-        // Quản lý Nộp bài
+        // --- Submission Management (Admin) ---
         Route::prefix('submissions')->group(function () {
             Route::get('/statistics', [AdminSubmissionController::class, 'getStatistics']);
             Route::get('/', [AdminSubmissionController::class, 'index']); 
@@ -305,7 +324,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::get('/phancong/{phancong}', [AdminSubmissionController::class, 'getSubmissionsForPhancong']);
         });
 
-        // Quản lý Hội đồng
+        // --- Council Management (Hội đồng) ---
         Route::prefix('hoidong')->group(function () {
             Route::get('/auto-create-stats', [HoiDongController::class, 'getAutoCreateStats']);
             Route::post('/create-bulk-department', [HoiDongController::class, 'createBulkByDepartment']);
@@ -330,7 +349,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::post('/auto-assign-groups', [HoiDongController::class, 'autoAssignGroups']);
         });
         
-        // Phân công Đề tài (Giám sát)
+        // --- Topic Assignments (Reviewer) ---
         Route::prefix('topic-assignments')->group(function () {
             Route::get('/lecturers', [TopicAssignmentController::class, 'getLecturers']);
             Route::post('/assign-topic-quota', [TopicAssignmentController::class, 'assignTopicQuota']);
@@ -341,13 +360,13 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::delete('/{assignmentId}', [TopicAssignmentController::class, 'removeAssignment']);
         });
 
-        // Hệ thống & Log
+        // --- System & Utilities ---
         Route::get('/history', [HistoryController::class, 'getSystemHistory']);
         Route::post('/history/cleanup', [HistoryController::class, 'cleanup']);
         Route::get('/giangvien', [GiangVienController::class, 'index']);
         Route::post('/notifications/broadcast', [AdminNotificationController::class, 'broadcast']);
-
-        //Backup & restore
+        
+        // --- System Backups ---
         Route::get('/backups', [BackupController::class, 'index']);
         Route::post('/backups', [BackupController::class, 'create']);
         Route::get('/backups/download', [BackupController::class, 'download']);
@@ -447,7 +466,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
     });
 });
 
-// Fallback cho các route không tồn tại
+// Fallback Route
 Route::fallback(function () {
     return response()->json(['message' => 'Not Found!'], 404);
 });

@@ -7,7 +7,7 @@ return new class extends Migration {
     public function up(): void {
         Schema::create('DETAI', function (Blueprint $table) {
             $table->id('ID_DETAI');
-            $table->unsignedBigInteger('ID_KEHOACH');
+            $table->unsignedBigInteger('ID_KEHOACH')->nullable();;
             $table->string('MA_DETAI', 20)->nullable()->unique();
             $table->string('TEN_DETAI', 255);
             $table->text('MOTA');
@@ -31,7 +31,7 @@ return new class extends Migration {
             $table->timestamp('NGAYTAO')->nullable()->useCurrent();
             $table->timestamp('NGAYCAPNHAT')->nullable()->useCurrentOnUpdate();
 
-            $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN');
+            $table->foreign('ID_KEHOACH')->references('ID_KEHOACH')->on('KEHOACH_KHOALUAN')->onDelete('set null');
             $table->foreign('ID_NGUOI_DEXUAT')->references('ID_GIANGVIEN')->on('GIANGVIEN');
             $table->foreign('ID_NGUOI_DUYET')->references('ID_NGUOIDUNG')->on('NGUOIDUNG');
             $table->foreign('ID_KHOA_BOMON')->references('ID_KHOA_BOMON')->on('KHOA_BOMON')->onDelete('set null');

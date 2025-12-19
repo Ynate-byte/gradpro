@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
-import { getThesisPlans, getPlanFilterOptions } from '@/api/thesisPlanService'
+import { getThesisPlans, getPlanFilterOptions, restorePlan } from '@/api/thesisPlanService'
 import { Button } from '@/components/ui/button'
-import { PlusCircle, Layers, Clock, Archive, FileEdit, LayoutGrid } from 'lucide-react'
+import { PlusCircle, Layers, Clock, Archive, FileEdit, LayoutGrid, RotateCcw } from 'lucide-react'
 import { PlanDataTable } from './components/PlanDataTable'
 import { PlanDetailDialog } from './components/PlanDetailDialog'
 import { TemplateSelectionDialog } from './components/TemplateSelectionDialog'
+import { RestorePlanDialog } from './components/RestorePlanDialog'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDebounce } from '@/hooks/useDebounce';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,6 +15,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { useTheme } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
+// Cấu hình Tabs
 const TABS = {
     ACTIVE: {
         id: 'active',
@@ -58,10 +60,9 @@ const statusOptions = [
     { value: 'Đã hoàn thành', label: 'Đã hoàn thành' },
 ].sort((a,b) => a.label.localeCompare(b.label));
 
-const columnVisibility = { 
-    HOCKY: false, 
-};
+const columnVisibility = { HOCKY: false };
 
+// Animation Variants
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
         return {
@@ -82,6 +83,7 @@ const getVariants = (shouldReduce) => {
 };
 
 export default function ThesisPlanManagementPage() {
+    // State quản lý dữ liệu và UI
     const [plans, setPlans] = useState([])
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 })
     const [pageCount, setPageCount] = useState(0)
@@ -98,9 +100,9 @@ export default function ThesisPlanManagementPage() {
     const navigate = useNavigate()
 
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
-
     const [filterOptionsData, setFilterOptionsData] = useState({ khoahoc: [], namhoc: [], hocky: [], hedaotao: [] });
 
+    // Phân quyền
     const { user } = useAuth();
     const userRoleName = user?.vaitro?.TEN_VAITRO;
     const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
@@ -109,13 +111,19 @@ export default function ThesisPlanManagementPage() {
     const isTruongKhoa = userRoleName === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
     const isGiaoVu = userRoleName === 'Giáo vụ' || positionCodes.includes('GIAO_VU');
 
+    // Chỉ Admin/Giáo vụ/Trưởng khoa mới được tạo và restore
     const canCreate = isGiaoVu || isTruongKhoa || isAdmin;
 
+    // Theme & Motion
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
+    // Ref cho input file upload (giữ lại để tham khảo, dù đã dùng Dialog)
+    const fileInputRef = useRef(null);
+
+    // Load filter options
     useEffect(() => {
         getPlanFilterOptions()
             .then(data => {
@@ -126,6 +134,7 @@ export default function ThesisPlanManagementPage() {
             });
     }, []); 
 
+    // Fetch Data Function
     const fetchData = useCallback(() => {
         setLoading(true)
         
@@ -157,6 +166,7 @@ export default function ThesisPlanManagementPage() {
             .finally(() => setLoading(false))
     }, [pagination, columnFilters, sorting, debouncedSearchTerm, activeTab])
     
+    // Initial fetch & Refresh when deps change
     useEffect(() => {
         fetchData()
     }, [fetchData]) 
@@ -166,15 +176,45 @@ export default function ThesisPlanManagementPage() {
     const handleOpenEdit = (plan) => { navigate(`/admin/thesis-plans/${plan.ID_KEHOACH}/edit`) }
     const handleViewDetails = (planId) => { setSelectedPlanId(planId); setIsDetailOpen(true); }
 
+    // Reset page index when filter changes
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
     }, [debouncedSearchTerm, activeTab]);
 
+    // Format options for Filters
     const hockyLabelMap = { '1': 'Học kỳ 1', '2': 'Học kỳ 2', '3': 'Học kỳ Hè' };
     const khoahocOptions = useMemo(() => (filterOptionsData.khoahoc || []).map(val => ({ label: val, value: val })), [filterOptionsData.khoahoc]);
     const namhocOptions = useMemo(() => (filterOptionsData.namhoc || []).map(val => ({ label: val, value: val })), [filterOptionsData.namhoc]);
     const hockyOptions = useMemo(() => (filterOptionsData.hocky || []).map(val => ({ label: hockyLabelMap[val] || val, value: val })), [filterOptionsData.hocky]);
     const hedaotaoOptions = useMemo(() => (filterOptionsData.hedaotao || []).map(val => ({ label: val, value: val })), [filterOptionsData.hedaotao]);
+
+    /**
+     * [UPDATED] Callback khi Restore thành công từ Dialog.
+     * Refresh lại dữ liệu bảng và chuyển về tab 'Tất cả'.
+     */
+    const handleRestoreSuccess = () => {
+        fetchData();
+        setActiveTab('all'); 
+    };
+
+    // Hàm xử lý upload file nhanh (nếu dùng input ẩn, hiện tại dùng Dialog)
+    const handleFileChange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        event.target.value = null; // Reset input
+
+        const toastId = toast.loading("Đang phục hồi dữ liệu kế hoạch...");
+        try {
+            await restorePlan(file);
+            toast.dismiss(toastId);
+            toast.success("Phục hồi kế hoạch thành công!");
+            fetchData();
+            setActiveTab('all');
+        } catch (error) {
+            toast.dismiss(toastId);
+            toast.error("Lỗi phục hồi: " + (error.response?.data?.message || "File không hợp lệ hoặc lỗi server."));
+        }
+    };
 
     return (
         <motion.div 
@@ -185,9 +225,30 @@ export default function ThesisPlanManagementPage() {
         >
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shrink-0">
                 {canCreate && (
-                    <Button onClick={handleOpenCreate} className="shrink-0 shadow-sm">
-                        <PlusCircle className="mr-2 h-4 w-4" /> Tạo Kế hoạch mới
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        {/* Input ẩn (dự phòng) */}
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileChange} 
+                            className="hidden" 
+                            accept=".zip"
+                        />
+                        
+                        <Button onClick={handleOpenCreate} className="shrink-0 shadow-sm">
+                            <PlusCircle className="mr-2 h-4 w-4" /> Tạo Kế hoạch mới
+                        </Button>
+
+                        {/* Nút Khôi phục (Mở Dialog) */}
+                        <RestorePlanDialog onSuccess={handleRestoreSuccess}>
+                            <Button 
+                                variant="outline" 
+                                className="shrink-0 shadow-sm border-dashed border-amber-300 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 text-amber-700 dark:text-amber-400"
+                            >
+                                <RotateCcw className="mr-2 h-4 w-4" /> Khôi phục
+                            </Button>
+                        </RestorePlanDialog>
+                    </div>
                 )}
             </div>
 
@@ -215,7 +276,6 @@ export default function ThesisPlanManagementPage() {
                             transition={{ duration: 0.2 }}
                         >
                             <TabsContent value={activeTab} className="flex-1 mt-0 outline-none ring-0 h-full flex flex-col">
-                                {/* Container chính cho bảng: flex-col để chia header và body */}
                                 <div className="flex flex-col h-full border rounded-lg bg-card shadow-sm overflow-hidden">
                                      <div className="p-4 border-b bg-muted/10 shrink-0">
                                         <h3 className="font-semibold text-lg tracking-tight">
@@ -225,8 +285,6 @@ export default function ThesisPlanManagementPage() {
                                             Danh sách các kế hoạch {Object.values(TABS).find(t => t.id === activeTab)?.label.toLowerCase()}.
                                         </p>
                                      </div>
-                                     
-                                     {/* Table Container: flex-1 để chiếm hết chiều cao còn lại */}
                                      <div className="flex-1 min-h-0 flex flex-col">
                                         <PlanDataTable
                                             data={plans}
@@ -241,14 +299,11 @@ export default function ThesisPlanManagementPage() {
                                             setPagination={setPagination}
                                             columnFilters={columnFilters}
                                             setColumnFilters={setColumnFilters}
-                                            
-                                            // Props cho filter
                                             statusOptions={activeTab === 'all' ? statusOptions : undefined}
                                             khoahocFilterOptions={khoahocOptions}
                                             namhocFilterOptions={namhocOptions}
                                             hockyFilterOptions={hockyOptions}
                                             hedaotaoFilterOptions={hedaotaoOptions}
-                                            
                                             columnVisibility={columnVisibility}
                                             sorting={sorting}
                                             setSorting={setSorting}
@@ -259,8 +314,6 @@ export default function ThesisPlanManagementPage() {
                                             searchPlaceholder="Tìm theo tên kế hoạch..."
                                             searchTerm={searchTerm}
                                             onSearchChange={setSearchTerm}
-                                            
-                                            // [QUAN TRỌNG] Bật chế độ Flex Layout cho bảng
                                             flexLayout={true}
                                             className="h-full border-0 rounded-none" 
                                         />
