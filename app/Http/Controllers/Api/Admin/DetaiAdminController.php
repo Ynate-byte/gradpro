@@ -14,10 +14,17 @@ use Illuminate\Support\Facades\DB;
 class DetaiAdminController extends Controller
 {
     /**
-     * Lấy danh sách tất cả đề tài để Admin hoặc Trưởng khoa xét duyệt.
+     * Lấy danh sách tất cả đề tài để Admin hoặc Trưởng khoa/Trưởng bộ môn xét duyệt.
      */
     public function index(Request $request)
     {
+        $user = Auth::user();
+        
+        // Xác định quyền hạn
+        $isTruongBoMon = in_array('TRUONG_BOMON', $this->getUserPositionCodes());
+        // Admin, Giáo vụ, Trưởng khoa được coi là Quản lý cấp cao (xem hết)
+        $isManager = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+
         // Khởi tạo query và eager load các quan hệ cần thiết
         $query = Detai::with([
             'nguoiDexuat.nguoidung',
@@ -25,6 +32,17 @@ class DetaiAdminController extends Controller
             'kehoachKhoaluan',
             'goiyDetai.nguoiGoiy.nguoidung' 
         ]);
+
+        // --- LOGIC PHÂN QUYỀN DỮ LIỆU ---
+        // Nếu là Trưởng bộ môn VÀ KHÔNG PHẢI Quản lý cấp cao -> Chỉ lấy đề tài thuộc bộ môn của họ
+        if ($isTruongBoMon && !$isManager) {
+            if ($user->giangvien) {
+                $query->where('ID_KHOA_BOMON', $user->giangvien->ID_KHOA_BOMON);
+            } else {
+                // Trường hợp lỗi data: user có role nhưng không có thông tin giảng viên
+                return response()->json([], 200); 
+            }
+        }
 
         // Lọc theo trạng thái đề tài (VD: Chờ duyệt, Đã duyệt...)
         if ($request->has('status')) {
@@ -47,8 +65,8 @@ class DetaiAdminController extends Controller
             });
         }
 
-        // Lọc theo ID khoa/bộ môn
-        if ($request->has('department_id')) {
+        // Lọc theo ID khoa/bộ môn (Chỉ áp dụng cho Admin/Manager vì Trưởng bộ môn đã bị force filter ở trên)
+        if ($isManager && $request->has('department_id')) {
             $query->where('ID_KHOA_BOMON', $request->department_id);
         }
 
@@ -97,8 +115,11 @@ class DetaiAdminController extends Controller
     {
         $currentUser = Auth::user();
         
-        // Kiểm tra quyền hạn: Chỉ Admin hoặc Trưởng khoa mới được thực hiện
-        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
+        $isTruongBoMon = in_array('TRUONG_BOMON', $this->getUserPositionCodes());
+        $isManager = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+
+        // Kiểm tra quyền hạn: Chỉ Admin, Giáo vụ, Trưởng khoa HOẶC Trưởng bộ môn mới được thực hiện
+        if (!$isManager && !$isTruongBoMon) {
             return response()->json(['message' => 'Không có quyền thực hiện.'], 403);
         }
 
@@ -114,6 +135,14 @@ class DetaiAdminController extends Controller
 
         // Tìm đề tài cần xử lý
         $topic = Detai::with('nguoiDexuat')->findOrFail($id);
+
+        // --- LOGIC BẢO MẬT CHO TRƯỞNG BỘ MÔN ---
+        // Nếu là Trưởng bộ môn (và không phải Admin), chỉ được duyệt đề tài CÙNG BỘ MÔN
+        if ($isTruongBoMon && !$isManager) {
+            if (!$currentUser->giangvien || $topic->ID_KHOA_BOMON !== $currentUser->giangvien->ID_KHOA_BOMON) {
+                return response()->json(['message' => 'Bạn chỉ có thể duyệt đề tài thuộc bộ môn của mình.'], 403);
+            }
+        }
 
         // Xử lý logic cập nhật trạng thái dựa trên action
         if ($request->action === 'approve') {
@@ -184,8 +213,11 @@ class DetaiAdminController extends Controller
     {
         $currentUser = Auth::user();
         
+        $isTruongBoMon = in_array('TRUONG_BOMON', $this->getUserPositionCodes());
+        $isManager = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+
         // Kiểm tra quyền hạn
-        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
+        if (!$isManager && !$isTruongBoMon) {
             return response()->json(['message' => 'Không có quyền thực hiện.'], 403);
         }
 
@@ -202,21 +234,33 @@ class DetaiAdminController extends Controller
         $topicIds = $request->input('topic_ids');
         $count = 0;
 
+        // Khởi tạo query update
+        $query = Detai::whereIn('ID_DETAI', $topicIds)->where('TRANGTHAI', 'Chờ duyệt');
+
+        // --- LOGIC BẢO MẬT CHO TRƯỞNG BỘ MÔN ---
+        // Chỉ cho phép update những đề tài thuộc bộ môn của họ
+        if ($isTruongBoMon && !$isManager) {
+            if ($currentUser->giangvien) {
+                $query->where('ID_KHOA_BOMON', $currentUser->giangvien->ID_KHOA_BOMON);
+            } else {
+                return response()->json(['message' => 'Lỗi thông tin giảng viên.'], 403);
+            }
+        }
+
         // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
         DB::beginTransaction();
         try {
-            // Cập nhật trạng thái hàng loạt cho các đề tài đang "Chờ duyệt"
-            $count = Detai::whereIn('ID_DETAI', $topicIds)
-                ->where('TRANGTHAI', 'Chờ duyệt')
-                ->update([
-                    'TRANGTHAI' => 'Đã duyệt',
-                    'ID_NGUOI_DUYET' => $currentUser->ID_NGUOIDUNG,
-                    'NGAY_DUYET' => now(),
-                    'LYDO_TUCHOI' => null,
-                    'LA_TAISUDUNG' => false, 
-                ]);
+            // Cập nhật trạng thái hàng loạt
+            $count = $query->update([
+                'TRANGTHAI' => 'Đã duyệt',
+                'ID_NGUOI_DUYET' => $currentUser->ID_NGUOIDUNG,
+                'NGAY_DUYET' => now(),
+                'LYDO_TUCHOI' => null,
+                'LA_TAISUDUNG' => false, 
+            ]);
 
             // Lấy lại danh sách các đề tài vừa được duyệt để gửi thông báo
+            // Lưu ý: Cần filter lại theo ID và TRANGTHAI 'Đã duyệt' để lấy đúng những cái vừa update
             $topics = Detai::whereIn('ID_DETAI', $topicIds)
                            ->where('TRANGTHAI', 'Đã duyệt')
                            ->with('nguoiDexuat.nguoidung')
@@ -251,14 +295,26 @@ class DetaiAdminController extends Controller
      */
     public function getPendingTopics()
     {
-        $topics = Detai::with([
+        // Hàm này giữ nguyên, vì index() đã xử lý logic lọc rồi.
+        // Tuy nhiên, để nhất quán, ta dùng query tương tự index nếu cần
+        // Hoặc đơn giản là return danh sách rỗng nếu frontend gọi API này riêng biệt
+        
+        $currentUser = Auth::user();
+        $isTruongBoMon = in_array('TRUONG_BOMON', $this->getUserPositionCodes());
+        $isManager = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+
+        $query = Detai::with([
             'nguoiDexuat.nguoidung',
             'chuyennganh',
             'goiyDetai.nguoiGoiy.nguoidung'
         ])
-        ->where('TRANGTHAI', 'Chờ duyệt')
-        ->orderBy('NGAYTAO', 'asc')
-        ->get();
+        ->where('TRANGTHAI', 'Chờ duyệt');
+
+        if ($isTruongBoMon && !$isManager && $currentUser->giangvien) {
+            $query->where('ID_KHOA_BOMON', $currentUser->giangvien->ID_KHOA_BOMON);
+        }
+
+        $topics = $query->orderBy('NGAYTAO', 'asc')->get();
 
         // Thêm tên giảng viên vào kết quả trả về
         $topics->transform(function ($topic) {
@@ -274,16 +330,27 @@ class DetaiAdminController extends Controller
      */
     public function getStatistics()
     {
+        $currentUser = Auth::user();
+        $isTruongBoMon = in_array('TRUONG_BOMON', $this->getUserPositionCodes());
+        $isManager = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+
+        $query = Detai::query();
+
+        if ($isTruongBoMon && !$isManager && $currentUser->giangvien) {
+            $query->where('ID_KHOA_BOMON', $currentUser->giangvien->ID_KHOA_BOMON);
+        }
+
+        // Clone query để đếm các trạng thái khác nhau
         $stats = [
-            'total_topics' => Detai::count(),
-            'draft_topics' => Detai::where('TRANGTHAI', 'Nháp')->count(),
-            'pending_topics' => Detai::where('TRANGTHAI', 'Chờ duyệt')->count(),
-            'approved_topics' => Detai::where('TRANGTHAI', 'Đã duyệt')->count(),
-            'rejected_topics' => Detai::where('TRANGTHAI', 'Từ chối')->count(),
-            'edit_requested_topics' => Detai::where('TRANGTHAI', 'Yêu cầu chỉnh sửa')->count(),
-            'full_topics' => Detai::where('TRANGTHAI', 'Đã đầy')->count(),
-            'locked_topics' => Detai::where('TRANGTHAI', 'Đã khóa')->count(),
-            'topics_with_suggestions' => Detai::whereHas('goiyDetai')->count(),
+            'total_topics' => (clone $query)->count(),
+            'draft_topics' => (clone $query)->where('TRANGTHAI', 'Nháp')->count(),
+            'pending_topics' => (clone $query)->where('TRANGTHAI', 'Chờ duyệt')->count(),
+            'approved_topics' => (clone $query)->where('TRANGTHAI', 'Đã duyệt')->count(),
+            'rejected_topics' => (clone $query)->where('TRANGTHAI', 'Từ chối')->count(),
+            'edit_requested_topics' => (clone $query)->where('TRANGTHAI', 'Yêu cầu chỉnh sửa')->count(),
+            'full_topics' => (clone $query)->where('TRANGTHAI', 'Đã đầy')->count(),
+            'locked_topics' => (clone $query)->where('TRANGTHAI', 'Đã khóa')->count(),
+            'topics_with_suggestions' => (clone $query)->whereHas('goiyDetai')->count(),
         ];
 
         return response()->json($stats);

@@ -5,12 +5,13 @@ import {
     LogIn, LogOut, UserCog, KeyRound, Users, UserMinus, UserPlus, UserCheck,
     BookOpen, CheckSquare, Trello, UploadCloud, Calendar, Activity,
     FileText, Shield, Monitor, FileEdit, CheckCircle, XCircle, Star, MessageSquare, RefreshCw,
-    Mail, HandMetal, BookCheck, ArrowRight, Edit3, PlusCircle
+    Mail, HandMetal, BookCheck, ArrowRight, Edit3
 } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from '@/components/ui/button';
 
 // Map icon từ backend trả về sang Lucide React Icon
 const iconMap = {
@@ -43,7 +44,7 @@ const iconMap = {
     'BookCheck': BookCheck,
 };
 
-// Map tên trường Database sang Tiếng Việt
+// Map tên trường Database sang Tiếng Việt hiển thị tóm tắt
 const FIELD_MAP = {
     'TEN_CONGVIEC': 'Tên công việc',
     'TRANGTHAI': 'Trạng thái',
@@ -56,42 +57,47 @@ const FIELD_MAP = {
     'THOIGIAN_KETTHUC': 'Kết thúc',
     'TEN_DETAI': 'Tên đề tài',
     'ID_COT': 'Cột Kanban',
-    'NOIDUNG': 'Nội dung'
+    'NOIDUNG': 'Nội dung',
+    'YEUCAU': 'Yêu cầu',
+    'MUCTIEU': 'Mục tiêu',
+    'KETQUA_MONGDOI': 'Kết quả',
+    'ID_KHOA_BOMON': 'Bộ môn',
+    'SO_NHOM_TOIDA': 'Số nhóm tối đa'
 };
 
 // Helper: Render chi tiết log (Phiên bản gọn cho Timeline)
 const DetailRenderer = ({ type, details }) => {
     if (!details || Object.keys(details).length === 0) return null;
 
-    // 1. Hiển thị Diff (Sự thay đổi Old -> New)
+    // 1. Hiển thị Diff (Sự thay đổi Old -> New) - Dạng tóm tắt
     if (details.changes && Array.isArray(details.changes)) {
         return (
-            <div className="mt-1.5 flex flex-col gap-1 bg-muted/40 p-2 rounded border text-[11px]">
+            <div className="mt-2 flex flex-col gap-1.5 bg-muted/40 p-2.5 rounded-md border border-border/50 text-[11px]">
                 {details.changes.slice(0, 3).map((change, idx) => { // Giới hạn hiển thị 3 dòng đầu
                     const fieldName = FIELD_MAP[change.field] || change.field;
                     
                     // Kiểm tra độ dài để hiển thị rút gọn
                     const oldText = String(change.old || '(Trống)');
                     const newText = String(change.new || '(Trống)');
-                    const isLong = oldText.length > 30 || newText.length > 30;
+                    const isLong = oldText.length > 20 || newText.length > 20;
 
                     return (
-                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 border-b border-dashed last:border-0 pb-1 last:pb-0">
-                            <span className="font-semibold text-muted-foreground min-w-[80px]">
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 border-b border-dashed border-border/60 last:border-0 pb-1.5 last:pb-0">
+                            <span className="font-semibold text-muted-foreground min-w-[90px] shrink-0 mt-0.5">
                                 {fieldName}:
                             </span>
                             
                             {isLong ? (
                                 <span className="text-muted-foreground italic">
-                                    (Đã thay đổi nội dung chi tiết)
+                                    (Đã thay đổi nội dung)
                                 </span>
                             ) : (
-                                <div className="flex items-center gap-1.5">
-                                    <span className="line-through opacity-60 text-red-600 truncate max-w-[100px] bg-red-50 px-1 rounded">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="line-through opacity-60 text-red-600 truncate max-w-[80px] bg-red-50 dark:bg-red-950/30 px-1 rounded decoration-red-400">
                                         {oldText}
                                     </span>
                                     <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-                                    <span className="text-green-600 font-medium truncate max-w-[100px] bg-green-50 px-1 rounded">
+                                    <span className="text-green-600 font-medium truncate max-w-[80px] bg-green-50 dark:bg-green-950/30 px-1 rounded">
                                         {newText}
                                     </span>
                                 </div>
@@ -101,15 +107,15 @@ const DetailRenderer = ({ type, details }) => {
                 })}
                 
                 {details.changes.length > 3 && (
-                    <span className="text-[10px] text-muted-foreground italic pl-1 pt-1 block">
-                        ...và {details.changes.length - 3} thay đổi khác
+                    <span className="text-[10px] text-muted-foreground italic pl-1 block">
+                        ...và {details.changes.length - 3} trường khác
                     </span>
                 )}
             </div>
         );
     }
-
-    // 2. Grading Logs
+    
+    // 2. Grading Logs (Chấm điểm)
     if (type && type.includes('GRADE')) {
          return (
              <div className="flex items-center gap-2 mt-1">
@@ -135,43 +141,37 @@ const DetailRenderer = ({ type, details }) => {
 
 // Helper: Màu sắc icon dựa trên loại hành động
 const getColorClass = (actionType) => {
-    if (!actionType) return 'text-gray-500 border-gray-200 bg-gray-50';
+    if (!actionType) return 'text-gray-500 border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700';
     
-    switch (true) {
-        case actionType === 'LOGIN': return 'text-blue-500 border-blue-200 bg-blue-50';
-        case actionType === 'LOGOUT': return 'text-gray-500 border-gray-200 bg-gray-50';
-        case actionType === 'CHANGE_PASSWORD': 
-        case actionType === 'UPDATE_PROFILE': return 'text-purple-500 border-purple-200 bg-purple-50';
-        
-        case actionType === 'CREATE_GROUP':
-        case actionType === 'JOIN_GROUP': 
-        case actionType === 'APPROVE_MEMBER': return 'text-emerald-500 border-emerald-200 bg-emerald-50';
-        case actionType === 'LEAVE_GROUP': return 'text-red-500 border-red-200 bg-red-50';
-        case actionType === 'INVITE_MEMBER': 
-        case actionType === 'SEND_REQUEST': return 'text-indigo-500 border-indigo-200 bg-indigo-50';
-        
-        case actionType === 'REGISTER_TOPIC': 
-        case actionType === 'PROPOSE_TOPIC': 
-        case actionType === 'ASSIGN_TOPIC': 
-        case actionType === 'UPDATE_TOPIC': return 'text-blue-600 border-blue-200 bg-blue-50';
+    // Nhóm Tạo/Thêm/Duyệt -> Xanh lá/Emerald
+    if (actionType.includes('CREATE') || actionType.includes('ADD') || actionType.includes('APPROVE') || actionType.includes('JOIN')) 
+        return 'text-emerald-500 border-emerald-200 bg-emerald-50 dark:bg-emerald-900/20 dark:border-emerald-800';
+    
+    // Nhóm Sửa/Update -> Xanh dương
+    if (actionType.includes('UPDATE') || actionType.includes('EDIT') || actionType.includes('CHANGE')) 
+        return 'text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800';
+    
+    // Nhóm Xóa/Hủy/Từ chối -> Đỏ
+    if (actionType.includes('DELETE') || actionType.includes('REMOVE') || actionType.includes('REJECT') || actionType.includes('LEAVE')) 
+        return 'text-red-500 border-red-200 bg-red-50 dark:bg-red-900/20 dark:border-red-800';
+    
+    // Mời/Gửi -> Tím/Indigo
+    if (actionType.includes('INVITE') || actionType.includes('SEND'))
+        return 'text-indigo-500 border-indigo-200 bg-indigo-50 dark:bg-indigo-900/20 dark:border-indigo-800';
 
-        case actionType === 'SUBMIT_PRODUCT': 
-        case actionType === 'CONFIRM_SUBMISSION': return 'text-green-600 border-green-200 bg-green-50';
-        case actionType === 'REJECT_SUBMISSION': 
-        case actionType === 'REJECT_REVIEW': return 'text-red-500 border-red-200 bg-red-50';
-        
-        case actionType.includes('GRADE'): return 'text-yellow-500 border-yellow-200 bg-yellow-50';
+    // Chấm điểm -> Vàng
+    if (actionType.includes('GRADE')) 
+        return 'text-yellow-600 border-yellow-200 bg-yellow-50 dark:bg-yellow-900/20 dark:border-yellow-800';
 
-        case actionType === 'TASK_CREATE': return 'text-cyan-500 border-cyan-200 bg-cyan-50';
-        case actionType === 'TASK_MOVE': 
-        case actionType === 'TASK_UPDATE': return 'text-orange-400 border-orange-200 bg-orange-50';
-        case actionType === 'CREATE_MEETING': return 'text-pink-500 border-pink-200 bg-pink-50';
+    // Task/Meeting -> Màu riêng
+    if (actionType === 'TASK_CREATE') return 'text-cyan-500 border-cyan-200 bg-cyan-50 dark:bg-cyan-900/20 dark:border-cyan-800';
+    if (actionType === 'TASK_MOVE' || actionType === 'TASK_UPDATE') return 'text-orange-400 border-orange-200 bg-orange-50 dark:bg-orange-900/20 dark:border-orange-800';
+    if (actionType === 'CREATE_MEETING') return 'text-pink-500 border-pink-200 bg-pink-50 dark:bg-pink-900/20 dark:border-pink-800';
 
-        default: return 'text-gray-500 border-gray-200 bg-gray-50';
-    }
+    return 'text-gray-500 border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-700';
 };
 
-// Helper: Lấy tên viết tắt
+// Helper: Lấy Initials tên user
 const getInitials = (name) => {
     if (!name) return '?';
     const parts = name.split(' ');
@@ -180,14 +180,16 @@ const getInitials = (name) => {
         : name.substring(0, 2).toUpperCase();
 };
 
-const HistoryTimeline = ({ items, isLoading }) => {
+const HistoryTimeline = ({ items, isLoading, onSelect, selectedItemId }) => { 
     if (isLoading) {
-        return <div className="p-4 text-center text-muted-foreground text-sm">Đang tải hoạt động...</div>;
+        return <div className="p-4 text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
+            <Activity className="w-4 h-4 animate-spin" /> Đang tải hoạt động...
+        </div>;
     }
 
     if (!items || items.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center p-6 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/10">
+            <div className="flex flex-col items-center justify-center p-6 text-muted-foreground border-2 border-dashed rounded-lg bg-muted/10 h-full min-h-[200px]">
                 <Activity className="w-8 h-8 mb-2 opacity-20" />
                 <p className="text-sm">Chưa có hoạt động nào.</p>
             </div>
@@ -195,61 +197,103 @@ const HistoryTimeline = ({ items, isLoading }) => {
     }
 
     return (
-        <ScrollArea className="h-[600px] pr-4">
-            <div className="relative pl-4 border-l-2 border-muted ml-3 space-y-6 py-2">
+        <ScrollArea className="h-full pr-4">
+            <div className="relative pl-4 border-l-2 border-muted ml-3 space-y-6 py-2 pb-10">
                 {items.map((item) => {
                     const IconComponent = iconMap[item.ICON] || Activity;
-                    const details = typeof item.CHI_TIET === 'string' 
-                        ? JSON.parse(item.CHI_TIET) 
-                        : (item.CHI_TIET || {});
+                    let details = {};
+                    try {
+                        details = typeof item.CHI_TIET === 'string' ? JSON.parse(item.CHI_TIET) : (item.CHI_TIET || {});
+                    } catch (e) {
+                        details = {};
+                    }
+                    
+                    const isSelected = selectedItemId === item.ID_LICHSU;
+                    
+                    // Chỉ cho phép click nếu có onSelect VÀ item có changes (diff)
+                    const hasDiff = details.changes && Array.isArray(details.changes) && details.changes.length > 0;
+                    const isClickable = onSelect && hasDiff;
 
                     return (
                         <div key={item.ID_LICHSU} className="relative group">
                             {/* Icon trên trục thời gian */}
                             <div className={cn(
-                                "absolute -left-[23px] top-0 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm transition-all group-hover:scale-110 z-10",
-                                getColorClass(item.LOAI_HANH_DONG)
+                                "absolute -left-[23px] top-0 flex h-6 w-6 items-center justify-center rounded-full border bg-background shadow-sm transition-all z-10",
+                                isSelected 
+                                    ? "scale-110 ring-2 ring-primary border-primary bg-primary text-primary-foreground" 
+                                    : "group-hover:scale-110",
+                                !isSelected && getColorClass(item.LOAI_HANH_DONG)
                             )}>
                                 <IconComponent className="h-3 w-3" />
                             </div>
                             
                             <div className="flex flex-col gap-1">
-                                {/* Header: Thời gian & Tên Nhóm */}
-                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-0.5">
-                                     <span className="font-mono">{format(new Date(item.NGAY_TAO), "HH:mm, dd/MM", { locale: vi })}</span>
-                                     {item.nhom && <Badge variant="outline" className="text-[9px] h-4 px-1 font-normal border-muted-foreground/20 text-muted-foreground">{item.nhom.TEN_NHOM}</Badge>}
+                                {/* Header: Thời gian */}
+                                <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-0.5 pl-1">
+                                     <span className="font-mono">{format(new Date(item.NGAY_TAO), "HH:mm, dd/MM/yyyy", { locale: vi })}</span>
                                 </div>
 
                                 {/* Card Nội dung */}
-                                <div className="bg-card p-3 rounded-lg border shadow-sm hover:shadow-md transition-all">
+                                <div 
+                                    className={cn(
+                                        "bg-card p-3 rounded-lg border shadow-sm transition-all relative overflow-hidden text-left",
+                                        isClickable 
+                                            ? "hover:shadow-md cursor-pointer hover:border-primary/50 hover:bg-accent/5" 
+                                            : "opacity-80 hover:opacity-100",
+                                        isSelected 
+                                            ? "border-primary bg-primary/5 shadow-md ring-1 ring-primary/20 opacity-100" 
+                                            : ""
+                                    )}
+                                    onClick={() => isClickable && onSelect(item)}
+                                >
                                     <div className="flex items-start gap-3">
                                         {/* Avatar người dùng */}
                                         {item.nguoidung ? (
-                                            <Avatar className="h-7 w-7 mt-0.5 border">
+                                            <Avatar className="h-8 w-8 mt-0.5 border shadow-sm">
                                                 <AvatarImage src={item.nguoidung.AVATAR_URL} />
-                                                <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                                                <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-bold">
                                                     {getInitials(item.nguoidung.HODEM_VA_TEN)}
                                                 </AvatarFallback>
                                             </Avatar>
                                         ) : (
-                                            <div className="h-7 w-7 mt-0.5 flex items-center justify-center bg-muted rounded-full border">
-                                                <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+                                            <div className="h-8 w-8 mt-0.5 flex items-center justify-center bg-muted rounded-full border">
+                                                <Shield className="h-4 w-4 text-muted-foreground" />
                                             </div>
                                         )}
 
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-xs leading-snug mb-1">
+                                            <div className="text-xs leading-snug mb-1.5">
                                                 {item.nguoidung ? (
-                                                    <span className="font-bold text-foreground mr-1">{item.nguoidung.HODEM_VA_TEN}</span>
+                                                    <span className="font-bold text-foreground mr-1.5 text-sm block sm:inline">
+                                                        {item.nguoidung.HODEM_VA_TEN}
+                                                    </span>
                                                 ) : (
-                                                    <span className="font-bold text-foreground mr-1">Hệ thống</span>
+                                                    <span className="font-bold text-foreground mr-1.5 text-sm block sm:inline">
+                                                        Hệ thống
+                                                    </span>
                                                 )}
-                                                <span className="text-muted-foreground font-normal">{item.TIEU_DE}</span>
-                                            </p>
+                                                <span className="text-muted-foreground font-normal break-words">
+                                                    {item.TIEU_DE}
+                                                </span>
+                                            </div>
                                             
                                             <DetailRenderer type={item.LOAI_HANH_DONG} details={details} />
+                                            
+                                            {/* Button Xem so sánh (chỉ hiện khi có diff và có onSelect) */}
+                                            {isClickable && (
+                                                <div className={cn(
+                                                    "mt-2 flex items-center gap-1 text-[10px] font-medium transition-all",
+                                                    isSelected ? "text-primary" : "text-muted-foreground group-hover:text-primary opacity-0 group-hover:opacity-100"
+                                                )}>
+                                                    <FileText className="w-3 h-3" />
+                                                    {isSelected ? "Đang xem so sánh" : "Nhấn để xem chi tiết so sánh"}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
+                                    
+                                    {/* Indicator active bar */}
+                                    {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary"></div>}
                                 </div>
                             </div>
                         </div>

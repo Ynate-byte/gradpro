@@ -140,20 +140,24 @@ export function AppSidebar() {
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Logic Phân Quyền (GIỮ NGUYÊN) ---
+    // --- Logic Phân Quyền ---
     const roleName = user?.vaitro?.TEN_VAITRO;
     const positions = user?.giangvien?.chucvus || [];
     const positionCodes = positions.map(p => p.MA_CHUCVU);
     const positionNames = positions.map(p => p.TEN_CHUCVU);
+    
     const isSinhVien = roleName === 'Sinh viên';
     const isAdminAccount = roleName === 'Admin';
     const hasLecturerProfile = !!user?.giangvien;
-    const isTruongKhoa = positionCodes.includes('TRUONG_KHOA');
-    const isGiaoVu = positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
-    const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
-    const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu;
+    
+    const isTruongKhoa = isAdminAccount || positionCodes.includes('TRUONG_KHOA');
+    const isGiaoVu = isAdminAccount || positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
+    const isTruongBoMon = isAdminAccount || positionCodes.includes('TRUONG_BOMON');
+    
+    // [CẬP NHẬT] Thêm isTruongBoMon vào điều kiện truy cập Admin Area
+    const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu || isTruongBoMon;
 
-    // --- Config Menu (GIỮ NGUYÊN) ---
+    // --- Config Menu ---
     const platformMenu = {
         label: "Hệ thống",
         items: [
@@ -164,7 +168,9 @@ export function AppSidebar() {
                 subItems: [
                     { href: "/student/dashboard", title: "Tổng quan", hidden: !isSinhVien },
                     { href: "/lecturer/dashboard", title: "Tổng quan", hidden: !hasLecturerProfile },
-                    { href: "/admin/dashboard", title: "Bảng điều khiển", hidden: !canAccessAdminArea },
+                    
+                    // Dashboard admin chỉ dành cho Admin/GVu/TKhoa, TBMon không thấy
+                    { href: "/admin/dashboard", title: "Bảng điều khiển", hidden: !isGiaoVu && !isTruongKhoa && !isAdminAccount },
                     { href: "/notifications", title: "Thông báo" },
                     { href: "/history", title: "Lịch sử hoạt động" },
                 ],
@@ -195,20 +201,29 @@ export function AppSidebar() {
     const adminMenu = {
         label: "Quản trị",
         items: [
-            { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart },
-            { title: "Người dùng", href: "/admin/users", icon: Shield },
-            { title: "Quản lý nhóm", href: "/admin/groups", icon: Users },
-            { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy },
-            { title: "Mẫu kế hoạch", href: "/admin/templates", icon: FileText },
-            { title: "Phân bổ đê tài", href: "/admin/quota-management", icon: Layers },
-            { title: "Quản lý Đề tài", href: "/admin/thesis-topics", icon: BookCopy },
-            { title: "Quản lý Hội đồng", href: "/admin/hoidong", icon: GraduationCap },
-            { title: "Bảng điểm tổng", href: "/admin/cham-diem", icon: Star },
-            { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle },
-            { title: "Quản lý File", href: "/admin/files", icon: Folder },
-            { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity },
-            { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings },
-            { title: "Sao lưu dữ liệu", href: "/admin/backups", icon: ShieldCheck },
+            // Các mục chỉ Admin/GiaoVu/TruongKhoa mới thấy
+            { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart, hidden: !isGiaoVu && !isTruongKhoa },
+            { title: "Người dùng", href: "/admin/users", icon: Shield, hidden: !isGiaoVu },
+            { title: "Quản lý nhóm", href: "/admin/groups", icon: Users, hidden: !isGiaoVu && !isTruongKhoa },
+            { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy, hidden: !isGiaoVu && !isTruongKhoa },
+            { title: "Mẫu kế hoạch", href: "/admin/templates", icon: FileText, hidden: !isGiaoVu },
+            { title: "Phân bổ đề tài", href: "/admin/quota-management", icon: Layers, hidden: !isGiaoVu && !isTruongKhoa },
+            
+            // Mục này hiển thị cho cả Trưởng bộ môn
+            { 
+                title: "Quản lý Đề tài", 
+                href: "/admin/thesis-topics", 
+                icon: BookCopy, 
+                hidden: !isGiaoVu && !isTruongKhoa && !isTruongBoMon && !isAdminAccount
+            },
+            
+            { title: "Quản lý Hội đồng", href: "/admin/hoidong", icon: GraduationCap, hidden: !isGiaoVu && !isTruongKhoa },
+            { title: "Bảng điểm tổng", href: "/admin/cham-diem", icon: Star, hidden: !isGiaoVu && !isTruongKhoa },
+            { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle, hidden: !isGiaoVu && !isTruongKhoa },
+            { title: "Quản lý File", href: "/admin/files", icon: Folder, hidden: !isGiaoVu },
+            { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity, hidden: !isGiaoVu },
+            { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings, hidden: !isGiaoVu },
+            { title: "Sao lưu dữ liệu", href: "/admin/backups", icon: ShieldCheck, hidden: !isAdminAccount },
         ],
     };
 
@@ -237,7 +252,7 @@ export function AppSidebar() {
                             <ChevronsUpDown className="ml-auto size-3 text-muted-foreground group-data-[collapsible=icon]:hidden" />
                         </Button>
                     </DropdownMenuTrigger>
-                    {/* Content Dropdown giữ nguyên logic */}
+                    
                     <DropdownMenuContent side="right" align="start" className="w-56 rounded-md border-border shadow-md">
                         <DropdownMenuItem onClick={() => navigate('/')} className="cursor-pointer">
                             <LayoutDashboard className="mr-2 size-4 text-primary" /> Trang chủ
@@ -273,7 +288,6 @@ export function AppSidebar() {
                 {/* 2. Admin Group */}
                 {canAccessAdminArea && (
                     <>
-                    {/* Đường phân cách rõ hơn */}
                     <SidebarSeparator className="my-2 mx-2 bg-border/60"/>
                     <SidebarGroup className="p-0">
                         <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold text-foreground/50 uppercase tracking-widest px-2 mb-1">
@@ -365,10 +379,10 @@ export function AppSidebar() {
 
                                     <DropdownMenuSeparator className="my-1 opacity-50"/>
 
-                                    {/* 2. [ĐÃ THÊM LẠI] Phần Giảm hiệu ứng */}
+                                    {/* 2. Phần Giảm hiệu ứng */}
                                     <DropdownMenuItem 
                                         onSelect={(e) => {
-                                            e.preventDefault(); // Chặn việc đóng menu khi click
+                                            e.preventDefault(); 
                                             setReduceMotion(!reduceMotion);
                                         }}
                                         className="cursor-pointer text-xs font-medium px-2 py-1.5 flex items-center justify-between"
@@ -380,7 +394,6 @@ export function AppSidebar() {
                                             }
                                             <span>Giảm hiệu ứng</span>
                                         </div>
-                                        {/* Icon Check khi bật */}
                                         {reduceMotion && <Check className="size-3.5 text-primary" />}
                                     </DropdownMenuItem>
 

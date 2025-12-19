@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
@@ -10,18 +10,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
     Send, BookOpen, User, Layers, Users,
     Target, Check, MessageSquare, Loader2,
     CheckCircle, XCircle, ChevronLeft, ChevronRight,
     Clock, Info, AlertCircle, Save, X, Edit3, ArrowRight,
-    RotateCcw, AlertTriangle, PenTool, Edit
+    RotateCcw, AlertTriangle, PenTool, Edit, GripVertical, History, LayoutList
 } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatDistanceToNow, format } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // --- API Services ---
 import { useAuth } from '@/contexts/AuthContext';
@@ -29,15 +31,41 @@ import { thesisTopicService } from '@/api/thesisTopicService';
 import { getTopicHistory } from '@/api/historyService';
 import { getKhoaBomons } from '@/api/userService';
 import axiosClient from '@/api/axiosConfig';
-import { toast } from 'sonner';
 
 // --- Shared Components ---
 import InlineDiff from '@/components/shared/InlineDiff';
 import HistoryTimeline from '@/components/shared/HistoryTimeline';
+import TopicHistoryDiffPanel from './TopicHistoryDiffPanel'; 
 
-// ==========================================
-// 1. CÁC COMPONENT UI NHỎ (HELPER)
-// ==========================================
+/* ===================================================================================
+ * HELPER COMPONENTS
+ * =================================================================================== */
+
+const getStatusBadge = (status) => {
+    const styles = {
+        'Đã duyệt': "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-green-800",
+        'Chờ duyệt': "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-yellow-800",
+        'Yêu cầu chỉnh sửa': "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400",
+        'Từ chối': "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400",
+        'Nháp': "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400",
+        'Đang chỉnh sửa': "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300",
+    };
+    const defaultStyle = "bg-secondary text-secondary-foreground border-border";
+
+    return (
+        <Badge variant="outline" className={cn("px-2.5 py-0.5 text-xs font-semibold shadow-none border", styles[status] || defaultStyle)}>
+            {status}
+        </Badge>
+    );
+};
+
+const getInitials = (name) => {
+    if (!name || typeof name !== 'string') return '';
+    const parts = name.trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) return '';
+    if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
 
 const MetadataCard = ({ icon: Icon, label, value, oldValue }) => {
     const hasDiff = (oldValue !== undefined) && (String(oldValue || '') !== String(value || ''));
@@ -71,19 +99,6 @@ const MetadataCard = ({ icon: Icon, label, value, oldValue }) => {
             </div>
         </div>
     );
-};
-
-// Helper: Lấy tên viết tắt
-const getInitials = (name) => {
-    if (!name || typeof name !== 'string') return '';
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) return '';
-    if (parts.length === 1) {
-        return parts[0].slice(0, 2).toUpperCase();
-    }
-    const first = parts[0][0] || '';
-    const last = parts[parts.length - 1][0] || '';
-    return (first + last).toUpperCase();
 };
 
 const ChatBubble = ({ user, message, isMe, time, role }) => (
@@ -120,27 +135,9 @@ const ChatBubble = ({ user, message, isMe, time, role }) => (
     </div>
 );
 
-const getStatusBadge = (status) => {
-    const styles = {
-        'Đã duyệt': "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-green-800",
-        'Chờ duyệt': "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-yellow-800",
-        'Yêu cầu chỉnh sửa': "bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400",
-        'Từ chối': "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400",
-        'Nháp': "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400",
-        'Đang chỉnh sửa': "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300",
-    };
-    const defaultStyle = "bg-secondary text-secondary-foreground border-border";
-
-    return (
-        <Badge variant="outline" className={cn("px-2.5 py-0.5 text-xs font-semibold shadow-none border", styles[status] || defaultStyle)}>
-            {status}
-        </Badge>
-    );
-};
-
-// ==========================================
-// 2. COMPONENT CHÍNH
-// ==========================================
+/* ===================================================================================
+ * MAIN COMPONENT
+ * =================================================================================== */
 
 const TopicDetailDialog = ({
     open,
@@ -173,6 +170,12 @@ const TopicDetailDialog = ({
     // History States
     const [historyItems, setHistoryItems] = useState([]);
     const [historyLoading, setHistoryLoading] = useState(false);
+    const [selectedHistoryItem, setSelectedHistoryItem] = useState(null); 
+    
+    // [RESIZABLE] State
+    const [sidebarWidth, setSidebarWidth] = useState(35); // 35% width mặc định
+    const containerRef = useRef(null);
+    const isResizingRef = useRef(false);
 
     // Chat States
     const [replyInputs, setReplyInputs] = useState({});
@@ -183,61 +186,53 @@ const TopicDetailDialog = ({
     const chatEndRef = useRef(null);
     const scrollAreaRef = useRef(null);
 
-    // --- [CẬP NHẬT] PERMISSION CHECK ---
-    // Lấy ID giảng viên hiện tại
+    // --- PERMISSION CHECK ---
     const currentGvId = user?.giangvien?.ID_GIANGVIEN;
     const userRole = user?.vaitro?.TEN_VAITRO;
-
-    // Check quyền Owner
     const isOwner = topic && String(topic.ID_NGUOI_DEXUAT) === String(currentGvId);
-    
-    // Check quyền Admin
     const isAdmin = ['Admin', 'Giáo vụ', 'Trưởng khoa'].includes(userRole);
-    
-    // [MỚI] Check quyền Reviewer (Người được phân công góp ý)
     const isReviewer = topic?.phancong_nguoi_gop_y?.some(
         pc => String(pc.ID_GIANGVIEN) === String(currentGvId)
     );
-
     const canEdit = topic && ((isOwner && ['Nháp', 'Yêu cầu chỉnh sửa', 'Đang chỉnh sửa', 'Đã duyệt'].includes(topic.TRANGTHAI)) || isAdmin);
-    // Cho phép comment nếu chưa chốt
     const canComment = topic && !['Đã duyệt', 'Từ chối', 'Đã khóa', 'Đã đầy'].includes(topic.TRANGTHAI);
-
-    // --- Check Reuse ---
     const isReused = topic?.LA_TAISUDUNG;
     const isApproved = topic?.TRANGTHAI === 'Đã duyệt';
 
-    // --- EFFECTS ---
+    // =========================== EFFECTS ===========================
 
     useEffect(() => {
         if (open && topicId) {
+            // [FIX] Reset toàn bộ state liên quan đến history/so sánh của đề tài cũ
+            setSelectedHistoryItem(null); 
+            setHistoryItems([]);
+            setComparisonData(null);
+            
+            // Load dữ liệu mới
             loadTopicDetails(true);
             loadDepartments();
             loadComparison(); 
             if (activeTab === 'history') loadHistory();
         } else if (!open) {
+            // Reset toàn bộ khi đóng Dialog
             setTopic(null);
             setComparisonData(null);
             setIsEditing(false);
             setNewSuggestion('');
             setHistoryItems([]);
             setActiveTab('info');
+            setSelectedHistoryItem(null); 
+            setSidebarWidth(35);
         }
     }, [open, topicId]);
 
     // Keyboard Navigation
     useEffect(() => {
         const handleKeyDown = (e) => {
-            if (!open) return;
-            if (isEditing) return;
-
-            if (e.key === 'ArrowLeft' && hasPrevious) {
-                onPrevious();
-            } else if (e.key === 'ArrowRight' && hasNext) {
-                onNext();
-            }
+            if (!open || isEditing) return;
+            if (e.key === 'ArrowLeft' && hasPrevious) onPrevious();
+            else if (e.key === 'ArrowRight' && hasNext) onNext();
         };
-
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [open, isEditing, hasNext, hasPrevious, onNext, onPrevious]);
@@ -254,7 +249,37 @@ const TopicDetailDialog = ({
         }
     }, [topic?.goiyDetai?.length, isEditing]);
 
-    // --- DATA FETCHING ---
+    // =========================== RESIZE LOGIC ===========================
+
+    const startResizing = useCallback(() => {
+        isResizingRef.current = true;
+        document.addEventListener('mousemove', resize);
+        document.addEventListener('mouseup', stopResizing);
+        document.body.style.userSelect = 'none'; // Ngăn chọn văn bản khi kéo
+        document.body.style.cursor = 'col-resize';
+    }, []);
+
+    const resize = useCallback((e) => {
+        if (!isResizingRef.current || !containerRef.current) return;
+        const containerRect = containerRef.current.getBoundingClientRect();
+        // Tính % độ rộng mới dựa trên vị trí chuột
+        const newWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+        // Giới hạn Min 20% - Max 60%
+        if (newWidth >= 20 && newWidth <= 60) {
+            setSidebarWidth(newWidth);
+        }
+    }, []);
+
+    const stopResizing = useCallback(() => {
+        isResizingRef.current = false;
+        document.removeEventListener('mousemove', resize);
+        document.removeEventListener('mouseup', stopResizing);
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+    }, [resize]);
+
+
+    // =========================== DATA FETCHING ===========================
 
     const loadTopicDetails = async (showLoader = false) => {
         try {
@@ -299,6 +324,10 @@ const TopicDetailDialog = ({
         try {
             const res = await getTopicHistory(topicId, { per_page: 50 });
             setHistoryItems(res.data || []);
+            // Tự động chọn item đầu tiên (mới nhất) để hiển thị ngay
+            if (res.data && res.data.length > 0 && !selectedHistoryItem) {
+                setSelectedHistoryItem(res.data[0]);
+            }
         } catch (error) {
             console.error("Failed to load history", error);
         } finally {
@@ -312,7 +341,7 @@ const TopicDetailDialog = ({
         return dept ? dept.TEN_KHOA_BOMON : `ID: ${id}`;
     };
 
-    // --- ACTION HANDLERS ---
+    // =========================== ACTION HANDLERS ===========================
 
     const handleSave = async () => {
         if (!editFormData.TEN_DETAI || !editFormData.MOTA) {
@@ -323,16 +352,15 @@ const TopicDetailDialog = ({
         try {
             const res = await thesisTopicService.updateTopic(topicId, editFormData);
             setTopic(res.data);
-            
             if (isReused && isApproved && !isAdmin && res.data.TRANGTHAI === 'Chờ duyệt') {
                  toast.warning("Đề tài đã chuyển sang trạng thái 'Chờ duyệt' do có sự thay đổi.");
             } else {
                  toast.success("Cập nhật thành công.");
             }
-
             setIsEditing(false);
             if (onDataChange) onDataChange();
-            loadComparison();
+            loadComparison(); // Update so sánh
+            if (activeTab === 'history') loadHistory(); // Reload lịch sử để hiện log mới
         } catch (error) {
             toast.error("Cập nhật thất bại.");
         } finally {
@@ -342,7 +370,7 @@ const TopicDetailDialog = ({
 
     const handleEditClick = () => {
         if (isReused && isApproved && !isAdmin) {
-            if (!window.confirm("CẢNH BÁO QUAN TRỌNG:\n\nĐây là đề tài Tái sử dụng đã được duyệt tự động.\nNếu bạn chỉnh sửa nội dung, trạng thái sẽ chuyển về 'Chờ duyệt' và cần cấp trên phê duyệt lại.\n\nBạn có chắc chắn muốn tiếp tục?")) {
+            if (!window.confirm("CẢNH BÁO: Bạn đang sửa đề tài tái sử dụng. Trạng thái sẽ chuyển về 'Chờ duyệt'. Tiếp tục?")) {
                 return;
             }
         }
@@ -366,12 +394,14 @@ const TopicDetailDialog = ({
         setEditFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    // --- CHAT LOGIC (UPDATED) ---
+    // --- HISTORY HANDLER ---
+    const handleHistorySelect = (item) => {
+        setSelectedHistoryItem(item);
+    };
 
+    // --- CHAT LOGIC ---
     const sendMessage = async (content, parentId = null, isEditRequest = false) => {
         if (!content.trim()) return;
-        
-        // Tạo fake message để hiển thị ngay lập tức (Optimistic UI)
         const newMsg = {
             ID_GOIY: parentId || Date.now(),
             ID_PHANHOI: Date.now(),
@@ -381,7 +411,6 @@ const TopicDetailDialog = ({
             ID_GIANGVIEN: currentGvId,
             phanhois: []
         };
-
         if (parentId) {
              setTopic(prev => ({
                 ...prev,
@@ -393,46 +422,23 @@ const TopicDetailDialog = ({
             setNewSuggestion('');
             setIsSending(true);
         }
-
         try {
-            // [UPDATE] Gửi thêm cờ is_edit_request
-            if (parentId) {
-                await thesisTopicService.addReplyToSuggestion(parentId, { 
-                    NOIDUNG: content, 
-                    is_edit_request: isEditRequest 
-                });
-            } else {
-                await thesisTopicService.addSuggestion(topicId, { 
-                    NOIDUNG_GOIY: content, 
-                    is_edit_request: isEditRequest 
-                });
-            }
-            
+            if (parentId) await thesisTopicService.addReplyToSuggestion(parentId, { NOIDUNG: content, is_edit_request: isEditRequest });
+            else await thesisTopicService.addSuggestion(topicId, { NOIDUNG_GOIY: content, is_edit_request: isEditRequest });
             loadTopicDetails(false);
             if(onDataChange) onDataChange();
-        } catch(e) {
-            toast.error("Gửi tin nhắn thất bại");
-        } finally {
-            setIsSending(false);
-        }
+        } catch(e) { toast.error("Gửi tin nhắn thất bại"); } 
+        finally { setIsSending(false); }
     };
+    const handleQuickEditRequest = () => sendMessage("Tôi muốn chỉnh sửa một chút.", null, true);
 
-    // [MỚI] Hàm xử lý khi bấm nút phản hồi nhanh
-    const handleQuickEditRequest = () => {
-        sendMessage("Tôi muốn chỉnh sửa một chút.", null, true);
-    };
-
-    // --- RENDER HELPER ---
+    // --- RENDER FIELD ---
     const renderField = (key, label, icon, isArea = false) => {
         const currentValue = topic?.[key] || "";
         const hasHistoryData = comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, key);
         const rawOldValue = hasHistoryData ? comparisonData[key] : undefined;
-        
-        const hasDiff = hasHistoryData && 
-                        (String(rawOldValue || '') !== String(currentValue || '')) && 
-                        !isEditing;
+        const hasDiff = hasHistoryData && (String(rawOldValue || '') !== String(currentValue || '')) && !isEditing;
         const displayOldValue = rawOldValue || ""; 
-
         if (isEditing) {
             return (
                 <div className="space-y-2">
@@ -441,8 +447,7 @@ const TopicDetailDialog = ({
                         <Textarea 
                             value={editFormData[key]} 
                             onChange={e => setEditFormData({...editFormData, [key]: e.target.value})} 
-                            rows={5}
-                            className="bg-background font-normal"
+                            rows={5} className="bg-background font-normal"
                         />
                     ) : (
                         <Input 
@@ -454,42 +459,20 @@ const TopicDetailDialog = ({
                 </div>
             );
         }
-
         if (!currentValue && !hasDiff) return null;
-
         return (
-            <div className={cn(
-                "group relative rounded-lg border p-4 transition-all",
-                hasDiff 
-                    ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800" 
-                    : "bg-card border-border hover:border-primary/20"
-            )}>
-                {hasDiff && (
-                    <div className="absolute -top-2.5 left-3 px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] font-bold uppercase rounded-full border border-amber-200 flex items-center gap-1 shadow-sm z-10">
-                        <Edit3 className="w-3 h-3" /> Thay đổi
-                    </div>
-                )}
-                
-                <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-2">
-                    {icon} {label}
-                </h4>
-                
+            <div className={cn("group relative rounded-lg border p-4 transition-all", hasDiff ? "bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800" : "bg-card border-border hover:border-primary/20")}>
+                {hasDiff && <div className="absolute -top-2.5 left-3 px-2 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300 text-[10px] font-bold uppercase rounded-full border border-amber-200 flex items-center gap-1 shadow-sm z-10"><Edit3 className="w-3 h-3" /> Thay đổi</div>}
+                <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-2">{icon} {label}</h4>
                 <div className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
-                    {hasDiff ? (
-                        <InlineDiff oldValue={displayOldValue} newValue={currentValue} />
-                    ) : (
-                        currentValue
-                    )}
+                    {hasDiff ? <InlineDiff oldValue={displayOldValue} newValue={currentValue} /> : currentValue}
                 </div>
             </div>
         );
     };
 
     return (
-        <Dialog open={open} onOpenChange={(v) => {
-            if (!v && isEditing) { setIsEditing(false); }
-            onOpenChange(v);
-        }}>
+        <Dialog open={open} onOpenChange={(v) => { if (!v && isEditing) setIsEditing(false); onOpenChange(v); }}>
             <DialogContent className="max-w-[95vw] lg:max-w-[90vw] xl:max-w-[1400px] h-[90vh] p-0 flex flex-col bg-background gap-0 overflow-hidden border-none shadow-2xl sm:rounded-2xl">
                 
                 {/* 1. HEADER */}
@@ -502,186 +485,103 @@ const TopicDetailDialog = ({
                             {loading && !topic ? (
                                 <div className="h-6 w-48 bg-muted animate-pulse rounded" />
                             ) : isEditing ? (
-                                <Input 
-                                    value={editFormData.TEN_DETAI}
-                                    onChange={e => setEditFormData({...editFormData, TEN_DETAI: e.target.value})}
-                                    className="text-lg font-bold h-10 px-3 border-primary/50 bg-accent/50"
-                                    placeholder="Nhập tên đề tài..."
-                                />
+                                <Input value={editFormData.TEN_DETAI} onChange={e => setEditFormData({...editFormData, TEN_DETAI: e.target.value})} className="text-lg font-bold h-10 px-3 border-primary/50 bg-accent/50" placeholder="Nhập tên đề tài..." />
                             ) : (
-                                <DialogTitle className="text-xl font-bold text-foreground leading-tight mb-1.5 line-clamp-1">
-                                    {topic?.TEN_DETAI || "Đang tải..."}
-                                </DialogTitle>
+                                <DialogTitle className="text-xl font-bold text-foreground leading-tight mb-1.5 line-clamp-1">{topic?.TEN_DETAI || "Đang tải..."}</DialogTitle>
                             )}
                             
                             {(!loading || topic) && topic && (
                                 <div className="flex items-center gap-3 mt-1.5">
                                     <Badge variant="secondary" className="font-mono text-[10px] px-1.5 h-5 border-border/50">{topic.MA_DETAI}</Badge>
                                     {getStatusBadge(topic.TRANGTHAI)}
-
-                                    {isReused && (
-                                        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 gap-1 pl-1 pr-2">
-                                            <RotateCcw className="w-3 h-3" /> Tái sử dụng
-                                        </Badge>
-                                    )}
+                                    {isReused && <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 gap-1 pl-1 pr-2"><RotateCcw className="w-3 h-3" /> Tái sử dụng</Badge>}
                                 </div>
                             )}
                         </div>
                     </div>
 
-                    {/* Actions Top Right */}
+                    {/* Actions */}
                     <div className="flex items-center gap-2 ml-4">
                         {!isEditing && canEdit && topic && (
-                            <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={handleEditClick} 
-                                className="h-9 border-dashed border-primary/50 text-primary hover:bg-primary/5"
-                            >
-                                <Edit className="w-4 h-4 mr-2" /> Chỉnh sửa
-                            </Button>
+                            <Button variant="outline" size="sm" onClick={handleEditClick} className="h-9 border-dashed border-primary/50 text-primary hover:bg-primary/5"><Edit className="w-4 h-4 mr-2" /> Chỉnh sửa</Button>
                         )}
                         {isEditing && (
                             <div className="flex gap-2 animate-in fade-in slide-in-from-right-5 duration-200">
                                 <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Hủy</Button>
-                                <Button size="sm" onClick={handleSave} disabled={isSaving} className="bg-primary text-primary-foreground shadow-md">
-                                    {isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />} Lưu
-                                </Button>
+                                <Button size="sm" onClick={handleSave} disabled={isSaving} className="bg-primary text-primary-foreground shadow-md">{isSaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />} Lưu</Button>
                             </div>
                         )}
-                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => onOpenChange(false)}>
-                            <X className="w-5 h-5 text-muted-foreground" />
-                        </Button>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full" onClick={() => onOpenChange(false)}><X className="w-5 h-5 text-muted-foreground" /></Button>
                     </div>
                 </DialogHeader>
 
                 {/* 2. TAB NAVIGATION */}
                 <div className="px-6 border-b border-border bg-background/50 backdrop-blur-sm sticky top-0 z-10">
-                    <div className="flex gap-6">
-                        <button 
-                            onClick={() => { setActiveTab('info'); if(isEditing) handleCancelEdit(); }}
-                            className={cn(
-                                "py-3 text-sm font-medium border-b-2 transition-colors outline-none",
-                                activeTab === 'info' 
-                                    ? "border-primary text-primary" 
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            Thông tin & Thảo luận
-                        </button>
-                        <button 
-                            onClick={() => { setActiveTab('history'); if(isEditing) handleCancelEdit(); }}
-                            className={cn(
-                                "py-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-2 outline-none",
-                                activeTab === 'history' 
-                                    ? "border-primary text-primary" 
-                                    : "border-transparent text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            <Clock className="w-4 h-4" /> Lịch sử thay đổi
-                        </button>
-                    </div>
+                    <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); if(isEditing) setIsEditing(false); }} className="w-full">
+                        <TabsList className="w-full justify-start h-auto p-0 bg-transparent gap-6">
+                            <TabsTrigger 
+                                value="info" 
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-4 py-3 text-sm font-medium bg-transparent shadow-none transition-none"
+                            >
+                                <LayoutList className="w-4 h-4 mr-2" /> Thông tin & Thảo luận
+                            </TabsTrigger>
+                            <TabsTrigger 
+                                value="history" 
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:text-primary px-4 py-3 text-sm font-medium bg-transparent shadow-none transition-none"
+                            >
+                                <History className="w-4 h-4 mr-2" /> Lịch sử thay đổi
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
                 </div>
 
                 {/* 3. BODY CONTENT */}
-                <div className="flex-1 overflow-hidden bg-secondary/10 relative">
-                    {loading && (
-                        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
-                            <Loader2 className="w-10 h-10 animate-spin text-primary mb-2" />
-                            <p className="text-sm text-muted-foreground animate-pulse">Đang tải dữ liệu...</p>
-                        </div>
-                    )}
+                <div className="flex-1 min-h-0 overflow-hidden bg-secondary/5 relative">
+                    {loading && <div className="absolute inset-0 bg-background/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center"><Loader2 className="w-10 h-10 animate-spin text-primary mb-2" /><p className="text-sm text-muted-foreground animate-pulse">Đang tải dữ liệu...</p></div>}
 
+                    {/* TAB 1: INFO */}
                     {topic && activeTab === 'info' && (
                         <div className="flex h-full animate-in fade-in duration-300">
-                            
                             {/* CỘT TRÁI: NỘI DUNG CHÍNH */}
                             <ScrollArea className="flex-1 h-full">
                                 <div className="p-6 max-w-5xl mx-auto space-y-8">
-                                    
-                                    {isEditing && isReused && isApproved && !isAdmin && (
-                                        <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4">
-                                            <AlertTriangle className="h-4 w-4" />
-                                            <AlertTitle className="font-bold">Lưu ý khi chỉnh sửa</AlertTitle>
-                                            <AlertDescription>
-                                                Bạn đang sửa một đề tài tái sử dụng đã được duyệt. Sau khi lưu, trạng thái sẽ chuyển thành <strong>Chờ duyệt</strong> để cấp trên xem xét lại.
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
-
-                                    {!isEditing && (topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && (
-                                        <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 shadow-sm">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <AlertTitle className="ml-2 font-bold">
-                                                {topic.TRANGTHAI === 'Từ chối' ? 'Đề tài bị từ chối' : 'Yêu cầu chỉnh sửa từ quản lý'}
-                                            </AlertTitle>
-                                            <AlertDescription className="mt-2 pl-6 text-sm opacity-90">
-                                                {topic.LYDO_TUCHOI}
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
+                                    {isEditing && isReused && isApproved && !isAdmin && <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800 mb-4"><AlertTriangle className="h-4 w-4" /><AlertTitle className="font-bold">Lưu ý</AlertTitle><AlertDescription>Sửa đề tài tái sử dụng đã duyệt sẽ chuyển trạng thái về <strong>Chờ duyệt</strong>.</AlertDescription></Alert>}
+                                    {!isEditing && (topic.TRANGTHAI === 'Yêu cầu chỉnh sửa' || topic.TRANGTHAI === 'Từ chối') && topic.LYDO_TUCHOI && <Alert variant="destructive" className="bg-destructive/5 border-destructive/20 shadow-sm"><AlertCircle className="h-4 w-4" /><AlertTitle className="ml-2 font-bold">{topic.TRANGTHAI === 'Từ chối' ? 'Đề tài bị từ chối' : 'Yêu cầu chỉnh sửa'}</AlertTitle><AlertDescription className="mt-2 pl-6 text-sm opacity-90">{topic.LYDO_TUCHOI}</AlertDescription></Alert>}
 
                                     {/* Metadata Grid */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <MetadataCard icon={User} label="Giảng viên" value={topic.ten_giang_vien} />
-                                        
                                         {isEditing ? (
                                             <div className="flex flex-col gap-1 p-3 rounded-xl border bg-card shadow-sm">
-                                                 <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                                                    <Layers className="w-3.5 h-3.5" />
-                                                    <span className="text-[10px] uppercase font-bold tracking-wider">Bộ môn</span>
-                                                </div>
+                                                 <div className="flex items-center gap-2 text-muted-foreground mb-1"><Layers className="w-3.5 h-3.5" /><span className="text-[10px] uppercase font-bold tracking-wider">Bộ môn</span></div>
                                                 <Select value={editFormData.ID_KHOA_BOMON} onValueChange={v => setEditFormData({...editFormData, ID_KHOA_BOMON: v})}>
                                                     <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                                                     <SelectContent>{departments.map(d => <SelectItem key={d.ID_KHOA_BOMON} value={String(d.ID_KHOA_BOMON)}>{d.TEN_KHOA_BOMON}</SelectItem>)}</SelectContent>
                                                 </Select>
                                             </div>
                                         ) : (
-                                            <MetadataCard 
-                                                icon={Layers} 
-                                                label="Bộ môn" 
-                                                value={topic.ten_bo_mon || topic.khoaBomon?.TEN_KHOA_BOMON} 
-                                                oldValue={comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, 'ID_KHOA_BOMON') 
-                                                    ? getDepartmentName(comparisonData.ID_KHOA_BOMON) 
-                                                    : undefined} 
-                                            />
+                                            <MetadataCard icon={Layers} label="Bộ môn" value={topic.ten_bo_mon || topic.khoaBomon?.TEN_KHOA_BOMON} oldValue={comparisonData?.ID_KHOA_BOMON ? getDepartmentName(comparisonData.ID_KHOA_BOMON) : undefined} />
                                         )}
-
                                         {isEditing ? (
                                              <div className="flex flex-col gap-1 p-3 rounded-xl border bg-card shadow-sm">
-                                                <div className="flex items-center gap-2 text-muted-foreground mb-1">
-                                                    <Users className="w-3.5 h-3.5" />
-                                                    <span className="text-[10px] uppercase font-bold tracking-wider">Nhóm tối đa</span>
-                                                </div>
+                                                <div className="flex items-center gap-2 text-muted-foreground mb-1"><Users className="w-3.5 h-3.5" /><span className="text-[10px] uppercase font-bold tracking-wider">Nhóm tối đa</span></div>
                                                 <Input type="number" className="h-8 text-sm" value={editFormData.SO_NHOM_TOIDA} onChange={e => setEditFormData({...editFormData, SO_NHOM_TOIDA: e.target.value})} />
                                             </div>
                                         ) : (
-                                            <MetadataCard 
-                                                icon={Users} 
-                                                label="Nhóm tối đa" 
-                                                value={topic.SO_NHOM_TOIDA} 
-                                                oldValue={comparisonData && Object.prototype.hasOwnProperty.call(comparisonData, 'SO_NHOM_TOIDA') 
-                                                    ? comparisonData.SO_NHOM_TOIDA 
-                                                    : undefined} 
-                                            />
+                                            <MetadataCard icon={Users} label="Nhóm tối đa" value={topic.SO_NHOM_TOIDA} oldValue={comparisonData?.SO_NHOM_TOIDA} />
                                         )}
-
                                         <MetadataCard icon={Clock} label="Đã đăng ký" value={`${topic.SO_NHOM_HIENTAI} nhóm`} />
                                     </div>
-
                                     <Separator />
-
                                     {/* Nội dung chi tiết */}
                                     <div className="grid grid-cols-1 gap-8">
                                         <div className="grid md:grid-cols-2 gap-6">
                                             {renderField('YEUCAU', 'Yêu cầu kiến thức', <Check className="w-4 h-4" />, true)}
                                             {renderField('KETQUA_MONGDOI', 'Kết quả mong đợi', <Target className="w-4 h-4" />, true)}
                                         </div>
-                                        
                                         {renderField('MUCTIEU', 'Mục tiêu đề tài', <Target className="w-4 h-4 text-red-500" />, true)}
                                         {renderField('MOTA', 'Mô tả chi tiết', <Info className="w-4 h-4 text-blue-500" />, true)}
                                     </div>
-
                                     <div className="h-10"></div>
                                 </div>
                             </ScrollArea>
@@ -692,57 +592,26 @@ const TopicDetailDialog = ({
                                     <MessageSquare className="w-4 h-4 text-primary" />
                                     <h3 className="font-bold text-sm">Thảo luận ({topic.goiyDetai?.length || 0})</h3>
                                 </div>
-
                                 <ScrollArea className="flex-1 p-4 bg-muted/5" ref={scrollAreaRef}>
                                     <div className="space-y-6">
                                         {!topic.goiyDetai?.length ? (
                                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground py-10 opacity-60">
-                                                <MessageSquare className="w-10 h-10 mb-2 stroke-1" />
-                                                <p className="text-sm">Chưa có thảo luận nào</p>
+                                                <MessageSquare className="w-10 h-10 mb-2 stroke-1" /><p className="text-sm">Chưa có thảo luận nào</p>
                                             </div>
                                         ) : (
                                             topic.goiyDetai.map((thread) => (
                                                 <div key={thread.ID_GOIY} className="space-y-3 mb-6">
-                                                    {/* Main Comment */}
-                                                    <ChatBubble 
-                                                        user={thread.giangvien?.nguoidung} 
-                                                        message={thread.NOIDUNG_GOIY} 
-                                                        time={thread.NGAYTAO} 
-                                                        isMe={thread.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN}
-                                                        role="Người góp ý"
-                                                    />
-                                                    
-                                                    {/* Replies */}
+                                                    <ChatBubble user={thread.giangvien?.nguoidung} message={thread.NOIDUNG_GOIY} time={thread.NGAYTAO} isMe={thread.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN} role="Người góp ý" />
                                                     <div className="pl-4 space-y-3 border-l-2 border-border/50 ml-4">
                                                         {thread.phanhois?.map(reply => (
-                                                            <ChatBubble 
-                                                                key={reply.ID_PHANHOI}
-                                                                user={reply.giangvien?.nguoidung} 
-                                                                message={reply.NOIDUNG} 
-                                                                time={reply.created_at} 
-                                                                isMe={reply.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN}
-                                                                role={reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT ? 'Tác giả' : null}
-                                                            />
+                                                            <ChatBubble key={reply.ID_PHANHOI} user={reply.giangvien?.nguoidung} message={reply.NOIDUNG} time={reply.created_at} isMe={reply.ID_GIANGVIEN === user?.giangvien?.ID_GIANGVIEN} role={reply.ID_GIANGVIEN === topic.ID_NGUOI_DEXUAT ? 'Tác giả' : null} />
                                                         ))}
                                                     </div>
-
-                                                    {/* Reply Input */}
                                                     {canComment && (
                                                         <div className="pl-8">
                                                             <div className="relative">
-                                                                <Input 
-                                                                    placeholder="Nhập câu trả lời..." 
-                                                                    className="h-9 text-xs pr-8 bg-background rounded-full shadow-sm focus-visible:ring-1"
-                                                                    value={replyInputs[thread.ID_GOIY] || ''}
-                                                                    onChange={e => setReplyInputs({...replyInputs, [thread.ID_GOIY]: e.target.value})}
-                                                                    onKeyDown={e => e.key === 'Enter' && sendMessage(e.target.value, thread.ID_GOIY)}
-                                                                />
-                                                                <button 
-                                                                    onClick={() => sendMessage(replyInputs[thread.ID_GOIY], thread.ID_GOIY)}
-                                                                    className="absolute right-1.5 top-1.5 text-primary hover:text-primary/80"
-                                                                >
-                                                                    <Send className="w-3.5 h-3.5" />
-                                                                </button>
+                                                                <Input placeholder="Nhập câu trả lời..." className="h-9 text-xs pr-8 bg-background rounded-full shadow-sm focus-visible:ring-1" value={replyInputs[thread.ID_GOIY] || ''} onChange={e => setReplyInputs({...replyInputs, [thread.ID_GOIY]: e.target.value})} onKeyDown={e => e.key === 'Enter' && sendMessage(e.target.value, thread.ID_GOIY)} />
+                                                                <button onClick={() => sendMessage(replyInputs[thread.ID_GOIY], thread.ID_GOIY)} className="absolute right-1.5 top-1.5 text-primary hover:text-primary/80"><Send className="w-3.5 h-3.5" /></button>
                                                             </div>
                                                         </div>
                                                     )}
@@ -752,46 +621,19 @@ const TopicDetailDialog = ({
                                         <div ref={chatEndRef} />
                                     </div>
                                 </ScrollArea>
-
                                 {canComment && (
                                     <div className="p-3 border-t bg-background">
                                         {topic.TRANGTHAI === 'Chờ duyệt' && (isOwner || isReviewer) && (
                                             <div className="mb-2 flex">
-                                                <Button 
-                                                    variant="secondary" 
-                                                    size="sm" 
-                                                    className="h-7 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200"
-                                                    onClick={handleQuickEditRequest}
-                                                    disabled={isSending}
-                                                >
-                                                    <PenTool className="w-3 h-3 mr-1.5" />
-                                                    Yêu cầu chỉnh sửa / Tôi muốn sửa
+                                                <Button variant="secondary" size="sm" className="h-7 text-xs bg-orange-100 text-orange-700 hover:bg-orange-200 border border-orange-200" onClick={handleQuickEditRequest} disabled={isSending}>
+                                                    <PenTool className="w-3 h-3 mr-1.5" /> Yêu cầu chỉnh sửa / Tôi muốn sửa
                                                 </Button>
                                             </div>
                                         )}
-
                                         <div className="relative shadow-sm rounded-xl border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
-                                            <Textarea 
-                                                placeholder="Nhập nội dung thảo luận mới..." 
-                                                className="min-h-[50px] max-h-[120px] w-full resize-none border-0 bg-transparent py-3 pl-3 pr-10 text-sm placeholder:text-muted-foreground focus-visible:ring-0"
-                                                value={newSuggestion}
-                                                onChange={e => setNewSuggestion(e.target.value)}
-                                                onKeyDown={e => {
-                                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                                        e.preventDefault();
-                                                        sendMessage(newSuggestion);
-                                                    }
-                                                }}
-                                            />
+                                            <Textarea placeholder="Nhập nội dung thảo luận mới..." className="min-h-[50px] max-h-[120px] w-full resize-none border-0 bg-transparent py-3 pl-3 pr-10 text-sm placeholder:text-muted-foreground focus-visible:ring-0" value={newSuggestion} onChange={e => setNewSuggestion(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(newSuggestion); } }} />
                                             <div className="absolute bottom-2 right-2">
-                                                <Button 
-                                                    size="icon" 
-                                                    className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
-                                                    disabled={!newSuggestion.trim() || isSending}
-                                                    onClick={() => sendMessage(newSuggestion)}
-                                                >
-                                                    {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                                </Button>
+                                                <Button size="icon" className="h-8 w-8 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90" disabled={!newSuggestion.trim() || isSending} onClick={() => sendMessage(newSuggestion)}>{isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}</Button>
                                             </div>
                                         </div>
                                     </div>
@@ -800,15 +642,42 @@ const TopicDetailDialog = ({
                         </div>
                     )}
 
-                    {/* === TAB 2: LỊCH SỬ THAY ĐỔI === */}
+                    {/* === TAB 2: LỊCH SỬ THAY ĐỔI (DẠNG 2 CỘT RESIZABLE) [FIXED] === */}
                     {topic && activeTab === 'history' && (
-                        <div className="h-full p-6 overflow-y-auto custom-scrollbar bg-background animate-in fade-in duration-300">
-                            <div className="mx-auto">
-                                <div className="mb-6 flex items-center gap-2 text-muted-foreground">
-                                    <Clock className="w-5 h-5" />
-                                    <h3 className="text-lg font-semibold text-foreground">Lịch sử hoạt động của đề tài</h3>
+                        <div 
+                            ref={containerRef} 
+                            className="h-full flex overflow-hidden bg-background animate-in fade-in duration-300"
+                        >
+                            {/* CỘT TRÁI (TIMELINE) */}
+                            <div 
+                                className="min-w-[250px] border-r h-full flex flex-col bg-muted/10 shrink-0"
+                                style={{ width: `${sidebarWidth}%` }}
+                            >
+                                <div className="p-4 border-b flex items-center gap-2 bg-background/50">
+                                    <Clock className="w-4 h-4 text-primary" />
+                                    <h3 className="font-semibold text-sm">Dòng thời gian</h3>
                                 </div>
-                                <HistoryTimeline items={historyItems} isLoading={historyLoading} />
+                                <div className="flex-1 overflow-hidden">
+                                     <HistoryTimeline 
+                                        items={historyItems} 
+                                        isLoading={historyLoading} 
+                                        onSelect={handleHistorySelect}
+                                        selectedItemId={selectedHistoryItem?.ID_LICHSU}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* RESIZER HANDLER */}
+                            <div
+                                className="w-1.5 bg-border/50 hover:bg-primary/50 cursor-col-resize transition-colors z-10 flex items-center justify-center group active:bg-primary"
+                                onMouseDown={startResizing}
+                            >
+                                <GripVertical className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </div>
+
+                            {/* CỘT PHẢI (DIFF PANEL) */}
+                            <div className="flex-1 h-full overflow-hidden bg-background relative min-w-[400px]">
+                                <TopicHistoryDiffPanel historyItem={selectedHistoryItem} />
                             </div>
                         </div>
                     )}
@@ -816,46 +685,21 @@ const TopicDetailDialog = ({
 
                 {/* 4. FOOTER: NAVIGATION & MAIN ACTIONS */}
                 <div className="px-6 py-4 border-t bg-background shrink-0 flex items-center justify-between z-10">
-                    {/* Navigation */}
                     <div className="flex items-center gap-2">
-                        <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={onPrevious} 
-                            disabled={!hasPrevious} 
-                            className="w-9 p-0 rounded-full border-dashed"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={onPrevious} disabled={!hasPrevious} className="w-9 p-0 rounded-full border-dashed"><ChevronLeft className="w-4 h-4" /></Button>
                         <span className="text-xs font-mono text-muted-foreground px-2">Điều hướng</span>
-                        <Button 
-                            type="button" 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={onNext} 
-                            disabled={!hasNext} 
-                            className="w-9 p-0 rounded-full border-dashed"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </Button>
+                        <Button type="button" variant="outline" size="sm" onClick={onNext} disabled={!hasNext} className="w-9 p-0 rounded-full border-dashed"><ChevronRight className="w-4 h-4" /></Button>
                     </div>
 
-                    {/* Main Actions */}
                     {!isEditing && showAdminActions && topic && (
                         <div className="flex gap-3">
-                             <Button variant="ghost" onClick={() => onReject(topic)} className="text-destructive hover:bg-destructive/10 hover:text-destructive h-9">
-                                <XCircle className="w-4 h-4 mr-2" /> Từ chối
-                            </Button>
-                            <Button variant="outline" onClick={() => onRequestEdit(topic)} className="h-9 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800">
-                                <Edit className="w-4 h-4 mr-2" /> Yêu cầu sửa
-                            </Button>
-                            <Button onClick={() => onApprove(topic.ID_DETAI)} className="h-9 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all">
-                                <CheckCircle className="w-4 h-4 mr-2" /> Duyệt đề tài
-                            </Button>
+                             <Button variant="ghost" onClick={() => onReject(topic)} className="text-destructive hover:bg-destructive/10 hover:text-destructive h-9"><XCircle className="w-4 h-4 mr-2" /> Từ chối</Button>
+                            <Button variant="outline" onClick={() => onRequestEdit(topic)} className="h-9 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"><Edit className="w-4 h-4 mr-2" /> Yêu cầu sửa</Button>
+                            <Button onClick={() => onApprove(topic.ID_DETAI)} className="h-9 bg-green-600 hover:bg-green-700 text-white shadow-md hover:shadow-lg transition-all"><CheckCircle className="w-4 h-4 mr-2" /> Duyệt đề tài</Button>
                         </div>
                     )}
                 </div>
+
             </DialogContent>
         </Dialog>
     );

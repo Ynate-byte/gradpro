@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, FileDown, CheckCheck } from "lucide-react"; // Thêm CheckCheck
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, FileDown, CheckCheck } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
@@ -28,6 +28,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 import StatCard from '@/components/shared/StatCard';
+import { useAuth } from "@/contexts/AuthContext"; // [NEW] Import Auth Context
 
 const getVariants = (shouldReduce) => {
     // ... (Giữ nguyên)
@@ -44,7 +45,9 @@ const getVariants = (shouldReduce) => {
 const columnVisibility = { "department_id": false };
 
 const TopicManagementTabs = () => {
-    // ... (Giữ nguyên các state cũ)
+    const { user } = useAuth(); // [NEW] Lấy thông tin user
+    
+    // --- State Logic ---
     const [allTopics, setAllTopics] = useState([]);
     const [loading, setLoading] = useState(true);
     const [loadingStats, setLoadingStats] = useState(true);
@@ -69,7 +72,6 @@ const TopicManagementTabs = () => {
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [actionType, setActionType] = useState("");
 
-    // [NEW] State cho Bulk Action
     const [showBulkApproveAlert, setShowBulkApproveAlert] = useState(false);
     const [isBulkApproving, setIsBulkApproving] = useState(false);
 
@@ -78,7 +80,15 @@ const TopicManagementTabs = () => {
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // ... (Giữ nguyên useEffect init data và loadTopics) ...
+    // [NEW] Xác định nếu là Trưởng bộ môn thuần túy (không phải Admin/GiaoVu/TruongKhoa)
+    const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
+    const roleName = user?.vaitro?.TEN_VAITRO;
+    
+    const isTruongBoMonOnly = positionCodes.includes('TRUONG_BOMON') && 
+                              !positionCodes.includes('TRUONG_KHOA') && 
+                              !positionCodes.includes('GIAO_VU') &&
+                              roleName !== 'Admin';
+
     // 1. Init Data
     useEffect(() => {
         const init = async () => {
@@ -142,7 +152,7 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // 3. Process Data (Filter & Sort) - Giữ nguyên
+    // 3. Process Data (Filter & Sort)
     const processedData = useMemo(() => {
         let filtered = allTopics.filter(t => {
             const matchesSearch =
@@ -199,7 +209,7 @@ const TopicManagementTabs = () => {
         return { pagedData, pageCount, stats, allFiltered: filtered };
     }, [allTopics, debouncedSearchTerm, activeTab, columnFilters, sorting, pagination]);
 
-    // ... (Navigation Logic & Single Action Handlers giữ nguyên) ...
+    // Navigation & Single Action Handlers
     const currentList = useMemo(() => {
         return processedData.allFiltered || [];
     }, [processedData.allFiltered]);
@@ -377,9 +387,9 @@ const TopicManagementTabs = () => {
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
 
-                    // Filter Bộ môn
+                    // [NEW] Logic ẩn bộ lọc bộ môn nếu là Trưởng bộ môn thuần túy
                     khoaBomonFilterColumnId="department_id"
-                    khoaBomonFilterOptions={departmentOptions}
+                    khoaBomonFilterOptions={isTruongBoMonOnly ? undefined : departmentOptions}
                     khoaBomonFilterTitle="Bộ môn"
                     
                     columnVisibility={columnVisibility}
@@ -389,7 +399,7 @@ const TopicManagementTabs = () => {
                     onImportUser={null}
                     addBtnText=""
                     
-                    // [NEW] Bulk Actions Slot
+                    // Bulk Actions Slot
                     bulkActions={
                          selectedCount > 0 && activeTab === "Chờ duyệt" ? (
                             <Button 
@@ -459,17 +469,17 @@ const TopicManagementTabs = () => {
             </div>
 
             {/* Stats Cards */}
-            <motion.div
+            <motion.div 
                 className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 shrink-0"
                 variants={variants.container}
                 initial="hidden"
                 animate="visible"
             >
                  <motion.div variants={variants.item} className="h-full">
-                    <StatCard
-                        icon={BookOpen}
-                        title="Tổng số Đề tài"
-                        value={loadingStats ? 'loading' : processedData.stats.total}
+                    <StatCard 
+                        icon={BookOpen} 
+                        title="Tổng số Đề tài" 
+                        value={loadingStats ? 'loading' : processedData.stats.total} 
                         onClick={() => setActiveTab("Tất cả")}
                         iconBgClass="bg-blue-100 dark:bg-blue-900/30"
                         iconColorClass="text-blue-600 dark:text-blue-400"
@@ -478,10 +488,10 @@ const TopicManagementTabs = () => {
                     />
                 </motion.div>
                 <motion.div variants={variants.item} className="h-full">
-                    <StatCard
-                        icon={Clock}
-                        title="Chờ duyệt"
-                        value={loadingStats ? 'loading' : processedData.stats.pending}
+                    <StatCard 
+                        icon={Clock} 
+                        title="Chờ duyệt" 
+                        value={loadingStats ? 'loading' : processedData.stats.pending} 
                         onClick={() => setActiveTab("Chờ duyệt")}
                         iconBgClass="bg-yellow-100 dark:bg-yellow-900/30"
                         iconColorClass="text-yellow-600 dark:text-yellow-400"
@@ -491,10 +501,10 @@ const TopicManagementTabs = () => {
                     />
                 </motion.div>
                 <motion.div variants={variants.item} className="h-full">
-                    <StatCard
-                        icon={CheckCircle}
-                        title="Đã duyệt"
-                        value={loadingStats ? 'loading' : processedData.stats.approved}
+                    <StatCard 
+                        icon={CheckCircle} 
+                        title="Đã duyệt" 
+                        value={loadingStats ? 'loading' : processedData.stats.approved} 
                         onClick={() => setActiveTab("Đã duyệt")}
                         iconBgClass="bg-green-100 dark:bg-green-900/30"
                         iconColorClass="text-green-600 dark:text-green-400"
@@ -503,10 +513,10 @@ const TopicManagementTabs = () => {
                     />
                 </motion.div>
                 <motion.div variants={variants.item} className="h-full">
-                    <StatCard
-                        icon={AlertTriangle}
-                        title="Cần xử lý"
-                        value={loadingStats ? 'loading' : processedData.stats.editRequest}
+                    <StatCard 
+                        icon={AlertTriangle} 
+                        title="Cần xử lý" 
+                        value={loadingStats ? 'loading' : processedData.stats.editRequest} 
                         onClick={() => setActiveTab("Yêu cầu chỉnh sửa")}
                         iconBgClass="bg-orange-100 dark:bg-orange-900/30"
                         iconColorClass="text-orange-600 dark:text-orange-400"
@@ -551,7 +561,7 @@ const TopicManagementTabs = () => {
             </div>
 
             {/* Dialogs */}
-            <TopicDetailDialog
+            <TopicDetailDialog 
                 open={showTopicDetailDialog}
                 onOpenChange={setShowTopicDetailDialog}
                 topicId={selectedTopicId}
@@ -565,7 +575,7 @@ const TopicManagementTabs = () => {
                 hasPrevious={hasPrevious}
             />
 
-            <RejectDialog
+            <RejectDialog 
                 open={showRejectDialog}
                 onOpenChange={setShowRejectDialog}
                 onSubmit={handleRejectSubmit}

@@ -97,22 +97,19 @@ function App() {
   
   // Phân quyền chi tiết
   const isTruongKhoa = isAdmin || role === 'Trưởng khoa' || positionCodes.includes('TRUONG_KHOA');
-
-  // [CẬP NHẬT QUAN TRỌNG]: Thêm PHO_KHOA vào điều kiện isGiaoVu
   const isGiaoVu = isAdmin || role === 'Giáo vụ' || positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
-  
   const isTruongBoMon = isAdmin || positionCodes.includes('TRUONG_BOMON');
   
   const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
   const isSinhVien = role === 'Sinh viên';
 
-  // Admin, Trưởng khoa, Giáo vụ (và Phó khoa nhờ dòng isGiaoVu ở trên)
-  const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu;
+  // [CẬP NHẬT] Cho phép Trưởng bộ môn vào Admin Area
+  const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu || isTruongBoMon;
   
   const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
   const canChamDiem = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
 
-  // [UPDATED] Component điều hướng trang chủ
+  // Component điều hướng trang chủ
   const HomeRedirect = () => {
     if (isSinhVien) {
       return <Navigate to="/student/dashboard" replace />;
@@ -156,7 +153,7 @@ function App() {
             </ProtectedRoute>
           }
         >
-          {/* [UPDATED] Route trang chủ động theo vai trò */}
+          {/* Route trang chủ động theo vai trò */}
           <Route index element={<HomeRedirect />} />
 
           {/* Các Routes chung */}
@@ -220,10 +217,11 @@ function App() {
             </>
           )}
 
-          {/* Routes dành cho Admin, Trưởng Khoa, Giáo Vụ, Phó Khoa */}
+          {/* Routes dành cho Admin, Trưởng Khoa, Giáo Vụ, Phó Khoa, VÀ TRƯỞNG BỘ MÔN (cho quản lý đề tài) */}
           {canViewAdminRoutes && (
             <>
-              <Route path="admin/dashboard" element={<AdminDashboard />} />
+              {/* Chỉ Admin/GiaoVu/TruongKhoa mới vào Dashboard */}
+              {(isGiaoVu || isTruongKhoa) && <Route path="admin/dashboard" element={<AdminDashboard />} />}
 
               <Route path="admin/users" element={<UserManagementPage />} />
               <Route path="admin/groups" element={<GroupAdminPage />} />
@@ -243,8 +241,9 @@ function App() {
               <Route path="admin/templates/create" element={<TemplateFormPage />} />
               <Route path="admin/templates/:templateId/edit" element={<TemplateFormPage />} />
 
-              {/* Routes Quản lý Đề tài Khóa luận */}
+              {/* Routes Quản lý Đề tài Khóa luận - TRƯỞNG BỘ MÔN VÀO ĐƯỢC */}
               <Route path="admin/thesis-topics" element={<AdminThesisTopicsPage />} />
+              
               <Route path="admin/submissions" element={<SubmissionManagementPage />} />
 
               {/* Routes Quản lý Hội đồng */}
