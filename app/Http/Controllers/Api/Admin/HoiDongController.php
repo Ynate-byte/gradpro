@@ -21,7 +21,7 @@ use App\Services\ActivityLogger;
 class HoiDongController extends Controller
 {
     /**
-     * Lấy danh sách hội đồng (phân trang, lọc, sắp xếp)
+     * Lấy danh sách hội đồng (phân trang, lọc, sắp xếp ngày giờ)
      */
     public function index(Request $request)
     {
@@ -29,34 +29,51 @@ class HoiDongController extends Controller
             ->with(['nhoms' => function ($q) {
                 $q->withCount(['diemPhanBien', 'diemHoiDong']);
             }])
-            ->withCount('giangviens')
-            ->orderBy($request->input('sort', 'NGAY_BAOCAO'), $request->input('dir', 'desc'));
+            ->withCount('giangviens');
 
-        // Filter theo kế hoạch đang chạy nếu không có filter cụ thể
+        // 2. Các Bộ Lọc (Filters)
+
+        // Mặc định: Nếu không chọn kế hoạch cụ thể và không lấy tất cả -> Chỉ lấy kế hoạch đang chạy
         if (!$request->filled('kehoach') && !$request->boolean('all')) {
             $query->whereHas('kehoach', function ($q) {
                 $q->whereIn('TRANGTHAI', ['Đang thực hiện', 'Chờ duyệt chỉnh sửa', 'Đang chấm điểm']);
             });
         }
 
+        // Tìm kiếm theo tên
         if ($request->filled('search')) {
             $query->where('TEN_HOIDONG', 'like', '%' . $request->input('search') . '%');
         }
 
+        // Lọc theo ID Kế hoạch
         if ($request->filled('kehoach')) {
             $query->where('ID_KEHOACH', $request->input('kehoach'));
         }
 
-        // Lọc theo Bộ môn
+        // Lọc theo ID Khoa/Bộ môn
         if ($request->filled('khoa_bomon_id')) {
             $query->where('ID_KHOA_BOMON', $request->input('khoa_bomon_id'));
         }
 
+        // Lọc theo Loại hội đồng (hoidong, hoidong5, phanbien)
         if ($request->filled('loai')) {
             $query->whereIn('LOAI', $request->input('loai'));
         }
 
-        // Helper tính trạng thái chấm điểm
+        // 3. Logic Sắp Xếp (Sorting)
+        $sort = $request->input('sort', 'NGAY_BAOCAO');
+        $dir = $request->input('dir', 'desc');
+
+        if ($sort === 'NGAY_BAOCAO') {
+            // Nếu sắp xếp cột Ngày:
+            $query->orderBy('NGAY_BAOCAO', $dir)
+                  ->orderBy('GIO_BAOCAO', 'asc');
+        } else {
+            // Các cột khác sắp xếp bình thường
+            $query->orderBy($sort, $dir);
+        }
+
+        // 4. Helper tính trạng thái chấm điểm (Closure)
         $calculateStatus = function ($hd) {
             $hd->so_thanh_vien = $hd->giangviens_count;
             $hd->so_nhom = $hd->nhoms->count();
@@ -66,12 +83,14 @@ class HoiDongController extends Controller
             } else {
                 $allGraded = true;
                 $totalMembers = $hd->so_thanh_vien;
+                
                 if ($totalMembers == 0) {
                     $hd->trang_thai_cham_diem = 'chua_cham_diem';
                     return $hd;
                 }
 
                 foreach ($hd->nhoms as $nhom) {
+                    // Kiểm tra đủ điểm chưa dựa trên loại hội đồng
                     if ($hd->LOAI === 'phanbien' && $nhom->diem_phan_bien_count < $totalMembers) {
                         $allGraded = false;
                         break;
@@ -85,22 +104,25 @@ class HoiDongController extends Controller
             return $hd;
         };
 
-        // Lấy tất cả (cho dropdown)
+        // 5. Trả về dữ liệu
+
+        // Trường hợp 1: Lấy tất cả
         if ($request->boolean('all')) {
             $hoidongs = $query->with(['giangviens.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN'])->get();
             $hoidongs->transform($calculateStatus);
             return response()->json($hoidongs->values());
         }
 
-        // Lấy phân trang
-        $allMatchingHoidongs = $query->get();
+        // Trường hợp 2: Phân trang (Pagination)
+        $allMatchingHoidongs = $query->get(); 
         $allMatchingHoidongs->transform($calculateStatus);
 
-        // Filter client-side cho trạng thái chấm (vì là thuộc tính tính toán)
+        // Lọc theo trạng thái chấm điểm (nếu có)
         if ($request->filled('trang_thai_cham_diem')) {
             $allMatchingHoidongs = $allMatchingHoidongs->whereIn('trang_thai_cham_diem', $request->input('trang_thai_cham_diem'));
         }
 
+        // Thực hiện phân trang thủ công trên Collection
         $perPage = $request->per_page ?? 10;
         $page = $request->page ?? 1;
         $paginatedItems = $allMatchingHoidongs->slice(($page - 1) * $perPage, $perPage)->values();
@@ -457,6 +479,25 @@ class HoiDongController extends Controller
             }
 
             return response()->json(['message' => 'Cập nhật phòng thành công!', 'PHONG' => $hoidong->PHONG]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Cập nhật thất bại: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function updateGio(Request $request, $id)
+    {
+        $hoidong = Hoidong::find($id);
+        if (!$hoidong) return response()->json(['error' => 'Không tìm thấy hội đồng'], 404);
+        
+        $validated = $request->validate([
+            'GIO_BAOCAO' => 'nullable',
+        ]);
+        
+        $gio = $validated['GIO_BAOCAO'];
+
+        try {
+            $hoidong->update(['GIO_BAOCAO' => $gio]);
+            return response()->json(['message' => 'Cập nhật giờ báo cáo thành công!', 'GIO_BAOCAO' => $hoidong->GIO_BAOCAO]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Cập nhật thất bại: ' . $e->getMessage()], 500);
         }

@@ -1,7 +1,8 @@
-import React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useMemo } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { toast } from 'sonner';
 
 // Import APIs
 import { getLecturerDashboardStats } from '@/api/lecturerService';
@@ -10,6 +11,7 @@ import { getLecturerSchedule } from '@/api/lecturerCalendarService';
 import lecturerQuotaService from '@/api/lecturerQuotaService';
 import { getAllPlans } from '@/api/thesisPlanService';
 import { getHoiDongByGiangVien } from '@/api/adminHoiDongService';
+import { nudgeLecturerReminder } from '@/api/adminService';
 
 // UI Components
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,17 +19,26 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
+import { Separator } from '@/components/ui/separator';
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Icons
 import { 
     Users, BookOpen, ChevronRight, FileStack, MessageSquarePlus, 
     Target, CheckCircle, GraduationCap, Clock, ArrowRight, 
-    Hourglass, CalendarDays, MousePointerClick, BellRing
+    Hourglass, CalendarDays, MousePointerClick, BellRing,
+    FileCheck, User, Bell, AlertOctagon, Loader2, ChevronDown
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format, parseISO, differenceInDays } from 'date-fns';
@@ -44,59 +55,194 @@ const getPlanGridClass = (count) => {
     }
 };
 
-// --- COMPONENT: QUOTA PROGRESS CARD ---
-const QuotaProgressCard = ({ assigned, created, onClick }) => {
-    const percent = assigned > 0 ? Math.min(100, Math.round((created / assigned) * 100)) : 0;
-    const missing = Math.max(0, assigned - created);
-    const isComplete = assigned > 0 && missing === 0;
+// --- COMPONENT: DANH SÁCH GIẢNG VIÊN (Trong Popover) ---
+const LecturerListPopoverContent = ({ lecturers, nudgeAllMutation }) => {
+    const nudgeLecturer = useMutation({
+        mutationFn: ({ id_user, missing }) => nudgeLecturerReminder(id_user, missing),
+        onSuccess: () => toast.success("Đã gửi nhắc nhở."),
+        onError: () => toast.error("Lỗi gửi nhắc nhở.")
+    });
+
+    // Lọc GV chưa hoàn thành
+    const incompleteLecturers = lecturers.filter(l => (l.topics_created || 0) < (l.quota_assigned || 0));
 
     return (
-        <div className={cn(
-            "p-5 rounded-xl border shadow-sm flex flex-col justify-between transition-all",
-            isComplete 
-                ? "bg-green-50 border-green-200 text-green-900 dark:bg-green-900/20 dark:border-green-900 dark:text-green-100" 
-                : "bg-white border-gray-200 dark:bg-card dark:border-border"
-        )}>
-            <div>
-                <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                        <div className={cn("p-2 rounded-lg", isComplete ? "bg-green-200 dark:bg-green-800" : "bg-blue-100 dark:bg-blue-900")}>
-                            <Target className={cn("w-5 h-5", isComplete ? "text-green-800 dark:text-green-200" : "text-blue-700 dark:text-blue-300")} />
-                        </div>
-                        <h3 className="font-bold text-lg">Chỉ tiêu Đề tài</h3>
-                    </div>
-                    {isComplete && <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />}
-                </div>
+        <div className="w-[340px] flex flex-col">
+            <div className="p-3 border-b bg-muted/30 flex items-center justify-between">
+                <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <AlertOctagon className="w-4 h-4 text-orange-600" />
+                    Chưa hoàn thành ({incompleteLecturers.length})
+                </h4>
                 
-                <div className="space-y-2">
-                    <div className="flex justify-between text-sm font-medium">
-                        <span>Tiến độ</span>
-                        <span className="font-mono">{created}/{assigned}</span>
-                    </div>
-                    <div className="h-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
-                        <div 
-                            className={cn("h-full transition-all duration-700 ease-out rounded-full", isComplete ? "bg-green-500" : "bg-blue-500")} 
-                            style={{ width: `${percent}%` }} 
-                        />
-                    </div>
-                    <p className="text-sm opacity-80 mt-2">
-                        {isComplete 
-                            ? "Bạn đã hoàn thành chỉ tiêu đề tài." 
-                            : <>Cần tạo thêm <strong className="text-red-600 dark:text-red-400">{missing}</strong> đề tài nữa.</>}
-                    </p>
-                </div>
+                {/* Nút Nhắc tất cả */}
+                {incompleteLecturers.length > 0 && (
+                    <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-7 text-xs border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+                        onClick={() => nudgeAllMutation.mutate()}
+                        disabled={nudgeAllMutation.isPending}
+                    >
+                        {nudgeAllMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1"/> : <BellRing className="w-3 h-3 mr-1" />}
+                        Nhắc tất cả
+                    </Button>
+                )}
             </div>
-            
-            {!isComplete && (
-                <Button 
-                    variant="outline" 
-                    className="mt-4 w-full border-blue-200 hover:bg-blue-50 text-blue-700 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/50" 
-                    onClick={onClick}
-                >
-                    Quản lý Quota
-                </Button>
-            )}
+
+            <ScrollArea className="h-[250px] p-0">
+                <div className="p-2 space-y-1">
+                    {incompleteLecturers.length > 0 ? (
+                        incompleteLecturers.map((lecturer) => {
+                            const missing = (lecturer.quota_assigned || 0) - (lecturer.topics_created || 0);
+                            return (
+                                <div key={lecturer.ID_GIANGVIEN} className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors border border-transparent hover:border-border text-xs group">
+                                    <div className="flex items-center gap-3 overflow-hidden">
+                                        <div className="p-1.5 bg-background rounded-full shrink-0 border shadow-sm">
+                                            <User className="w-3 h-3 text-muted-foreground" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="font-medium truncate max-w-[150px] text-foreground" title={lecturer.TEN_GIANGVIEN}>
+                                                {lecturer.TEN_GIANGVIEN}
+                                            </p>
+                                            <p className="text-[10px] text-muted-foreground">
+                                                Đã tạo: <span className="font-mono font-bold text-foreground">{lecturer.topics_created}</span> / {lecturer.quota_assigned}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    
+                                    <TooltipProvider>
+                                        <Tooltip>
+                                            <TooltipTrigger asChild>
+                                                <Button 
+                                                    size="icon" 
+                                                    variant="ghost" 
+                                                    className="h-7 w-7 text-muted-foreground hover:text-orange-600 hover:bg-orange-50"
+                                                    disabled={nudgeLecturer.isPending}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        if(lecturer.id_user) {
+                                                                nudgeLecturer.mutate({ id_user: lecturer.id_user, missing: missing });
+                                                        } else {
+                                                            toast.error("Không tìm thấy thông tin người dùng.");
+                                                        }
+                                                    }}
+                                                >
+                                                    {nudgeLecturer.isPending ? <Loader2 className="w-3 h-3 animate-spin"/> : <Bell className="w-3.5 h-3.5" />}
+                                                </Button>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="left"><p>Gửi thông báo nhắc nhở</p></TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
+                                </div>
+                            );
+                        })
+                    ) : (
+                        <div className="flex flex-col items-center justify-center h-[150px] text-muted-foreground">
+                            <CheckCircle className="w-8 h-8 text-green-500 mb-2 opacity-50" />
+                            <p className="text-xs">Tất cả giảng viên đã đủ chỉ tiêu.</p>
+                        </div>
+                    )}
+                </div>
+            </ScrollArea>
         </div>
+    );
+}
+
+// --- COMPONENT: THẺ TIẾN ĐỘ GỘP (CÁ NHÂN + BỘ MÔN) ---
+const CombinedProgressCard = ({ myQuotaData, deptLecturers, isTruongBoMon, navigate }) => {
+    // 1. Dữ liệu Cá nhân
+    const myAssigned = myQuotaData?.quota_assigned || 0;
+    const myCreated = myQuotaData?.topics_created || 0;
+    const myPercent = myAssigned > 0 ? Math.min(100, Math.round((myCreated / myAssigned) * 100)) : 0;
+    const myMissing = Math.max(0, myAssigned - myCreated);
+    const isMyComplete = myAssigned > 0 && myMissing === 0;
+
+    // 2. Dữ liệu Bộ môn (Chỉ tính nếu là Trưởng BM)
+    const incompleteLecturers = deptLecturers ? deptLecturers.filter(l => (l.topics_created || 0) < (l.quota_assigned || 0)) : [];
+    const incompleteCount = incompleteLecturers.length;
+    const isDeptComplete = deptLecturers && deptLecturers.length > 0 && incompleteCount === 0;
+
+    // Mutation nhắc nhở hàng loạt
+    const nudgeAllMutation = useMutation({
+        mutationFn: async () => {
+            const promises = incompleteLecturers.map(lecturer => {
+                const userId = lecturer.id_user;
+                const missing = (lecturer.quota_assigned || 0) - (lecturer.topics_created || 0);
+                if (userId && missing > 0) {
+                    return nudgeLecturerReminder(userId, missing);
+                }
+                return Promise.resolve();
+            });
+            await Promise.all(promises);
+        },
+        onSuccess: () => toast.success(`Đã gửi nhắc nhở đến ${incompleteCount} giảng viên.`),
+        onError: () => toast.error("Có lỗi khi gửi nhắc nhở hàng loạt.")
+    });
+
+    return (
+        <Card className="border shadow-sm overflow-hidden bg-card">
+            <CardHeader className="p-4 pb-2 border-b bg-muted/20">
+                <CardTitle className="text-sm font-bold uppercase text-foreground flex items-center gap-2">
+                    <Target className="w-4 h-4 text-primary" />
+                    Tiến độ Ra đề tài
+                </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-5">
+                
+                {/* 1. Phần Cá nhân */}
+                <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="font-semibold text-muted-foreground uppercase tracking-wide">Cá nhân</span>
+                        <span className={cn("font-mono font-bold", isMyComplete ? "text-green-600" : "text-blue-600")}>
+                            {myCreated} / {myAssigned}
+                        </span>
+                    </div>
+                    <Progress value={myPercent} className="h-2.5" indicatorClassName={isMyComplete ? "bg-green-500" : "bg-blue-600"} />
+                    <div className="flex justify-between items-center text-xs">
+                        <span className="text-muted-foreground">
+                            {isMyComplete ? "Đã hoàn thành" : <span className="text-red-500 font-medium">Thiếu {myMissing} đề tài</span>}
+                        </span>
+                        <Button variant="link" className="h-auto p-0 text-xs text-blue-500" onClick={() => navigate('/lecturer/quota-management')}>
+                            Chi tiết
+                        </Button>
+                    </div>
+                </div>
+
+                {/* 2. Phần Bộ môn (Chỉ hiện nếu là Trưởng BM) */}
+                {isTruongBoMon && (
+                    <>
+                        <Separator />
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1.5">
+                                    <Users className="w-3.5 h-3.5" /> Bộ môn
+                                </span>
+                                
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" size="sm" className={cn(
+                                            "h-7 text-xs px-2.5 border transition-colors flex items-center gap-1",
+                                            isDeptComplete 
+                                                ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100" 
+                                                : "bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100"
+                                        )}>
+                                            {isDeptComplete ? (
+                                                <>Hoàn tất <CheckCircle className="w-3 h-3 ml-1" /></>
+                                            ) : (
+                                                <>{incompleteCount} GV chưa xong <ChevronDown className="w-3 h-3 ml-1 opacity-50" /></>
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0" align="end" side="right" sideOffset={10}>
+                                        <LecturerListPopoverContent lecturers={deptLecturers || []} nudgeAllMutation={nudgeAllMutation} />
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        </div>
+                    </>
+                )}
+            </CardContent>
+        </Card>
     );
 };
 
@@ -115,26 +261,30 @@ const ReminderItem = ({ icon: Icon, title, description, actionText, onAction, va
     };
 
     return (
-        <div className={cn("flex items-center justify-between p-3 rounded-lg border mb-3 last:mb-0 shadow-sm transition-all hover:shadow-md", variants[variant])}>
-            <div className="flex items-center gap-3 overflow-hidden">
-                <div className={cn("p-2 bg-white/80 dark:bg-black/20 rounded-full shrink-0", iconColors[variant])}>
-                    <Icon className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                    <h4 className="text-sm font-bold truncate">{title}</h4>
-                    <p className="text-xs opacity-90 truncate">{description}</p>
+        <div className={cn("flex items-start gap-3 p-3 rounded-lg border mb-3 last:mb-0 shadow-sm transition-all hover:shadow-md", variants[variant])}>
+            <div className="mt-0.5 shrink-0">
+                <div className={cn("p-1.5 bg-white/60 dark:bg-black/20 rounded-full", iconColors[variant])}>
+                     <Icon className="w-4 h-4" />
                 </div>
             </div>
-            {onAction && (
-                <Button 
-                    size="sm" 
-                    variant="ghost" 
-                    className={cn("text-xs font-semibold hover:bg-white/50 dark:hover:bg-black/20 h-8 px-3 shrink-0 ml-2", iconColors[variant])}
-                    onClick={onAction}
-                >
-                    {actionText} <ChevronRight className="w-3 h-3 ml-1" />
-                </Button>
-            )}
+            <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start">
+                    <h4 className="text-sm font-bold truncate">{title}</h4>
+                </div>
+                <p className="text-xs opacity-90 line-clamp-2 mt-0.5">{description}</p>
+                {onAction && (
+                    <div className="mt-2 flex justify-end">
+                         <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className={cn("text-[10px] font-semibold hover:bg-white/50 dark:hover:bg-black/20 h-6 px-2", iconColors[variant])}
+                            onClick={onAction}
+                        >
+                            {actionText} <ChevronRight className="w-3 h-3 ml-1" />
+                        </Button>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };
@@ -322,6 +472,10 @@ export default function LecturerDashboard() {
     const { user } = useAuth();
     const navigate = useNavigate();
 
+    // Xác định quyền Trưởng bộ môn
+    const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
+    const isTruongBoMon = positionCodes.includes('TRUONG_BOMON');
+
     // 1. Lấy thống kê tổng quan & Kế hoạch active
     const { data: stats, isLoading: loadStats } = useQuery({
         queryKey: ['lecturerDashboardStats'],
@@ -344,19 +498,54 @@ export default function LecturerDashboard() {
         }),
     });
 
-    // 4. Lấy Quota (chỉ tiêu)
+    // 4. Lấy Kế hoạch Active để dùng cho các query tiếp theo
+    const { data: activePlans } = useQuery({
+        queryKey: ['allPlansForDashboard'],
+        queryFn: getAllPlans,
+    });
+    
+    const activePlan = useMemo(() => {
+        if (!activePlans) return null;
+        return activePlans.find(p => p.TRANGTHAI === 'Đang thực hiện' || p.TRANGTHAI === 'Chờ duyệt chỉnh sửa') || activePlans[0];
+    }, [activePlans]);
+
+    const activePlanId = activePlan?.ID_KEHOACH;
+
+    // 5. Lấy Quota (chỉ tiêu) CÁ NHÂN
     const { data: myQuotaData } = useQuery({
-        queryKey: ['lecturerMyQuotaDetail'],
+        queryKey: ['lecturerMyQuotaDetail', activePlanId],
         queryFn: async () => {
-            const plans = await getAllPlans();
-            const activePlan = plans.find(p => p.TRANGTHAI === 'Đang thực hiện' || p.TRANGTHAI === 'Chờ duyệt chỉnh sửa') || plans[0];
-            
-            if (activePlan) {
-                const res = await lecturerQuotaService.getMyQuota({ plan_id: activePlan.ID_KEHOACH });
-                return res.data;
-            }
-            return null;
-        }
+             const res = await lecturerQuotaService.getMyQuota({ plan_id: activePlanId });
+             // [FIX] Truy cập đúng vào data bên trong response
+             return res.data; 
+        },
+        enabled: !!activePlanId
+    });
+
+    // 6. [MỚI] TRƯỞNG BỘ MÔN: Lấy danh sách GV & Quota của họ
+    const { data: deptLecturers } = useQuery({
+        queryKey: ['deptLecturersQuota', activePlanId],
+        queryFn: async () => {
+            const res = await lecturerQuotaService.getLecturers({ plan_id: activePlanId });
+            // API getLecturers trả về { department_id, lecturers: [...] }
+            return res.data?.lecturers || [];
+        },
+        enabled: !!isTruongBoMon && !!activePlanId
+    });
+
+    // 7. [MỚI] TRƯỞNG BỘ MÔN: Lấy danh sách đề tài đang chờ duyệt
+    const { data: pendingTopics } = useQuery({
+        queryKey: ['pendingTopicsDepartment', activePlanId],
+        queryFn: async () => {
+             const res = await thesisTopicService.getAdminTopics({ 
+                 plan_id: activePlanId, 
+                 status: 'Chờ duyệt',
+                 department_id: user.giangvien.ID_KHOA_BOMON 
+             });
+             // Xử lý dữ liệu trả về từ API
+             return Array.isArray(res.data) ? res.data : (res.data?.data || []);
+        },
+        enabled: !!isTruongBoMon && !!activePlanId
     });
 
     const isLoading = loadStats || loadGroups || loadSchedule;
@@ -381,15 +570,15 @@ export default function LecturerDashboard() {
         activePlansStatus = []
     } = stats || {};
     
-    const hasReminders = pendingSubmissionsCount > 0 || missingQuotaCount > 0 || pendingReviewsCount > 0;
+    // Tính toán số lượng đề tài chờ duyệt (cho Trưởng BM)
+    const pendingTopicsCount = pendingTopics ? pendingTopics.length : 0;
 
-    const quotaAssigned = myQuotaData?.quota_assigned || 0;
-    const topicsCreated = myQuotaData?.topics_created || 0;
+    const hasReminders = pendingSubmissionsCount > 0 || missingQuotaCount > 0 || pendingReviewsCount > 0 || pendingTopicsCount > 0;
 
     return (
         <div className="h-full overflow-y-auto bg-gray-50/50 dark:bg-background p-4 md:p-8">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 pb-10">
-                <div className="xl:col-span-2 space-y-8">                    
+                <div className="xl:col-span-2 space-y-8">                    
                     <section>
                         <h2 className="text-lg font-bold text-foreground mb-3 flex items-center gap-2">
                             <Target className="w-5 h-5 text-blue-600" />
@@ -418,6 +607,18 @@ export default function LecturerDashboard() {
                             <CardContent className="p-0">
                                 {hasReminders ? (
                                     <div className="flex flex-col">
+                                        {/* [MỚI] Nhắc nhở duyệt đề tài (Cho Trưởng BM) */}
+                                        {isTruongBoMon && pendingTopicsCount > 0 && (
+                                            <ReminderItem 
+                                                variant="urgent"
+                                                icon={FileCheck}
+                                                title="Duyệt đề tài Bộ môn"
+                                                description={`Có ${pendingTopicsCount} đề tài mới đang chờ bạn phê duyệt.`}
+                                                actionText="Duyệt ngay"
+                                                onAction={() => navigate('/admin/thesis-topics?status=Chờ duyệt')}
+                                            />
+                                        )}
+
                                         {pendingSubmissionsCount > 0 && (
                                             <ReminderItem 
                                                 variant="urgent"
@@ -570,8 +771,8 @@ export default function LecturerDashboard() {
                                     ))
                                 ) : (
                                     <div className="text-center py-8 text-sm text-muted-foreground bg-muted/20 rounded-lg border border-dashed flex flex-col items-center">
-                                        <CalendarDays className="w-6 h-6 mb-2 opacity-20" />
-                                        Hôm nay bạn rảnh.
+                                            <CalendarDays className="w-6 h-6 mb-2 opacity-20" />
+                                            Hôm nay bạn rảnh.
                                     </div>
                                 )}
                             </div>
@@ -581,17 +782,12 @@ export default function LecturerDashboard() {
                     {/* Thẻ Hội đồng */}
                     <CouncilCard />
 
-                      {/* Thẻ Quota (Mini) */}
-                      <div className="border rounded-xl p-4 bg-card shadow-sm">
-                        <h4 className="text-xs font-bold uppercase text-muted-foreground mb-2 flex items-center gap-1">
-                             <Target className="w-3 h-3" /> Tiến độ ra đề
-                        </h4>
-                        <QuotaProgressCard 
-                            assigned={quotaAssigned} 
-                            created={topicsCreated}
-                            onClick={() => navigate('/lecturer/quota-management')}
-                        />
-                      </div>
+                    <CombinedProgressCard 
+                        myQuotaData={myQuotaData} 
+                        deptLecturers={deptLecturers}
+                        isTruongBoMon={isTruongBoMon}
+                        navigate={navigate}
+                    />
                 </div>
             </div>
         </div>

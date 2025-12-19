@@ -44,6 +44,10 @@ export const updateHoiDongName = (id, tenHoiDong) => {
     return axiosClient.patch(`/admin/hoidong/${id}/update-name`, { TEN_HOIDONG: tenHoiDong }).then(res => res.data);
 };
 
+export const updateHoiDongGio = (id, gioBaoCao) => {
+    return axiosClient.patch(`/admin/hoidong/${id}/update-gio`, { GIO_BAOCAO: gioBaoCao }).then(res => res.data);
+};
+
 /**
  * Xóa hội đồng.
  */

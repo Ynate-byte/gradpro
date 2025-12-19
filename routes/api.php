@@ -322,6 +322,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::delete('/{id}', [HoiDongController::class, 'destroy']);
             Route::patch('/{id}/update-phong', [HoiDongController::class, 'updatePhong']);
             Route::patch('/{id}/update-name', [HoiDongController::class, 'updateTenHoiDong']);
+            Route::patch('/{id}/update-gio', [HoiDongController::class, 'updateGio']);
             Route::post('/auto-assign-members', [HoiDongController::class, 'autoAssignMembers']);
             Route::post('/bulk-upgrade', [HoiDongController::class, 'bulkUpgrade']);
             Route::post('/{id}/upgrade-to-hoidong', [HoiDongController::class, 'upgradePhanBienToHoiDong']);

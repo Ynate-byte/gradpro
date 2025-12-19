@@ -68,6 +68,7 @@ class QuotaController extends Controller
 
             return [
                 'ID_GIANGVIEN' => $lecturer->ID_GIANGVIEN,
+                'id_user' => $lecturer->nguoidung ? $lecturer->nguoidung->ID_NGUOIDUNG : null,
                 'TEN_GIANGVIEN' => $lecturer->nguoidung->HODEM_VA_TEN,
                 'EMAIL' => $lecturer->nguoidung->EMAIL,
                 'HOCVI' => $lecturer->HOCVI,

@@ -39,7 +39,8 @@ import {
   AlertCircle,
   Users,
   BookOpen,
-  Users2 
+  Users2,
+  ArrowUpDown
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -89,10 +90,12 @@ const getVariants = (shouldReduce) => {
     };
 };
 
-// Component cho phép sửa nhanh tên/phòng ngay trên bảng
-const EditableTextCell = ({ getValue, row, colId }) => {
+// Component cho phép sửa nhanh tên/phòng/giờ ngay trên bảng
+const EditableTextCell = ({ getValue, row, colId, type = "text" }) => {
     const initialValue = getValue() || "";
-    const [value, setValue] = useState(initialValue);
+    const formattedInitialValue = colId === "GIO_BAOCAO" && initialValue ? initialValue.substring(0, 5) : initialValue;
+    
+    const [value, setValue] = useState(formattedInitialValue);
     const [isEditing, setIsEditing] = useState(false);
     const queryClient = useQueryClient();
     
@@ -102,6 +105,9 @@ const EditableTextCell = ({ getValue, row, colId }) => {
                 return hoiDongService.updateHoiDongName(row.original.ID_HOIDONG, newValue);
             } else if (colId === "PHONG") {
                 return hoiDongService.updateHoiDongPhong(row.original.ID_HOIDONG, newValue);
+            } else if (colId === "GIO_BAOCAO") {
+                // [THÊM MỚI] Gọi API update giờ
+                return hoiDongService.updateHoiDongGio(row.original.ID_HOIDONG, newValue);
             }
             return Promise.reject(new Error("Unknown column"));
         },
@@ -110,9 +116,9 @@ const EditableTextCell = ({ getValue, row, colId }) => {
             queryClient.invalidateQueries({ queryKey: [QUERY_KEY_HOIDONG] });
         },
         onError: (err) => {
-            const errorMsg = err.response?.data?.errors?.TEN_HOIDONG?.[0] || err.response?.data?.error || "Cập nhật thất bại!";
+            const errorMsg = err.response?.data?.error || "Cập nhật thất bại!";
             toast.error(errorMsg);
-            setValue(initialValue);
+            setValue(formattedInitialValue);
         },
         onSettled: () => {
             setIsEditing(false);
@@ -123,11 +129,11 @@ const EditableTextCell = ({ getValue, row, colId }) => {
         const trimmedValue = String(value).trim();
         if (colId === "TEN_HOIDONG" && !trimmedValue) {
             toast.error("Tên Hội đồng không được để trống.");
-            setValue(initialValue);
+            setValue(formattedInitialValue);
             setIsEditing(false);
             return;
         }
-        if (trimmedValue !== initialValue) {
+        if (trimmedValue !== formattedInitialValue) {
             mutate(trimmedValue);
         } else {
             setIsEditing(false);
@@ -138,14 +144,14 @@ const EditableTextCell = ({ getValue, row, colId }) => {
         if (e.key === "Enter") {
             e.currentTarget.blur();
         } else if (e.key === "Escape") {
-            setValue(initialValue);
-            e.currentTarget.blur();
+            setValue(formattedInitialValue);
+            setIsEditing(false);
         }
     };
   
     useEffect(() => {
-        setValue(initialValue);
-    }, [initialValue]);
+        setValue(formattedInitialValue);
+    }, [formattedInitialValue]);
   
     if (isPending) {
         return (
@@ -155,17 +161,18 @@ const EditableTextCell = ({ getValue, row, colId }) => {
         );
     }
   
-    const displayValue = initialValue || <span className="text-muted-foreground italic">Trống</span>;
+    const displayValue = initialValue ? (colId === "GIO_BAOCAO" ? initialValue.substring(0, 5) : initialValue) : <span className="text-muted-foreground italic">Trống</span>;
   
     if (isEditing) {
         return (
             <Input
                 autoFocus
+                type={type}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 onBlur={onBlur}
                 onKeyDown={onKeyDown}
-                className={cn("h-8 min-w-[50px] p-2", colId === "TEN_HOIDONG" ? "w-full" : "w-16 text-center")}
+                className={cn("h-8 min-w-[50px] p-2 truncate", colId === "TEN_HOIDONG" ? "w-full" : "w-full text-center")}
             />
         );
     }
@@ -173,11 +180,12 @@ const EditableTextCell = ({ getValue, row, colId }) => {
     return (
         <div
             className={cn(
-                "w-full min-h-[32px] px-3 py-2 text-sm rounded-md cursor-pointer",
+                "w-full min-h-[32px] px-3 py-2 text-sm rounded-md cursor-pointer truncate",
                 "border border-transparent hover:bg-muted",
-                colId === "TEN_HOIDONG" ? "font-medium text-primary" : "text-center"
+                colId === "TEN_HOIDONG" ? "font-medium text-primary block" : "text-center"
             )}
             onClick={() => setIsEditing(true)}
+            title={String(value)}
         >
             {displayValue}
         </div>
@@ -215,7 +223,6 @@ const ListHoiDong = () => {
   const isReduced = reduceMotion || shouldReduceMotion;
   const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-  // Query Filters
   const { data: filterOptions, isLoading: isLoadingFilters } = useQuery({
     queryKey: [QUERY_KEY_FILTERS],
     queryFn: async () => {
@@ -265,7 +272,9 @@ const ListHoiDong = () => {
       hoiDongService.getHoiDongPaginated({
         page: pagination.pageIndex + 1,
         per_page: pagination.pageSize,
-        sort: sorting.length > 0 ? `${sorting[0].id},${sorting[0].desc ? "desc" : "asc"}` : undefined,
+        sort: sorting.length > 0 ? sorting[0].id : undefined,
+        dir: sorting.length > 0 ? (sorting[0].desc ? "desc" : "asc") : undefined,
+        
         search: debouncedSearch,
         kehoach: selectedPlanId,
         khoa_bomon_id: columnFilters.find((f) => f.id === "khoaBomon")?.value,
@@ -350,7 +359,9 @@ const ListHoiDong = () => {
         accessorKey: "TEN_HOIDONG",
         header: "Tên hội đồng",
         cell: ({ row, getValue }) => (
-          <EditableTextCell getValue={getValue} row={row} colId="TEN_HOIDONG" />
+          <div className="max-w-[200px]">
+            <EditableTextCell getValue={getValue} row={row} colId="TEN_HOIDONG" />
+          </div>
         ),
         size: 250,
       },
@@ -376,8 +387,15 @@ const ListHoiDong = () => {
       {
         accessorKey: "khoaBomon", 
         header: "Bộ môn",
-        accessorFn: (row) => row.khoaBomon?.TEN_KHOA_BOMON,
-        cell: ({ row }) => row.original.khoaBomon?.TEN_KHOA_BOMON || "-",
+        accessorFn: (row) => row.khoaBomon?.TEN_KHOA_BOMON || row.khoa_bomon?.TEN_KHOA_BOMON,
+        cell: ({ row }) => {
+            const tenBM = row.original.khoaBomon?.TEN_KHOA_BOMON || row.original.khoa_bomon?.TEN_KHOA_BOMON || "-";
+            return (
+                <div className="max-w-[100px] truncate" title={tenBM}>
+                    {tenBM}
+                </div>
+            );
+        },
         size: 200,
       },
       {
@@ -399,13 +417,26 @@ const ListHoiDong = () => {
         accessorKey: "PHONG",
         header: "Phòng",
         cell: ({ row, getValue }) => (
-          <EditableTextCell getValue={getValue} row={row} colId="PHONG" />
+            <div className="w-[80px]">
+                 <EditableTextCell getValue={getValue} row={row} colId="PHONG" />
+            </div>
         ),
         size: 80,
       },
       {
         accessorKey: "NGAY_BAOCAO",
-        header: "Ngày Báo Cáo",
+        header: ({ column }) => {
+          return (
+            <Button
+              variant="ghost"
+              className="-ml-4 h-8 data-[state=open]:bg-accent"
+              onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            >
+              <span>Ngày</span>
+              <ArrowUpDown className="ml-2 h-4 w-4" />
+            </Button>
+          )
+        },
         cell: ({ row }) => {
           const date = row.original.NGAY_BAOCAO;
           try {
@@ -414,16 +445,17 @@ const ListHoiDong = () => {
             return date;
           }
         },
-        size: 120,
+        size: 140, 
       },
       {
         accessorKey: "GIO_BAOCAO",
         header: "Giờ Báo Cáo",
-        cell: ({ row }) => {
-          const time = row.original.GIO_BAOCAO;
-          return time ? time.substring(0, 5) : "-";
-        },
-        size: 100,
+        cell: ({ row, getValue }) => (
+            <div className="w-[100px]">
+                <EditableTextCell getValue={getValue} row={row} colId="GIO_BAOCAO" type="time" />
+            </div>
+        ),
+        size: 130,
       },
       {
         accessorKey: "so_thanh_vien",

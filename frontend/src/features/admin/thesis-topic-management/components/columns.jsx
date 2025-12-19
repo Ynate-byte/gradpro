@@ -2,7 +2,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { DataTableRowActions } from "./row-actions";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from "lucide-react"; // Đảm bảo đã import RotateCcw
+import { ArrowUpDown, ArrowUp, ArrowDown, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
@@ -50,6 +50,7 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
         ),
         enableSorting: false,
         enableHiding: false,
+        size: 40,
     },
     {
         accessorKey: "TEN_DETAI",
@@ -65,32 +66,30 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
         cell: ({ row }) => (
             <button
                 onClick={() => onViewDetails(row.original.ID_DETAI)}
-                className="max-w-[300px] xl:max-w-sm truncate font-medium text-left hover:underline text-primary dark:text-blue-400"
+                className="max-w-[600px] truncate font-medium text-left hover:underline text-primary dark:text-blue-400 block"
                 title={row.original.TEN_DETAI}
             >
                 {row.original.TEN_DETAI}
             </button>
-        )
+        ),
+        size: 500,
     },
     {
         accessorKey: "ten_giang_vien",
         header: "GV Đề xuất",
         cell: ({ row }) => (
-            <div className="text-sm text-muted-foreground max-w-[150px] truncate">
+            <div className="text-sm text-muted-foreground max-w-[200px] truncate" title={row.original.ten_giang_vien}>
                 {row.original.ten_giang_vien}
             </div>
-        )
+        ),
+        size: 150,
     },
-    // 👇 CẬP NHẬT CỘT TRẠNG THÁI TẠI ĐÂY
     {
         accessorKey: "TRANGTHAI",
         header: "Trạng thái",
         cell: ({ row }) => (
             <div className="flex items-center gap-2">
-                {/* Badge trạng thái */}
                 {getStatusBadge(row.original.TRANGTHAI)}
-
-                {/* Icon Tái sử dụng (Chỉ hiện nếu LA_TAISUDUNG == 1) */}
                 {row.original.LA_TAISUDUNG == 1 && (
                     <TooltipProvider>
                         <Tooltip>
@@ -110,15 +109,17 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
         filterFn: (row, id, value) => {
             return value.includes(row.getValue(id))
         },
+        size: 140,
     },
     {
         accessorKey: "ten_bo_mon", 
         header: "Bộ môn",
         cell: ({ row }) => (
-            <div className="text-xs text-muted-foreground max-w-[120px] truncate" title={row.original.ten_bo_mon}>
+            <div className="text-xs text-muted-foreground max-w-[150px] truncate" title={row.original.ten_bo_mon}>
                 {row.original.ten_bo_mon || 'N/A'}
             </div>
-        )
+        ),
+        size: 150,
     },
     { 
         id: "department_id",
@@ -136,5 +137,6 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
                 onRequestEdit={onRequestEdit}
             />
         ),
+        size: 80,
     },
 ];

@@ -5,6 +5,7 @@ import { ArrowUpDown, ArrowUp, ArrowDown, Send, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { DataTableRowActions } from "./row-actions";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { size } from 'zod';
 
 // === Badge trạng thái ===
 const getStatusBadge = (status) => {
@@ -64,7 +65,7 @@ export const getColumns = ({
             <div className="flex flex-col">
                 <button
                     onClick={() => onViewDetails(row.original.ID_DETAI)}
-                    className="max-w-[300px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none"
+                    className="max-w-[500px] xl:max-w-sm truncate font-medium text-left text-primary hover:underline dark:text-blue-400 focus:outline-none"
                     title={row.original.TEN_DETAI}
                 >
                     {row.original.TEN_DETAI}
@@ -72,6 +73,7 @@ export const getColumns = ({
                 <span className="text-[10px] text-muted-foreground">{row.original.MA_DETAI}</span>
             </div>
         ),
+        size: 500,
     },
     {
         accessorKey: "ten_giang_vien",
