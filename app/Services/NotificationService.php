@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Thongbao;
 use Illuminate\Support\Facades\Log;
+use App\Events\NewNotification;
 
 class NotificationService
 {
@@ -41,6 +42,9 @@ class NotificationService
                 'DA_DOC'        => false,
                 'NGAY_TAO'      => now(),
             ]);
+
+            broadcast(new NewNotification($notification))->toOthers();
+            
         } catch (\Exception $e) {
             Log::error("NotificationService Error: " . $e->getMessage());
         }

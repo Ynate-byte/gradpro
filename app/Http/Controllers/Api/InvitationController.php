@@ -40,36 +40,43 @@ class InvitationController extends Controller
     public function handleInvitation(Request $request, LoimoiNhom $loimoi)
     {
         $user = $request->user();
+
+        // 1. Kiểm tra quyền sở hữu lời mời
         if ($loimoi->ID_NGUOI_DUOCMOI !== $user->ID_NGUOIDUNG) {
             return response()->json(['message' => 'Lời mời không hợp lệ.'], 403);
         }
         
         $validated = $request->validate(['action' => 'required|in:accept,decline']);
 
+        // 2. Trường hợp TỪ CHỐI
         if ($validated['action'] === 'decline') {
             $loimoi->update(['TRANGTHAI' => 'Từ chối', 'NGAY_PHANHOI' => now()]);
             return response()->json(['message' => 'Bạn đã từ chối lời mời.']);
         }
         
+        // 3. Trường hợp CHẤP NHẬN (Sử dụng Transaction để đảm bảo toàn vẹn dữ liệu)
         return DB::transaction(function () use ($loimoi, $user) {
+            // Lock dòng dữ liệu nhóm để tránh race condition (nhiều người vào cùng lúc)
             $nhom = Nhom::where('ID_NHOM', $loimoi->ID_NHOM)->lockForUpdate()->first();
             
+            // Kiểm tra kế hoạch & Feature Flag
             $plan = KehoachKhoaluan::find($nhom->ID_KEHOACH);
             $maxMembers = $plan->SO_THANHVIEN_TOIDA ?? 4; // Mặc định 4 nếu không tìm thấy
 
+            // Nếu không phải Admin/GV thì phải check thời gian mở chức năng
             if ($plan && !$plan->isFeatureActive('SV_TAO_NHOM')) {
                 if (!$this->isAdmin() && !$this->isGiaoVu() && !$this->isTruongKhoa()) {
                     return response()->json(['message' => 'Giai đoạn tham gia nhóm đã kết thúc.'], 403);
                 }
             }
             
-            // Kiểm tra dựa trên số max động
+            // Kiểm tra số lượng thành viên
             if ($nhom->SO_THANHVIEN_HIENTAI >= $maxMembers) {
                 $loimoi->update(['TRANGTHAI' => 'Hết hạn']);
                 return response()->json(['message' => "Tham gia thất bại! Nhóm đã đủ thành viên ({$maxMembers} người)."], 409);
             }
 
-            // Kiểm tra xem user đã có nhóm khác chưa
+            // Kiểm tra xem user đã có nhóm nào khác trong kế hoạch này chưa
             $alreadyInGroup = ThanhvienNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
                 ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $nhom->ID_KEHOACH))
                 ->exists();
@@ -78,7 +85,7 @@ class InvitationController extends Controller
                 return response()->json(['message' => 'Bạn đã là thành viên của một nhóm khác.'], 409);
             }
             
-            // Thêm thành viên
+            //THÊM THÀNH VIÊN VÀO NHÓM
             ThanhvienNhom::create([
                 'ID_NHOM' => $nhom->ID_NHOM,
                 'ID_NGUOIDUNG' => $user->ID_NGUOIDUNG,
@@ -87,12 +94,12 @@ class InvitationController extends Controller
             
             $nhom->increment('SO_THANHVIEN_HIENTAI');
 
-            // So sánh với số max động để cập nhật trạng thái nhóm
+            // Cập nhật trạng thái nhóm nếu đã đầy
             if ($nhom->SO_THANHVIEN_HIENTAI >= $maxMembers) {
                 $nhom->TRANGTHAI = 'Đã đủ thành viên';
                 $nhom->save();
 
-                // --- TỰ ĐỘNG HỦY/TỪ CHỐI CÁC YÊU CẦU/LỜI MỜI KHÁC CỦA NHÓM ---
+                // Tự động hủy các lời mời/yêu cầu khác CỦA NHÓM NÀY (vì nhóm đã đầy)
                 LoimoiNhom::where('ID_NHOM', $nhom->ID_NHOM)
                     ->where('TRANGTHAI', 'Đang chờ')
                     ->update(['TRANGTHAI' => 'Hết hạn']); 
@@ -102,14 +109,22 @@ class InvitationController extends Controller
                     ->update(['TRANGTHAI' => 'Từ chối']);
             }
 
+            // Cập nhật trạng thái lời mời hiện tại
             $loimoi->update(['TRANGTHAI' => 'Chấp nhận', 'NGAY_PHANHOI' => now()]);
             
-            // Hủy các lời mời khác gửi đến user này từ các nhóm khác
             LoimoiNhom::where('ID_NGUOI_DUOCMOI', $user->ID_NGUOIDUNG)
                 ->where('ID_LOIMOI', '!=', $loimoi->ID_LOIMOI)
                 ->where('TRANGTHAI', 'Đang chờ')
                 ->update(['TRANGTHAI' => 'Từ chối']);
+
+            YeucauVaoNhom::where('ID_NGUOIDUNG', $user->ID_NGUOIDUNG)
+                ->where('TRANGTHAI', 'Đang chờ')
+                ->whereHas('nhom', function($q) use ($nhom) {
+                    $q->where('ID_KEHOACH', $nhom->ID_KEHOACH);
+                })
+                ->update(['TRANGTHAI' => 'Đã hủy']);
             
+            // Ghi Log
             ActivityLogger::log(
                 'JOIN_GROUP', 
                 "Đã tham gia nhóm {$nhom->TEN_NHOM}", 
@@ -117,6 +132,7 @@ class InvitationController extends Controller
                 $nhom->ID_NHOM,
                 'UserPlus'
             );
+
             return response()->json(['message' => 'Chào mừng bạn đến với nhóm mới!']);
         });
     }

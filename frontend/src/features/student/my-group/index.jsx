@@ -8,7 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import {
     BookCopy, CheckCircle, AlertTriangle, Crown,
     AlertCircle, UploadCloud, CalendarCheck, LayoutDashboard,
-    Mail, Phone
+    Mail, Phone, Lock, RefreshCw, Loader2
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { NoGroupView } from './components/NoGroupView';
@@ -37,7 +37,7 @@ import { Badge } from '@/components/ui/badge';
 import { ActivityCard } from './components/ActivityCard';
 import { startOfWeek, endOfWeek, isWithinInterval, parseISO, isFuture } from 'date-fns';
 import { SubmissionDialog } from './components/submission/SubmissionDialog';
-import { RefreshCw, Loader2 } from 'lucide-react';
+import { useFeatureFlag } from '@/hooks/useFeatureFlag';
 
 // Component Skeleton khi đang tải dữ liệu
 const LoadingSkeleton = () => (
@@ -208,17 +208,15 @@ export default function MyGroupPage() {
         return { upcomingMeetingsCount: validMeetings.length, upcomingTasksCount: tasksCount }; 
     }, [groupDetails?.meetings, groupDetails?.tasksCount]);
 
-    // [MỚI] Helper tính điểm cho từng sinh viên (ĐÃ SỬA LỖI KEY)
+    // Helper tính điểm cho từng sinh viên
     const getStudentGrades = (studentId, groupData) => {
         if (!groupData) return null;
 
         const plan = groupData.kehoach || {};
-        // Tỷ trọng mặc định
         const wHD = parseFloat(plan.TYTRONG_DIEM_QUATRINH ?? 0.4);
         const wPB = parseFloat(plan.TYTRONG_DIEM_PHANBIEN ?? 0.3);
         const wHDONG = parseFloat(plan.TYTRONG_DIEM_HOIDONG ?? 0.3);
 
-        // Helper lấy điểm từ danh sách (xử lý cả JSON chi tiết)
         const getScore = (records) => {
             if (!records || records.length === 0) return null;
             
@@ -227,7 +225,6 @@ export default function MyGroupPage() {
 
             records.forEach(record => {
                 let score = parseFloat(record.DIEM || 0);
-                // Nếu có điểm chi tiết, tìm điểm của sinh viên này
                 if (record.DIEM_CHI_TIET) {
                     let details = record.DIEM_CHI_TIET;
                     if (typeof details === 'string') {
@@ -247,7 +244,6 @@ export default function MyGroupPage() {
             return count === 0 ? null : (total / count);
         };
 
-        // [SỬA LỖI CHÍNH]: Dùng key snake_case (hoặc thử cả 2 để an toàn)
         const listHD = groupData.diem_huong_dan || groupData.diemHuongDan;
         const listPB = groupData.diem_phan_bien || groupData.diemPhanBien;
         const listHDONG = groupData.diem_hoi_dong || groupData.diemHoiDong;
@@ -256,10 +252,8 @@ export default function MyGroupPage() {
         const scorePB = getScore(listPB);
         const scoreHDONG = getScore(listHDONG);
 
-        // Nếu chưa có điểm nào
         if (scoreHD === null && scorePB === null && scoreHDONG === null) return null;
 
-        // Tính tổng
         let final = 0;
         if (scoreHD !== null) final += scoreHD * wHD;
         if (scorePB !== null) final += scorePB * wPB;
@@ -292,6 +286,8 @@ export default function MyGroupPage() {
     const hasTopic = !!phancong?.detai;
     const isLeader = user?.ID_NGUOIDUNG === groupData?.ID_NHOMTRUONG;
 
+    // [MỚI] Kiểm tra feature flag SV_NOP_BAI từ kế hoạch
+    const isSubmissionEnabled = useFeatureFlag(groupDetails?.plan, 'SV_NOP_BAI');
 
     if (isLoadingData) {
         return <div className="p-4 md:p-8"><LoadingSkeleton /></div>;
@@ -344,10 +340,22 @@ export default function MyGroupPage() {
                         
                         {hasTopic && (
                             <Button 
-                                className="w-full sm:w-full"
+                                className={cn(
+                                    "w-full sm:w-full",
+                                    !isSubmissionEnabled && "opacity-80 bg-gray-400 hover:bg-gray-400 cursor-not-allowed"
+                                )}
                                 onClick={() => setIsSubmissionOpen(true)}
+                                disabled={!isSubmissionEnabled} // <--- Disable nếu chưa mở
                             >
-                                <UploadCloud className="mr-2 h-4 w-4" /> Nộp sản phẩm
+                                {isSubmissionEnabled ? (
+                                    <>
+                                        <UploadCloud className="mr-2 h-4 w-4" /> Nộp sản phẩm
+                                    </>
+                                ) : (
+                                    <>
+                                        <Lock className="mr-2 h-4 w-4" /> Chưa mở nộp
+                                    </>
+                                )}
                             </Button>
                         )}
                     </div>
@@ -406,9 +414,9 @@ export default function MyGroupPage() {
                                                     {/* Hiển thị điểm tổng kết */}
                                                     {grades && (
                                                         <div className="ml-2">
-                                                            <Badge variant="secondary" className="text-xs font-bold bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
-                                                                {grades.final}
-                                                            </Badge>
+                                                                <Badge variant="secondary" className="text-xs font-bold bg-green-100 text-green-700 border-green-200 hover:bg-green-100">
+                                                                    {grades.final}
+                                                                </Badge>
                                                         </div>
                                                     )}
                                                 </button>
@@ -457,8 +465,8 @@ export default function MyGroupPage() {
                                                                     </div>
                                                                 </div>
                                                                 <div className="flex justify-between items-center bg-green-50 p-2 rounded border border-green-100 mt-1">
-                                                                    <span className="text-xs font-bold text-green-800">TỔNG KẾT:</span>
-                                                                    <span className="text-base font-bold text-green-700">{grades.final}</span>
+                                                                        <span className="text-xs font-bold text-green-800">TỔNG KẾT:</span>
+                                                                        <span className="text-base font-bold text-green-700">{grades.final}</span>
                                                                 </div>
                                                             </div>
                                                         </>

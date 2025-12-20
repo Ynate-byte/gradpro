@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCheck, Loader2, Inbox } from 'lucide-react';
+import { Bell, CheckCheck, Loader2, Inbox, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,7 +21,7 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("all");
 
-    // 1. Kiểm tra xem có tin KHẨN CẤP (URGENT) chưa đọc không để rung chuông
+    // Check tin khẩn cấp
     const hasUrgentUnread = notifications.some(n => !n.DA_DOC && n.DO_UU_TIEN === 'URGENT');
 
     // --- MUTATIONS ---
@@ -29,7 +29,6 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
         mutationFn: markAsRead,
         onSuccess: () => {
             queryClient.invalidateQueries(['notifications']);
-            queryClient.invalidateQueries(['notifications-page']);
             queryClient.invalidateQueries(['unreadCount']);
         }
     });
@@ -38,7 +37,6 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
         mutationFn: deleteNotification,
         onSuccess: () => {
             queryClient.invalidateQueries(['notifications']);
-            queryClient.invalidateQueries(['notifications-page']);
             queryClient.invalidateQueries(['unreadCount']);
             toast.success("Đã xóa thông báo");
         }
@@ -52,24 +50,20 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
         });
     };
 
-    const handleMarkOneRead = (id) => {
-        markReadMutation.mutate(id);
+    // Filter logic
+    const getFilteredNotifications = () => {
+        if (activeTab === 'unread') return notifications.filter(n => !n.DA_DOC);
+        if (activeTab === 'academic') return notifications.filter(n => n.LOAI_THONGBAO === 'ACADEMIC');
+        if (activeTab === 'work') return notifications.filter(n => ['TASK', 'GROUP'].includes(n.LOAI_THONGBAO));
+        return notifications;
     };
 
-    const handleDeleteOne = (id) => {
-        deleteMutation.mutate(id);
-    };
-
-    // Lọc danh sách hiển thị theo Tab
-    const displayNotifications = activeTab === 'unread' 
-        ? notifications.filter(n => !n.DA_DOC) 
-        : notifications;
+    const displayNotifications = getFilteredNotifications();
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-full hover:bg-muted/60 transition-colors">
-                    {/* Icon Chuông: Đổi màu đỏ và rung nếu có tin khẩn cấp */}
+                <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full hover:bg-muted transition-colors">
                     <Bell 
                         className={cn(
                             "h-5 w-5 transition-all", 
@@ -77,51 +71,54 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
                             hasUrgentUnread ? "text-red-500 animate-bell-shake" : "text-muted-foreground"
                         )} 
                     />
-                    
-                    {/* Badge số lượng */}
                     {unreadCount > 0 && (
                         <span className={cn(
-                            "absolute top-1.5 right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-background animate-in zoom-in duration-300",
+                            "absolute top-1.5 right-1.5 flex h-2.5 w-2.5 rounded-full ring-2 ring-background animate-in zoom-in duration-300",
                             hasUrgentUnread ? "bg-red-600" : "bg-red-500"
-                        )}>
-                            {unreadCount > 9 ? '9+' : unreadCount}
-                        </span>
+                        )} />
                     )}
                 </Button>
             </PopoverTrigger>
 
-            <PopoverContent className="w-[380px] p-0 overflow-hidden shadow-xl border-border/60" align="end" sideOffset={8}>
+            <PopoverContent className="w-[400px] p-0 overflow-hidden shadow-xl border-border/60" align="end" sideOffset={8}>
                 
                 {/* HEADER */}
-                <div className="p-4 border-b bg-muted/30 flex items-center justify-between">
-                    <h3 className="font-semibold text-sm">Thông báo</h3>
+                <div className="p-3 px-4 border-b bg-muted/20 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-sm">Thông báo</h3>
+                        {unreadCount > 0 && (
+                            <span className="text-[10px] font-bold bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full">
+                                {unreadCount} mới
+                            </span>
+                        )}
+                    </div>
                     {unreadCount > 0 && (
                         <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="h-7 px-2 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                            className="h-7 px-2 text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50"
                             onClick={handleMarkAllRead}
                             disabled={markReadMutation.isPending}
                         >
-                            <CheckCheck className="mr-1.5 h-3.5 w-3.5" /> 
-                            Đánh dấu đã đọc
+                            <CheckCheck className="mr-1.5 h-3 w-3" /> 
+                            Đọc tất cả
                         </Button>
                     )}
                 </div>
 
-                {/* TABS */}
+                {/* TABS & FILTER */}
                 <Tabs defaultValue="all" value={activeTab} onValueChange={setActiveTab} className="w-full">
-                    <div className="px-4 pt-2">
-                        <TabsList className="w-full grid grid-cols-2 h-9">
-                            <TabsTrigger value="all" className="text-xs">Tất cả</TabsTrigger>
-                            <TabsTrigger value="unread" className="text-xs">
-                                Chưa đọc {unreadCount > 0 && `(${unreadCount})`}
-                            </TabsTrigger>
+                    <div className="px-4 pt-2 border-b">
+                        <TabsList className="w-full justify-start h-9 bg-transparent p-0 gap-4">
+                            <TabsTrigger value="all" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-1 pb-2 text-xs">Tất cả</TabsTrigger>
+                            <TabsTrigger value="unread" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-1 pb-2 text-xs">Chưa đọc</TabsTrigger>
+                            <TabsTrigger value="academic" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-1 pb-2 text-xs">Học tập</TabsTrigger>
+                            <TabsTrigger value="work" className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-1 pb-2 text-xs">Công việc</TabsTrigger>
                         </TabsList>
                     </div>
 
                     {/* CONTENT LIST */}
-                    <div className="relative min-h-[300px]">
+                    <div className="relative min-h-[300px] bg-background/50">
                         {isLoading ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-background/50 z-10">
                                 <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -135,19 +132,21 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
                                         <NotificationItem 
                                             key={noti.ID_THONGBAO} 
                                             notification={noti} 
-                                            onMarkRead={handleMarkOneRead}
-                                            onDelete={handleDeleteOne}
+                                            onMarkRead={(id) => markReadMutation.mutate(id)}
+                                            onDelete={(id) => deleteMutation.mutate(id)}
                                         />
                                     ))}
                                 </div>
                             ) : (
-                                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground px-4 text-center">
+                                <div className="flex flex-col items-center justify-center h-[300px] text-center p-4">
                                     <div className="bg-muted/50 p-4 rounded-full mb-3">
-                                        <Inbox className="h-8 w-8 opacity-40" />
+                                        <Inbox className="h-8 w-8 text-muted-foreground/40" />
                                     </div>
-                                    <p className="text-sm font-medium">Không có thông báo nào</p>
-                                    <p className="text-xs mt-1 opacity-70">
-                                        {activeTab === 'unread' ? "Bạn đã đọc hết tất cả thông báo." : "Bạn chưa nhận được thông báo nào."}
+                                    <p className="text-sm font-medium text-foreground">Không có thông báo mới</p>
+                                    <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                                        {activeTab === 'unread' 
+                                            ? "Bạn đã đọc hết tất cả thông báo quan trọng." 
+                                            : "Hiện tại bạn chưa nhận được thông báo nào."}
                                     </p>
                                 </div>
                             )}
@@ -159,7 +158,7 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
                 <div className="p-2 border-t bg-muted/10">
                     <Button 
                         variant="ghost" 
-                        className="w-full h-9 text-xs font-medium justify-center text-muted-foreground hover:text-primary"
+                        className="w-full h-8 text-xs font-medium justify-center text-muted-foreground hover:text-primary"
                         onClick={() => {
                             setOpen(false);
                             navigate('/notifications');

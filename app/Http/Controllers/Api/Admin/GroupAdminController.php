@@ -541,6 +541,16 @@ class GroupAdminController extends Controller
             $nhom->save();
 
             $this->addStudentsToPlanIfNotExists($validated['student_ids'], $planId);
+
+            YeucauVaoNhom::whereIn('ID_NGUOIDUNG', $validated['student_ids'])
+            ->where('TRANGTHAI', 'Đang chờ')
+            ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $planId))
+            ->update(['TRANGTHAI' => 'Đã hủy']);
+
+            LoimoiNhom::whereIn('ID_NGUOI_DUOCMOI', $validated['student_ids'])
+                ->where('TRANGTHAI', 'Đang chờ')
+                ->whereHas('nhom', fn($q) => $q->where('ID_KEHOACH', $planId))
+                ->update(['TRANGTHAI' => 'Hết hạn']);
         });
 
         return response()->json(['message' => "Đã thêm thành công {$countToAdd} sinh viên vào nhóm."]);

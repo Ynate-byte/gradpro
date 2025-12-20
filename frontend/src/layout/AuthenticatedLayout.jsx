@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect } from 'react';
 import { Outlet, Link, useNavigate, useLocation, matchPath, Navigate } from 'react-router-dom';
 import { AppSidebar } from '@/layout/AppSidebar';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,13 +9,18 @@ import {
     BreadcrumbPage, BreadcrumbSeparator
 } from '@/components/ui/breadcrumb';
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Moon, Sun, Bell, LogOut, ShieldAlert } from "lucide-react"; // Thêm LogOut, ShieldAlert
+import { CalendarDays, Moon, Sun, LogOut, ShieldAlert } from "lucide-react";
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getUnreadCount, getNotifications } from '@/api/notificationService';
 import { NotificationDropdown } from '@/components/shared/notifications/NotificationDropdown';
 import { useTheme } from "@/components/theme-provider";
-import { ChangePasswordForm } from '@/features/profile/components/ChangePasswordForm'; 
+import { ChangePasswordForm } from '@/features/profile/components/ChangePasswordForm';
+
+// Import thư viện Real-time
+import Echo from 'laravel-echo';
+import Pusher from 'pusher-js';
+import { toast } from 'sonner';
 
 const routeNameMap = {
     '/': 'Trang chủ',
@@ -108,14 +113,16 @@ export default function AuthenticatedLayout() {
     const navigate = useNavigate();
     const location = useLocation();
     const { theme, setTheme } = useTheme();
+    const queryClient = useQueryClient();
 
     const isFirstLogin = user?.LA_DANGNHAP_LANDAU == true || user?.LA_DANGNHAP_LANDAU == 1;
 
+    // Polling dự phòng (5 phút)
     const { data: countData } = useQuery({
         queryKey: ['unreadCount'],
         queryFn: getUnreadCount,
         enabled: !!user && !isFirstLogin,
-        refetchInterval: 300000,
+        refetchInterval: 300000, 
         refetchOnWindowFocus: true,
         retry: false,
     });
@@ -131,8 +138,78 @@ export default function AuthenticatedLayout() {
     const unreadCount = countData?.count || 0;
     const notifications = latestNotiData?.data || [];
 
+    // --- REAL-TIME LISTENER ---
+    useEffect(() => {
+        if (!user?.ID_NGUOIDUNG) return;
+
+        // Lấy key từ env
+        const appKey = import.meta.env.VITE_REVERB_APP_KEY;
+        const host = import.meta.env.VITE_REVERB_HOST;
+        const port = import.meta.env.VITE_REVERB_PORT;
+
+        // [QUAN TRỌNG] Kiểm tra xem có App Key không. Nếu không có thì không khởi tạo Echo để tránh lỗi sập app.
+        if (!appKey) {
+            console.warn("Real-time notifications are disabled: VITE_REVERB_APP_KEY is missing in frontend/.env");
+            return;
+        }
+
+        // Cấu hình Echo (Sử dụng Laravel Reverb)
+        window.Pusher = Pusher;
+        
+        const echoConfig = {
+            broadcaster: 'reverb', 
+            key: appKey,
+            wsHost: host || 'localhost',
+            wsPort: port ?? 8080,
+            wssPort: port ?? 443,
+            forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https',
+            enabledTransports: ['ws', 'wss'],
+            authEndpoint: '/api/broadcasting/auth',
+            auth: {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem('authToken')}`,
+                },
+            },
+        };
+
+        let echo;
+        try {
+            echo = new Echo(echoConfig);
+
+            // Lắng nghe kênh riêng tư của user
+            const channelName = `App.Models.Nguoidung.${user.ID_NGUOIDUNG}`;
+            
+            echo.private(channelName)
+                .listen('.notification.new', (e) => {
+                    // 1. Cập nhật số lượng chưa đọc ngay lập tức
+                    queryClient.setQueryData(['unreadCount'], (old) => ({ count: (old?.count || 0) + 1 }));
+                    
+                    // 2. Refresh danh sách thông báo
+                    queryClient.invalidateQueries(['notifications']);
+
+                    // 3. Hiện Toast thông báo
+                    toast.info(e.notification.TIEU_DE, {
+                        description: e.notification.NOI_DUNG,
+                        duration: 5000,
+                        action: e.notification.LIEN_KET ? {
+                            label: "Xem",
+                            onClick: () => navigate(e.notification.LIEN_KET)
+                        } : undefined,
+                    });
+                });
+        } catch (error) {
+            console.error("Failed to connect to Reverb:", error);
+        }
+
+        return () => {
+            if (echo) {
+                const channelName = `App.Models.Nguoidung.${user.ID_NGUOIDUNG}`;
+                echo.leave(channelName);
+            }
+        };
+    }, [user, queryClient, navigate]);
+
     const breadcrumbItems = useMemo(() => {
-        // ... (Giữ nguyên logic breadcrumb cũ) ...
         const pathnames = location.pathname.split('/').filter(x => x);
         let currentPath = '';
         const items = [];
@@ -209,7 +286,6 @@ export default function AuthenticatedLayout() {
         return (
             <SidebarProvider>
                 <div className="flex h-screen w-full bg-background text-foreground">
-                    {/* Ẩn Sidebar khi loading để tránh giật */}
                     <div className="w-64 h-full border-r bg-muted/10 hidden md:block" /> 
                     <SidebarInset>
                         <HeaderSkeleton />
@@ -292,7 +368,7 @@ export default function AuthenticatedLayout() {
                             <NotificationDropdown 
                                 notifications={notifications} 
                                 unreadCount={unreadCount} 
-                                isLoading={loadingNoti}
+                                isLoading={loadingNoti} 
                             />
                         </div>
                     </header>
