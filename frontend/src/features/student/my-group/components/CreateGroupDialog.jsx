@@ -37,7 +37,7 @@ const useFormOptions = () => {
   return { chuyenNganhs, khoaBomons };
 };
 
-export function CreateGroupDialog({ isOpen, setIsOpen, planId }) { // <-- Bỏ `onSuccess`
+export function CreateGroupDialog({ isOpen, setIsOpen, planId }) {
   const { chuyenNganhs, khoaBomons } = useFormOptions();
   const queryClient = useQueryClient();
 
@@ -46,19 +46,21 @@ export function CreateGroupDialog({ isOpen, setIsOpen, planId }) { // <-- Bỏ `
     defaultValues: { TEN_NHOM: '', MOTA: '', ID_CHUYENNGANH: '', ID_KHOA_BOMON: '' },
   });
 
-  // Reset form khi mở dialog
   useEffect(() => {
     if (isOpen) {
       form.reset();
     }
   }, [isOpen, form]);
 
-  // Nâng cấp: Sử dụng useMutation để tạo nhóm
   const createGroupMutation = useMutation({
     mutationFn: (data) => createGroup(data, planId),
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success("Tạo nhóm thành công!");
-      queryClient.invalidateQueries({ queryKey: ['myGroupDetails', planId] }); // Tự động refresh
+
+      await queryClient.invalidateQueries({ 
+        queryKey: ['myGroupDetails', String(planId)] 
+      });
+      
       setIsOpen(false);
     },
     onError: (error) => {

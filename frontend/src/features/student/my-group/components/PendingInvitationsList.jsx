@@ -6,20 +6,24 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Loader2, Mail } from 'lucide-react'; // Thêm Loader2
 import { toast } from 'sonner';
 import { handleInvitation } from '@/api/groupService';
-import { useMutation, useQueryClient } from '@tanstack/react-query'; // <-- THÊM MỚI
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-export function PendingInvitationsList({ invitations, planId }) { // <-- Bỏ refreshData, thêm planId
+export function PendingInvitationsList({ invitations, planId }) {
   const [alertInfo, setAlertInfo] = useState({ isOpen: false, action: null, invitationId: null });
   const alertTitleId = useId();
   const alertDescriptionId = useId();
-  const queryClient = useQueryClient(); // <-- THÊM MỚI
+  const queryClient = useQueryClient();
 
-  // Nâng cấp: Sử dụng useMutation để xử lý lời mời
   const handleInviteMutation = useMutation({
     mutationFn: ({ invitationId, action }) => handleInvitation(invitationId, action),
-    onSuccess: (response) => {
+    onSuccess: async (response) => {
       toast.success(response.message);
-      queryClient.invalidateQueries({ queryKey: ['myGroupDetails', planId] }); // Tự động refresh
+      
+      await queryClient.invalidateQueries({ 
+          queryKey: ['myGroupDetails', String(planId)] 
+      });
+      
+      await queryClient.invalidateQueries({ queryKey: ['invitations'] });
     },
     onError: (error) => {
       toast.error(error.response?.data?.message || "Thao tác thất bại.");
@@ -36,13 +40,12 @@ export function PendingInvitationsList({ invitations, planId }) { // <-- Bỏ re
   const handleAction = () => {
     const { action, invitationId } = alertInfo;
     if (!action || !invitationId) return;
-    handleInviteMutation.mutate({ invitationId, action }); // Gọi mutate
+    handleInviteMutation.mutate({ invitationId, action });
   };
 
   return (
     <>
       <Card>
-        {/* ... (CardHeader - không đổi) ... */}
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Mail /> Lời mời tham gia nhóm</CardTitle>
           <CardDescription>Bạn có {invitations.length} lời mời đang chờ. Chấp nhận một lời mời sẽ tự động từ chối các lời mời còn lại.</CardDescription>

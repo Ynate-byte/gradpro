@@ -585,8 +585,9 @@ class NhomController extends Controller
      */
     public function handleJoinRequest(Request $request, Nhom $nhom, YeucauVaoNhom $yeucau)
     {
+        $user = $request->user();
         $this->authorize('manage', $nhom);
-
+        
         if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
             return response()->json(['message' => 'Giai đoạn thay đổi thành viên nhóm đã kết thúc.'], 403);
         }
