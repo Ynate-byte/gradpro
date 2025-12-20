@@ -480,6 +480,7 @@ class NhomController extends Controller
     public function inviteMultipleMembers(Request $request, Nhom $nhom)
     {
         $this->authorize('manage', $nhom);
+        $user = $request->user();
         
         if (!$this->isGroupPhaseActive($nhom->ID_KEHOACH)) {
             return response()->json(['message' => 'Giai đoạn mời thành viên đã kết thúc.'], 403);
