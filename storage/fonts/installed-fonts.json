@@ -4,5 +4,11 @@
         "bold": "C:\\laragon\\www\\gradpro\\storage\\fonts\/times_new_roman_bold_311f4c12031c6bd7b412edda670a31e6",
         "italic": "C:\\laragon\\www\\gradpro\\storage\\fonts\/times_new_roman_italic_65305bb8b48140200c347549f4a11f50",
         "bold_italic": "times_new_roman_bold_italic_849b9a1e123b576db70433b0449ef5ac"
+    },
+    "times new roman bold": {
+        "bold": "times_new_roman_bold_bold_311f4c12031c6bd7b412edda670a31e6"
+    },
+    "times new roman italic": {
+        "italic": "times_new_roman_italic_italic_65305bb8b48140200c347549f4a11f50"
     }
 }

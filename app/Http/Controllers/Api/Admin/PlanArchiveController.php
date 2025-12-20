@@ -181,8 +181,7 @@ class PlanArchiveController extends Controller
                 'moc_thoigians', 'detais', 'nhoms', 'hoidongs', 'sinhvien_thamgias', 'quota_khoa_bomons', 'quota_giangviens'
             ])->toArray();
             
-            // Đổi tên để biết là bản restore
-            $planData['TEN_DOT'] = $planData['TEN_DOT'] . ' (Restore ' . date('d/m H:i') . ')';
+            $planData['TEN_DOT'] = $planData['TEN_DOT'];
             
             // Giữ nguyên trạng thái cũ (Đã hoàn thành, Đang thực hiện...)
             $planData['TRANGTHAI'] = $data['TRANGTHAI']; 

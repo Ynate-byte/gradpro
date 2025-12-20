@@ -25,6 +25,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,7 +46,10 @@ import {
   Users,
   BookOpen,
   Users2,
-  ArrowUpDown
+  ArrowUpDown,
+  FileDown,
+  FileText,
+  Printer
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { vi } from "date-fns/locale";
@@ -48,6 +57,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import * as hoiDongService from "@/api/adminHoiDongService";
+import { exportSchedulePdf, exportStudentListPdf } from "@/api/adminHoiDongService"; 
 import { CreateHoiDongDialog } from "./CreateHoiDong";
 import { AutoAssignMemberDialog } from "./AutoAssignMemberDialog";
 import { WorkloadStatsDialog } from "./WorkloadStatsDialog";
@@ -106,7 +116,6 @@ const EditableTextCell = ({ getValue, row, colId, type = "text" }) => {
             } else if (colId === "PHONG") {
                 return hoiDongService.updateHoiDongPhong(row.original.ID_HOIDONG, newValue);
             } else if (colId === "GIO_BAOCAO") {
-                // [THÊM MỚI] Gọi API update giờ
                 return hoiDongService.updateHoiDongGio(row.original.ID_HOIDONG, newValue);
             }
             return Promise.reject(new Error("Unknown column"));
@@ -215,6 +224,7 @@ const ListHoiDong = () => {
   const [isInitialPlanSet, setIsInitialPlanSet] = useState(false);
   
   const [upgradeType, setUpgradeType] = useState("hoidong"); 
+  const [isExporting, setIsExporting] = useState(false); // State loading khi xuất file
 
   const currentLoaiFilter = columnFilters.find(f => f.id === "LOAI")?.value?.[0];
 
@@ -332,6 +342,69 @@ const ListHoiDong = () => {
       setIsSingleUpgradeAlertOpen(false);
     },
   });
+
+  // [NEW] Hàm xử lý xuất file kế hoạch (Lịch trình)
+  const handleExportSchedule = async () => {
+    if (!selectedPlanId) {
+        toast.warning("Vui lòng chọn kế hoạch trước khi xuất file.");
+        return;
+    }
+    
+    setIsExporting(true);
+    try {
+        const response = await exportSchedulePdf(selectedPlanId);
+        
+        // Tạo link download ảo
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = url;
+        
+        // Lấy tên kế hoạch để đặt tên file
+        const planName = filterOptions?.kehoach?.find(k => String(k.value) === selectedPlanId)?.TEN_DOT || 'KeHoach';
+        link.setAttribute('download', `KeHoach-HoiDong-${planName}.pdf`);
+        
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        
+        toast.success("Xuất file kế hoạch thành công!");
+    } catch (error) {
+        console.error(error);
+        toast.error("Xuất file thất bại.");
+    } finally {
+        setIsExporting(false);
+    }
+  };
+
+  // [NEW] Hàm xử lý xuất file DS Sinh viên (Phụ lục)
+  const handleExportStudentList = async () => {
+      if (!selectedPlanId) {
+          toast.warning("Vui lòng chọn kế hoạch trước.");
+          return;
+      }
+      
+      setIsExporting(true);
+      try {
+          const response = await exportStudentListPdf(selectedPlanId);
+          
+          const url = window.URL.createObjectURL(new Blob([response.data]));
+          const link = document.createElement('a');
+          link.href = url;
+          const planName = filterOptions?.kehoach?.find(k => String(k.value) === selectedPlanId)?.TEN_DOT || 'KeHoach';
+          link.setAttribute('download', `DS-SinhVien-BaoVe-${planName}.pdf`);
+          
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          
+          toast.success("Xuất danh sách sinh viên thành công!");
+      } catch (error) {
+          console.error(error);
+          toast.error("Xuất file thất bại.");
+      } finally {
+          setIsExporting(false);
+      }
+  };
 
   const columns = useMemo(
     () => [
@@ -676,6 +749,30 @@ const ListHoiDong = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
+            
+            {/* [NEW] Dropdown Xuất Báo Cáo */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                    variant="outline" 
+                    size="sm" 
+                    disabled={isExporting || !selectedPlanId}
+                    className="bg-background shadow-sm border-blue-200 text-blue-700 hover:bg-blue-50"
+                >
+                    {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
+                    Xuất Báo Cáo
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleExportSchedule} className="cursor-pointer">
+                    <FileDown className="mr-2 h-4 w-4" /> Xuất Lịch Hội đồng (Kế hoạch)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExportStudentList} className="cursor-pointer">
+                    <FileText className="mr-2 h-4 w-4" /> Xuất DS Sinh viên (Phụ lục)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button variant="outline" onClick={() => setIsStatsOpen(true)} disabled={!selectedPlanId} className="bg-background">
                 <BarChart3 className="mr-2 h-4 w-4" /> Thống kê tải
             </Button>
@@ -778,10 +875,10 @@ const ListHoiDong = () => {
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogCancel>Hủy</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>
-                      Xác nhận
-                    </AlertDialogAction>
+                  <AlertDialogCancel>Hủy</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => upgradeMutation.mutate(selectedIds)}>
+                    Xác nhận
+                  </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>

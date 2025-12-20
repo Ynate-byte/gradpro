@@ -65,7 +65,6 @@ export const getChuyenNganhOptions = () => {
     return axiosClient.get("/admin/hoidong/chuyennganh-options").then(res => res.data);
 }
 
-// [THÊM MỚI] Hàm service để nâng cấp Hội đồng
 /**
  * Nâng cấp Hội đồng Phản biện lên Hội đồng Bảo vệ.
  * @param {number} id - ID của Hội đồng.
@@ -115,4 +114,16 @@ export const createBulkByDepartment = (data) => {
 
 export const getHoiDongByGiangVien = () => {
     return axiosClient.get('/giangvien/my-hoidong').then(res => res.data);
+};
+
+export const exportSchedulePdf = (planId) => {
+    return axiosClient.get(`/admin/hoidong/export-schedule/${planId}`, {
+        responseType: 'blob', // Quan trọng để tải file
+    });
+};
+
+export const exportStudentListPdf = (planId) => {
+    return axiosClient.get(`/admin/hoidong/export-student-list/${planId}`, {
+        responseType: 'blob',
+    });
 };

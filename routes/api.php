@@ -223,9 +223,6 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         Route::get('thesis-plans/list-all', [ThesisPlanController::class, 'getAllPlans']);
         Route::post('thesis-plans/preview-new', [ThesisPlanController::class, 'previewNewPlan']);
         Route::get('thesis-plans/filter-options', [ThesisPlanController::class, 'getFilterOptions']);
-        
-        // [MỚI] Backup/Restore Kế hoạch cụ thể (Plan Archive)
-        // Lưu ý: Đặt trước apiResource để tránh xung đột
         Route::get('thesis-plans/{id}/archive', [PlanArchiveController::class, 'archive']);
         Route::post('thesis-plans/restore', [PlanArchiveController::class, 'restore']);
 
@@ -347,6 +344,8 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::post('/{id}/upgrade-to-hoidong', [HoiDongController::class, 'upgradePhanBienToHoiDong']);
             Route::delete('/{idHoiDong}/nhom/{idNhom}', [HoiDongController::class, 'xoaPhanBoNhom']);
             Route::post('/auto-assign-groups', [HoiDongController::class, 'autoAssignGroups']);
+            Route::get('/export-schedule/{planId}', [HoiDongController::class, 'exportSchedulePdf']);
+            Route::get('/export-student-list/{planId}', [HoiDongController::class, 'exportStudentListPdf']);
         });
         
         // --- Topic Assignments (Reviewer) ---

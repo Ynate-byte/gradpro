@@ -1563,4 +1563,170 @@ class HoiDongController extends Controller
             );
         }
     }
+
+    // app/Http/Controllers/Api/Admin/HoiDongController.php
+
+public function exportSchedulePdf($planId)
+    {
+        try {
+            // 1. Lấy kế hoạch kèm thông tin người phê duyệt và chức vụ của họ
+            $plan = KehoachKhoaluan::with(['nguoiPheDuyet.giangvien.chucvus'])
+                ->findOrFail($planId);
+
+            // 2. Lấy danh sách hội đồng (như cũ)
+            $hoidongs = Hoidong::where('ID_KEHOACH', $planId)
+                ->with(['nhoms.chuyennganh']) 
+                ->orderBy('NGAY_BAOCAO', 'asc')
+                ->orderBy('GIO_BAOCAO', 'asc')
+                ->get();
+
+            // Gom nhóm hội đồng (như cũ)
+            $groupedCouncils = $hoidongs->groupBy(function ($item) {
+                $firstGroup = $item->nhoms->first();
+                if ($firstGroup && $firstGroup->chuyennganh) {
+                    $tenChuyenNganh = $firstGroup->chuyennganh->TEN_CHUYENNGANH;
+                    if (!\Illuminate\Support\Str::startsWith($tenChuyenNganh, 'Ngành')) {
+                        return "Ngành " . $tenChuyenNganh;
+                    }
+                    return $tenChuyenNganh;
+                }
+                return 'Các Hội đồng chưa phân nhóm';
+            })->sortKeys();
+
+            // 3. XỬ LÝ THÔNG TIN NGƯỜI KÝ (ĐỘNG)
+            $signerName = "...................................";
+            $signerHeader = "TRƯỞNG KHOA"; // Mặc định
+            $signerRole = "";
+
+            if ($plan->nguoiPheDuyet) {
+                $signerName = $plan->nguoiPheDuyet->HODEM_VA_TEN;
+                
+                // Lấy danh sách mã chức vụ của người duyệt
+                $positionCodes = [];
+                if ($plan->nguoiPheDuyet->giangvien && $plan->nguoiPheDuyet->giangvien->chucvus) {
+                    $positionCodes = $plan->nguoiPheDuyet->giangvien->chucvus->pluck('MA_CHUCVU')->toArray();
+                }
+
+                // Logic hiển thị chức vụ
+                if (in_array('TRUONG_KHOA', $positionCodes)) {
+                    $signerHeader = "TRƯỞNG KHOA";
+                    $signerRole = ""; // Trưởng khoa ký trực tiếp thì không cần dòng 2
+                } elseif (in_array('PHO_KHOA', $positionCodes)) {
+                    $signerHeader = "KT. TRƯỞNG KHOA";
+                    $signerRole = "PHÓ TRƯỞNG KHOA";
+                } else {
+                    // Trường hợp khác (VD: Thư ký, hoặc chưa set chức vụ)
+                    $signerHeader = "TL. TRƯỞNG KHOA"; // Thừa lệnh
+                    // Lấy tên chức vụ đầu tiên tìm thấy hoặc để trống
+                    $firstRole = $plan->nguoiPheDuyet->giangvien->chucvus->first();
+                    $signerRole = $firstRole ? mb_strtoupper($firstRole->TEN_CHUCVU, 'UTF-8') : "GIẢNG VIÊN";
+                }
+            }
+
+            $data = [
+                'plan' => $plan,
+                'groupedCouncils' => $groupedCouncils,
+                'today' => \Carbon\Carbon::now(),
+                'planNumber' => $plan->ID_KEHOACH . '/KH-KCNTT',
+                
+                // Truyền biến người ký xuống View
+                'signerName' => $signerName,
+                'signerHeader' => $signerHeader,
+                'signerRole' => $signerRole
+            ];
+
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.council_schedule', $data);
+            $pdf->setPaper('A4', 'portrait');
+
+            return $pdf->download('Ke-hoach-bao-ve-' . $plan->KHOAHOC . '.pdf');
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Export PDF Error: " . $e->getMessage());
+            return response()->json(['message' => 'Xuất file thất bại: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function exportStudentListPdf($planId)
+    {
+        try {
+            $plan = KehoachKhoaluan::with(['nguoiPheDuyet.giangvien'])->findOrFail($planId);
+
+            $hoidongs = Hoidong::where('ID_KEHOACH', $planId)
+                ->with([
+                    'nhoms' => function($q) {
+                        $q->with([
+                            'thanhviens.nguoidung', 
+                            'phancongDetaiNhom.detai',
+                            'phancongDetaiNhom.gvhd.nguoidung'
+                        ]);
+                    }
+                ])
+                ->orderByRaw('CAST(REGEXP_REPLACE(TEN_HOIDONG, "[^0-9]+", "") AS UNSIGNED) ASC')
+                ->get();
+
+            // CHẾ BIẾN DỮ LIỆU ĐỂ KHỚP VỚI MẪU (GOM DÒNG)
+            $processedCouncils = [];
+
+            foreach ($hoidongs as $hd) {
+                // Nhóm các nhóm SV theo Đề tài (để merge dòng trong PDF)
+                // Key sẽ là ID_DETAI
+                $groupedByTopic = [];
+
+                foreach ($hd->nhoms as $nhom) {
+                    $detai = $nhom->phancongDetaiNhom?->detai;
+                    $topicId = $detai ? $detai->ID_DETAI : 'unknown_' . $nhom->ID_NHOM;
+                    
+                    if (!isset($groupedByTopic[$topicId])) {
+                        $groupedByTopic[$topicId] = [
+                            'ten_detai' => $detai ? $detai->TEN_DETAI : 'Chưa đăng ký đề tài',
+                            'gvhd' => $nhom->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN ?? '',
+                            'sinh_viens' => []
+                        ];
+                    }
+
+                    foreach ($nhom->thanhviens as $tv) {
+                        // Tách Họ lót và Tên
+                        $fullName = $tv->nguoidung->HODEM_VA_TEN;
+                        $parts = explode(' ', $fullName);
+                        $ten = array_pop($parts);
+                        $hoLot = implode(' ', $parts);
+
+                        $groupedByTopic[$topicId]['sinh_viens'][] = [
+                            'mssv' => $tv->nguoidung->MA_DINHDANH,
+                            'ho_lot' => $hoLot,
+                            'ten' => $ten,
+                        ];
+                    }
+                }
+
+                if (!empty($groupedByTopic)) {
+                    $processedCouncils[] = [
+                        'ten_hoi_dong' => mb_strtoupper($hd->TEN_HOIDONG, 'UTF-8'),
+                        'topics' => $groupedByTopic
+                    ];
+                }
+            }
+
+            // Người ký (Mặc định cô Ngân như ảnh)
+            $signerName = "Nguyễn Thị Bích Ngân";
+            if ($plan->nguoiPheDuyet) {
+                $signerName = $plan->nguoiPheDuyet->HODEM_VA_TEN;
+            }
+
+            $data = [
+                'plan' => $plan,
+                'councils' => $processedCouncils,
+                'signerName' => $signerName
+            ];
+
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.student_list_schedule', $data);
+            $pdf->setPaper('A4', 'landscape'); // Khổ ngang
+
+            return $pdf->download('DS-Hoi-dong-Bao-ve-' . $plan->KHOAHOC . '.pdf');
+
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error("Export Error: " . $e->getMessage());
+            return response()->json(['message' => 'Lỗi xuất file: ' . $e->getMessage()], 500);
+        }
+    }
 }
