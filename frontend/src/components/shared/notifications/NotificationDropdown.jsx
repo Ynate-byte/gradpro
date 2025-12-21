@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckCheck, Loader2, Inbox, ListFilter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -21,8 +21,10 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
     const [open, setOpen] = useState(false);
     const [activeTab, setActiveTab] = useState("all");
 
-    // Check tin khẩn cấp
-    const hasUrgentUnread = notifications.some(n => !n.DA_DOC && n.DO_UU_TIEN === 'URGENT');
+    // Check tin khẩn cấp (Memoized để tối ưu)
+    const hasUrgentUnread = useMemo(() => {
+        return notifications.some(n => !n.DA_DOC && n.DO_UU_TIEN === 'URGENT');
+    }, [notifications]);
 
     // --- MUTATIONS ---
     const markReadMutation = useMutation({
@@ -50,15 +52,13 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
         });
     };
 
-    // Filter logic
-    const getFilteredNotifications = () => {
+    // --- TỐI ƯU: Wrap logic lọc trong useMemo ---
+    const displayNotifications = useMemo(() => {
         if (activeTab === 'unread') return notifications.filter(n => !n.DA_DOC);
         if (activeTab === 'academic') return notifications.filter(n => n.LOAI_THONGBAO === 'ACADEMIC');
         if (activeTab === 'work') return notifications.filter(n => ['TASK', 'GROUP'].includes(n.LOAI_THONGBAO));
         return notifications;
-    };
-
-    const displayNotifications = getFilteredNotifications();
+    }, [notifications, activeTab]);
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -73,9 +73,11 @@ export function NotificationDropdown({ notifications, unreadCount, isLoading }) 
                     />
                     {unreadCount > 0 && (
                         <span className={cn(
-                            "absolute top-1.5 right-1.5 flex h-2.5 w-2.5 rounded-full ring-2 ring-background animate-in zoom-in duration-300",
+                            "absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full px-[3px] text-[10px] font-bold text-white shadow-sm ring-2 ring-background animate-in zoom-in duration-300",
                             hasUrgentUnread ? "bg-red-600" : "bg-red-500"
-                        )} />
+                        )}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                        </span>
                     )}
                 </Button>
             </PopoverTrigger>

@@ -36,8 +36,15 @@ use App\Http\Controllers\Api\Admin\AdminDashboardController;
 use App\Http\Controllers\Api\Admin\FileManagerController;
 use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Api\Admin\BackupController;
-// [MỚI] Import Controller xử lý Backup/Restore Kế hoạch
 use App\Http\Controllers\Api\Admin\PlanArchiveController;
+// [MỚI] Import Controller Báo cáo
+use App\Http\Controllers\Api\Admin\ReportController;
+
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+*/
 
 Route::post('/login', [AuthController::class, 'login']);
 
@@ -210,6 +217,14 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         Route::get('/dashboard/reminders', [AdminDashboardController::class, 'getReminders']);
         Route::get('/dashboard/incomplete-quotas', [AdminDashboardController::class, 'getIncompleteQuotaDetails']);
         
+        // --- [MỚI] BÁO CÁO THỐNG KÊ (Fix lỗi 404) ---
+        Route::prefix('reports')->group(function () {
+            Route::get('/plan-report', [ReportController::class, 'getPlanReport']);
+            Route::get('/student-results', [ReportController::class, 'getStudentResults']);
+            Route::post('/nudge', [ReportController::class, 'nudgeUser']);
+            Route::post('/nudge-bulk', [ReportController::class, 'nudgeBulk']);
+        });
+
         // --- File Manager ---
         Route::get('/file-manager', [FileManagerController::class, 'index']);
         Route::post('/file-manager/upload', [FileManagerController::class, 'upload']);

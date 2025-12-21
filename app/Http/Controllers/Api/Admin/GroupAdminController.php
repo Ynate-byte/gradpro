@@ -39,15 +39,20 @@ class GroupAdminController extends Controller
         ]);
 
         $query = Nhom::with([
-            'nhomtruong', 
-            'chuyennganh', 
-            'khoabomon',
-            'kehoach',
-            'thanhviens.nguoidung.sinhvien.chuyennganh', 
-            'phancongDetaiNhom.detai',
-            'phancongDetaiNhom.gvhd.nguoidung',
-            'diemTongKet'
-        ]);
+        'nhomtruong:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH', 
+        'chuyennganh:ID_CHUYENNGANH,TEN_CHUYENNGANH', 
+        'khoabomon:ID_KHOA_BOMON,TEN_KHOA_BOMON',
+        'kehoach:ID_KEHOACH,TEN_DOT',
+        'thanhviens:ID_THANHVIEN,ID_NHOM,ID_NGUOIDUNG', 
+        'thanhviens.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN,MA_DINHDANH',
+        'thanhviens.nguoidung.sinhvien:ID_SINHVIEN,ID_NGUOIDUNG,ID_CHUYENNGANH',
+        'thanhviens.nguoidung.sinhvien.chuyennganh:ID_CHUYENNGANH,TEN_CHUYENNGANH', 
+        'phancongDetaiNhom:ID_PHANCONG,ID_NHOM,ID_DETAI,ID_GVHD,TRANGTHAI',
+        'phancongDetaiNhom.detai:ID_DETAI,TEN_DETAI',
+        'phancongDetaiNhom.gvhd:ID_GIANGVIEN,ID_NGUOIDUNG',
+        'phancongDetaiNhom.gvhd.nguoidung:ID_NGUOIDUNG,HODEM_VA_TEN',
+        'diemTongKet'
+    ]);
 
         if ($request->filled('plan_id')) {
             $query->where('ID_KEHOACH', $request->input('plan_id'));

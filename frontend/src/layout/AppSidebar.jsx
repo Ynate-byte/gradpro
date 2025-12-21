@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
     LayoutDashboard, Newspaper, BookCopy, Users, Settings, ChevronsUpDown, ChevronRight,
     LogOut, CircleUserRound, Shield, CheckCircle, GraduationCap, PenSquare,
     Layers, History, FileText, Activity, Star, PieChart, Folder, ShieldCheck,
-    Palette, Zap, ZapOff, Type, Check
+    Palette, Zap, ZapOff, Type, Check, BarChart3
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -24,14 +24,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from "@/components/theme-provider";
 import { cn } from '@/lib/utils';
 
-// --- Helper (GIỮ NGUYÊN) ---
+// --- Helper ---
 const checkActive = (href, currentUrl) => {
     if (!href) return false;
     if (href === '/') return currentUrl === '/';
     return currentUrl === href || currentUrl.startsWith(`${href}/`);
 };
 
-// --- Component Menu Item (Compact & High Contrast) ---
+// --- Component Menu Item ---
 const MenuItem = ({ item, currentUrl }) => {
     if (item.hidden) return null;
 
@@ -101,7 +101,6 @@ const MenuItem = ({ item, currentUrl }) => {
         );
     }
 
-    // Trường hợp 2: Menu đơn
     if (item.href) {
         return (
             <SidebarMenuItem>
@@ -113,7 +112,7 @@ const MenuItem = ({ item, currentUrl }) => {
                         "group/btn transition-all duration-200 h-9 mb-0.5 rounded-md",
                         "group-data-[collapsible=icon]:justify-center",
                         isActive 
-                            ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 font-bold" // Active đơn: Nền đậm
+                            ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 font-bold"
                             : "hover:bg-sidebar-accent hover:text-foreground"
                     )}
                 >
@@ -140,99 +139,126 @@ export function AppSidebar() {
     const navigate = useNavigate();
     const currentUrl = location.pathname;
 
-    // --- Logic Phân Quyền ---
-    const roleName = user?.vaitro?.TEN_VAITRO;
-    const positions = user?.giangvien?.chucvus || [];
-    const positionCodes = positions.map(p => p.MA_CHUCVU);
-    const positionNames = positions.map(p => p.TEN_CHUCVU);
-    
-    const isSinhVien = roleName === 'Sinh viên';
-    const isAdminAccount = roleName === 'Admin';
-    const hasLecturerProfile = !!user?.giangvien;
-    
-    const isTruongKhoa = isAdminAccount || positionCodes.includes('TRUONG_KHOA');
-    const isGiaoVu = isAdminAccount || positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
-    const isTruongBoMon = isAdminAccount || positionCodes.includes('TRUONG_BOMON');
-    
-    // [CẬP NHẬT] Thêm isTruongBoMon vào điều kiện truy cập Admin Area
-    const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu || isTruongBoMon;
+    // --- TỐI ƯU: Sử dụng useMemo để tính toán quyền hạn ---
+    const permissions = useMemo(() => {
+        const roleName = user?.vaitro?.TEN_VAITRO;
+        const positions = user?.giangvien?.chucvus || [];
+        const positionCodes = positions.map(p => p.MA_CHUCVU);
+        const positionNames = positions.map(p => p.TEN_CHUCVU);
 
-    // --- Config Menu ---
-    const platformMenu = {
-        label: "Hệ thống",
-        items: [
-            {
-                title: "Tổng quan",
-                icon: LayoutDashboard,
-                href: "/",
-                subItems: [
-                    { href: "/student/dashboard", title: "Tổng quan", hidden: !isSinhVien },
-                    { href: "/lecturer/dashboard", title: "Tổng quan", hidden: !hasLecturerProfile },
-                    
-                    // Dashboard admin chỉ dành cho Admin/GVu/TKhoa, TBMon không thấy
-                    { href: "/admin/dashboard", title: "Bảng điều khiển", hidden: !isGiaoVu && !isTruongKhoa && !isAdminAccount },
-                    { href: "/notifications", title: "Thông báo" },
-                    { href: "/history", title: "Lịch sử hoạt động" },
-                ],
-            },
-            { title: "Tin tức", href: "/news", icon: Newspaper },
-            {
-                title: "Đồ án",
-                icon: BookCopy,
-                href: "/projects",
-                hidden: isAdminAccount && !hasLecturerProfile,
-                subItems: [
-                    { href: "/projects/topics", title: "Danh sách Đề tài", hidden: !isSinhVien },
-                    { href: "/projects/my-plans", title: "Kế hoạch tham gia", hidden: !isSinhVien },
-                    { href: "/projects/my-group", title: "Nhóm của tôi", hidden: !isSinhVien },
-                    { href: "/projects/find-group", title: "Tìm kiếm nhóm", hidden: !isSinhVien },
-                    { href: "/lecturer/thesis-topics", title: "Đề tài của tôi", hidden: !hasLecturerProfile },
-                    { href: "/lecturer/groups-management", title: "Nhóm hướng dẫn", hidden: !hasLecturerProfile },
-                    { href: "/lecturer/submissions", title: "Duyệt nộp bài", hidden: !hasLecturerProfile },
-                    { href: "/lecturer/quota-management", title: "Thông tin Quota", hidden: !hasLecturerProfile },
-                    { href: "/department-head/topic-reviewer-assignment", title: "Phân công Góp ý", hidden: !isTruongBoMon },
-                ],
-            },
-            { title: "Hội đồng", href: "/lecturer/council", icon: GraduationCap, hidden: !hasLecturerProfile },
-            { title: "Chấm điểm", href: "/lecturer/grading", icon: PenSquare, hidden: !hasLecturerProfile },
-        ],
-    };
+        const isAdminAccount = roleName === 'Admin';
+        
+        // Logic quyền chi tiết
+        const isTruongKhoa = isAdminAccount || positionCodes.includes('TRUONG_KHOA');
+        const isGiaoVu = isAdminAccount || positionCodes.includes('GIAO_VU') || positionCodes.includes('PHO_KHOA');
+        const isTruongBoMon = isAdminAccount || positionCodes.includes('TRUONG_BOMON');
+        
+        const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(roleName);
+        const isSinhVien = roleName === 'Sinh viên';
+        const hasLecturerProfile = !!user?.giangvien;
 
-    const adminMenu = {
-        label: "Quản trị",
-        items: [
-            // Các mục chỉ Admin/GiaoVu/TruongKhoa mới thấy
-            { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart, hidden: !isGiaoVu && !isTruongKhoa },
-            { title: "Người dùng", href: "/admin/users", icon: Shield, hidden: !isGiaoVu },
-            { title: "Quản lý nhóm", href: "/admin/groups", icon: Users, hidden: !isGiaoVu && !isTruongKhoa },
-            { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy, hidden: !isGiaoVu && !isTruongKhoa },
-            { title: "Mẫu kế hoạch", href: "/admin/templates", icon: FileText, hidden: !isGiaoVu },
-            { title: "Phân bổ đề tài", href: "/admin/quota-management", icon: Layers, hidden: !isGiaoVu && !isTruongKhoa },
-            
-            // Mục này hiển thị cho cả Trưởng bộ môn
-            { 
-                title: "Quản lý Đề tài", 
-                href: "/admin/thesis-topics", 
-                icon: BookCopy, 
-                hidden: !isGiaoVu && !isTruongKhoa && !isTruongBoMon && !isAdminAccount
-            },
-            
-            { title: "Quản lý Hội đồng", href: "/admin/hoidong", icon: GraduationCap, hidden: !isGiaoVu && !isTruongKhoa },
-            { title: "Bảng điểm tổng", href: "/admin/cham-diem", icon: Star, hidden: !isGiaoVu && !isTruongKhoa },
-            { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle, hidden: !isGiaoVu && !isTruongKhoa },
-            { title: "Quản lý File", href: "/admin/files", icon: Folder, hidden: !isGiaoVu },
-            { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity, hidden: !isGiaoVu },
-            { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings, hidden: !isGiaoVu },
-            { title: "Sao lưu dữ liệu", href: "/admin/backups", icon: ShieldCheck, hidden: !isAdminAccount },
-        ],
-    };
+        // Quyền truy cập các khu vực lớn
+        const canAccessAdminArea = isAdminAccount || isTruongKhoa || isGiaoVu || isTruongBoMon;
+        const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdminAccount;
 
-    const getUserDisplayTitle = () => {
+        // Display text
+        let displayTitle = roleName || 'Thành viên';
         if (hasLecturerProfile && positionNames.length > 0) {
-            return positionNames.join(', ');
+            displayTitle = positionNames.join(', ');
         }
-        return roleName || 'Thành viên';
-    };
+
+        return {
+            isSinhVien,
+            isAdminAccount,
+            hasLecturerProfile,
+            isTruongKhoa,
+            isGiaoVu,
+            isTruongBoMon,
+            canAccessAdminArea,
+            canViewGiangVienRoutes,
+            displayTitle
+        };
+    }, [user]); // Chỉ tính lại khi user thay đổi
+
+    // --- TỐI ƯU: Sử dụng useMemo cho cấu trúc Menu ---
+    const { platformMenu, adminMenu } = useMemo(() => {
+        const { 
+            isSinhVien, hasLecturerProfile, 
+            isGiaoVu, isTruongKhoa, isAdminAccount, isTruongBoMon,
+            canAccessAdminArea 
+        } = permissions;
+
+        const pMenu = {
+            label: "Hệ thống",
+            items: [
+                {
+                    title: "Tổng quan",
+                    icon: LayoutDashboard,
+                    href: "/",
+                    subItems: [
+                        { href: "/student/dashboard", title: "Tổng quan", hidden: !isSinhVien },
+                        { href: "/lecturer/dashboard", title: "Tổng quan", hidden: !hasLecturerProfile },
+                        { href: "/admin/dashboard", title: "Bảng điều khiển", hidden: !isGiaoVu && !isTruongKhoa && !isAdminAccount },
+                        { href: "/notifications", title: "Thông báo" },
+                        { href: "/history", title: "Lịch sử hoạt động" },
+                    ],
+                },
+                { title: "Tin tức", href: "/news", icon: Newspaper },
+                {
+                    title: "Đồ án",
+                    icon: BookCopy,
+                    href: "/projects",
+                    hidden: isAdminAccount && !hasLecturerProfile,
+                    subItems: [
+                        { href: "/projects/topics", title: "Danh sách Đề tài", hidden: !isSinhVien },
+                        { href: "/projects/my-plans", title: "Kế hoạch tham gia", hidden: !isSinhVien },
+                        { href: "/projects/my-group", title: "Nhóm của tôi", hidden: !isSinhVien },
+                        { href: "/projects/find-group", title: "Tìm kiếm nhóm", hidden: !isSinhVien },
+                        { href: "/lecturer/thesis-topics", title: "Đề tài của tôi", hidden: !hasLecturerProfile },
+                        { href: "/lecturer/groups-management", title: "Nhóm hướng dẫn", hidden: !hasLecturerProfile },
+                        { href: "/lecturer/submissions", title: "Duyệt nộp bài", hidden: !hasLecturerProfile },
+                        { href: "/lecturer/quota-management", title: "Thông tin Quota", hidden: !hasLecturerProfile },
+                        { href: "/department-head/topic-reviewer-assignment", title: "Phân công Góp ý", hidden: !isTruongBoMon },
+                    ],
+                },
+                { title: "Hội đồng", href: "/lecturer/council", icon: GraduationCap, hidden: !hasLecturerProfile },
+                { title: "Chấm điểm", href: "/lecturer/grading", icon: PenSquare, hidden: !hasLecturerProfile },
+            ],
+        };
+
+        const aMenu = {
+            label: "Quản trị",
+            items: [
+                { 
+                    title: "Thống kê Báo cáo", 
+                    href: "/admin/reports", 
+                    icon: BarChart3,
+                    hidden: !isGiaoVu && !isTruongKhoa 
+                },
+                { title: "Tổng quan", href: "/admin/dashboard", icon: PieChart, hidden: !isGiaoVu && !isTruongKhoa },
+                { title: "Người dùng", href: "/admin/users", icon: Shield, hidden: !isGiaoVu },
+                { title: "Quản lý nhóm", href: "/admin/groups", icon: Users, hidden: !isGiaoVu && !isTruongKhoa },
+                { title: "Kế hoạch KLTN", href: "/admin/thesis-plans", icon: BookCopy, hidden: !isGiaoVu && !isTruongKhoa },
+                { title: "Mẫu kế hoạch", href: "/admin/templates", icon: FileText, hidden: !isGiaoVu },
+                { title: "Phân bổ đề tài", href: "/admin/quota-management", icon: Layers, hidden: !isGiaoVu && !isTruongKhoa },
+                { 
+                    title: "Quản lý Đề tài", 
+                    href: "/admin/thesis-topics", 
+                    icon: BookCopy, 
+                    hidden: !isGiaoVu && !isTruongKhoa && !isTruongBoMon && !isAdminAccount
+                },
+                { title: "Quản lý Hội đồng", href: "/admin/hoidong", icon: GraduationCap, hidden: !isGiaoVu && !isTruongKhoa },
+                { title: "Bảng điểm tổng", href: "/admin/cham-diem", icon: Star, hidden: !isGiaoVu && !isTruongKhoa },
+                { title: "Duyệt nộp bài", href: "/admin/submissions", icon: CheckCircle, hidden: !isGiaoVu && !isTruongKhoa },
+                { title: "Quản lý File", href: "/admin/files", icon: Folder, hidden: !isGiaoVu },
+                { title: "Nhật ký hệ thống", href: "/admin/system-logs", icon: Activity, hidden: !isGiaoVu },
+                { title: "Thiết lập chung", href: "/admin/settings/general", icon: Settings, hidden: !isGiaoVu },
+                { title: "Sao lưu dữ liệu", href: "/admin/backups", icon: ShieldCheck, hidden: !isAdminAccount },
+            ],
+        };
+
+        return { platformMenu: pMenu, adminMenu: aMenu };
+    }, [permissions]);
 
     return (
         <Sidebar collapsible="icon" className="group border-r border-sidebar-border bg-sidebar-background">
@@ -246,7 +272,7 @@ export function AppSidebar() {
                             <div className="flex flex-col items-start gap-0 overflow-hidden transition-all group-data-[collapsible=icon]:hidden min-w-0">
                                 <span className="text-sm font-bold tracking-tight text-foreground truncate">HUIT GRADPRO</span>
                                 <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider truncate w-32">
-                                    {getUserDisplayTitle()}
+                                    {permissions.displayTitle}
                                 </span>
                             </div>
                             <ChevronsUpDown className="ml-auto size-3 text-muted-foreground group-data-[collapsible=icon]:hidden" />
@@ -286,12 +312,12 @@ export function AppSidebar() {
                 </SidebarGroup>
 
                 {/* 2. Admin Group */}
-                {canAccessAdminArea && (
+                {permissions.canAccessAdminArea && (
                     <>
                     <SidebarSeparator className="my-2 mx-2 bg-border/60"/>
                     <SidebarGroup className="p-0">
                         <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden text-[10px] font-bold text-foreground/50 uppercase tracking-widest px-2 mb-1">
-                             {adminMenu.label}
+                            {adminMenu.label}
                         </SidebarGroupLabel>
                         <SidebarGroupContent>
                             <SidebarMenu>
@@ -357,6 +383,7 @@ export function AppSidebar() {
                                                 { value: 'small', sizeClass: 'text-[10px]' },
                                                 { value: 'normal', sizeClass: 'text-xs' },
                                                 { value: 'large', sizeClass: 'text-sm' },
+                                                { value: 'xl', sizeClass: 'text-base' },
                                             ].map((item) => (
                                                 <button
                                                     key={item.value}

@@ -79,6 +79,7 @@ const routeNameMap = {
     '/admin/system-logs': 'Nhật ký hệ thống',
     '/admin/files': 'Quản lý tập tin',
     '/admin/settings/general': 'Cấu hình chung',
+    '/admin/reports': 'Thống kê báo cáo', // [MỚI] Thêm breadcrumb cho trang reports
 };
 
 const HeaderSkeleton = () => (
@@ -145,24 +146,23 @@ export default function AuthenticatedLayout() {
         // Lấy key từ env
         const appKey = import.meta.env.VITE_REVERB_APP_KEY;
         const host = import.meta.env.VITE_REVERB_HOST;
-        const port = import.meta.env.VITE_REVERB_PORT;
+        // const port = import.meta.env.VITE_REVERB_PORT; // Không dùng port từ env nếu không chắc chắn
 
-        // [QUAN TRỌNG] Kiểm tra xem có App Key không. Nếu không có thì không khởi tạo Echo để tránh lỗi sập app.
         if (!appKey) {
-            console.warn("Real-time notifications are disabled: VITE_REVERB_APP_KEY is missing in frontend/.env");
+            console.warn("Real-time notifications are disabled: VITE_REVERB_APP_KEY is missing.");
             return;
         }
 
-        // Cấu hình Echo (Sử dụng Laravel Reverb)
         window.Pusher = Pusher;
         
         const echoConfig = {
             broadcaster: 'reverb', 
             key: appKey,
-            wsHost: host || 'localhost',
-            wsPort: port ?? 8080,
-            wssPort: port ?? 443,
-            forceTLS: (import.meta.env.VITE_REVERB_SCHEME ?? 'http') === 'https',
+            wsHost: host || 'localhost',       
+            wsPort: 8080,
+            wssPort: 8080,
+            forceTLS: false, 
+            
             enabledTransports: ['ws', 'wss'],
             authEndpoint: '/api/broadcasting/auth',
             auth: {

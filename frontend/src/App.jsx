@@ -39,6 +39,7 @@ const TopicReviewerAssignmentPage = lazy(() => import('./features/department-hea
 
 // --- Import các components Quản trị ---
 const AdminDashboard = lazy(() => import('./features/admin/dashboard/AdminDashboard.jsx'));
+const ThesisReportPage = lazy(() => import('./features/admin/reports/ThesisReportPage.jsx'));
 const UserManagementPage = lazy(() => import('./features/admin/user-management/index.jsx'));
 const GroupAdminPage = lazy(() => import('./features/admin/group-management/index.jsx'));
 const ThesisPlanManagementPage = lazy(() => import('./features/admin/thesis-plan-management/index.jsx'));
@@ -103,7 +104,7 @@ function App() {
   const isGiangVien = ['Giảng viên', 'Giảng Viên'].includes(role);
   const isSinhVien = role === 'Sinh viên';
 
-  // [CẬP NHẬT] Cho phép Trưởng bộ môn vào Admin Area
+  // Cho phép Trưởng bộ môn vào Admin Area
   const canViewAdminRoutes = isAdmin || isTruongKhoa || isGiaoVu || isTruongBoMon;
   
   const canViewGiangVienRoutes = isGiangVien || isTruongKhoa || isGiaoVu || isAdmin;
@@ -221,7 +222,8 @@ function App() {
           {canViewAdminRoutes && (
             <>
               {/* Chỉ Admin/GiaoVu/TruongKhoa mới vào Dashboard */}
-              {(isGiaoVu || isTruongKhoa) && <Route path="admin/dashboard" element={<AdminDashboard />} />}
+              {(isGiaoVu || isTruongKhoa) && <Route path="admin/dashboard" element={<AdminDashboard />} />}            
+              {(isGiaoVu || isTruongKhoa) && <Route path="admin/reports" element={<ThesisReportPage />} />}
 
               <Route path="admin/users" element={<UserManagementPage />} />
               <Route path="admin/groups" element={<GroupAdminPage />} />
