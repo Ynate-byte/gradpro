@@ -1131,122 +1131,163 @@ class ThesisPlanController extends Controller
     }
     
     /**
-     * Giai đoạn 4: Xử lý (Process) các 'validRows' đã được duyệt
+     * Giai đoạn 4: Xử lý (Process) các 'validRows' đã được duyệt (Tối ưu Bulk Insert)
      */
     public function importProcess(Request $request, KehoachKhoaluan $plan)
     {
+        // 1. Validate đầu vào
         $validated = $request->validate([
             'validRows' => 'required|array',
             'validRows.*.action' => 'required|in:link,create_and_link',
-            'validRows.*.data' => 'required|array', 
+            'validRows.*.data' => 'required|array',
             'defaults' => 'required|array',
-            'defaults.ID_CHUYENNGANH' => 'required|integer|exists:CHUYENNGANH,ID_CHUYENNGANH',
+            'defaults.ID_CHUYENNGANH' => 'required|integer',
             'defaults.HEDAOTAO' => 'required|string',
-            'defaults.ID_VAITRO' => 'required|integer|exists:VAITRO,ID_VAITRO',
+            'defaults.ID_VAITRO' => 'required|integer',
         ]);
-    
+
         $validRows = $validated['validRows'];
         $defaults = $validated['defaults'];
-        $countLinked = 0;
-        $countCreated = 0;
-    
+        $planId = $plan->ID_KEHOACH;
+
+        $linkData = [];          // Chứa dữ liệu để insert vào SINHVIEN_THAMGIA (Link)
+        $createUserData = [];    // Chứa dữ liệu tạo NGUOIDUNG (Create)
+        $createStudentMeta = []; // Chứa dữ liệu phụ (lớp, niên khóa) để map sau khi tạo User
+
+        $now = now();
+        $passwordHash = Hash::make('123456'); // Hash 1 lần dùng chung
+
         DB::beginTransaction();
         try {
-            foreach ($validRows as $index => $row) {
-                if (!isset($row['action']) || !isset($row['data']) || !is_array($row['data'])) {
-                    Log::warning("Invalid row structure at index {$index}", ['row' => $row]);
-                    continue;
-                }
-    
+            // --- BƯỚC 1: PHÂN LOẠI DỮ LIỆU (IN-MEMORY) ---
+            foreach ($validRows as $row) {
                 $action = $row['action'];
                 $data = $row['data'];
-    
+
                 if ($action === 'link') {
-                    if (!isset($data['ID_SINHVIEN'])) {
-                        Log::warning("Missing ID_SINHVIEN in link row", ['data' => $data]);
-                        continue;
+                    if (isset($data['ID_SINHVIEN'])) {
+                        $linkData[] = [
+                            'ID_KEHOACH' => $planId,
+                            'ID_SINHVIEN' => $data['ID_SINHVIEN'],
+                            'DU_DIEUKIEN' => true,
+                            'NGAY_DANGKY' => $now,
+                        ];
                     }
-    
-                    SinhvienThamgia::create([
-                        'ID_KEHOACH' => $plan->ID_KEHOACH,
-                        'ID_SINHVIEN' => $data['ID_SINHVIEN'],
-                        'DU_DIEUKIEN' => true,
-                        'NGAY_DANGKY' => now(),
-                    ]);
-                    $countLinked++;
-                    continue;
-                }
-    
-                if ($action === 'create_and_link') {
-                    if (empty($data['MA_DINHDANH']) || empty($data['HODEM_VA_TEN'])) {
-                        Log::warning("Missing required fields in create_and_link", ['data' => $data]);
-                        continue;
-                    }
-    
-                    $email = $data['EMAIL'] ?? null;
-                    if (!$email) {
-                        $email = $this->generateEmail($data['HODEM_VA_TEN'], $data['MA_DINHDANH']);
-                        if (Nguoidung::where('EMAIL', $email)->exists()) {
-                            $email = $this->generateEmail($data['HODEM_VA_TEN'], $data['MA_DINHDANH'], true);
-                        }
-                    }
-    
-                    $newUser = Nguoidung::create([
+                } elseif ($action === 'create_and_link') {
+                    // Chuẩn bị dữ liệu User
+                    // Lưu ý: Email đã được frontend hoặc step preview validate/generate rồi
+                    // Tuy nhiên để an toàn, ta sẽ check trùng trong mảng này nếu cần (ở đây giả sử preview đã chuẩn)
+                    
+                    $createUserData[] = [
                         'MA_DINHDANH' => $data['MA_DINHDANH'],
                         'HODEM_VA_TEN' => $data['HODEM_VA_TEN'],
-                        'EMAIL' => $email,
+                        'EMAIL' => $data['EMAIL'],
                         'NGAYSINH' => $data['NGAYSINH'] ?? null,
-                        'MATKHAU_BAM' => Hash::make('123456'),
+                        'MATKHAU_BAM' => $passwordHash,
                         'ID_VAITRO' => $defaults['ID_VAITRO'],
                         'LA_DANGNHAP_LANDAU' => true,
                         'TRANGTHAI_KICHHOAT' => true,
-                    ]);
-    
-                    $newSinhvien = $newUser->sinhvien()->create([
-                        'ID_CHUYENNGANH' => $defaults['ID_CHUYENNGANH'],
+                        'NGAYTAO' => $now,
+                        'NGAYCAPNHAT' => $now,
+                    ];
+
+                    // Lưu meta để tạo Sinh viên sau khi có User ID
+                    $createStudentMeta[$data['MA_DINHDANH']] = [
                         'NIENKHOA' => $data['NIENKHOA'] ?? null,
-                        'HEDAOTAO' => $defaults['HEDAOTAO'],
                         'TEN_LOP' => $data['TEN_LOP'] ?? null,
-                    ]);
-    
-                    SinhvienThamgia::create([
-                        'ID_KEHOACH' => $plan->ID_KEHOACH,
-                        'ID_SINHVIEN' => $newSinhvien->ID_SINHVIEN,
-                        'DU_DIEUKIEN' => true,
-                        'NGAY_DANGKY' => now(),
-                    ]);
-    
-                    $countCreated++;
-                    continue;
+                    ];
                 }
-    
-                Log::warning("Unknown action in row", ['action' => $action]);
             }
-    
+
+            // --- BƯỚC 2: XỬ LÝ NHÓM 'LINK' (Insert 1 lần) ---
+            if (!empty($linkData)) {
+                // Chia nhỏ nếu dữ liệu quá lớn (ví dụ > 1000 dòng)
+                foreach (array_chunk($linkData, 500) as $chunk) {
+                    SinhvienThamgia::insert($chunk);
+                }
+            }
+
+            // --- BƯỚC 3: XỬ LÝ NHÓM 'CREATE' (Insert Bulk & Map ID) ---
+            if (!empty($createUserData)) {
+                
+                // 3a. Insert NGUOIDUNG
+                foreach (array_chunk($createUserData, 500) as $chunk) {
+                    Nguoidung::insert($chunk);
+                }
+
+                // 3b. Lấy lại ID của các User vừa tạo (Dựa vào MA_DINHDANH là unique)
+                $mssvList = array_column($createUserData, 'MA_DINHDANH');
+                $newUsers = Nguoidung::whereIn('MA_DINHDANH', $mssvList)
+                    ->pluck('ID_NGUOIDUNG', 'MA_DINHDANH'); // Map: MSSV => ID_NGUOIDUNG
+
+                // 3c. Chuẩn bị dữ liệu SINHVIEN
+                $createStudentData = [];
+                foreach ($newUsers as $mssv => $userId) {
+                    $meta = $createStudentMeta[$mssv] ?? [];
+                    $createStudentData[] = [
+                        'ID_NGUOIDUNG' => $userId,
+                        'ID_CHUYENNGANH' => $defaults['ID_CHUYENNGANH'],
+                        'HEDAOTAO' => $defaults['HEDAOTAO'],
+                        'NIENKHOA' => $meta['NIENKHOA'],
+                        'TEN_LOP' => $meta['TEN_LOP'],
+                    ];
+                }
+
+                // 3d. Insert SINHVIEN
+                if (!empty($createStudentData)) {
+                    foreach (array_chunk($createStudentData, 500) as $chunk) {
+                        Sinhvien::insert($chunk);
+                    }
+
+                    // 3e. Lấy lại ID của các Sinh viên vừa tạo để insert vào Tham gia
+                    // Query lại user IDs vừa insert để lấy sinh viên tương ứng
+                    $newStudentIds = Sinhvien::whereIn('ID_NGUOIDUNG', $newUsers->values())
+                        ->pluck('ID_SINHVIEN');
+
+                    // 3f. Prepare Link Data cho nhóm mới tạo
+                    $newLinkData = [];
+                    foreach ($newStudentIds as $svId) {
+                        $newLinkData[] = [
+                            'ID_KEHOACH' => $planId,
+                            'ID_SINHVIEN' => $svId,
+                            'DU_DIEUKIEN' => true,
+                            'NGAY_DANGKY' => $now,
+                        ];
+                    }
+
+                    // 3g. Insert SINHVIEN_THAMGIA
+                    foreach (array_chunk($newLinkData, 500) as $chunk) {
+                        SinhvienThamgia::insert($chunk);
+                    }
+                }
+            }
+
+            // Ghi Log tổng hợp
+            $totalCount = count($linkData) + count($createUserData);
+            ActivityLogger::log(
+                'IMPORT_PARTICIPANTS',
+                "Import Excel sinh viên vào kế hoạch: {$plan->TEN_DOT}",
+                [
+                    'plan_id' => $plan->ID_KEHOACH,
+                    'linked_count' => count($linkData),
+                    'created_count' => count($createUserData),
+                    'total' => $totalCount
+                ],
+                null,
+                'Database'
+            );
+
             DB::commit();
 
-            ActivityLogger::log(
-            'IMPORT_PARTICIPANTS',
-            "Import Excel sinh viên vào kế hoạch: {$plan->TEN_DOT}",
-            [
-                'plan_id' => $plan->ID_KEHOACH,
-                'linked_count' => $countLinked,  
-                'created_count' => $countCreated, 
-                'total' => $countLinked + $countCreated
-            ],
-            null,
-            'Database'
-        );
-    
             return response()->json([
                 'message' => "Import hoàn tất!",
-                'description' => "Đã liên kết {$countLinked} sinh viên và tạo mới {$countCreated} sinh viên."
+                'description' => "Đã xử lý thành công {$totalCount} sinh viên (Liên kết: " . count($linkData) . ", Tạo mới: " . count($createUserData) . ")."
             ]);
+
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Import Process Error: ' . $e->getMessage(), [
-                'trace' => $e->getTraceAsString(),
-                'request' => $request->all()
+                'trace' => $e->getTraceAsString()
             ]);
             return response()->json([
                 'message' => 'Lỗi nghiêm trọng khi lưu dữ liệu. Toàn bộ thao tác đã được hoàn tác.',
@@ -1254,7 +1295,6 @@ class ThesisPlanController extends Controller
             ], 500);
         }
     }
-
     // [START THÊM MỚI] 2 HÀM CHO TRANG CÀI ĐẶT
     /**
      * Lấy cài đặt chi tiết của một kế hoạch.

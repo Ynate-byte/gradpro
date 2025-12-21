@@ -37,7 +37,6 @@ use App\Http\Controllers\Api\Admin\FileManagerController;
 use App\Http\Controllers\Api\Admin\NotificationController as AdminNotificationController;
 use App\Http\Controllers\Api\Admin\BackupController;
 use App\Http\Controllers\Api\Admin\PlanArchiveController;
-// [MỚI] Import Controller Báo cáo
 use App\Http\Controllers\Api\Admin\ReportController;
 
 /*
@@ -217,7 +216,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         Route::get('/dashboard/reminders', [AdminDashboardController::class, 'getReminders']);
         Route::get('/dashboard/incomplete-quotas', [AdminDashboardController::class, 'getIncompleteQuotaDetails']);
         
-        // --- [MỚI] BÁO CÁO THỐNG KÊ (Fix lỗi 404) ---
+        // --- BÁO CÁO THỐNG KÊ ---
         Route::prefix('reports')->group(function () {
             Route::get('/plan-report', [ReportController::class, 'getPlanReport']);
             Route::get('/student-results', [ReportController::class, 'getStudentResults']);
@@ -306,11 +305,13 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         // --- Topic Management (Admin) ---
         Route::prefix('detai')->group(function () {
             Route::get('/', [DetaiAdminController::class, 'index']);
+            Route::get('/export-pdf', [DetaiAdminController::class, 'exportPdf']); 
             Route::get('/pending', [DetaiAdminController::class, 'getPendingTopics']);
             Route::get('/statistics', [DetaiAdminController::class, 'getStatistics']);
             Route::get('/{id}', [DetaiAdminController::class, 'show']);
             Route::post('/{id}/approve-reject', [DetaiAdminController::class, 'approveOrReject']);
             Route::post('/bulk-approve', [DetaiAdminController::class, 'bulkApprove']);
+            Route::post('/bulk-delete', [DetaiAdminController::class, 'bulkDelete']);
         });
         
         // --- Quota Management ---

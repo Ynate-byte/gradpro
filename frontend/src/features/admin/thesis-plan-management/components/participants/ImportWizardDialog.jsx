@@ -182,26 +182,26 @@ const MappingRowMulti = ({ label, headers, values, onAdd, onUpdate, onRemove }) 
     <div className="space-y-2 p-3 bg-muted/30 rounded-lg border border-border/50">
         <div className="flex items-center justify-between">
             <Label className="text-xs font-semibold text-muted-foreground">{label} <span className="text-red-500">*</span></Label>
-            <Button 
-                type="button" 
-                variant="ghost" 
-                size="sm" 
-                onClick={onAdd} 
+            <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={onAdd}
                 className="h-5 text-[10px] text-blue-600 hover:text-blue-700 px-2 bg-blue-50 hover:bg-blue-100"
             >
                 <Plus className="h-3 w-3 mr-1" /> Thêm cột
             </Button>
         </div>
-        
+
         <div className="space-y-2">
             {values.map((value, index) => (
                 <div key={index} className="flex items-center gap-2">
                     <div className="h-8 w-6 flex items-center justify-center bg-muted rounded text-[10px] font-mono text-muted-foreground shrink-0">
                         {index + 1}
                     </div>
-                    <Select 
-                        value={value || "__IGNORE__"} 
-                        onValueChange={(v) => onUpdate(index, v === "__IGNORE__" ? null : v)} 
+                    <Select
+                        value={value || "__IGNORE__"}
+                        onValueChange={(v) => onUpdate(index, v === "__IGNORE__" ? null : v)}
                     >
                         <SelectTrigger className="h-8 text-xs bg-white focus:ring-1 focus:ring-primary">
                             <SelectValue placeholder="Chọn cột..." />
@@ -212,11 +212,11 @@ const MappingRowMulti = ({ label, headers, values, onAdd, onUpdate, onRemove }) 
                         </SelectContent>
                     </Select>
                     {values.length > 1 && (
-                        <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            onClick={() => onRemove(index)} 
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => onRemove(index)}
                             className="h-8 w-8 shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                         >
                             <Trash2 className="h-4 w-4" />
@@ -249,25 +249,34 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
 
     // Auto-mapping
     useEffect(() => {
-        setMssvCol(guessColumn(headers, ['mã sv', 'mssv', 'ma_sv', 'code']));
-        
-        const ho = guessColumn(headers, ['họ', 'họ đệm']);
-        const ten = guessColumn(headers, ['tên']);
-        const hoVaTen = guessColumn(headers, ['họ và tên', 'họ tên', 'fullname']);
-
-        if (ho && ten) { setHoTenCols([ho, ten]); } 
-        else if (hoVaTen) { setHoTenCols([hoVaTen]); } 
+        // [CẬP NHẬT] Logic ưu tiên gán cứng cột nếu file có đủ số lượng cột
+        if (headers.length >= 6) {
+            setMssvCol(headers[1]);             // Cột 1: MSSV (Bỏ qua cột 0 là STT)
+            setHoTenCols([headers[2], headers[3]]); // Cột 2 & 3: Họ, Tên
+            setNgaySinhCol(headers[4]);         // Cột 4: Ngày sinh
+            setTenLopCol(headers[5]);           // Cột 5: Lớp
+        } 
         else {
-            const col2 = headers.find(h => h.includes('Cột 2'));
-            const col3 = headers.find(h => h.includes('Cột 3'));
-            if (col2 && col3) setHoTenCols([col2, col3]);
-            else if (col2) setHoTenCols([col2]);
-            else setHoTenCols(['']);
-        }
+            // Fallback nếu file lạ
+            setMssvCol(guessColumn(headers, ['mã sv', 'mssv', 'ma_sv', 'code']));
 
-        setNgaySinhCol(guessColumn(headers, ['ngày sinh', 'ngaysinh', 'dob']));
-        const lop = guessColumn(headers, ['lớp', 'tên lớp', 'class']);
-        setTenLopCol(lop);
+            const ho = guessColumn(headers, ['họ', 'họ đệm']);
+            const ten = guessColumn(headers, ['tên']);
+            const hoVaTen = guessColumn(headers, ['họ và tên', 'họ tên', 'fullname']);
+
+            if (ho && ten) { setHoTenCols([ho, ten]); }
+            else if (hoVaTen) { setHoTenCols([hoVaTen]); }
+            else {
+                const col2 = headers.length > 1 ? headers[1] : '';
+                const col3 = headers.length > 2 ? headers[2] : '';
+                if (col2 && col3) setHoTenCols([col2, col3]);
+                else if (col2) setHoTenCols([col2]);
+                else setHoTenCols(['']);
+            }
+
+            setNgaySinhCol(guessColumn(headers, ['ngày sinh', 'ngaysinh', 'dob']));
+            setTenLopCol(guessColumn(headers, ['lớp', 'tên lớp', 'class']));
+        }
 
         if (auxData.chuyenNganhs.length > 0 && !defaultChuyenNganh) {
             setDefaultChuyenNganh(String(auxData.chuyenNganhs[0].ID_CHUYENNGANH));
@@ -308,7 +317,7 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
             HEDAOTAO: defaultHeDaoTao,
             ID_VAITRO: svRoleId,
         };
-        
+
         setIsLoading(true);
         await onComplete(mapping, defaults, setIsLoading);
         setIsLoading(false);
@@ -317,7 +326,7 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
     return (
         <div className="flex flex-col h-full overflow-hidden">
             <div className="flex flex-col lg:flex-row h-full overflow-hidden">
-                
+
                 {/* CỘT TRÁI: CẤU HÌNH */}
                 <div className="w-full lg:w-[400px] flex-shrink-0 border-b lg:border-b-0 lg:border-r flex flex-col bg-muted/10">
                     <ScrollArea className="flex-1">
@@ -327,23 +336,23 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
                                     <Wand2 className="h-4 w-4" /> 1. Ánh xạ dữ liệu
                                 </div>
                                 <div className="bg-card border rounded-lg p-4 space-y-4 shadow-sm">
-                                    <MappingRow 
-                                        label="Mã Sinh Viên (MSSV)" 
-                                        headers={headers} value={mssvCol} onChange={setMssvCol} 
+                                    <MappingRow
+                                        label="Mã Sinh Viên (MSSV) [Cột 1]"
+                                        headers={headers} value={mssvCol} onChange={setMssvCol}
                                         placeholder="Chọn cột MSSV..." required
                                     />
                                     <Separator />
-                                    <MappingRowMulti 
-                                        label="Họ và Tên" 
-                                        headers={headers} values={hoTenCols} 
-                                        onAdd={() => setHoTenCols([...hoTenCols, ''])} 
-                                        onUpdate={updateHoTenCol} 
-                                        onRemove={(i) => setHoTenCols(hoTenCols.filter((_, idx) => idx !== i))} 
+                                    <MappingRowMulti
+                                        label="Họ và Tên [Cột 2 & 3]"
+                                        headers={headers} values={hoTenCols}
+                                        onAdd={() => setHoTenCols([...hoTenCols, ''])}
+                                        onUpdate={updateHoTenCol}
+                                        onRemove={(i) => setHoTenCols(hoTenCols.filter((_, idx) => idx !== i))}
                                     />
                                     <Separator />
                                     <div className="grid grid-cols-2 gap-3">
-                                        <MappingRow label="Ngày sinh" headers={headers} value={ngaySinhCol} onChange={setNgaySinhCol} placeholder="Chọn cột..." />
-                                        <MappingRow label="Tên lớp" headers={headers} value={tenLopCol} onChange={setTenLopCol} placeholder="Chọn cột..." />
+                                        <MappingRow label="Ngày sinh [Cột 4]" headers={headers} value={ngaySinhCol} onChange={setNgaySinhCol} placeholder="Chọn cột..." />
+                                        <MappingRow label="Tên lớp [Cột 5]" headers={headers} value={tenLopCol} onChange={setTenLopCol} placeholder="Chọn cột..." />
                                     </div>
                                 </div>
                             </div>
@@ -356,7 +365,7 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold text-muted-foreground">Chuyên ngành mặc định <span className="text-red-500">*</span></Label>
                                         <Select value={defaultChuyenNganh} onValueChange={setDefaultChuyenNganh}>
-                                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Chọn..."/></SelectTrigger>
+                                            <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="Chọn..." /></SelectTrigger>
                                             <SelectContent>
                                                 {auxData.chuyenNganhs.map(cn => (
                                                     <SelectItem key={cn.ID_CHUYENNGANH} value={String(cn.ID_CHUYENNGANH)}>{cn.TEN_CHUYENNGANH}</SelectItem>
@@ -364,7 +373,7 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
                                             </SelectContent>
                                         </Select>
                                     </div>
-                                    
+
                                     <div className="space-y-1.5">
                                         <Label className="text-xs font-semibold text-muted-foreground">Hệ đào tạo <span className="text-red-500">*</span></Label>
                                         <Select value={defaultHeDaoTao} onValueChange={setDefaultHeDaoTao}>
@@ -386,7 +395,7 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
                                                 <SelectItem value="default">Nhập thủ công (Cố định)</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        
+
                                         {nienKhoaSource === 'ten_lop' ? (
                                             <div className="flex items-center gap-2 text-xs">
                                                 <span className="whitespace-nowrap">Lấy</span>
@@ -408,16 +417,16 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
                 <div className="flex-1 flex flex-col h-full bg-background overflow-hidden">
                     <div className="p-4 border-b bg-muted/10 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
-                            <FileText className="h-4 w-4 text-blue-500"/> Dữ liệu file gốc (5 dòng đầu)
+                            <FileText className="h-4 w-4 text-blue-500" /> Dữ liệu file gốc (5 dòng đầu)
                         </div>
                         <Badge variant="outline" className="text-xs font-normal">
                             {headers.length} cột tìm thấy
                         </Badge>
                     </div>
-                    
+
                     <div className="flex-1 w-full overflow-hidden relative">
-                         <ScrollArea className="h-full w-full">
-                            <div className="min-w-max pb-4"> 
+                        <ScrollArea className="h-full w-full">
+                            <div className="min-w-max pb-4">
                                 <Table>
                                     <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
                                         <TableRow className="hover:bg-transparent border-b">
@@ -451,6 +460,8 @@ const Step2Mapping = ({ onBack, onComplete, analyzeResult, auxData }) => {
                 <Button variant="outline" onClick={onBack} disabled={isLoading} className="h-9 text-sm">
                     <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
                 </Button>
+                
+                {/* [ĐÃ SỬA LỖI Ở ĐÂY] Xóa tham chiếu countSelected, chỉ dùng isLoading */}
                 <Button onClick={handleSubmit} disabled={isLoading} className="min-w-[140px] h-9 text-sm font-semibold">
                     {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Tiếp tục"}
                     {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
@@ -491,7 +502,7 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
     const handleSubmit = async () => {
         const finalRows = previewResult.validRows.filter((_, i) => !uncheckedIndices.has(i));
         if (finalRows.length === 0) { toast.error("Vui lòng chọn ít nhất 1 dòng."); return; }
-        
+
         setIsLoading(true);
         await onComplete(finalRows, defaults, setIsLoading);
         setIsLoading(false);
@@ -500,8 +511,8 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
     const renderRow = (row, index, isError = false) => (
         <TableRow key={index} className={cn(
             "border-b last:border-b-0",
-            isError ? "bg-red-50/30 hover:bg-red-50/50" : 
-            uncheckedIndices.has(index) ? "opacity-50 bg-muted/20" : "hover:bg-green-50/30"
+            isError ? "bg-red-50/30 hover:bg-red-50/50" :
+                uncheckedIndices.has(index) ? "opacity-50 bg-muted/20" : "hover:bg-green-50/30"
         )}>
             {!isError && activeTab === 'valid' && (
                 <TableCell className="w-[40px] py-2 px-3">
@@ -514,12 +525,12 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
             <TableCell className="text-xs py-2 px-3">
                 {isError ? (
                     <span className="text-red-600 flex items-center gap-1 font-medium text-[11px]">
-                        <XCircle className="h-3 w-3"/> {Object.values(row.error_details || {}).flat().join(', ') || row.error}
+                        <XCircle className="h-3 w-3" /> {Object.values(row.error_details || {}).flat().join(', ') || row.error}
                     </span>
                 ) : (
-                    row.action === 'create_and_link' ? 
-                    <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-[10px] px-1.5 py-0 shadow-none">Tạo mới</Badge> : 
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shadow-none">Liên kết</Badge>
+                    row.action === 'create_and_link' ?
+                        <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50 text-[10px] px-1.5 py-0 shadow-none">Tạo mới</Badge> :
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shadow-none">Liên kết</Badge>
                 )}
             </TableCell>
         </TableRow>
@@ -529,8 +540,8 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
         <div className="flex flex-col h-full bg-background">
             {/* Thống kê nhanh */}
             <div className="grid grid-cols-3 gap-4 px-6 pt-6 mb-4 shrink-0">
-                <Card 
-                    className={cn("border cursor-pointer transition-all shadow-sm hover:shadow-md active:scale-[0.98]", activeTab === 'valid' ? "border-green-500 ring-1 ring-green-500/20 bg-green-50/30" : "hover:border-green-300")} 
+                <Card
+                    className={cn("border cursor-pointer transition-all shadow-sm hover:shadow-md active:scale-[0.98]", activeTab === 'valid' ? "border-green-500 ring-1 ring-green-500/20 bg-green-50/30" : "hover:border-green-300")}
                     onClick={() => setActiveTab('valid')}
                 >
                     <CardContent className="p-3 flex items-center justify-between">
@@ -541,12 +552,12 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
                                 <span className="text-xs text-muted-foreground">/ {totalValid}</span>
                             </div>
                         </div>
-                        <div className="h-8 w-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><CheckCircle className="h-4 w-4"/></div>
+                        <div className="h-8 w-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center"><CheckCircle className="h-4 w-4" /></div>
                     </CardContent>
                 </Card>
-                
-                <Card 
-                    className={cn("border cursor-pointer transition-all shadow-sm hover:shadow-md active:scale-[0.98]", activeTab === 'invalid' ? "border-red-500 ring-1 ring-red-500/20 bg-red-50/30" : "hover:border-red-300")} 
+
+                <Card
+                    className={cn("border cursor-pointer transition-all shadow-sm hover:shadow-md active:scale-[0.98]", activeTab === 'invalid' ? "border-red-500 ring-1 ring-red-500/20 bg-red-50/30" : "hover:border-red-300")}
                     onClick={() => setActiveTab('invalid')}
                 >
                     <CardContent className="p-3 flex items-center justify-between">
@@ -554,12 +565,12 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
                             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide">Lỗi</p>
                             <p className="text-xl font-bold text-red-600">{totalInvalid}</p>
                         </div>
-                        <div className="h-8 w-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center"><XCircle className="h-4 w-4"/></div>
+                        <div className="h-8 w-8 rounded-full bg-red-100 text-red-600 flex items-center justify-center"><XCircle className="h-4 w-4" /></div>
                     </CardContent>
                 </Card>
 
-                <Card 
-                    className={cn("border cursor-pointer transition-all shadow-sm hover:shadow-md active:scale-[0.98]", activeTab === 'ignored' ? "border-yellow-500 ring-1 ring-yellow-500/20 bg-yellow-50/30" : "hover:border-yellow-300")} 
+                <Card
+                    className={cn("border cursor-pointer transition-all shadow-sm hover:shadow-md active:scale-[0.98]", activeTab === 'ignored' ? "border-yellow-500 ring-1 ring-yellow-500/20 bg-yellow-50/30" : "hover:border-yellow-300")}
                     onClick={() => setActiveTab('ignored')}
                 >
                     <CardContent className="p-3 flex items-center justify-between">
@@ -567,7 +578,7 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
                             <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-wide">Bỏ qua</p>
                             <p className="text-xl font-bold text-yellow-600">{totalIgnored}</p>
                         </div>
-                        <div className="h-8 w-8 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center"><AlertTriangle className="h-4 w-4"/></div>
+                        <div className="h-8 w-8 rounded-full bg-yellow-100 text-yellow-600 flex items-center justify-center"><AlertTriangle className="h-4 w-4" /></div>
                     </CardContent>
                 </Card>
             </div>
@@ -577,9 +588,9 @@ const Step3Preview = ({ onBack, onComplete, previewResult, defaults }) => {
                 <div className="border rounded-lg flex flex-col bg-background h-full shadow-sm overflow-hidden">
                     <div className="p-2 bg-muted/30 border-b flex justify-between items-center shrink-0">
                         <span className="text-xs font-semibold ml-2 text-muted-foreground flex items-center gap-2">
-                            {activeTab === 'valid' && <><CheckCircle className="h-3.5 w-3.5"/> Danh sách sẽ được Import</>}
-                            {activeTab === 'invalid' && <><XCircle className="h-3.5 w-3.5"/> Dữ liệu lỗi cấu trúc/thiếu thông tin</>}
-                            {activeTab === 'ignored' && <><Info className="h-3.5 w-3.5"/> Sinh viên đã có trong kế hoạch này</>}
+                            {activeTab === 'valid' && <><CheckCircle className="h-3.5 w-3.5" /> Danh sách sẽ được Import</>}
+                            {activeTab === 'invalid' && <><XCircle className="h-3.5 w-3.5" /> Dữ liệu lỗi cấu trúc/thiếu thông tin</>}
+                            {activeTab === 'ignored' && <><Info className="h-3.5 w-3.5" /> Sinh viên đã có trong kế hoạch này</>}
                         </span>
                     </div>
                     <ScrollArea className="flex-1 w-full">
@@ -689,18 +700,23 @@ export function ImportWizardDialog({ isOpen, setIsOpen, onSuccess, plan }) {
     };
 
     const handleProcess = async (validRows, defaultsConfig, setIsLoadingCallback) => {
-        if (typeof setIsLoadingCallback === 'function') setIsLoadingCallback(true);
-        try {
-            const result = await processPlanImport(plan.ID_KEHOACH, validRows, defaultsConfig);
-            toast.success(result.message);
-            onSuccess();
-            handleClose();
-        } catch (error) {
-            toast.error(error.response?.data?.message || "Import thất bại.");
-        } finally {
-            if (typeof setIsLoadingCallback === 'function') setIsLoadingCallback(false);
-        }
-    };
+            if (typeof setIsLoadingCallback === 'function') setIsLoadingCallback(true);
+            const promise = processPlanImport(plan.ID_KEHOACH, validRows, defaultsConfig);
+
+            toast.promise(promise, {
+                loading: 'Đang đồng bộ dữ liệu vào hệ thống...',
+                success: (data) => {
+                    onSuccess();
+                    handleClose();
+                    if (typeof setIsLoadingCallback === 'function') setIsLoadingCallback(false);
+                    return `${data.message} ${data.description || ''}`;
+                },
+                error: (error) => {
+                    if (typeof setIsLoadingCallback === 'function') setIsLoadingCallback(false);
+                    return error.response?.data?.message || "Import thất bại. Vui lòng thử lại.";
+                }
+            });
+        };
 
     return (
         <Dialog open={isOpen} onOpenChange={handleClose}>

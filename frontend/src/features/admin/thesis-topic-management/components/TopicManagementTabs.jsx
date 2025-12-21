@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, Filter, FileDown, CheckCheck } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, FileDown, CheckCheck, FileText } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
@@ -16,7 +16,7 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from "@/components/ui/alert-dialog"; // Import AlertDialog
+} from "@/components/ui/alert-dialog";
 import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
@@ -28,12 +28,15 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { cn } from "@/lib/utils";
 import { useTheme } from "@/components/theme-provider";
 import StatCard from '@/components/shared/StatCard';
-import { useAuth } from "@/contexts/AuthContext"; // [NEW] Import Auth Context
+import { useAuth } from "@/contexts/AuthContext";
 
 const getVariants = (shouldReduce) => {
-    // ... (Giữ nguyên)
     if (shouldReduce) {
-        return { container: { visible: { opacity: 1 } }, item: { visible: { opacity: 1, y: 0 } }, table: { visible: { opacity: 1, y: 0 } } };
+        return { 
+            container: { visible: { opacity: 1 } }, 
+            item: { visible: { opacity: 1, y: 0 } }, 
+            table: { visible: { opacity: 1, y: 0 } } 
+        };
     }
     return {
         container: { hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.08 } } },
@@ -45,7 +48,7 @@ const getVariants = (shouldReduce) => {
 const columnVisibility = { "department_id": false };
 
 const TopicManagementTabs = () => {
-    const { user } = useAuth(); // [NEW] Lấy thông tin user
+    const { user } = useAuth();
     
     // --- State Logic ---
     const [allTopics, setAllTopics] = useState([]);
@@ -74,13 +77,14 @@ const TopicManagementTabs = () => {
 
     const [showBulkApproveAlert, setShowBulkApproveAlert] = useState(false);
     const [isBulkApproving, setIsBulkApproving] = useState(false);
+    const [isExportingPdf, setIsExportingPdf] = useState(false); // [NEW] State loading xuất PDF
 
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // [NEW] Xác định nếu là Trưởng bộ môn thuần túy (không phải Admin/GiaoVu/TruongKhoa)
+    // Xác định nếu là Trưởng bộ môn thuần túy (không phải Admin/GiaoVu/TruongKhoa)
     const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
     const roleName = user?.vaitro?.TEN_VAITRO;
     
@@ -311,8 +315,46 @@ const TopicManagementTabs = () => {
         setShowRejectDialog(true);
     };
 
+    // [MỚI] Hàm xử lý xuất PDF
+    const handleExportPdf = async () => {
+        if (!selectedPlanId) {
+            toast.warning("Vui lòng chọn một kế hoạch.");
+            return;
+        }
+
+        setIsExportingPdf(true);
+        toast.info("Đang tạo file PDF, vui lòng đợi...");
+
+        try {
+            // Lấy department_id từ bộ lọc hiện tại (nếu có) để xuất đúng danh sách đang xem
+            const deptFilter = columnFilters.find(f => f.id === 'department_id');
+            // Nếu filter là mảng (multi-select), lấy giá trị đầu tiên hoặc logic tùy chỉnh. 
+            // Ở đây giả sử PDF hỗ trợ lọc 1 khoa hoặc tất cả.
+            const deptId = deptFilter ? deptFilter.value[0] : null;
+
+            const blob = await thesisTopicService.exportTopicsPdf(selectedPlanId, deptId);
+            
+            // Tạo link tải
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `Danh-sach-de-tai-${selectedPlanId}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+            toast.success("Tải file PDF thành công!");
+        } catch (error) {
+            console.error(error);
+            toast.error("Xuất PDF thất bại.");
+        } finally {
+            setIsExportingPdf(false);
+        }
+    };
+
     const handleExport = () => {
-        toast.info("Tính năng xuất danh sách đang phát triển.");
+        toast.info("Tính năng xuất danh sách Excel đang phát triển.");
     };
 
     const handleBulkApproveClick = () => {
@@ -387,7 +429,7 @@ const TopicManagementTabs = () => {
                     searchTerm={searchTerm}
                     onSearchChange={setSearchTerm}
 
-                    // [NEW] Logic ẩn bộ lọc bộ môn nếu là Trưởng bộ môn thuần túy
+                    // Logic ẩn bộ lọc bộ môn nếu là Trưởng bộ môn thuần túy
                     khoaBomonFilterColumnId="department_id"
                     khoaBomonFilterOptions={isTruongBoMonOnly ? undefined : departmentOptions}
                     khoaBomonFilterTitle="Bộ môn"
@@ -462,8 +504,19 @@ const TopicManagementTabs = () => {
                       </Select>
                   </div>
                   <div className="flex items-center gap-2">
-                     <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId} className="shadow-sm">
-                          <FileDown className="mr-2 h-4 w-4" /> Xuất danh sách
+                      {/* [NEW] Button Export PDF */}
+                      <Button 
+                          variant="outline" 
+                          onClick={handleExportPdf} 
+                          disabled={!selectedPlanId || isExportingPdf}
+                          className="shadow-sm border-red-200 hover:bg-red-50 text-red-700 dark:border-red-900 dark:hover:bg-red-900/20"
+                      >
+                          {isExportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />} 
+                          Xuất PDF
+                      </Button>
+
+                      <Button variant="outline" onClick={handleExport} disabled={!selectedPlanId} className="shadow-sm">
+                           <FileDown className="mr-2 h-4 w-4" /> Xuất Excel
                       </Button>
                   </div>
             </div>
@@ -583,7 +636,7 @@ const TopicManagementTabs = () => {
                 actionType={actionType}
             />
 
-            {/* [NEW] Bulk Approve Alert Dialog */}
+            {/* Bulk Approve Alert Dialog */}
             <AlertDialog open={showBulkApproveAlert} onOpenChange={setShowBulkApproveAlert}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

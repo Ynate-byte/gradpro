@@ -168,7 +168,25 @@ const thesisTopicService = {
 
     processImport: (data) => {
         return axiosConfig.post('/detai/import/process', { data });
-    }
+    },
+
+    exportTopicsPdf: async (planId, departmentId = null) => {
+        const params = { plan_id: planId };
+        if (departmentId && departmentId !== 'all') {
+            params.department_id = departmentId;
+        }
+
+        const response = await axiosConfig.get('/admin/detai/export-pdf', {
+            params,
+            responseType: 'blob',
+        });
+        return response.data;
+    },
+    
+    bulkDeleteTopics: async (topicIds) => {
+        const response = await axiosConfig.post('/admin/detai/bulk-delete', { topic_ids: topicIds });
+        return response.data;
+    },
 };
 
 export { thesisTopicService };

@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use App\Services\NotificationService;
 use Illuminate\Support\Facades\DB;
+use App\Models\KehoachKhoaluan;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class DetaiAdminController extends Controller
 {
@@ -106,6 +108,83 @@ class DetaiAdminController extends Controller
         ])->findOrFail($id);
 
         return response()->json($topic);
+    }
+
+    /**
+     * Xóa hàng loạt đề tài (Chỉ Admin/Trưởng khoa/Giáo vụ)
+     */
+    public function bulkDelete(Request $request)
+    {
+        // 1. Kiểm tra quyền hạn
+        $isManager = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
+        if (!$isManager) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
+        // 2. Validate
+        $validator = Validator::make($request->all(), [
+            'topic_ids' => 'required|array|min:1',
+            'topic_ids.*' => 'exists:DETAI,ID_DETAI',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $topicIds = $request->input('topic_ids');
+        $deletedCount = 0;
+        $failedCount = 0;
+
+        DB::beginTransaction();
+        try {
+            // Lấy danh sách đề tài cần xóa
+            $topics = Detai::whereIn('ID_DETAI', $topicIds)->get();
+
+            foreach ($topics as $topic) {
+                // Kiểm tra điều kiện xóa (VD: Đề tài đã có nhóm đăng ký thì không được xóa)
+                if ($topic->SO_NHOM_HIENTAI > 0) {
+                    $failedCount++;
+                    continue; // Bỏ qua đề tài này
+                }
+
+                // Cập nhật lại Quota cho giảng viên (nếu cần thiết logic giống hàm destroy đơn lẻ)
+                $planId = $topic->ID_KEHOACH;
+                $lecturerId = $topic->ID_NGUOI_DEXUAT;
+                
+                $topic->delete();
+                $deletedCount++;
+
+                // Logic hồi phục trạng thái Quota (nếu GV đã hoàn thành, giờ bị xóa thì mở lại)
+                if ($planId && $lecturerId) {
+                    $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)
+                        ->where('ID_GIANGVIEN', $lecturerId)
+                        ->first();
+
+                    if ($quotaGV && $quotaGV->TRANGTHAI === 'Hoàn thành') {
+                        $currentCount = Detai::where('ID_KEHOACH', $planId)
+                            ->where('ID_NGUOI_DEXUAT', $lecturerId)
+                            ->count();
+                        
+                        if ($currentCount < $quotaGV->SO_DETAI_QUOTA) {
+                            $quotaGV->update(['TRANGTHAI' => 'Đang phân công']);
+                        }
+                    }
+                }
+            }
+
+            DB::commit();
+
+            $message = "Đã xóa thành công {$deletedCount} đề tài.";
+            if ($failedCount > 0) {
+                $message .= " Có {$failedCount} đề tài không thể xóa vì đã có sinh viên đăng ký.";
+            }
+
+            return response()->json(['message' => $message]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json(['message' => 'Lỗi khi xóa hàng loạt: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -354,5 +433,45 @@ class DetaiAdminController extends Controller
         ];
 
         return response()->json($stats);
+    }
+
+    public function exportPdf(Request $request)
+    {
+        $planId = $request->input('plan_id');
+        if (!$planId) {
+            return response()->json(['message' => 'Vui lòng chọn Kế hoạch để xuất file.'], 400);
+        }
+
+        // 1. Lấy thông tin Kế hoạch
+        $plan = KehoachKhoaluan::findOrFail($planId);
+
+        // 2. Query lấy danh sách đề tài ĐÃ DUYỆT
+        // Có thể áp dụng thêm bộ lọc Department nếu cần
+        $query = Detai::with([
+            'nguoiDexuat.nguoidung', 
+            'khoaBomon'
+        ])
+        ->where('ID_KEHOACH', $planId)
+        ->where('TRANGTHAI', 'Đã duyệt');
+
+        // Nếu có lọc theo bộ môn từ client gửi lên
+        if ($request->filled('department_id')) {
+            $query->where('ID_KHOA_BOMON', $request->department_id);
+        }
+
+        $topics = $query->orderBy('ID_KHOA_BOMON', 'asc') // Gom theo bộ môn cho đẹp
+                        ->orderBy('TEN_DETAI', 'asc')
+                        ->get();
+
+        // 3. Render PDF
+        $pdf = Pdf::loadView('documents.topic_list', [
+            'plan' => $plan,
+            'topics' => $topics
+        ]);
+
+        // Set khổ giấy ngang (Landscape) như ảnh mẫu
+        $pdf->setPaper('A4', 'landscape');
+
+        return $pdf->download('Danh-sach-de-tai-' . $plan->KHOAHOC . '.pdf');
     }
 }

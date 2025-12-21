@@ -11,7 +11,8 @@ export function GroupDataTable({
     planId, 
     onSuccess, 
     onViewDetails, 
-    searchTerm, 
+    searchTerm,
+    debouncedSearchTerm,
     onSearchChange, 
     columnFilters, 
     setColumnFilters, 
@@ -24,12 +25,14 @@ export function GroupDataTable({
     const [loading, setLoading] = useState(true);
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 10 });
     const [sorting, setSorting] = useState([]);
+    
+    // State cho các Dialog
     const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
     const [isFormOpen, setIsFormOpen] = useState(false);
     const [selectedGroup, setSelectedGroup] = useState(null);
     const [isAssignTopicOpen, setIsAssignTopicOpen] = useState(false);
 
-    // ... (Giữ nguyên các handlers handleAddStudent, handleEdit, handleAssignTopic, fetchData, useEffect) ...
+    // Handlers mở dialog
     const handleAddStudent = (group) => {
         setSelectedGroup(group);
         setIsAddStudentOpen(true);
@@ -45,6 +48,7 @@ export function GroupDataTable({
         setIsAssignTopicOpen(true);
     };
 
+    // --- [LOGIC GỌI API ĐÃ SỬA] ---
     const fetchData = useCallback(() => {
         if (!planId) {
             setLoading(false);
@@ -54,6 +58,7 @@ export function GroupDataTable({
         }
         setLoading(true);
 
+        // Lấy giá trị bộ lọc
         const statuses = columnFilters.find(f => f.id === 'TRANGTHAI')?.value;
         const isSpecialRaw = columnFilters.find(f => f.id === 'LA_NHOM_DACBIET')?.value;
         const isSpecial = isSpecialRaw ? isSpecialRaw.map(v => (v === 'true' || v === 1) ? 1 : 0) : undefined;
@@ -62,7 +67,7 @@ export function GroupDataTable({
             plan_id: planId,
             page: pagination.pageIndex + 1,
             per_page: pagination.pageSize,
-            search: searchTerm,
+            search: debouncedSearchTerm,
             statuses: statuses,
             is_special: isSpecial,
             sort: sorting[0] ? `${sorting[0].id},${sorting[0].desc ? 'desc' : 'asc'}` : undefined,
@@ -73,18 +78,29 @@ export function GroupDataTable({
                 setData(response.data);
                 setPageCount(response.last_page);
             })
-            .catch(() => toast.error("Lỗi khi tải danh sách nhóm."))
+            .catch((error) => {
+                // Không hiện lỗi nếu request bị cancel (nếu có cơ chế cancel token)
+                if (error.code !== "ERR_CANCELED") {
+                    console.error(error);
+                    toast.error("Lỗi khi tải danh sách nhóm.");
+                }
+            })
             .finally(() => setLoading(false));
-    }, [planId, pagination, searchTerm, columnFilters, sorting]); 
+    
+    // Dependency Array: Thay searchTerm bằng debouncedSearchTerm
+    }, [planId, pagination, debouncedSearchTerm, columnFilters, sorting]); 
 
+    // Reset về trang 1 khi filter hoặc search thay đổi
     useEffect(() => {
         setPagination(prev => ({ ...prev, pageIndex: 0 }));
-    }, [searchTerm, columnFilters, planId]); 
+    }, [debouncedSearchTerm, columnFilters, planId]); 
 
+    // Gọi API khi các dependency thay đổi
     useEffect(() => {
         fetchData();
     }, [fetchData]);
 
+    // Cấu hình cột
     const columns = useMemo(() => getColumns({
         onEdit: handleEdit,
         onAddStudent: handleAddStudent,
@@ -98,9 +114,13 @@ export function GroupDataTable({
         onSuccess();
     };
 
+    // Options cho bộ lọc
     const statusFilterOptions = [
         { value: "Đang mở", label: "Đang mở" },
         { value: "Đã đủ thành viên", label: "Đã đủ thành viên" },
+        { value: "Đang thực hiện", label: "Đang thực hiện" },
+        { value: "Đã hoàn thành", label: "Đã hoàn thành" },
+        { value: "Không đạt", label: "Không đạt" },
     ];
 
     const typeFilterOptions = [
@@ -122,7 +142,7 @@ export function GroupDataTable({
                 sorting={sorting}
                 setSorting={setSorting}
                 
-                // Layout props
+                // Layout & Style props
                 flexLayout={flexLayout}
                 className={className}
                 containerClassName="h-full bg-card" 
@@ -135,8 +155,6 @@ export function GroupDataTable({
                 searchTerm={searchTerm}
                 onSearchChange={onSearchChange}
                 addBtnText=""
-                
-                // Filters
                 statusColumnId="TRANGTHAI"
                 statusOptions={statusFilterOptions}
                 
@@ -149,6 +167,7 @@ export function GroupDataTable({
                 })}
             />
 
+            {/* Các Dialog quản lý */}
             <AddStudentDialog
                 isOpen={isAddStudentOpen}
                 setIsOpen={setIsAddStudentOpen}
