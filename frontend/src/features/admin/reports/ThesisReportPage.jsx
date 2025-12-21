@@ -7,7 +7,7 @@ import {
 import { 
     Download, BellRing, Bell, Users, BookOpen, GraduationCap, 
     AlertCircle, CheckCircle, XCircle, Loader2, RefreshCw, Search,
-    ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+    ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -19,22 +19,36 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
 
 import { getAllPlans } from '@/api/thesisPlanService';
-import { getPlanReport, nudgeUser, getStudentResults } from '@/api/reportService';
+import { getPlanReport, nudgeUser, getStudentResults, nudgeBulk, exportReportExcel } from '@/api/reportService';
 import { useDebounce } from '@/hooks/useDebounce';
 
-// --- CONFIG ---
-const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6'];
+// --- CONFIG COLORS ---
+const SCORE_BAR_COLOR = '#3b82f6';       // Blue-500
+const PASS_COLOR = '#10b981';            // Emerald-500
+const FAIL_SCORE_COLOR = '#ef4444';      // Red-500
+const FAIL_NO_COUNCIL_COLOR = '#f97316'; // Orange-500 (Rớt do k có HĐ)
+const PENDING_COLOR = '#e5e7eb';         // Gray-200 (Chưa chấm)
 
 // --- COMPONENT CON: THẺ THỐNG KÊ (STAT CARD) ---
-const StatCard = ({ title, value, description, icon: Icon, className }) => (
+const StatCard = ({ title, value, description, icon: Icon, className, valueClassName }) => (
     <Card className={cn("shadow-sm", className)}>
         <CardContent className="p-4 flex items-center justify-between">
             <div>
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{title}</p>
-                <div className="text-2xl font-bold mt-1 text-foreground">{value}</div>
+                <div className={cn("text-2xl font-bold mt-1 text-foreground", valueClassName)}>{value}</div>
                 {description && <p className="text-[10px] text-muted-foreground mt-1">{description}</p>}
             </div>
             <div className="p-3 rounded-full bg-primary/10 text-primary">
@@ -62,7 +76,7 @@ const AlertList = ({ items, renderItem }) => {
     );
 };
 
-// --- COMPONENT CON: BẢNG KẾT QUẢ CHI TIẾT (ĐÃ TỐI ƯU) ---
+// --- COMPONENT CON: BẢNG KẾT QUẢ CHI TIẾT ---
 const StudentResultsTable = ({ planId, weights, planStatus }) => {
     const [page, setPage] = useState(1);
     const [perPage, setPerPage] = useState("20"); 
@@ -70,7 +84,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
     const [search, setSearch] = useState('');
     const debouncedSearch = useDebounce(search, 500);
 
-    // Query dữ liệu với per_page
     const { data: resultData, isLoading, isFetching } = useQuery({
         queryKey: ['studentResults', planId, page, perPage, filter, debouncedSearch],
         queryFn: () => getStudentResults(planId, { 
@@ -83,7 +96,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
         keepPreviousData: true 
     });
 
-    // Reset về trang 1 khi thay đổi bộ lọc hoặc tìm kiếm
     useEffect(() => { setPage(1); }, [filter, debouncedSearch, perPage]);
 
     const students = resultData?.data || [];
@@ -102,9 +114,7 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                         <CardDescription>Bảng điểm chi tiết toàn khóa.</CardDescription>
                     </div>
 
-                    {/* Controls */}
                     <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                         {/* Filter Tabs */}
                          <div className="flex p-1 bg-muted rounded-md h-9 self-start sm:self-center">
                             <button
                                 onClick={() => setFilter('all')}
@@ -126,7 +136,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                             </button>
                         </div>
 
-                        {/* Search Input */}
                         <div className="relative w-full sm:w-60">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -142,7 +151,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
             
             <CardContent className="px-0 pb-0">
                 <div className="border-y relative min-h-[300px]">
-                    {/* Loading Overlay khi chuyển trang */}
                     {isFetching && !isLoading && (
                         <div className="absolute inset-0 bg-background/50 z-10 flex items-start justify-center pt-20">
                             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -155,7 +163,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                                 <TableHead className="w-[100px] pl-4">MSSV</TableHead>
                                 <TableHead className="w-[200px]">Họ và Tên</TableHead>
                                 <TableHead className="hidden md:table-cell">Đề tài</TableHead>
-                                {/* Hiển thị Tỷ trọng điểm */}
                                 <TableHead className="text-center w-[90px] text-xs">
                                     HD <span className="text-[10px] text-muted-foreground block">({weights?.hd ?? 0}%)</span>
                                 </TableHead>
@@ -194,7 +201,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                                     let resultBadge = null;
 
                                     if (hasScore) {
-                                        // Có điểm thì xét Đậu/Rớt bình thường
                                         const isPass = score >= 4.0;
                                         resultBadge = (
                                             <Badge variant={isPass ? "default" : "destructive"} className={cn("text-[10px] h-5 px-1.5 shadow-none", isPass ? "bg-green-100 text-green-700 hover:bg-green-200 border-green-200" : "bg-red-100 text-red-700 hover:bg-red-200 border-red-200")}>
@@ -202,16 +208,13 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                                             </Badge>
                                         );
                                     } else {
-                                        // Chưa có điểm
                                         if (isPlanEnded && !hasCouncil) {
-                                            // Kế hoạch đã kết thúc và không có hội đồng => Rớt
                                             resultBadge = (
-                                                <Badge variant="destructive" className="bg-red-100 text-red-700 hover:bg-red-200 border-red-200 text-[10px] h-5 px-1.5 shadow-none">
+                                                <Badge variant="destructive" className="bg-orange-100 text-orange-700 hover:bg-orange-200 border-orange-200 text-[10px] h-5 px-1.5 shadow-none">
                                                     Rớt (K.HĐ)
                                                 </Badge>
                                             );
                                         } else {
-                                            // Đang chờ hoặc chưa chấm
                                             resultBadge = <span className="text-[10px] text-muted-foreground italic">--</span>;
                                         }
                                     }
@@ -243,7 +246,6 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                     </Table>
                 </div>
 
-                {/* --- ADVANCED PAGINATION --- */}
                 <div className="flex flex-col sm:flex-row items-center justify-between px-4 py-4 gap-4 bg-muted/10">
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Hiển thị</span>
@@ -263,49 +265,17 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
                     </div>
 
                     <div className="flex items-center gap-1">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setPage(1)}
-                            disabled={page === 1 || isLoading}
-                            title="Trang đầu"
-                        >
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(1)} disabled={page === 1 || isLoading} title="Trang đầu">
                             <ChevronsLeft className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setPage(p => Math.max(1, p - 1))}
-                            disabled={!meta.prev_page_url || isLoading}
-                            title="Trang trước"
-                        >
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={!meta.prev_page_url || isLoading} title="Trang trước">
                             <ChevronLeft className="h-4 w-4" />
                         </Button>
-                        
-                        <span className="text-xs font-medium mx-2 min-w-[60px] text-center">
-                            Trang {meta.current_page} / {totalPages}
-                        </span>
-
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                            disabled={!meta.next_page_url || isLoading}
-                            title="Trang sau"
-                        >
+                        <span className="text-xs font-medium mx-2 min-w-[60px] text-center">Trang {meta.current_page} / {totalPages}</span>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={!meta.next_page_url || isLoading} title="Trang sau">
                             <ChevronRight className="h-4 w-4" />
                         </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => setPage(totalPages)}
-                            disabled={page === totalPages || isLoading}
-                            title="Trang cuối"
-                        >
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(totalPages)} disabled={page === totalPages || isLoading} title="Trang cuối">
                             <ChevronsRight className="h-4 w-4" />
                         </Button>
                     </div>
@@ -318,6 +288,11 @@ const StudentResultsTable = ({ planId, weights, planStatus }) => {
 // --- MAIN PAGE ---
 export default function ThesisReportPage() {
     const [selectedPlanId, setSelectedPlanId] = useState(null);
+
+    // State cho Dialog nhắc nhở hàng loạt
+    const [isBulkNudgeOpen, setIsBulkNudgeOpen] = useState(false);
+    const [bulkNudgeType, setBulkNudgeType] = useState(null); // 'students', 'groups', 'grades'
+    const [isProcessingBulk, setIsProcessingBulk] = useState(false);
 
     // 1. Load danh sách kế hoạch
     const { data: plans } = useQuery({
@@ -343,6 +318,19 @@ export default function ThesisReportPage() {
         onSuccess: () => toast.success("Đã gửi nhắc nhở thành công.")
     });
 
+    // Mutation nhắc nhở hàng loạt
+    const bulkNudgeMutation = useMutation({
+        mutationFn: ({ userIds, message }) => nudgeBulk(userIds, message),
+        onSuccess: (data) => {
+            toast.success(data.message);
+            setIsBulkNudgeOpen(false);
+        },
+        onError: (err) => {
+            toast.error(err.response?.data?.message || "Gửi hàng loạt thất bại.");
+        },
+        onSettled: () => setIsProcessingBulk(false)
+    });
+
     const handleNudge = (userId, name, type) => {
         let msg = "";
         if (type === 'student_no_group') msg = `Chào ${name}, bạn chưa tham gia nhóm khóa luận nào. Vui lòng tìm nhóm gấp.`;
@@ -352,30 +340,134 @@ export default function ThesisReportPage() {
         nudgeMutation.mutate({ userId, message: msg });
     };
 
+    // Helper functions cho Bulk Nudge
+    const getAlertItems = (type) => {
+        if (!reportData?.alerts) return [];
+        if (type === 'students') return reportData.alerts.students_no_group;
+        if (type === 'groups') return reportData.alerts.groups_no_topic;
+        if (type === 'grades') return reportData.alerts.lecturers_missing_grades;
+        return [];
+    };
+
+    const getBulkNudgeTitle = () => {
+        if (bulkNudgeType === 'students') return "Sinh viên chưa có nhóm";
+        if (bulkNudgeType === 'groups') return "Nhóm chưa có đề tài";
+        if (bulkNudgeType === 'grades') return "Giảng viên thiếu điểm";
+        return "";
+    };
+
+    const openBulkNudge = (type) => {
+        const items = getAlertItems(type);
+        if (!items || items.length === 0) {
+            toast.info("Không có đối tượng nào cần nhắc nhở trong mục này.");
+            return;
+        }
+        setBulkNudgeType(type);
+        setIsBulkNudgeOpen(true);
+    };
+
+    const handleConfirmBulkNudge = () => {
+        setIsProcessingBulk(true);
+        const items = getAlertItems(bulkNudgeType);
+        let userIds = [];
+        let message = "";
+
+        if (bulkNudgeType === 'students') {
+            userIds = items.map(i => i.ID_NGUOIDUNG);
+            message = "Thông báo khẩn: Bạn chưa tham gia nhóm khóa luận nào. Vui lòng thực hiện ghép nhóm ngay.";
+        } else if (bulkNudgeType === 'groups') {
+            userIds = items.map(i => i.LEADER_ID);
+            message = "Thông báo khẩn: Nhóm của bạn chưa đăng ký đề tài. Vui lòng đăng ký trước hạn chót.";
+        } else if (bulkNudgeType === 'grades') {
+            userIds = items.map(i => i.ID_NGUOIDUNG);
+            message = "Thông báo khẩn: Quý Thầy/Cô vui lòng hoàn tất nhập điểm cho các Hội đồng bảo vệ.";
+        }
+
+        bulkNudgeMutation.mutate({ userIds, message });
+    };
+
+    // Hàm xử lý xuất Excel
+    const handleExportExcel = async () => {
+        if (!selectedPlanId) {
+            toast.error("Vui lòng chọn một kế hoạch trước.");
+            return;
+        }
+
+        const toastId = toast.loading("Đang tạo file Excel...");
+        try {
+            const response = await exportReportExcel(selectedPlanId);
+            
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            
+            const planName = plans?.find(p => String(p.ID_KEHOACH) === selectedPlanId)?.TEN_DOT || 'export';
+            const safeName = planName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            link.setAttribute('download', `Ket_qua_${safeName}.xlsx`);
+            
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+            
+            toast.dismiss(toastId);
+            toast.success("Xuất file thành công!");
+        } catch (error) {
+            toast.dismiss(toastId);
+            console.error(error);
+            toast.error("Xuất file thất bại. Vui lòng thử lại.");
+        }
+    };
+
     if (!selectedPlanId && !plans) return <div className="p-8 text-center flex items-center justify-center h-full"><Loader2 className="animate-spin mr-2"/> Đang tải dữ liệu...</div>;
 
     const { overview, charts, alerts, weights } = reportData || {};
 
-    // [FIX] Xử lý số liệu an toàn
+    const selectedPlan = plans?.find(p => String(p.ID_KEHOACH) === selectedPlanId);
+    const isPlanEnded = selectedPlan?.TRANGTHAI === 'Đã hoàn thành';
+
+    // --- LOGIC TÍNH TOÁN BIỂU ĐỒ TRÒN (Pass/Fail) ---
+    const totalStudents = Number(overview?.students) || 0;
     const passCount = Number(charts?.pass_fail?.pass) || 0;
-    const failCount = Number(charts?.pass_fail?.fail) || 0;
-    const totalGraded = passCount + failCount;
+    const failScoreCount = Number(charts?.pass_fail?.fail) || 0; // Rớt do điểm < 4.0
     
-    const passRate = totalGraded > 0 
-        ? Math.round((passCount / totalGraded) * 100) 
+    // Tổng số SV đã có điểm (Đã chấm)
+    const totalGraded = passCount + failScoreCount;
+    
+    // Số lượng SV chưa có điểm
+    const pendingOrNoCouncilCount = Math.max(0, totalStudents - totalGraded); 
+
+    // Chỉ coi là Rớt K.HĐ nếu kế hoạch ĐÃ KẾT THÚC, ngược lại là "Chưa chấm"
+    const failNoCouncilCount = isPlanEnded ? pendingOrNoCouncilCount : 0;
+    
+    // Tổng số rớt thực tế (hiển thị cho StatCard)
+    const totalFailedDisplay = failScoreCount + failNoCouncilCount;
+
+    // Tính lại tỷ lệ đậu trên TỔNG SỐ SINH VIÊN
+    const passRate = totalStudents > 0 
+        ? Math.round((passCount / totalStudents) * 100) 
         : 0;
 
+    // Dữ liệu cho biểu đồ tròn
+    const passFailData = [
+        { name: 'Đậu', value: passCount, fill: PASS_COLOR },
+        { name: 'Rớt (<4.0)', value: failScoreCount, fill: FAIL_SCORE_COLOR },
+    ];
+    
+    if (isPlanEnded) {
+        if (failNoCouncilCount > 0) {
+            passFailData.push({ name: 'Rớt (K.HĐ)', value: failNoCouncilCount, fill: FAIL_NO_COUNCIL_COLOR });
+        }
+    } else {
+        if (pendingOrNoCouncilCount > 0) {
+            passFailData.push({ name: 'Chưa chấm', value: pendingOrNoCouncilCount, fill: PENDING_COLOR });
+        }
+    }
+
+    // Dữ liệu biểu đồ cột
     const scoreData = charts?.score_dist 
         ? Object.entries(charts.score_dist).map(([key, val]) => ({ name: key, value: val })) 
         : [];
-        
-    const passFailData = [
-        { name: 'Đậu', value: passCount },
-        { name: 'Rớt (<4.0)', value: failCount }
-    ];
-
-    // Lấy thông tin kế hoạch hiện tại để check trạng thái
-    const selectedPlan = plans?.find(p => String(p.ID_KEHOACH) === selectedPlanId);
 
     return (
         <div className="p-4 md:p-6 space-y-6 h-full flex flex-col bg-gray-50/50 dark:bg-background overflow-y-auto">
@@ -403,7 +495,12 @@ export default function ThesisReportPage() {
                     <Button variant="outline" size="icon" onClick={() => refetch()} title="Làm mới">
                         <RefreshCw className={cn("w-4 h-4", isLoading && "animate-spin")} />
                     </Button>
-                    <Button variant="default" className="bg-blue-600 hover:bg-blue-700">
+                    <Button 
+                        variant="default" 
+                        className="bg-blue-600 hover:bg-blue-700"
+                        onClick={handleExportExcel}
+                        disabled={isLoading}
+                    >
                         <Download className="w-4 h-4 mr-2" /> Xuất Excel
                     </Button>
                 </div>
@@ -428,21 +525,22 @@ export default function ThesisReportPage() {
                             value={overview?.groups || 0} 
                             description={`${overview?.active_groups || 0} đang thực hiện`}
                             icon={Users} 
-                             className="border-l-4 border-l-indigo-500"
+                            className="border-l-4 border-l-indigo-500"
                         />
                         <StatCard 
                             title="Đề tài / Slot" 
                             value={`${overview?.assigned_topics || 0} / ${overview?.topics || 0}`} 
                             description={`${overview?.topics || 0} đề tài được duyệt`}
                             icon={BookOpen} 
-                             className="border-l-4 border-l-emerald-500"
+                            className="border-l-4 border-l-emerald-500"
                         />
                         <StatCard 
                             title="Tỷ lệ Đậu" 
                             value={`${passRate}%`} 
-                            description={`${failCount} sinh viên rớt`}
+                            description={`${totalFailedDisplay} sinh viên rớt`}
                             icon={GraduationCap} 
-                             className="border-l-4 border-l-orange-500"
+                            className="border-l-4 border-l-orange-500"
+                            valueClassName={totalFailedDisplay > 0 ? "text-red-600" : "text-green-600"}
                         />
                     </div>
 
@@ -463,7 +561,7 @@ export default function ThesisReportPage() {
                                                 cursor={{ fill: 'transparent' }}
                                                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                                             />
-                                            <Bar dataKey="value" fill="#3b82f6" radius={[4, 4, 0, 0]} name="Số lượng" />
+                                            <Bar dataKey="value" fill={SCORE_BAR_COLOR} radius={[4, 4, 0, 0]} name="Số lượng" />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -471,6 +569,7 @@ export default function ThesisReportPage() {
                         </Card>
                     </div>
 
+                    {/* --- [CẬP NHẬT] BIỂU ĐỒ TRÒN TỶ LỆ ĐẬU/RỚT --- */}
                     <div className="col-span-12 md:col-span-4">
                         <Card className="h-full shadow-sm">
                             <CardHeader className="pb-2">
@@ -484,23 +583,41 @@ export default function ThesisReportPage() {
                                                 data={passFailData}
                                                 cx="50%"
                                                 cy="50%"
-                                                innerRadius={60}
-                                                outerRadius={80}
-                                                paddingAngle={5}
+                                                innerRadius={65} 
+                                                outerRadius={85}
+                                                paddingAngle={2} 
                                                 dataKey="value"
+                                                startAngle={90}
+                                                endAngle={-270}
                                             >
                                                 {passFailData.map((entry, index) => (
-                                                    <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#ef4444'} />
+                                                    <Cell key={`cell-${index}`} fill={entry.fill} strokeWidth={0} />
                                                 ))}
                                             </Pie>
-                                            <Tooltip />
-                                            <Legend verticalAlign="bottom" height={36}/>
+                                            <Tooltip 
+                                                formatter={(value) => [`${value} SV`, 'Số lượng']}
+                                                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                                            />
+                                            <Legend 
+                                                verticalAlign="bottom" 
+                                                height={36} 
+                                                iconType="circle"
+                                                formatter={(value, entry) => (
+                                                    <span className="text-xs font-medium ml-1 text-slate-700 dark:text-slate-300">{value}</span>
+                                                )}
+                                            />
                                         </PieChart>
                                     </ResponsiveContainer>
+                                    
+                                    {/* Text ở giữa biểu đồ: HIỂN THỊ TỔNG SINH VIÊN */}
                                     <div className="absolute inset-0 flex items-center justify-center pointer-events-none pb-8">
                                         <div className="text-center">
-                                            <span className="text-2xl font-bold block">{totalGraded}</span>
-                                            <span className="text-[10px] text-muted-foreground uppercase">SV Đã chấm</span>
+                                            <span className="text-3xl font-bold block text-slate-800 dark:text-white leading-none">
+                                                {totalStudents}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground uppercase font-semibold mt-1 block">
+                                                Tổng Sinh viên
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -520,8 +637,9 @@ export default function ThesisReportPage() {
                             </CardHeader>
                             <CardContent className="p-0">
                                 <Tabs defaultValue="students" className="w-full">
-                                    <div className="px-4 pt-2">
-                                        <TabsList className="bg-transparent p-0 gap-4 w-full justify-start border-b rounded-none h-auto">
+                                    {/* THANH TAB + NÚT NHẮC TẤT CẢ */}
+                                    <div className="px-4 pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b">
+                                        <TabsList className="bg-transparent p-0 gap-4 justify-start border-b-0 rounded-none h-auto w-full sm:w-auto">
                                             <TabsTrigger 
                                                 value="students" 
                                                 className="data-[state=active]:bg-transparent data-[state=active]:shadow-none data-[state=active]:border-b-2 data-[state=active]:border-orange-500 rounded-none px-1 pb-3 text-xs font-medium text-muted-foreground data-[state=active]:text-orange-600 transition-all"
@@ -541,8 +659,36 @@ export default function ThesisReportPage() {
                                                 GV thiếu điểm ({alerts?.lecturers_missing_grades?.length || 0})
                                             </TabsTrigger>
                                         </TabsList>
+
+                                        {/* [MỚI] Nút Nhắc tất cả - Chỉ hiện khi kế hoạch CHƯA kết thúc */}
+                                        {!isPlanEnded && (
+                                            <div className="pb-2">
+                                                <TabsContent value="students" className="m-0">
+                                                    <Button size="sm" className="h-7 text-xs bg-orange-600 hover:bg-orange-700"
+                                                        disabled={!alerts?.students_no_group?.length}
+                                                        onClick={() => openBulkNudge('students')}>
+                                                        <Send className="w-3 h-3 mr-1.5" /> Nhắc tất cả ({alerts?.students_no_group?.length || 0})
+                                                    </Button>
+                                                </TabsContent>
+                                                <TabsContent value="groups" className="m-0">
+                                                    <Button size="sm" className="h-7 text-xs bg-orange-600 hover:bg-orange-700"
+                                                        disabled={!alerts?.groups_no_topic?.length}
+                                                        onClick={() => openBulkNudge('groups')}>
+                                                        <Send className="w-3 h-3 mr-1.5" /> Nhắc tất cả ({alerts?.groups_no_topic?.length || 0})
+                                                    </Button>
+                                                </TabsContent>
+                                                <TabsContent value="grades" className="m-0">
+                                                    <Button size="sm" className="h-7 text-xs bg-orange-600 hover:bg-orange-700"
+                                                        disabled={!alerts?.lecturers_missing_grades?.length}
+                                                        onClick={() => openBulkNudge('grades')}>
+                                                        <Send className="w-3 h-3 mr-1.5" /> Nhắc tất cả ({alerts?.lecturers_missing_grades?.length || 0})
+                                                    </Button>
+                                                </TabsContent>
+                                            </div>
+                                        )}
                                     </div>
 
+                                    {/* NỘI DUNG TAB */}
                                     <div className="p-0">
                                         <TabsContent value="students" className="m-0">
                                             <AlertList 
@@ -558,10 +704,13 @@ export default function ThesisReportPage() {
                                                                 <p className="text-xs text-muted-foreground">{item.MA_DINHDANH}</p>
                                                             </div>
                                                         </div>
-                                                        <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8" 
-                                                            onClick={() => handleNudge(item.ID_NGUOIDUNG, item.HODEM_VA_TEN, 'student_no_group')}>
-                                                            <BellRing className="w-4 h-4 mr-1" /> Nhắc
-                                                        </Button>
+                                                        
+                                                        {!isPlanEnded && (
+                                                            <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8" 
+                                                                onClick={() => handleNudge(item.ID_NGUOIDUNG, item.HODEM_VA_TEN, 'student_no_group')}>
+                                                                <BellRing className="w-4 h-4 mr-1" /> Nhắc
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 )}
                                             />
@@ -581,10 +730,13 @@ export default function ThesisReportPage() {
                                                                 <p className="text-xs text-muted-foreground">Trưởng nhóm: {item.LEADER_NAME}</p>
                                                             </div>
                                                         </div>
-                                                        <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8"
-                                                            onClick={() => handleNudge(item.LEADER_ID, item.LEADER_NAME, 'group_no_topic')}>
-                                                            <BellRing className="w-4 h-4 mr-1" /> Nhắc
-                                                        </Button>
+                                                        
+                                                        {!isPlanEnded && (
+                                                            <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8"
+                                                                onClick={() => handleNudge(item.LEADER_ID, item.LEADER_NAME, 'group_no_topic')}>
+                                                                <BellRing className="w-4 h-4 mr-1" /> Nhắc
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 )}
                                             />
@@ -606,10 +758,13 @@ export default function ThesisReportPage() {
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8"
-                                                            onClick={() => handleNudge(item.ID_NGUOIDUNG, item.HODEM_VA_TEN, 'missing_grade')}>
-                                                            <BellRing className="w-4 h-4 mr-1" /> Nhắc
-                                                        </Button>
+                                                        
+                                                        {!isPlanEnded && (
+                                                            <Button size="sm" variant="ghost" className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 h-8"
+                                                                onClick={() => handleNudge(item.ID_NGUOIDUNG, item.HODEM_VA_TEN, 'missing_grade')}>
+                                                                <BellRing className="w-4 h-4 mr-1" /> Nhắc
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 )}
                                             />
@@ -620,17 +775,35 @@ export default function ThesisReportPage() {
                         </Card>
                     </div>
 
-                    {/* --- ROW 4: DANH SÁCH SINH VIÊN (MỚI) --- */}
+                    {/* --- ROW 4: DANH SÁCH SINH VIÊN --- */}
                     <div className="col-span-12">
                         <StudentResultsTable 
                             planId={selectedPlanId} 
                             weights={weights} 
-                            planStatus={selectedPlan?.TRANGTHAI} // Truyền trạng thái kế hoạch xuống
+                            planStatus={selectedPlan?.TRANGTHAI} 
                         />
                     </div>
-
                 </div>
             )}
+
+            {/* --- ALERT DIALOG FOR BULK NUDGE --- */}
+            <AlertDialog open={isBulkNudgeOpen} onOpenChange={setIsBulkNudgeOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Xác nhận gửi nhắc nhở hàng loạt?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Bạn sắp gửi thông báo đến <strong>{getAlertItems(bulkNudgeType).length}</strong> người dùng trong danh sách <strong>{getBulkNudgeTitle()}</strong>.
+                            <br/><br/>Hành động này sẽ gửi thông báo hệ thống đến từng người.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isProcessingBulk}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmBulkNudge} disabled={isProcessingBulk} className="bg-orange-600 hover:bg-orange-700 text-white">
+                            {isProcessingBulk && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Xác nhận gửi
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

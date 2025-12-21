@@ -13,6 +13,10 @@ use App\Models\Nguoidung;
 use App\Models\Sinhvien;
 use App\Models\Nhom;
 use App\Models\TyTrongDiem;
+use App\Models\DiemHuongDan;
+use App\Models\DiemPhanBien;
+use App\Models\DiemHoiDong;
+use App\Models\DiemTongKet;
 use Illuminate\Validation\Rule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -392,6 +396,70 @@ class ThesisPlanController extends Controller
             DB::rollBack();
             Log::error("Lỗi xóa kế hoạch: " . $e->getMessage());
             return response()->json(['message' => 'Lỗi server khi xóa kế hoạch: ' . $e->getMessage()], 500);
+        }
+    }
+
+    public function forceChangeStatus(Request $request, KehoachKhoaluan $plan)
+    {
+        // 1. Kiểm tra quyền hạn (Chỉ Admin và Trưởng khoa)
+        if (!$this->isAdmin() && !$this->isTruongKhoa()) {
+            return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
+        }
+
+        // 2. Validate danh sách trạng thái hợp lệ
+        $validStatuses = [
+            'Bản nháp', 'Chờ phê duyệt', 'Chờ duyệt chỉnh sửa', 'Yêu cầu chỉnh sửa',
+            'Đã phê duyệt', 'Đang thực hiện', 'Đang chấm điểm', 'Đã hoàn thành', 'Đã hủy'
+        ];
+
+        $validator = Validator::make($request->all(), [
+            'TRANGTHAI' => ['required', Rule::in($validStatuses)],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $oldStatus = $plan->TRANGTHAI;
+        $newStatus = $request->TRANGTHAI;
+
+        if ($oldStatus === $newStatus) {
+            return response()->json(['message' => 'Trạng thái mới trùng với trạng thái hiện tại.'], 400);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 3. Cập nhật trạng thái
+            $plan->update(['TRANGTHAI' => $newStatus]);
+
+            // 4. Ghi log hệ thống
+            ActivityLogger::log(
+                'FORCE_STATUS_CHANGE',
+                "Thay đổi trạng thái kế hoạch: {$plan->TEN_DOT}",
+                [
+                    'plan_id' => $plan->ID_KEHOACH,
+                    'old_status' => $oldStatus,
+                    'new_status' => $newStatus,
+                    'by_user' => Auth::user()->EMAIL
+                ],
+                null,
+                'RefreshCw'
+            );
+
+            // 5. Clear Cache bộ lọc để frontend cập nhật lại số lượng
+            Cache::forget('plan_filter_options');
+
+            DB::commit();
+
+            return response()->json([
+                'message' => "Đã chuyển trạng thái từ '{$oldStatus}' sang '{$newStatus}'.",
+                'plan' => $plan
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Force change status failed: ' . $e->getMessage());
+            return response()->json(['message' => 'Lỗi server khi đổi trạng thái.'], 500);
         }
     }
 
@@ -1265,39 +1333,104 @@ class ThesisPlanController extends Controller
      * Cập nhật cài đặt chi tiết của một kế hoạch.
      */
     public function updatePlanSettings(Request $request, KehoachKhoaluan $plan)
-{
-    $validated = $request->validate([
-        'SO_THANHVIEN_TOIDA' => 'required|integer|min:1|max:10',
-        'TYTRONG_DIEM_QUATRINH' => 'required|numeric|min:0|max:1',
-        'TYTRONG_DIEM_PHANBIEN' => 'required|numeric|min:0|max:1',
-        'TYTRONG_DIEM_HOIDONG' => 'required|numeric|min:0|max:1',
-        
-        'SETTINGS' => 'nullable|array', 
-    ]);
-
-    $sum = (float)$validated['TYTRONG_DIEM_QUATRINH'] +
-           (float)$validated['TYTRONG_DIEM_PHANBIEN'] +
-           (float)$validated['TYTRONG_DIEM_HOIDONG'];
-
-    if (abs($sum - 1.0) > 0.001) {
-        throw ValidationException::withMessages([
-            'TYTRONG_DIEM_QUATRINH' => 'Tổng 3 tỷ lệ điểm phải bằng 1 (100%). Hiện tại là ' . ($sum * 100) . '%.'
+    {
+        $validated = $request->validate([
+            'SO_THANHVIEN_TOIDA' => 'required|integer|min:1|max:10',
+            'TYTRONG_DIEM_QUATRINH' => 'required|numeric|min:0|max:1',
+            'TYTRONG_DIEM_PHANBIEN' => 'required|numeric|min:0|max:1',
+            'TYTRONG_DIEM_HOIDONG' => 'required|numeric|min:0|max:1',
+            'SETTINGS' => 'nullable|array', 
         ]);
-    }
 
-    try {
-        $plan->update($validated);
-        
-        return response()->json([
-            'message' => 'Cài đặt kế hoạch đã được cập nhật thành công.',
-            'settings' => $validated 
-        ]);
-    } catch (\Exception $e) {
-        Log::error('Lỗi updatePlanSettings: ' . $e->getMessage());
-        return response()->json(['message' => 'Cập nhật thất bại. Vui lòng thử lại.'], 500);
+        // Kiểm tra tổng tỷ trọng = 100%
+        $sum = (float)$validated['TYTRONG_DIEM_QUATRINH'] +
+               (float)$validated['TYTRONG_DIEM_PHANBIEN'] +
+               (float)$validated['TYTRONG_DIEM_HOIDONG'];
+
+        if (abs($sum - 1.0) > 0.001) {
+            throw ValidationException::withMessages([
+                'TYTRONG_DIEM_QUATRINH' => 'Tổng 3 tỷ lệ điểm phải bằng 1 (100%). Hiện tại là ' . ($sum * 100) . '%.'
+            ]);
+        }
+
+        DB::beginTransaction();
+        try {
+            // 1. Cập nhật thông tin kế hoạch
+            $plan->update($validated);
+
+            // 2. [LOGIC MỚI] Tính lại điểm cho toàn bộ nhóm thuộc kế hoạch này
+            $groups = Nhom::where('ID_KEHOACH', $plan->ID_KEHOACH)->get();
+            
+            $wHD = (float)$validated['TYTRONG_DIEM_QUATRINH'];
+            $wPB = (float)$validated['TYTRONG_DIEM_PHANBIEN'];
+            $wHDong = (float)$validated['TYTRONG_DIEM_HOIDONG'];
+
+            $recalcCount = 0;
+
+            foreach ($groups as $group) {
+                // Lấy điểm trung bình thành phần hiện tại
+                $diemHD = DiemHuongDan::where('ID_NHOM', $group->ID_NHOM)->avg('DIEM');
+                $diemPB = DiemPhanBien::where('ID_NHOM', $group->ID_NHOM)->avg('DIEM');
+                $diemHDong = DiemHoiDong::where('ID_NHOM', $group->ID_NHOM)->avg('DIEM');
+
+                $tong = 0;
+                $hasAnyScore = false;
+
+                // Tính tổng: Điểm thành phần * Tỷ trọng mới
+                if ($diemHD !== null) {
+                    $tong += $diemHD * $wHD;
+                    $hasAnyScore = true;
+                }
+                // Nếu có điểm PB và tỷ trọng PB > 0 thì cộng vào
+                if ($diemPB !== null && $wPB > 0) {
+                    $tong += $diemPB * $wPB;
+                    $hasAnyScore = true;
+                }
+                // Nếu có điểm HĐ và tỷ trọng HĐ > 0 thì cộng vào
+                if ($diemHDong !== null && $wHDong > 0) {
+                    $tong += $diemHDong * $wHDong;
+                    $hasAnyScore = true;
+                }
+
+                $finalTong = $hasAnyScore ? round($tong, 2) : null;
+
+                // Cập nhật vào bảng DIEM_TONGKET
+                DiemTongKet::updateOrCreate(
+                    ['ID_NHOM' => $group->ID_NHOM],
+                    [
+                        'DIEM_HD' => $diemHD !== null ? round($diemHD, 2) : null,
+                        'DIEM_PB' => $diemPB !== null ? round($diemPB, 2) : null,
+                        'DIEM_HDONG' => $diemHDong !== null ? round($diemHDong, 2) : null,
+                        'DIEM_TONG' => $finalTong
+                    ]
+                );
+                $recalcCount++;
+            }
+            
+            // Ghi log
+            ActivityLogger::log(
+                'UPDATE_PLAN_SETTINGS',
+                "Cập nhật tỷ trọng điểm kế hoạch {$plan->TEN_DOT}",
+                [
+                    'weights' => "$wHD / $wPB / $wHDong",
+                    'recalculated_groups' => $recalcCount
+                ],
+                $plan->ID_KEHOACH,
+                'Settings'
+            );
+
+            DB::commit();
+
+            return response()->json([
+                'message' => "Đã cập nhật cài đặt và tính lại điểm cho {$recalcCount} nhóm.",
+                'settings' => $validated 
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Lỗi updatePlanSettings: ' . $e->getMessage());
+            return response()->json(['message' => 'Cập nhật thất bại. Vui lòng thử lại.'], 500);
+        }
     }
-}
-    // [END THÊM MỚI]
 
     private function generateEmail(string $hoTen, string $mssv, bool $addRandom = false): string
     {

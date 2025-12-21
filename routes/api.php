@@ -223,6 +223,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
             Route::get('/student-results', [ReportController::class, 'getStudentResults']);
             Route::post('/nudge', [ReportController::class, 'nudgeUser']);
             Route::post('/nudge-bulk', [ReportController::class, 'nudgeBulk']);
+            Route::get('/export-results', [ReportController::class, 'exportResults']);
         });
 
         // --- File Manager ---
@@ -250,6 +251,7 @@ Route::middleware(['auth:sanctum', 'throttle:100,1', 'force.change.password'])->
         Route::post('thesis-plans/{plan}/request-changes', [ThesisPlanController::class, 'requestChanges']);
         Route::get('thesis-plans/{plan}/export-document', [ThesisPlanController::class, 'exportDocument']);
         Route::get('thesis-plans/{plan}/preview-document', [ThesisPlanController::class, 'previewDocument']);
+        Route::post('thesis-plans/{plan}/force-status', [ThesisPlanController::class, 'forceChangeStatus']);
         Route::post('thesis-plans/{plan}/activate', [ThesisPlanController::class, 'activatePlan']);
 
         // --- Plan Participants ---

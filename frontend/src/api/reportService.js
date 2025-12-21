@@ -17,3 +17,10 @@ export const getStudentResults = (planId, params) => {
         params: { plan_id: planId, ...params } 
     }).then(res => res.data);
 };
+
+export const exportReportExcel = (planId) => {
+    return axiosClient.get('/admin/reports/export-results', { 
+        params: { plan_id: planId },
+        responseType: 'blob'
+    });
+};

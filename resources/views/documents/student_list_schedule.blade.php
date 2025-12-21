@@ -18,7 +18,7 @@
         body {
             font-family: 'Times New Roman', serif;
             font-size: 11pt;
-            line-height: 1.2;
+            line-height: 1.3;
             margin: 0.5cm 0.5cm;
         }
 
@@ -26,22 +26,25 @@
         .header-table, .footer-table { width: 100%; border: none; margin-bottom: 5px; }
         .header-table td, .footer-table td { vertical-align: top; text-align: center; }
         
-        .school-name { font-size: 11pt; font-weight: normal; }
-        .nation { font-weight: bold; font-size: 11pt; }
+        .school-name { font-size: 11pt; font-weight: normal; text-transform: uppercase; }
+        .school-name-bold { font-size: 11pt; font-weight: bold; text-transform: uppercase; }
+        .nation { font-weight: bold; font-size: 11pt; text-transform: uppercase; }
         .motto { font-weight: bold; font-size: 11pt; border-bottom: 1px solid black; display: inline-block; padding-bottom: 2px; }
+        
         .appendix { text-align: left; font-size: 11pt; margin: 10px 0 5px 0; font-weight: bold; }
-        .doc-title { text-align: center; font-weight: bold; font-size: 13pt; margin-top: 5px; }
+        .doc-title { text-align: center; font-weight: bold; font-size: 13pt; margin-top: 10px; }
         .doc-subtitle { text-align: center; font-weight: bold; font-size: 13pt; text-transform: uppercase; }
-        .decision-ref { text-align: center; font-style: italic; font-size: 11pt; margin-bottom: 15px; }
+        .decision-ref { text-align: center; font-style: italic; font-size: 11pt; margin-bottom: 20px; }
 
-        /* TABLE STYLING GIỐNG MẪU */
+        /* TABLE STYLING */
         .council-header { 
             font-weight: bold; 
             text-transform: uppercase; 
-            margin-top: 20px; 
+            margin-top: 25px; 
             margin-bottom: 5px; 
             text-align: left;
             text-decoration: underline;
+            font-size: 12pt;
         }
 
         table.data-table {
@@ -49,43 +52,46 @@
             border-collapse: collapse;
             font-size: 11pt;
             margin-bottom: 10px;
-            table-layout: fixed; /* Cố định độ rộng */
+            page-break-inside: auto; /* Allow table to break across pages */
         }
         
         table.data-table th, table.data-table td {
             border: 1px solid black;
-            padding: 5px 4px;
+            padding: 5px;
             vertical-align: middle;
-            word-wrap: break-word;
         }
 
         table.data-table th { 
             font-weight: bold; 
             text-align: center; 
             background-color: white; 
+            vertical-align: middle;
         }
+        
+        /* Prevent page breaks inside rows if possible, but allow for long content */
+        tr { page-break-inside: avoid; page-break-after: auto; }
 
-        /* ĐỘ RỘNG CỘT (Tinh chỉnh theo ảnh mẫu) */
+        /* Specific fix for rowspans causing white space: force heights if needed, or rely on content */
+        /* .col-topic, .col-gv { height: 1px; } This is a trick sometimes used but risky */
+
+        /* Column Widths */
         .col-stt { width: 5%; text-align: center; }
-        .col-mssv { width: 13%; text-align: center; }
-        /* Cột Họ và Tên: Gộp lại chiếm khoảng 25-27% */
-        .col-holot { width: 18%; text-align: left; border-right: none; padding-right: 2px; }
-        .col-ten { width: 9%; text-align: left; border-left: none; padding-left: 2px; }
-        
-        .col-topic { width: 30%; text-align: justify; }
+        .col-mssv { width: 12%; text-align: center; }
+        .col-holot { width: 22%; text-align: left; border-right: none; } /* Removed right border for visual merge */
+        .col-ten { width: 8%; text-align: left; border-left: none; } /* Removed left border for visual merge */
+        .col-topic { width: 28%; text-align: left; } 
         .col-gv { width: 15%; text-align: left; }
-        .col-note { width: 8%; text-align: center; }
+        .col-note { width: 10%; text-align: center; }
 
-        /* Xử lý ngắt trang: Không ngắt giữa chừng 1 sinh viên */
-        tr { page-break-inside: avoid; }
-        
-        /* Chỉnh footer */
+        /* Footer Signature */
         .recipient-col { width: 50%; text-align: left; }
         .signature-col { width: 50%; text-align: center; }
         .recipient-title { font-weight: bold; font-style: italic; text-decoration: underline; font-size: 11pt; }
-        .recipient-list p { margin: 2px 0; font-size: 11pt; }
+        .recipient-list p { margin: 3px 0; font-size: 11pt; }
         .signer-role { font-weight: bold; font-size: 12pt; text-transform: uppercase; margin-bottom: 80px; }
         .signer-name { font-weight: bold; font-size: 12pt; }
+        
+        .text-center { text-align: center; }
     </style>
 </head>
 <body>
@@ -94,7 +100,7 @@
         <tr>
             <td style="width: 45%;">
                 <div class="school-name">TRƯỜNG ĐẠI HỌC CÔNG THƯƠNG</div>
-                <div class="school-name" style="font-weight: bold;">THÀNH PHỐ HỒ CHÍ MINH</div>
+                <div class="school-name-bold">THÀNH PHỐ HỒ CHÍ MINH</div>
             </td>
             <td style="width: 55%;">
                 <div class="nation">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</div>
@@ -121,59 +127,40 @@
         <table class="data-table">
             <thead>
                 <tr>
-                    <th rowspan="2" class="col-stt">STT</th>
-                    <th rowspan="2" class="col-mssv">Mã số<br>sinh viên</th>
-                    <th colspan="2" style="border-bottom: 1px solid black; padding: 0;">
-                        <div style="padding: 5px;">Họ và tên</div>
-                        <div style="display: flex; width: 100%; border-top: 1px solid black; display: none;"> <div style="width: 65%; border-right: 1px solid black;"></div>
-                            <div style="width: 35%;"></div>
-                        </div>
-                    </th>
-                    <th rowspan="2" class="col-topic">Tên Khóa luận tốt nghiệp</th>
-                    <th rowspan="2" class="col-gv">Người hướng dẫn<br>Khóa luận tốt nghiệp</th>
-                    <th rowspan="2" class="col-note">Ghi chú</th>
-                </tr>
-                <tr style="height: 0px;">
-                    <th class="col-holot" style="height: 0px; padding: 0; border-top: none;"></th>
-                    <th class="col-ten" style="height: 0px; padding: 0; border-top: none;"></th>
+                    <th class="col-stt">STT</th>
+                    <th class="col-mssv">Mã số<br>sinh viên</th>
+                    <th class="col-holot" colspan="2">Họ và tên</th> 
+                    {{-- Combined header for Name --}}
+                    <th class="col-topic">Tên Khóa luận tốt nghiệp</th>
+                    <th class="col-gv">Người hướng dẫn<br>Khóa luận tốt nghiệp</th>
+                    <th class="col-note">Ghi chú</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach($council['topics'] as $topic)
                     @php 
                         $studentCount = count($topic['sinh_viens']); 
-                        $firstStudent = true;
                     @endphp
 
                     @foreach($topic['sinh_viens'] as $index => $sv)
                         <tr>
-                            <td class="col-stt">{{ $globalStt++ }}</td>
-                            <td class="col-mssv">{{ $sv['mssv'] }}</td>
+                            <td class="text-center">{{ $globalStt++ }}</td>
+                            <td class="text-center">{{ $sv['mssv'] }}</td>
                             
-                            <td class="col-holot" style="border-right: none;">
-                                {{ $sv['ho_lot'] }}
-                            </td>
+                            {{-- Split name columns but make them look merged --}}
+                            <td class="col-holot" style="border-right: 0;">{{ $sv['ho_lot'] }}</td>
+                            <td class="col-ten" style="border-left: 0;">{{ $sv['ten'] }}</td>
                             
-                            <td class="col-ten" style="border-left: none;">
-                                {{ $sv['ten'] }}
-                            </td>
-                            
+                            {{-- Topic, Supervisor, Note --}}
                             @if($index === 0)
-                                <td class="col-topic" style="{{ $studentCount > 1 ? 'border-bottom: none;' : '' }}">
+                                <td class="col-topic" rowspan="{{ $studentCount }}">
                                     {{ $topic['ten_detai'] }}
                                 </td>
-                                <td class="col-gv" style="{{ $studentCount > 1 ? 'border-bottom: none;' : '' }}">
+                                <td class="col-gv" rowspan="{{ $studentCount }}">
                                     {{ $topic['gvhd'] }}
                                 </td>
-                                <td class="col-note" style="{{ $studentCount > 1 ? 'border-bottom: none;' : '' }}"></td>
-                            @elseif($index === $studentCount - 1)
-                                <td class="col-topic" style="border-top: none;"></td>
-                                <td class="col-gv" style="border-top: none;"></td>
-                                <td class="col-note" style="border-top: none;"></td>
-                            @else
-                                <td class="col-topic" style="border-top: none; border-bottom: none;"></td>
-                                <td class="col-gv" style="border-top: none; border-bottom: none;"></td>
-                                <td class="col-note" style="border-top: none; border-bottom: none;"></td>
+                                <td class="col-note" rowspan="{{ $studentCount }}">
+                                    </td>
                             @endif
                         </tr>
                     @endforeach
@@ -186,9 +173,9 @@
         <div style="text-align: center; margin-top: 20px; font-style: italic;">Chưa có dữ liệu hội đồng.</div>
     @endif
 
-    <table class="footer-table">
+    <table class="footer-table" style="margin-top: 20px;">
         <tr>
-            <td class="recipient-col">
+            <td class="recipient-col" style="padding-left: 20px;">
                 <div class="recipient-title">Nơi nhận:</div>
                 <div class="recipient-list">
                     <p>- BLĐ Khoa (để b/c);</p>
@@ -199,9 +186,9 @@
                 </div>
             </td>
             <td class="signature-col">
-                <div class="signer-header">KT. TRƯỞNG KHOA</div>
+                <div style="font-weight: bold; font-size: 12pt; text-transform: uppercase;">KT. TRƯỞNG KHOA</div>
                 <div class="signer-role">PHÓ TRƯỞNG KHOA</div>
-                <div class="signer-name" style="margin-top: 80px;">{{ $signerName }}</div>
+                <div class="signer-name">{{ $signerName }}</div>
             </td>
         </tr>
     </table>

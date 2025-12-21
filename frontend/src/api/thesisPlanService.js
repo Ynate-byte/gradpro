@@ -207,3 +207,7 @@ export const getPlanSettings = (planId) => {
 export const updatePlanSettings = (planId, settings) => {
     return axiosClient.put(`/admin/thesis-plans/${planId}/settings`, settings).then(res => res.data);
 };
+
+export const forceChangeStatus = (id, status) => {
+    return axiosClient.post(`/admin/thesis-plans/${id}/force-status`, { TRANGTHAI: status }).then(res => res.data);
+};

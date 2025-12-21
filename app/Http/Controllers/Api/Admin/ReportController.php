@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\DB;
 use App\Models\KehoachKhoaluan;
 use App\Models\Nguoidung;
 use App\Services\NotificationService;
+use App\Exports\ThesisResultExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class ReportController extends Controller
 {
@@ -295,5 +297,17 @@ class ReportController extends Controller
         }
 
         return response()->json(['message' => 'Đã gửi thông báo hàng loạt.']);
+    }
+
+    public function exportResults(Request $request)
+    {
+        $planId = $request->plan_id;
+        if (!$planId) return response()->json(['message' => 'Missing Plan ID'], 400);
+        
+        $plan = KehoachKhoaluan::find($planId);
+        // Tạo tên file: Ket-qua-KLTN-K19.xlsx
+        $fileName = 'Ket-qua-KLTN-' . ($plan ? $plan->KHOAHOC : 'export') . '.xlsx';
+
+        return Excel::download(new ThesisResultExport($planId), $fileName);
     }
 }
