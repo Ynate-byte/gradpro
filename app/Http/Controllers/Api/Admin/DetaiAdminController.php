@@ -111,7 +111,7 @@ class DetaiAdminController extends Controller
     }
 
     /**
-     * Xóa hàng loạt đề tài (Chỉ Admin/Trưởng khoa/Giáo vụ)
+     * Xóa hàng loạt đề tài
      */
     public function bulkDelete(Request $request)
     {
@@ -121,7 +121,6 @@ class DetaiAdminController extends Controller
             return response()->json(['message' => 'Bạn không có quyền thực hiện hành động này.'], 403);
         }
 
-        // 2. Validate
         $validator = Validator::make($request->all(), [
             'topic_ids' => 'required|array|min:1',
             'topic_ids.*' => 'exists:DETAI,ID_DETAI',
@@ -137,24 +136,27 @@ class DetaiAdminController extends Controller
 
         DB::beginTransaction();
         try {
-            // Lấy danh sách đề tài cần xóa
             $topics = Detai::whereIn('ID_DETAI', $topicIds)->get();
 
             foreach ($topics as $topic) {
-                // Kiểm tra điều kiện xóa (VD: Đề tài đã có nhóm đăng ký thì không được xóa)
                 if ($topic->SO_NHOM_HIENTAI > 0) {
                     $failedCount++;
-                    continue; // Bỏ qua đề tài này
+                    continue; 
                 }
 
-                // Cập nhật lại Quota cho giảng viên (nếu cần thiết logic giống hàm destroy đơn lẻ)
+                // Không check trạng thái kế hoạch nữa
+
                 $planId = $topic->ID_KEHOACH;
                 $lecturerId = $topic->ID_NGUOI_DEXUAT;
                 
+                // Dọn dẹp quan hệ con trước khi xóa
+                $topic->phancong_nguoi_gop_y()->delete();
+                $topic->goiyDetai()->delete();
+
                 $topic->delete();
                 $deletedCount++;
 
-                // Logic hồi phục trạng thái Quota (nếu GV đã hoàn thành, giờ bị xóa thì mở lại)
+                // Hồi phục Quota
                 if ($planId && $lecturerId) {
                     $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)
                         ->where('ID_GIANGVIEN', $lecturerId)
@@ -176,7 +178,7 @@ class DetaiAdminController extends Controller
 
             $message = "Đã xóa thành công {$deletedCount} đề tài.";
             if ($failedCount > 0) {
-                $message .= " Có {$failedCount} đề tài không thể xóa vì đã có sinh viên đăng ký.";
+                $message .= " Có {$failedCount} đề tài không thể xóa vì đã có nhóm đăng ký.";
             }
 
             return response()->json(['message' => $message]);
@@ -470,7 +472,7 @@ class DetaiAdminController extends Controller
         ]);
 
         // Set khổ giấy ngang (Landscape) như ảnh mẫu
-        $pdf->setPaper('A4', 'landscape');
+        $pdf->setPaper('A3', 'landscape');
 
         return $pdf->download('Danh-sach-de-tai-' . $plan->KHOAHOC . '.pdf');
     }

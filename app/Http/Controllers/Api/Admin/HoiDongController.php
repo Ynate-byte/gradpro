@@ -1646,87 +1646,127 @@ public function exportSchedulePdf($planId)
         }
     }
 
+    /**
+     * Xuất danh sách sinh viên bảo vệ theo Hội đồng (PDF)
+     */
     public function exportStudentListPdf($planId)
     {
         try {
-            $plan = KehoachKhoaluan::with(['nguoiPheDuyet.giangvien'])->findOrFail($planId);
+            $plan = KehoachKhoaluan::findOrFail($planId);
 
+            // 1. [LOGIC MỚI] LẤY TÊN TRƯỞNG KHOA
+            // Chỉ tìm trong bảng GIANGVIEN cột CHUC_VU
+            $truongKhoaName = '';
+
+            try {
+                // Tìm giảng viên có chức vụ chứa từ "Trưởng khoa" (VD: "Trưởng khoa CNTT")
+                $truongKhoa = \App\Models\Giangvien::where('CHUC_VU', 'LIKE', '%Trưởng khoa%')
+                    ->with('nguoidung') // Load quan hệ để lấy tên
+                    ->first();
+
+                if ($truongKhoa && $truongKhoa->nguoidung) {
+                    $truongKhoaName = $truongKhoa->nguoidung->HODEM_VA_TEN;
+                } else {
+                    // Fallback: Nếu không tìm thấy trong DB thì lấy tên người đang đăng nhập (nếu cần)
+                    // $truongKhoaName = auth()->user()->HODEM_VA_TEN ?? '';
+                }
+            } catch (\Exception $ex) {
+                // Nếu lỡ bảng GIANGVIEN cũng không có cột CHUC_VU thì log lại để debug
+                \Illuminate\Support\Facades\Log::warning("Lỗi tìm Trưởng khoa: " . $ex->getMessage());
+            }
+
+            // Nếu vẫn trống thì điền dấu chấm để người dùng tự điền
+            if (empty($truongKhoaName)) {
+                $truongKhoaName = "........................................";
+            }
+
+
+            // 2. Lấy dữ liệu Hội đồng (Giữ nguyên logic cũ)
             $hoidongs = Hoidong::where('ID_KEHOACH', $planId)
                 ->with([
                     'nhoms' => function($q) {
                         $q->with([
-                            'thanhviens.nguoidung', 
-                            'phancongDetaiNhom.detai',
-                            'phancongDetaiNhom.gvhd.nguoidung'
+                            'thanhviens.nguoidung',           
+                            'phancongDetaiNhom.detai',        
+                            'phancongDetaiNhom.gvhd.nguoidung' 
                         ]);
                     }
                 ])
+                // Sắp xếp số tự nhiên: Hội đồng 1, 2, 10...
                 ->orderByRaw('CAST(REGEXP_REPLACE(TEN_HOIDONG, "[^0-9]+", "") AS UNSIGNED) ASC')
                 ->get();
 
-            // CHẾ BIẾN DỮ LIỆU ĐỂ KHỚP VỚI MẪU (GOM DÒNG)
+
+            // 3. Chế biến dữ liệu (Mapping)
             $processedCouncils = [];
 
             foreach ($hoidongs as $hd) {
-                // Nhóm các nhóm SV theo Đề tài (để merge dòng trong PDF)
-                // Key sẽ là ID_DETAI
-                $groupedByTopic = [];
+                $topicsMap = [];
 
                 foreach ($hd->nhoms as $nhom) {
-                    $detai = $nhom->phancongDetaiNhom?->detai;
-                    $topicId = $detai ? $detai->ID_DETAI : 'unknown_' . $nhom->ID_NHOM;
+                    $phanCong = $nhom->phancongDetaiNhom;
+                    $detai = $phanCong?->detai;
                     
-                    if (!isset($groupedByTopic[$topicId])) {
-                        $groupedByTopic[$topicId] = [
-                            'ten_detai' => $detai ? $detai->TEN_DETAI : 'Chưa đăng ký đề tài',
-                            'gvhd' => $nhom->phancongDetaiNhom?->gvhd?->nguoidung?->HODEM_VA_TEN ?? '',
+                    // Key gom nhóm
+                    $key = $detai ? 'DT_' . $detai->ID_DETAI : 'NHOM_' . $nhom->ID_NHOM;
+
+                    if (!isset($topicsMap[$key])) {
+                        $topicsMap[$key] = [
+                            'ten_detai' => $detai ? $detai->TEN_DETAI : ($nhom->TEN_NHOM ?? 'Chưa đăng ký đề tài'),
+                            'gvhd' => $phanCong?->gvhd?->nguoidung?->HODEM_VA_TEN ?? '',
                             'sinh_viens' => []
                         ];
                     }
 
                     foreach ($nhom->thanhviens as $tv) {
-                        // Tách Họ lót và Tên
-                        $fullName = $tv->nguoidung->HODEM_VA_TEN;
+                        $user = $tv->nguoidung;
+                        if (!$user) continue;
+
+                        // Tách Họ - Tên
+                        $fullName = trim($user->HODEM_VA_TEN);
                         $parts = explode(' ', $fullName);
                         $ten = array_pop($parts);
                         $hoLot = implode(' ', $parts);
 
-                        $groupedByTopic[$topicId]['sinh_viens'][] = [
-                            'mssv' => $tv->nguoidung->MA_DINHDANH,
+                        $topicsMap[$key]['sinh_viens'][] = [
+                            'mssv' => $user->MA_DINHDANH ?? $user->MA_SINHVIEN,
                             'ho_lot' => $hoLot,
                             'ten' => $ten,
                         ];
                     }
                 }
 
-                if (!empty($groupedByTopic)) {
+                // Sắp xếp SV theo tên A-Z trong nhóm
+                foreach ($topicsMap as &$topicData) {
+                    usort($topicData['sinh_viens'], function($a, $b) {
+                        return strcmp($a['ten'], $b['ten']);
+                    });
+                }
+
+                if (!empty($topicsMap)) {
                     $processedCouncils[] = [
                         'ten_hoi_dong' => mb_strtoupper($hd->TEN_HOIDONG, 'UTF-8'),
-                        'topics' => $groupedByTopic
+                        'topics' => array_values($topicsMap)
                     ];
                 }
             }
 
-            // Người ký (Mặc định cô Ngân như ảnh)
-            $signerName = "Nguyễn Thị Bích Ngân";
-            if ($plan->nguoiPheDuyet) {
-                $signerName = $plan->nguoiPheDuyet->HODEM_VA_TEN;
-            }
-
-            $data = [
+            // 4. Render PDF
+            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.student_list_schedule', [
                 'plan' => $plan,
                 'councils' => $processedCouncils,
-                'signerName' => $signerName
-            ];
+                'truongKhoaName' => $truongKhoaName, // Truyền biến này sang View
+            ]);
+            
+            $pdf->setPaper('A4', 'landscape');
 
-            $pdf = \Barryvdh\DomPDF\Facade\Pdf::loadView('documents.student_list_schedule', $data);
-            $pdf->setPaper('A4', 'landscape'); // Khổ ngang
+            $fileName = 'DS-Hoi-dong-' . \Illuminate\Support\Str::slug($plan->TEN_DOT) . '.pdf';
 
-            return $pdf->download('DS-Hoi-dong-Bao-ve-' . $plan->KHOAHOC . '.pdf');
+            return $pdf->download($fileName);
 
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error("Export Error: " . $e->getMessage());
-            return response()->json(['message' => 'Lỗi xuất file: ' . $e->getMessage()], 500);
+            \Illuminate\Support\Facades\Log::error("Export PDF Error: " . $e->getMessage());
+            return response()->json(['message' => 'Lỗi xuất file PDF: ' . $e->getMessage()], 500);
         }
     }
 }

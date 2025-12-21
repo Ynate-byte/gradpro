@@ -29,7 +29,7 @@ const SortIndicator = ({ column }) => {
     return sorted === "desc" ? <ArrowDown className="ml-2 h-4 w-4" /> : <ArrowUp className="ml-2 h-4 w-4" />;
 };
 
-export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }) => [
+export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit, onDelete }) => [
     {
         id: "select",
         header: ({ table }) => (
@@ -135,6 +135,7 @@ export const getColumns = ({ onViewDetails, onApprove, onReject, onRequestEdit }
                 onApprove={onApprove}
                 onReject={onReject}
                 onRequestEdit={onRequestEdit}
+                onDelete={onDelete}
             />
         ),
         size: 80,

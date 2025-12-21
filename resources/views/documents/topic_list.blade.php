@@ -4,62 +4,89 @@
     <meta charset="UTF-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Danh sách Đề tài Khóa luận</title>
-    <style>
-        @font-face {
-            font-family: 'Times New Roman';
-            src: url('{{ storage_path('fonts/SVN-Times New Roman.ttf') }}') format('truetype');
-        }
-        @font-face {
-            font-family: 'Times New Roman Bold';
-            src: url('{{ storage_path('fonts/SVN-Times New Roman Bold.ttf') }}') format('truetype');
-            font-weight: bold;
-        }
+<style>
+    @font-face {
+        font-family: 'Times New Roman';
+        src: url('{{ storage_path('fonts/SVN-Times New Roman.ttf') }}') format('truetype');
+    }
+    @font-face {
+        font-family: 'Times New Roman Bold';
+        src: url('{{ storage_path('fonts/SVN-Times New Roman Bold.ttf') }}') format('truetype');
+        font-weight: bold;
+    }
 
-        body {
-            font-family: 'Times New Roman', serif;
-            font-size: 11pt;
-            line-height: 1.3;
-            margin: 0.5cm;
-        }
+    @page {
+        margin: 1cm;
+    }
 
-        .header-title {
-            text-align: center;
-            font-weight: bold;
-            font-size: 14pt;
-            text-transform: uppercase;
-            margin-bottom: 20px;
-        }
+    body {
+        font-family: 'Times New Roman', serif;
+        font-size: 11pt;
+        line-height: 1.3;
+    }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 10pt; /* Chữ trong bảng nhỏ hơn một chút để vừa */
-        }
+    .header-title {
+        text-align: center;
+        font-weight: bold;
+        font-size: 16pt;
+        text-transform: uppercase;
+        margin-bottom: 20px;
+    }
 
-        th, td {
-            border: 1px solid black;
-            padding: 5px;
-            vertical-align: middle;
-            text-align: left;
-        }
+    /* --- CẤU HÌNH BẢNG ĐỂ TỰ ĐỘNG SANG TRANG --- */
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 11pt;
+        table-layout: fixed;
+        /* Cho phép ngắt trang bên trong bảng */
+        page-break-inside: auto; 
+    }
 
-        th {
-            font-family: 'Times New Roman Bold';
-            font-weight: bold;
-            text-align: center;
-            background-color: #f0f0f0;
-        }
+    /* Cấu hình dòng (row) */
+    tr {
+        /* Cho phép ngắt trang bên trong dòng nếu nội dung quá dài */
+        page-break-inside: auto; 
+        page-break-after: auto;
+    }
 
-        /* Độ rộng các cột tương đối theo ảnh */
-        .col-stt { width: 5%; text-align: center; }
-        .col-ten { width: 20%; }
-        .col-yeucau { width: 30%; }
-        .col-gv { width: 15%; }
-        .col-email { width: 15%; word-break: break-all; }
-        .col-bomon { width: 8%; text-align: center; }
-        .col-ghichu { width: 7%; text-align: center; }
+    th, td {
+        border: 1px solid black;
+        padding: 6px;
+        vertical-align: top;
+        text-align: left;
+        word-wrap: break-word;
+        /* Đảm bảo nội dung trong ô cũng có thể bị ngắt */
+        page-break-inside: auto; 
+    }
 
-    </style>
+    /* Lặp lại tiêu đề khi sang trang mới */
+    thead {
+        display: table-header-group;
+    }
+    
+    tfoot {
+        display: table-footer-group;
+    }
+
+    th {
+        font-family: 'Times New Roman Bold';
+        font-weight: bold;
+        text-align: center;
+        background-color: #f0f0f0;
+        vertical-align: middle;
+    }
+
+    /* --- CÂN CHỈNH ĐỘ RỘNG CỘT (Đã tối ưu cho A3 Landscape) --- */
+    .col-stt     { width: 3%; text-align: center; }
+    .col-ten     { width: 15%; }
+    .col-yeucau  { width: 54%; } /* Cột này rộng nhất để chứa nội dung dài */
+    .col-gv      { width: 8%; }
+    .col-email   { width: 10%; font-size: 10pt; word-break: break-all; }
+    .col-bomon   { width: 5%; text-align: center; }
+    .col-ghichu  { width: 5%; text-align: center; }
+
+</style>
 </head>
 <body>
 
@@ -72,8 +99,7 @@
             <tr>
                 <th class="col-stt">STT</th>
                 <th class="col-ten">Tên đề tài</th>
-                <th class="col-yeucau">Yêu cầu</th>
-                <th class="col-gv">GVHD</th>
+                <th class="col-yeucau">Yêu cầu & Nội dung</th> <th class="col-gv">GVHD</th>
                 <th class="col-email">Email</th>
                 <th class="col-bomon">Bộ môn</th>
                 <th class="col-ghichu">Ghi chú</th>
@@ -83,20 +109,27 @@
             @foreach($topics as $index => $topic)
             <tr>
                 <td style="text-align: center;">{{ $index + 1 }}</td>
-                <td>{{ $topic->TEN_DETAI }}</td>
                 <td>
-                    {{-- Hiển thị Yêu cầu, nếu không có thì lấy Mô tả --}}
+                    <strong>{{ $topic->TEN_DETAI }}</strong>
+                </td>
+                <td>
+                    {{-- Ưu tiên hiển thị Yêu cầu, nếu không thì Mô tả --}}
                     @if($topic->YEUCAU)
                         {!! nl2br(e($topic->YEUCAU)) !!}
-                    @else
+                    @endif
+                    
+                    @if($topic->MOTA && $topic->YEUCAU)
+                        <br><br><strong>Mô tả:</strong><br>
+                    @endif
+                    
+                    @if($topic->MOTA)
                         {!! nl2br(e($topic->MOTA)) !!}
                     @endif
                 </td>
                 <td>{{ $topic->nguoiDexuat->nguoidung->HODEM_VA_TEN ?? '' }}</td>
                 <td>{{ $topic->nguoiDexuat->nguoidung->EMAIL ?? '' }}</td>
                 <td style="text-align: center;">{{ $topic->khoaBomon->MA_KHOA_BOMON ?? '' }}</td>
-                <td>
-                    {{-- Ví dụ: Hiển thị mục tiêu hoặc loại đề tài --}}
+                <td style="text-align: center;">
                     {{ $topic->MUCTIEU ?? '' }}
                 </td>
             </tr>

@@ -1028,23 +1028,28 @@ class DetaiController extends Controller
     }
 
     /**
-     * Xóa đề tài khóa luận
+     * Xóa đề tài khóa luận (Đơn lẻ)
      */
     public function destroy($id)
     {
         $topic = Detai::findOrFail($id);
+        
         $currentUser = Auth::user();
         $lecturer = $currentUser->giangvien;
 
+        // 1. Check quyền sở hữu (Hoặc là Admin/Quản lý)
         $isProposer = $lecturer && $topic->ID_NGUOI_DEXUAT == $lecturer->ID_GIANGVIEN;
-        $isAdmin = $this->isAdmin();
+        $isAdmin = $this->isAdmin() || $this->isTruongKhoa() || $this->isGiaoVu();
 
         if (!$isProposer && !$isAdmin) {
-            return response()->json(['message' => 'Không được phép'], 403);
+            return response()->json(['message' => 'Không được phép thực hiện hành động này.'], 403);
         }
 
-        if ($topic->TRANGTHAI === 'Đã duyệt' || $topic->SO_NHOM_HIENTAI > 0) {
-            return response()->json(['message' => 'Không thể xóa đề tài đã duyệt hoặc đề tài đã có nhóm đăng ký'], 403);
+        // 2. [LOGIC CHẶN XÓA DUY NHẤT]
+        // Chỉ chặn nếu ĐÃ CÓ NHÓM ĐĂNG KÝ.
+        // Bất kể kế hoạch đang chạy hay đã xong, nếu chưa ai chọn thì được phép xóa.
+        if ($topic->SO_NHOM_HIENTAI > 0) {
+            return response()->json(['message' => 'Không thể xóa đề tài đã có nhóm sinh viên đăng ký.'], 403);
         }
 
         DB::beginTransaction();
@@ -1052,19 +1057,26 @@ class DetaiController extends Controller
             $planId = $topic->ID_KEHOACH;
             $lecturerId = $topic->ID_NGUOI_DEXUAT;
 
+            // Xóa các phân công liên quan (nếu có rác)
+            $topic->phancong_nguoi_gop_y()->delete();
+            $topic->goiyDetai()->delete();
+
             $topic->delete();
             
-            $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)
-                ->where('ID_GIANGVIEN', $lecturerId)
-                ->first();
+            // 3. Cập nhật lại trạng thái Quota giảng viên (Mở lại nếu đang Hoàn thành)
+            if ($planId && $lecturerId) {
+                $quotaGV = \App\Models\QuotaGiangvien::where('ID_KEHOACH', $planId)
+                    ->where('ID_GIANGVIEN', $lecturerId)
+                    ->first();
 
-            if ($quotaGV && $quotaGV->TRANGTHAI === 'Hoàn thành') {
-                $currentCount = Detai::where('ID_KEHOACH', $planId)
-                    ->where('ID_NGUOI_DEXUAT', $lecturerId)
-                    ->count();
-                
-                if ($currentCount < $quotaGV->SO_DETAI_QUOTA) {
-                    $quotaGV->update(['TRANGTHAI' => 'Đang phân công']);
+                if ($quotaGV && $quotaGV->TRANGTHAI === 'Hoàn thành') {
+                    $currentCount = Detai::where('ID_KEHOACH', $planId)
+                        ->where('ID_NGUOI_DEXUAT', $lecturerId)
+                        ->count();
+                    
+                    if ($currentCount < $quotaGV->SO_DETAI_QUOTA) {
+                        $quotaGV->update(['TRANGTHAI' => 'Đang phân công']);
+                    }
                 }
             }
 
@@ -1072,7 +1084,7 @@ class DetaiController extends Controller
             return response()->json(['message' => 'Đề tài đã xóa thành công']);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['message' => 'Lỗi xóa đề tài'], 500);
+            return response()->json(['message' => 'Lỗi xóa đề tài: ' . $e->getMessage()], 500);
         }
     }
 

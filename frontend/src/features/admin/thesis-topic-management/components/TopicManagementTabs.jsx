@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { toast } from "sonner";
-import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, FileDown, CheckCheck, FileText } from "lucide-react";
+import { Loader2, BookOpen, Clock, CheckCircle, AlertTriangle, FileDown, CheckCheck, FileText, Trash2 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataTable } from '@/components/shared/data-table/DataTable';
@@ -21,7 +21,7 @@ import { getColumns } from "./columns";
 
 import { thesisTopicService } from "@/api/thesisTopicService";
 import { getAllPlans } from "@/api/thesisPlanService";
-import { getKhoaBomons } from "@/api/userService"; 
+import { getKhoaBomons } from "@/api/userService";
 import TopicDetailDialog from "../../../lecturer/thesis-topics/components/TopicDetailDialog";
 import RejectDialog from "./RejectDialog";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -32,10 +32,10 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const getVariants = (shouldReduce) => {
     if (shouldReduce) {
-        return { 
-            container: { visible: { opacity: 1 } }, 
-            item: { visible: { opacity: 1, y: 0 } }, 
-            table: { visible: { opacity: 1, y: 0 } } 
+        return {
+            container: { visible: { opacity: 1 } },
+            item: { visible: { opacity: 1, y: 0 } },
+            table: { visible: { opacity: 1, y: 0 } }
         };
     }
     return {
@@ -49,7 +49,7 @@ const columnVisibility = { "department_id": false };
 
 const TopicManagementTabs = () => {
     const { user } = useAuth();
-    
+
     // --- State Logic ---
     const [allTopics, setAllTopics] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -62,34 +62,45 @@ const TopicManagementTabs = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
     const [columnFilters, setColumnFilters] = useState([]);
-    
+
     const [departmentOptions, setDepartmentOptions] = useState([]);
-    
+
     const [pagination, setPagination] = useState({ pageIndex: 0, pageSize: 20 });
     const [sorting, setSorting] = useState([]);
     const [rowSelection, setRowSelection] = useState({});
 
+    // Dialog States
     const [showTopicDetailDialog, setShowTopicDetailDialog] = useState(false);
     const [showRejectDialog, setShowRejectDialog] = useState(false);
     const [selectedTopicId, setSelectedTopicId] = useState(null);
     const [selectedTopic, setSelectedTopic] = useState(null);
     const [actionType, setActionType] = useState("");
 
+    // Bulk Action States
     const [showBulkApproveAlert, setShowBulkApproveAlert] = useState(false);
     const [isBulkApproving, setIsBulkApproving] = useState(false);
-    const [isExportingPdf, setIsExportingPdf] = useState(false); // [NEW] State loading xuất PDF
+
+    // Delete States
+    const [showDeleteAlert, setShowDeleteAlert] = useState(false);
+    const [topicToDelete, setTopicToDelete] = useState(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const [showBulkDeleteAlert, setShowBulkDeleteAlert] = useState(false);
+    const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+
+    // Export States
+    const [isExportingPdf, setIsExportingPdf] = useState(false);
 
     const shouldReduceMotion = useReducedMotion();
     const { reduceMotion } = useTheme();
     const isReduced = reduceMotion || shouldReduceMotion;
     const variants = useMemo(() => getVariants(isReduced), [isReduced]);
 
-    // Xác định nếu là Trưởng bộ môn thuần túy (không phải Admin/GiaoVu/TruongKhoa)
+    // Xác định quyền hạn (Trưởng bộ môn thuần túy)
     const positionCodes = user?.giangvien?.chucvus?.map(cv => cv.MA_CHUCVU) || [];
     const roleName = user?.vaitro?.TEN_VAITRO;
-    
-    const isTruongBoMonOnly = positionCodes.includes('TRUONG_BOMON') && 
-                              !positionCodes.includes('TRUONG_KHOA') && 
+    const isTruongBoMonOnly = positionCodes.includes('TRUONG_BOMON') &&
+                              !positionCodes.includes('TRUONG_KHOA') &&
                               !positionCodes.includes('GIAO_VU') &&
                               roleName !== 'Admin';
 
@@ -99,9 +110,9 @@ const TopicManagementTabs = () => {
             try {
                 const [plansRes, deptRes] = await Promise.all([
                     getAllPlans(),
-                    getKhoaBomons().catch(() => []) 
+                    getKhoaBomons().catch(() => [])
                 ]);
-                
+
                 const plansList = plansRes || [];
                 setPlans(plansList);
 
@@ -129,7 +140,7 @@ const TopicManagementTabs = () => {
         if (selectedPlanId) {
             loadTopics(selectedPlanId);
         } else {
-            setAllTopics([]); 
+            setAllTopics([]);
             setLoading(false);
             setLoadingStats(false);
         }
@@ -139,12 +150,12 @@ const TopicManagementTabs = () => {
         try {
             setLoading(true);
             setLoadingStats(true);
-            
+
             const topicRes = await thesisTopicService.getAdminTopics({ plan_id: planId });
-            const topicsData = topicRes.data || topicRes || []; 
-            
+            const topicsData = topicRes.data || topicRes || [];
+
             setAllTopics(Array.isArray(topicsData) ? topicsData : (topicsData.data || []));
-            setRowSelection({}); // Reset selection khi load lại
+            setRowSelection({});
 
         } catch (error) {
             console.error("Error loading topics:", error);
@@ -156,7 +167,7 @@ const TopicManagementTabs = () => {
         }
     };
 
-    // 3. Process Data (Filter & Sort)
+    // 3. Process Data
     const processedData = useMemo(() => {
         let filtered = allTopics.filter(t => {
             const matchesSearch =
@@ -164,7 +175,6 @@ const TopicManagementTabs = () => {
                 t.ten_giang_vien?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
                 t.MA_DETAI?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
 
-            // Logic lọc theo Tab
             const matchesTab = activeTab === "Tất cả" || t.TRANGTHAI === activeTab;
 
             const matchesFilters = columnFilters.every(filter => {
@@ -226,11 +236,7 @@ const TopicManagementTabs = () => {
     const hasNext = currentTopicIndex !== -1 && currentTopicIndex < currentList.length - 1;
     const hasPrevious = currentTopicIndex !== -1 && currentTopicIndex > 0;
 
-    const handleViewTopicDetails = (topicId) => {
-        setSelectedTopicId(topicId);
-        setShowTopicDetailDialog(true);
-    };
-
+    // --- [SỬA LỖI] ĐỊNH NGHĨA CÁC HÀM NEXT/PREV TRƯỚC KHI SỬ DỤNG ---
     const handleNext = () => {
         if (hasNext) {
             const nextTopic = currentList[currentTopicIndex + 1];
@@ -243,6 +249,12 @@ const TopicManagementTabs = () => {
             const prevTopic = currentList[currentTopicIndex - 1];
             if (prevTopic) setSelectedTopicId(prevTopic.ID_DETAI);
         }
+    };
+    // ----------------------------------------------------------------
+
+    const handleViewTopicDetails = (topicId) => {
+        setSelectedTopicId(topicId);
+        setShowTopicDetailDialog(true);
     };
 
     const handleApprove = async (topicId) => {
@@ -315,7 +327,66 @@ const TopicManagementTabs = () => {
         setShowRejectDialog(true);
     };
 
-    // [MỚI] Hàm xử lý xuất PDF
+    // --- DELETE Handlers ---
+    const handleDeleteClick = (topic) => {
+        setTopicToDelete(topic);
+        setShowDeleteAlert(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!topicToDelete) return;
+        setIsDeleting(true);
+        try {
+            await thesisTopicService.deleteTopic(topicToDelete.ID_DETAI);
+            toast.success(`Đã xóa đề tài: ${topicToDelete.TEN_DETAI}`);
+            await loadTopics(selectedPlanId);
+            if (showTopicDetailDialog && selectedTopicId === topicToDelete.ID_DETAI) {
+                setShowTopicDetailDialog(false);
+            }
+        } catch (error) {
+            console.error("Delete error:", error);
+            toast.error(error.response?.data?.message || "Lỗi khi xóa đề tài.");
+        } finally {
+            setIsDeleting(false);
+            setShowDeleteAlert(false);
+            setTopicToDelete(null);
+        }
+    };
+
+    const handleBulkDeleteClick = () => {
+        const selectedCount = Object.keys(rowSelection).length;
+        if (selectedCount === 0) return;
+        setShowBulkDeleteAlert(true);
+    };
+
+    const confirmBulkDelete = async () => {
+        setIsBulkDeleting(true);
+        try {
+            const selectedIds = Object.keys(rowSelection).map(index => {
+                 const row = processedData.pagedData[parseInt(index)];
+                 return row ? row.ID_DETAI : null;
+            }).filter(id => id !== null);
+
+            if (selectedIds.length === 0) {
+                 toast.warning("Vui lòng chọn ít nhất 1 đề tài.");
+                 return;
+            }
+
+            const res = await thesisTopicService.bulkDeleteTopics(selectedIds);
+            toast.success(res.message);
+            setRowSelection({});
+            await loadTopics(selectedPlanId);
+
+        } catch (error) {
+            console.error("Bulk delete error:", error);
+            toast.error(error.response?.data?.message || "Lỗi khi xóa hàng loạt.");
+        } finally {
+            setIsBulkDeleting(false);
+            setShowBulkDeleteAlert(false);
+        }
+    };
+
+    // --- EXPORT Handlers ---
     const handleExportPdf = async () => {
         if (!selectedPlanId) {
             toast.warning("Vui lòng chọn một kế hoạch.");
@@ -326,15 +397,11 @@ const TopicManagementTabs = () => {
         toast.info("Đang tạo file PDF, vui lòng đợi...");
 
         try {
-            // Lấy department_id từ bộ lọc hiện tại (nếu có) để xuất đúng danh sách đang xem
             const deptFilter = columnFilters.find(f => f.id === 'department_id');
-            // Nếu filter là mảng (multi-select), lấy giá trị đầu tiên hoặc logic tùy chỉnh. 
-            // Ở đây giả sử PDF hỗ trợ lọc 1 khoa hoặc tất cả.
             const deptId = deptFilter ? deptFilter.value[0] : null;
 
             const blob = await thesisTopicService.exportTopicsPdf(selectedPlanId, deptId);
             
-            // Tạo link tải
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
@@ -357,9 +424,9 @@ const TopicManagementTabs = () => {
         toast.info("Tính năng xuất danh sách Excel đang phát triển.");
     };
 
+    // --- Bulk Approve ---
     const handleBulkApproveClick = () => {
-        const selectedCount = Object.keys(rowSelection).length;
-        if (selectedCount === 0) return;
+        if (Object.keys(rowSelection).length === 0) return;
         setShowBulkApproveAlert(true);
     };
 
@@ -371,19 +438,12 @@ const TopicManagementTabs = () => {
                  return row ? row.ID_DETAI : null;
             }).filter(id => id !== null);
 
-            if (selectedIds.length === 0) {
-                 toast.warning("Vui lòng chọn ít nhất 1 đề tài.");
-                 return;
-            }
-
             await thesisTopicService.bulkApproveTopics(selectedIds);
             toast.success(`Đã duyệt thành công ${selectedIds.length} đề tài.`);
-            setRowSelection({}); // Reset selection
+            setRowSelection({});
             await loadTopics(selectedPlanId);
-
         } catch (error) {
-            console.error("Bulk approve error:", error);
-            toast.error(error.response?.data?.message || "Lỗi khi duyệt hàng loạt.");
+            toast.error("Lỗi khi duyệt hàng loạt.");
         } finally {
             setIsBulkApproving(false);
             setShowBulkApproveAlert(false);
@@ -398,8 +458,9 @@ const TopicManagementTabs = () => {
         onViewDetails: handleViewTopicDetails,
         onApprove: handleApprove,
         onReject: handleReject,
-        onRequestEdit: handleRequestEdit
-    }), [handleApprove, handleReject, handleRequestEdit]);
+        onRequestEdit: handleRequestEdit,
+        onDelete: handleDeleteClick
+    }), [handleApprove, handleReject, handleRequestEdit]); // handleDeleteClick được defined ở trên
 
     const renderDataTable = () => {
         const selectedCount = Object.keys(rowSelection).length;
@@ -443,16 +504,30 @@ const TopicManagementTabs = () => {
                     
                     // Bulk Actions Slot
                     bulkActions={
-                         selectedCount > 0 && activeTab === "Chờ duyệt" ? (
-                            <Button 
-                                size="sm" 
-                                className="bg-green-600 hover:bg-green-700 text-white h-8 ml-2 animate-in fade-in zoom-in duration-200"
-                                onClick={handleBulkApproveClick}
-                            >
-                                <CheckCheck className="mr-2 h-4 w-4" />
-                                Duyệt {selectedCount} đề tài
-                            </Button>
-                         ) : null
+                         selectedCount > 0 && (
+                            <div className="flex gap-2 ml-2 animate-in fade-in zoom-in duration-200">
+                                {activeTab === "Chờ duyệt" && (
+                                    <Button 
+                                        size="sm" 
+                                        className="bg-green-600 hover:bg-green-700 text-white h-8"
+                                        onClick={handleBulkApproveClick}
+                                    >
+                                        <CheckCheck className="mr-2 h-4 w-4" />
+                                        Duyệt ({selectedCount})
+                                    </Button>
+                                )}
+                                
+                                <Button 
+                                    size="sm" 
+                                    variant="destructive"
+                                    className="h-8"
+                                    onClick={handleBulkDeleteClick}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Xóa ({selectedCount})
+                                </Button>
+                            </div>
+                         )
                     }
                     
                     flexLayout={true}
@@ -504,7 +579,6 @@ const TopicManagementTabs = () => {
                       </Select>
                   </div>
                   <div className="flex items-center gap-2">
-                      {/* [NEW] Button Export PDF */}
                       <Button 
                           variant="outline" 
                           onClick={handleExportPdf} 
@@ -656,6 +730,59 @@ const TopicManagementTabs = () => {
                         >
                             {isBulkApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Duyệt ngay
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Single Delete Alert Dialog */}
+            <AlertDialog open={showDeleteAlert} onOpenChange={setShowDeleteAlert}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-red-600 flex items-center gap-2">
+                            <Trash2 className="h-5 w-5"/> Xác nhận xóa đề tài?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Bạn có chắc chắn muốn xóa đề tài "<strong>{topicToDelete?.TEN_DETAI}</strong>"?
+                            <br />Hành động này không thể hoàn tác.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={confirmDelete} 
+                            disabled={isDeleting}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Xóa vĩnh viễn
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Bulk Delete Alert Dialog */}
+            <AlertDialog open={showBulkDeleteAlert} onOpenChange={setShowBulkDeleteAlert}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="text-red-600 flex items-center gap-2">
+                            <Trash2 className="h-5 w-5"/> Xác nhận xóa hàng loạt?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Bạn đang chọn xóa <strong>{Object.keys(rowSelection).length}</strong> đề tài.
+                            <br /><br />
+                            <span className="font-bold text-foreground">Lưu ý:</span> Chỉ những đề tài chưa có sinh viên đăng ký mới được xóa thành công.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isBulkDeleting}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction 
+                            onClick={confirmBulkDelete} 
+                            disabled={isBulkDeleting}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            {isBulkDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            Xóa tất cả
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
