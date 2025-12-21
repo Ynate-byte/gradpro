@@ -163,8 +163,9 @@ const CalendarEventItem = ({ event, onRate, onUpdate, onDelete, onEditDetail }) 
             newEndDate.setMinutes(newEndDate.getMinutes() + 45);
 
             const payload = {
-                THOIGIAN_BATDAU: newStartDate.toISOString(),
-                THOIGIAN_KETTHUC: newEndDate.toISOString(),
+                // [FIXED] Dùng format thay vì toISOString để giữ nguyên giờ Local
+                THOIGIAN_BATDAU: format(newStartDate, "yyyy-MM-dd'T'HH:mm:ss"),
+                THOIGIAN_KETTHUC: format(newEndDate, "yyyy-MM-dd'T'HH:mm:ss"),
                 ...(meeting.HINHTHUC_HOP === 'Trực tiếp' ? { DIADIEM: location } : { LINK_TRUCTUYEN: location }),
                 TIEUDE_LICHHOP: meeting.TIEUDE_LICHHOP,
                 HINHTHUC_HOP: meeting.HINHTHUC_HOP
@@ -420,7 +421,9 @@ export default function LecturerCalendarPage() {
             const [y, m, d] = date.split('-').map(Number);
             const [h, min, s] = session.defaultTime.split(':').map(Number);
             const localDate = new Date(y, m - 1, d, h , min, s);
-            const startTime = localDate.toISOString();
+            
+            // [FIXED] Sử dụng format để giữ nguyên giờ địa phương
+            const startTime = format(localDate, "yyyy-MM-dd'T'HH:mm:ss");
             
             createMeetingMutation.mutate({ groupId: group.ID_NHOM, startTime });
         } 
@@ -428,7 +431,6 @@ export default function LecturerCalendarPage() {
             const meeting = active.data.current.meeting;
             
             const [y, mon, d] = date.split('-').map(Number);
-            
             const [h, m, s] = session.defaultTime.split(':').map(Number);
             
             const newStartDate = new Date(y, mon - 1, d, h, m, s);
@@ -436,8 +438,9 @@ export default function LecturerCalendarPage() {
             newEndDate.setMinutes(newEndDate.getMinutes() + 45); 
             
             const payload = {
-                THOIGIAN_BATDAU: newStartDate.toISOString(),
-                THOIGIAN_KETTHUC: newEndDate.toISOString(),
+                // [FIXED] Sử dụng format để giữ nguyên giờ địa phương
+                THOIGIAN_BATDAU: format(newStartDate, "yyyy-MM-dd'T'HH:mm:ss"),
+                THOIGIAN_KETTHUC: format(newEndDate, "yyyy-MM-dd'T'HH:mm:ss"),
                 DIADIEM: meeting.DIADIEM,
                 LINK_TRUCTUYEN: meeting.LINK_TRUCTUYEN,
                 TIEUDE_LICHHOP: meeting.TIEUDE_LICHHOP,
@@ -487,18 +490,18 @@ export default function LecturerCalendarPage() {
                             </div>
                         ) : (
                             groups.map(group => {
-                                const meetingCount = meetings.filter(m =>
-                                    m.ID_NHOM === group.ID_NHOM &&
+                                const meetingCount = meetings.filter(m => 
+                                    m.ID_NHOM === group.ID_NHOM && 
                                     parseISO(m.THOIGIAN_BATDAU) >= startOfWeek(currentDate, options) &&
                                     parseISO(m.THOIGIAN_BATDAU) <= endOfWeek(currentDate, options) &&
                                     m.TRANGTHAI !== 'Đã hủy'
                                 ).length;
 
                                 return (
-                                    <DraggableGroupCard
-                                        key={group.ID_NHOM}
-                                        group={group}
-                                        count={meetingCount}
+                                    <DraggableGroupCard 
+                                        key={group.ID_NHOM} 
+                                        group={group} 
+                                        count={meetingCount} 
                                     />
                                 );
                             })
@@ -550,9 +553,9 @@ export default function LecturerCalendarPage() {
                                         {daysOfWeek.map(day => (
                                             <DroppableSessionCell key={`${day}-${session.id}`} day={day} session={session}>
                                                 {getEventsForSession(day, session).map(event => (
-                                                    <CalendarEventItem
-                                                        key={event.resource.ID_LICHHOP}
-                                                        event={event}
+                                                    <CalendarEventItem 
+                                                        key={event.resource.ID_LICHHOP} 
+                                                        event={event} 
                                                         onUpdate={(id, data) => updateMutation.mutate({ id, data })}
                                                         onRate={(id, rating) => rateMutation.mutate({ id, rating })}
                                                         onDelete={handleDeleteClick}
@@ -593,7 +596,7 @@ export default function LecturerCalendarPage() {
                     ) : null}
                 </DragOverlay>
 
-                <MeetingDialog
+                <MeetingDialog 
                     isOpen={isEditDialogOpen}
                     setIsOpen={setIsEditDialogOpen}
                     nhomId={editingMeeting?.ID_NHOM}
@@ -614,8 +617,8 @@ export default function LecturerCalendarPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel disabled={deleteMutation.isPending}>Không</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={() => deleteMutation.mutate(deletingMeeting.ID_LICHHOP)}
+                            <AlertDialogAction 
+                                onClick={() => deleteMutation.mutate(deletingMeeting.ID_LICHHOP)} 
                                 className="bg-destructive hover:bg-destructive/90"
                                 disabled={deleteMutation.isPending}
                             >

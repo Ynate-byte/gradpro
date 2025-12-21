@@ -64,7 +64,7 @@ const meetingSchema = z.object({
     path: ["THOIGIAN_KETTHUC"],
 });
 
-// Hàm xử lý thời gian (GIỮ NGUYÊN LOGIC)
+// Hàm xử lý thời gian
 const formatDateTimeLocal = (dateString) => {
     if (!dateString) return "";
     try {
@@ -74,10 +74,12 @@ const formatDateTimeLocal = (dateString) => {
     }
 };
 
+// [SỬA LỖI]: Hàm này giờ sẽ giữ nguyên giờ địa phương thay vì chuyển sang UTC
 const toISOStringWithLocalTimezone = (localTimeString) => {
     if (!localTimeString) return null;
-    const localDate = new Date(localTimeString);
-    return localDate.toISOString();
+    // Sử dụng format của date-fns để tạo chuỗi ISO giữ nguyên giờ địa phương
+    // Ví dụ: 2023-12-22T18:00 sẽ thành "2023-12-22T18:00:00" để gửi lên server
+    return format(new Date(localTimeString), "yyyy-MM-dd'T'HH:mm:ss");
 };
 
 
@@ -99,10 +101,9 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
         }
     });
 
-    // Theo dõi giá trị của trường HINHTHUC_HOP
     const hinhThucHop = form.watch('HINHTHUC_HOP');
 
-    // Thiết lập giá trị mặc định khi mở dialog (GIỮ NGUYÊN LOGIC)
+    // Thiết lập giá trị mặc định khi mở dialog
     useEffect(() => {
         if (isEditMode && meeting) {
             form.reset({
@@ -131,7 +132,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
         }
     }, [isOpen, isEditMode, meeting, form]);
 
-    // Hook xử lý tạo/cập nhật lịch họp (GIỮ NGUYÊN LOGIC)
+    // Hook xử lý tạo/cập nhật lịch họp
     const mutation = useMutation({
         mutationFn: (formData) => {
             const payload = {
@@ -197,7 +198,6 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
 
     return (
         <Dialog open={isOpen} onOpenChange={setIsOpen}>
-            {/* THAY ĐỔI: Mở rộng chiều ngang Dialog */}
             <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl font-bold">
@@ -257,7 +257,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                     />
                                 </div>
 
-                                {/* HÀNG 3: HÌNH THỨC & ĐỊA ĐIỂM (3 CỘT: 1/3 cho Hình thức, 2/3 cho Địa điểm/Link) */}
+                                {/* HÀNG 3: HÌNH THỨC & ĐỊA ĐIỂM */}
                                 <div className="grid grid-cols-3 gap-4">
                                     {/* Hình thức */}
                                     <FormField
@@ -344,7 +344,7 @@ export function MeetingDialog({ isOpen, setIsOpen, nhomId, planId, meeting }) {
                                                             placeholder="Ghi lại nội dung cuộc họp..." 
                                                             {...field} 
                                                             value={field.value || ''}
-                                                            rows={8} // Tăng rows để cân đối với cột bên cạnh
+                                                            rows={8}
                                                         />
                                                     </FormControl>
                                                     <FormMessage />

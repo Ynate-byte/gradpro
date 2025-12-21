@@ -56,9 +56,11 @@ const formatDateTimeLocal = (dateString) => {
     } catch { return ""; }
 };
 
+// [SỬA LỖI]: Hàm này trước đây dùng toISOString() gây lệch giờ
 const formatFromInput = (dateString) => {
     if (!dateString) return null;
-    return new Date(dateString).toISOString();
+    // Sử dụng format để tạo chuỗi YYYY-MM-DD HH:mm:ss giữ nguyên giờ địa phương
+    return format(new Date(dateString), "yyyy-MM-dd'T'HH:mm:ss");
 };
 
 // --- COMPONENT ---
@@ -143,21 +145,18 @@ export function TaskDialog({ state, setState, nhomId, members = [], columns = []
             const payload = {
                 ...data,
                 ID_COT: Number(data.ID_COT),
+                // Sử dụng hàm formatFromInput đã sửa
                 NGAY_HETHAN: formatFromInput(data.NGAY_HETHAN),
-                // Gửi luôn assignee_ids trong payload tạo mới để backend xử lý 1 lần (tránh 2 log nếu backend hỗ trợ)
                 assignee_ids: selectedUsers.map(u => u.ID_NGUOIDUNG) 
             };
             
             if (isEditMode) {
                 // Update task
                 const res = await updateTask(taskToEdit.ID_CONGVIEC, payload);
-                // Gán người (API update riêng lẻ thường không gán người, nên gọi thêm assignTask)
-                // Tuy nhiên, việc này tạo ra log thứ 2. Nếu muốn tránh, cần sửa Backend updateTask nhận luôn assignee_ids.
-                // Ở đây ta vẫn gọi để đảm bảo tính năng hoạt động.
                 await assignTask(taskToEdit.ID_CONGVIEC, payload.assignee_ids);
                 return res;
             } else {
-                // Create task (Backend createTask đã hỗ trợ gán người -> 1 log)
+                // Create task
                 return createTask(nhomId, payload);
             }
         },
